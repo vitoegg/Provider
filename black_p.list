@@ -1,8 +1,7 @@
-#绅士
-DOMAIN-KEYWORD,sis001
-#Notion
-DOMAIN-KEYWORD,notion
+
 #KEYWORD
+DOMAIN-KEYWORD,sis001
+DOMAIN-KEYWORD,notion
 DOMAIN-KEYWORD,evernote
 DOMAIN-KEYWORD,dlercloud
 DOMAIN-KEYWORD,slack
@@ -17,13 +16,7 @@ DOMAIN-KEYWORD,youtube
 DOMAIN-KEYWORD,github
 
 #SUFFIX
-DOMAIN-SUFFIX,notion.so
-DOMAIN-SUFFIX,intercom.io
 DOMAIN-SUFFIX,t.me
-DOMAIN-SUFFIX,suo.im
-DOMAIN-SUFFIX,apkpure.com
-DOMAIN-SUFFIX,zaihua.io
-DOMAIN-SUFFIX,tinyurl.com
 DOMAIN-SUFFIX,telesco.pe
 DOMAIN-SUFFIX,tdesktop.com
 DOMAIN-SUFFIX,telegra.ph
