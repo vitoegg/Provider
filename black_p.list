@@ -64,12 +64,9 @@ DOMAIN-SUFFIX,kakaocdn.net
 DOMAIN-SUFFIX,scdn.co
 DOMAIN-SUFFIX,spotify.com
 DOMAIN-SUFFIX,mytvsuper.com
-DOMAIN-KEYWORD,speedtest
+DOMAIN-SUFFIX,infinitynewtab.com
 DOMAIN-SUFFIX,tvb.com
-DOMAIN-KEYWORD,nowtv100
-DOMAIN-KEYWORD,rthklive
-DOMAIN-KEYWORD,netflix
-DOMAIN-KEYWORD,nflx
+
 # PN
 PROCESS-NAME,Backup and Sync
 PROCESS-NAME,Dropbox
