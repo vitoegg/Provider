@@ -12,16 +12,10 @@ DOMAIN-KEYWORD,gmail
 DOMAIN-KEYWORD,google
 DOMAIN-KEYWORD,twitter
 DOMAIN-KEYWORD,whatsapp
-DOMAIN-KEYWORD,youtube
 DOMAIN-KEYWORD,github
 
 #SUFFIX
 DOMAIN-SUFFIX,t.me
-DOMAIN-SUFFIX,telesco.pe
-DOMAIN-SUFFIX,tdesktop.com
-DOMAIN-SUFFIX,telegra.ph
-DOMAIN-SUFFIX,telegram.me
-DOMAIN-SUFFIX,telegram.org
 DOMAIN-SUFFIX,getpricetag
 DOMAIN-SUFFIX,steamcommunity.com
 DOMAIN-SUFFIX,xn--i2ru8q2qg.com
@@ -44,7 +38,6 @@ DOMAIN-SUFFIX,dropboxapi.com
 DOMAIN-SUFFIX,google.cn
 DOMAIN-SUFFIX,pinterest.com
 DOMAIN-SUFFIX,dafork.com
-DOMAIN-SUFFIX,nflxvideo.net
 DOMAIN-SUFFIX,wire.com
 DOMAIN-SUFFIX,reddit.com
 DOMAIN-SUFFIX,redditmedia.com
@@ -62,7 +55,6 @@ DOMAIN-SUFFIX,kakao.com
 DOMAIN-SUFFIX,kakao.co.kr
 DOMAIN-SUFFIX,kakaocdn.net
 DOMAIN-SUFFIX,scdn.co
-DOMAIN-SUFFIX,spotify.com
 DOMAIN-SUFFIX,mytvsuper.com
 DOMAIN-SUFFIX,infinitynewtab.com
 DOMAIN-SUFFIX,tvb.com
@@ -73,12 +65,10 @@ PROCESS-NAME,Dropbox
 PROCESS-NAME,Facebook
 PROCESS-NAME,Instagram
 PROCESS-NAME,Spotify
-PROCESS-NAME,Telegram
-PROCESS-NAME,Telegram Desktop
 PROCESS-NAME,Tweetbot
 PROCESS-NAME,Slack
 PROCESS-NAME,WhatsApp
-PROCESS-NAME,Spotify
+
 # UA
 USER-AGENT,Reeder*
 USER-AGENT,Pocket*
@@ -90,12 +80,9 @@ USER-AGENT,Instacast*
 USER-AGENT,Overcast*
 USER-AGENT,Argo*
 USER-AGENT,Tweetbot*
-USER-AGENT,Telegram*
-USER-AGENT,ph.telegra.Telegraph*
 USER-AGENT,Slack*
 USER-AGENT,Pinterest*
 USER-AGENT,KakaoTalk*
 USER-AGENT,KT*
 USER-AGENT,Argo*
-USER-AGENT,*Spotify*
 USER-AGENT,mytv*
