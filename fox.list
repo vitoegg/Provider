@@ -2,6 +2,8 @@
 USER-AGENT,FOX%20NOW*
 USER-AGENT,FOXPLUS*
 DOMAIN-SUFFIX,fox.com
+DOMAIN-SUFFIX,foxplay.com
+DOMAIN-SUFFIX,foxplus.com
 DOMAIN-SUFFIX,foxdcg.com
 DOMAIN-SUFFIX,theplatform.com
 DOMAIN-SUFFIX,uplynk.com
