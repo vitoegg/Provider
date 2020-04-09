@@ -1,8 +1,6 @@
 # > 豆瓣
 URL-REGEX,"^https?+:\/\/api\.douban\.com\/v\d\/app_ads\/"
 
-# > 新浪
-URL-REGEX,"^https?+:\/\/edit\.sinaapp\.com\/ua\?t=adv"
 # >> 新浪微博
 URL-REGEX,"^https?+:\/\/sdkapp\.uve\.weibo\.com\/interface\/sdk\/(?>action|sdk)ad\.php"
 URL-REGEX,"^https?+:\/\/wbapp\.uve\.weibo\.com\/wbapplua\/wbpullad\.lua"
