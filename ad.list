@@ -1,0 +1,16 @@
+# > 豆瓣
+URL-REGEX,"^https?+:\/\/api\.douban\.com\/v\d\/app_ads\/"
+
+# > 新浪
+URL-REGEX,"^https?+:\/\/edit\.sinaapp\.com\/ua\?t=adv"
+# >> 新浪微博
+URL-REGEX,"^https?+:\/\/sdkapp\.uve\.weibo\.com\/interface\/sdk\/(?>action|sdk)ad\.php"
+URL-REGEX,"^https?+:\/\/wbapp\.uve\.weibo\.com\/wbapplua\/wbpullad\.lua"
+URL-REGEX,"^https?+:\/\/weibointl\.api\.weibo\.cn\/portal\.php\?a=get_coopen_ads"
+
+# > 知乎
+URL-REGEX,"^https?+:\/\/api\.zhihu\.com\/(?>launch|real_time)"
+URL-REGEX,"^https?+:\/\/api\.zhihu\.com\/commercial_api\/(?>launch|real_time)"
+URL-REGEX,"^https?+:\/\/api\.zhihu\.com\/fringe\/ad"
+URL-REGEX,"^https?+:\/\/api\.zhihu\.com\/(?>ab|adx|xen|drama|zst|ad-style-service|market\/popover|search\/(?>top|tab|preset)|.*?(?>guide|recommendations|extended|featured-comment-ad))"
+URL-REGEX,"^https?+:\/\/www\.zhihu\.com\/api\/v4\/c(?>reator|ommunity-ad)"
