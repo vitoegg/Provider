@@ -1,7 +1,5 @@
 # Apple Global CDN
 
-#App Store
-DOMAIN-SUFFIX,mzstatic.com
 # iOS App Store
 USER-AGENT,com.apple.appstored*
 DOMAIN,iosapps.itunes.apple.com
