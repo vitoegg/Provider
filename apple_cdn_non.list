@@ -1,5 +1,6 @@
 # Apple Non-China CDN
-#
+#AppStore
+DOMAIN,apps.mzstatic.com
 # Trailer
 DOMAIN-SUFFIX,hls.itunes.apple.com
 # Movie Stream
