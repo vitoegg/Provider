@@ -14,6 +14,7 @@ DOMAIN,aod.itunes.apple.com
 DOMAIN,api.smoot.apple.cn
 DOMAIN,music.apple.com
 DOMAIN,mvod.itunes.apple.com
+DOMAIN,streamingaudio.itunes.apple.com
 
 # Update
 DOMAIN,supportdownload.apple.com
