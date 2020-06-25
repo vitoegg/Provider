@@ -1,21 +1,13 @@
 
 #KEYWORD
 DOMAIN-KEYWORD,sis001
-DOMAIN-KEYWORD,notion
-DOMAIN-KEYWORD,evernote
-DOMAIN-KEYWORD,dlercloud
 DOMAIN-KEYWORD,slack
-DOMAIN-KEYWORD,github
-DOMAIN-KEYWORD,onedrive
 DOMAIN-KEYWORD,freenom
+DOMAIN-KEYWORD,cool18
 
 #SUFFIX
-DOMAIN-SUFFIX,t.me
 DOMAIN-SUFFIX,microsoft.com
 DOMAIN-SUFFIX,infinitynewtab.com
-DOMAIN-SUFFIX,phncdn.com
-DOMAIN-SUFFIX,pornhub.com
-DOMAIN-SUFFIX,pornhubpremium.com
 DOMAIN-SUFFIX,live.com
 
 # PN
@@ -23,6 +15,5 @@ PROCESS-NAME,Backup and Sync
 PROCESS-NAME,Slack
 
 # UA
-USER-AGENT,Overcast*
 USER-AGENT,Tweetbot*
 USER-AGENT,Slack*
