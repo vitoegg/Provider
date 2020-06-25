@@ -1,8 +1,0 @@
-payload:
-  # 绅士网站
-  - DOMAIN-KEYWORD,sis001
-  # 其他加速
-  - DOMAIN-KEYWORD,freenom
-  - DOMAIN-SUFFIX,microsoft.com
-  - DOMAIN-SUFFIX,infinitynewtab.com
-  - DOMAIN-KEYWORD,cool18
