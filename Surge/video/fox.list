@@ -1,0 +1,13 @@
+# > FOX+
+#客户端
+USER-AGENT,FOXPlus*
+#登录
+DOMAIN-SUFFIX,now.com
+#网站
+DOMAIN-SUFFIX,fox.com
+DOMAIN-SUFFIX,foxplay.com
+DOMAIN-SUFFIX,foxplus.com
+DOMAIN-SUFFIX,foxdcg.com
+DOMAIN-SUFFIX,theplatform.com
+DOMAIN-SUFFIX,uplynk.com
+DOMAIN-SUFFIX,akamaized.net
