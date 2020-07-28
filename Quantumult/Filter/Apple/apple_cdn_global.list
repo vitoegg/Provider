@@ -5,9 +5,6 @@ DOMAIN-SUFFIX,mzstatic.com,DIRECT
 # iOS App Store
 USER-AGENT,com.apple.appstored*,DIRECT
 DOMAIN,iosapps.itunes.apple.com,DIRECT
-# Mac App Store
-PROCESS-NAME,storedownloadd,DIRECT
-DOMAIN,osxapps.itunes.apple.com,DIRECT
 
 # Apple Music
 DOMAIN,aod.itunes.apple.com,DIRECT
