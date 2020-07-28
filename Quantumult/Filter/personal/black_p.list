@@ -1,0 +1,15 @@
+
+#KEYWORD
+DOMAIN-KEYWORD,sis001,Global
+DOMAIN-KEYWORD,slack,Global
+DOMAIN-KEYWORD,freenom,Global,Global
+DOMAIN-KEYWORD,cool18,Global
+
+#SUFFIX
+DOMAIN-SUFFIX,microsoft.com,Global
+DOMAIN-SUFFIX,infinitynewtab.com,Global
+DOMAIN-SUFFIX,live.com,Global
+
+# UA
+USER-AGENT,Tweetbot*,Global
+USER-AGENT,Slack*,Global
