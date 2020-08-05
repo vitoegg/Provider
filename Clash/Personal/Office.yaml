@@ -1,0 +1,6 @@
+payload:
+#Microsoft Office资源下载
+  - DOMAIN-SUFFIX,data.microsoft.com
+  - DOMAIN-SUFFIX,officecdn-microsoft-com.akamaized.net
+  - DOMAIN-SUFFIX,mobile.pipe.aria.microsoft.com
+  - DOMAIN-KEYWORD,officecdn
