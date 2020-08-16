@@ -1,0 +1,12 @@
+# > VIKI
+#客户端
+#USER-AGENT,FOXPlus*
+#域名
+DOMAIN-SUFFIX,collector.viki.io
+DOMAIN-SUFFIX,api.viki.io
+DOMAIN-SUFFIX,viki.s.llnwi.net
+DOMAIN-SUFFIX,manifest-viki.viki.io
+DOMAIN-SUFFIX,akamaized.net
+DOMAIN-SUFFIX,vikiplatform.com
+DOMAIN-SUFFIX,collector.viki.io
+DOMAIN-SUFFIX,viki.io
