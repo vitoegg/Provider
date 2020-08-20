@@ -7,4 +7,4 @@ payload:
   - DOMAIN-SUFFIX,akamaized.net
   - DOMAIN-SUFFIX,vikiplatform.com
   - DOMAIN-SUFFIX,collector.viki.io
-  - DOMAIN-SUFFIX,viki.io
+  - DOMAIN-KEYWORD,viki
