@@ -14,7 +14,7 @@ DOMAIN,mvod.itunes.apple.com,DIRECT
 DOMAIN,streamingaudio.itunes.apple.com,DIRECT
 
 #TestFlight
-USER-AGENT,TestFlight*,DIRECT
+#USER-AGENT,TestFlight*,DIRECT
 
 # Update
 DOMAIN,supportdownload.apple.com,DIRECT

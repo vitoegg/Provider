@@ -1,0 +1,42 @@
+# Apple 直连
+#
+USER-AGENT,*com.apple.mobileme.fmip1,DIRECT
+USER-AGENT,*WeatherFoundation*,DIRECT
+
+# Settings
+USER-AGENT,%E8%AE%BE%E7%BD%AE*,DIRECT
+USER-AGENT,FindMyFriends*,DIRECT
+USER-AGENT,FindMyiPhone*,DIRECT
+USER-AGENT,FMDClient*,DIRECT
+USER-AGENT,FMFD*,DIRECT
+USER-AGENT,fmflocatord*,DIRECT
+
+# Apple Pay
+USER-AGENT,passd*,DIRECT
+USER-AGENT,Wallet*,DIRECT
+DOMAIN-KEYWORD,smp-device,DIRECT
+DOMAIN,smp-device-content.apple.com,DIRECT
+
+# Reserve
+DOMAIN,reserve-prime.apple.com,DIRECT
+DOMAIN-SUFFIX,ess.apple.com,DIRECT
+DOMAIN-SUFFIX,push-apple.com.akadns.net,DIRECT
+DOMAIN-SUFFIX,push.apple.com,DIRECT
+
+# Asset Cache Locator Service
+DOMAIN-SUFFIX,lcdn-locator.apple.com,DIRECT
+
+# Caching Server Registration
+DOMAIN-SUFFIX,lcdn-registration.apple.com,DIRECT
+
+# Apple 其他直连
+DOMAIN,api.smoot.apple.com,DIRECT
+DOMAIN,captive.apple.com,DIRECT
+DOMAIN,configuration.apple.com,DIRECT
+DOMAIN,guzzoni.apple.com,DIRECT
+
+
+
+
+
+
