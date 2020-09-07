@@ -30,6 +30,7 @@ DOMAIN-SUFFIX,lcdn-locator.apple.com,DIRECT
 DOMAIN-SUFFIX,lcdn-registration.apple.com,DIRECT
 
 # Apple 其他直连
+DOMAIN-SUFFIX,weather-data.apple.com,DIRECT
 DOMAIN,api.smoot.apple.com,DIRECT
 DOMAIN,captive.apple.com,DIRECT
 DOMAIN,configuration.apple.com,DIRECT
