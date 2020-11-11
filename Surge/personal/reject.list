@@ -1,0 +1,16 @@
+# 自定义去广告策略
+
+# > Bilibili广告过滤
+DOMAIN,data.bilibili.com,REJECT
+URL-REGEX,https://app.bilibili.com/x/v2/(splash|search/(defaultword|square)),REJECT
+URL-REGEX,https://api.bilibili.com/x/v2/dm/ad,REJECT
+
+# >知乎广告过滤
+RULE-SET,https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_remove_ads.list,REJECT
+
+# >彩云天气广告过滤
+DOMAIN,ad.caiyunapp.com,REJECT
+DOMAIN,caiyun51.com,REJECT
+DOMAIN,bai.caiyun72.com,REJECT
+DOMAIN,caiyun72.com,REJECT
+URL-REGEX,^http://cdn-1rtb.caiyunapp.com/creative/.*$
