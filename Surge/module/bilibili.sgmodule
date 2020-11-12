@@ -3,11 +3,9 @@
 #!system=ios
 
 [Rule]
-DOMAIN,data.bilibili.com,REJECT
 DOMAIN-SUFFIX,cm.bilibili.com,REJECT
 URL-REGEX,^https?:\/\/api\.bilibili\.com\/x\/v2\/dm\/ad,REJECT
 URL-REGEX,^https?:\/\/manga\.bilibili\.com\/twirp\/comic\.v\d\.comic\/flash,REJECT
-URL-REGEX,https://app.bilibili.com/x/v2/(splash|search/(defaultword|square)),REJECT
 
 [URL Rewrite]
 # 去除动态中的话题
