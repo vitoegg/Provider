@@ -6,4 +6,4 @@
 微博超话cookie获取 = type=http-request,pattern=^https?://m?api\.weibo\.c(n|om)\/2\/(cardlist|page\/button),script-path=https://raw.githubusercontent.com/evilbutcher/Quantumult_X/master/check_in/weibo/weibotalk.cookie.js,requires-body=false
 
 [MITM]
-hostname = api.weibo.cn
+hostname = api.weibo.cn,weibo.com
