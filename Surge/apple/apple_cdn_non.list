@@ -13,3 +13,6 @@ DOMAIN,devimages-cdn.apple.com
 DOMAIN,devstreaming-cdn.apple.com
 DOMAIN,js-cdn.music.apple.com
 DOMAIN,docs-assets.developer.apple.com
+# Other
+DOMAIN-SUFFIX,apple-dns.net
+DOMAIN-SUFFIX,gc.apple.com
