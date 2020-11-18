@@ -19,9 +19,20 @@ DOMAIN,beta.music.apple.com
 DOMAIN-KEYWORD,buy.itunes.apple.com
 
 # Apple 其他自选
-#
 DOMAIN-SUFFIX,aaplimg.com
 DOMAIN-SUFFIX,apple.co
 DOMAIN-SUFFIX,itunes.com
 DOMAIN-SUFFIX,itunes.apple.com
 DOMAIN,weather-analytics-events.apple.com
+
+# Hackl0us规则补充
+#https://raw.githubusercontent.com/Hackl0us/SS-Rule-Snippet/master/Rulesets/Basic/Apple-proxy.list
+DOMAIN,developer.apple.com
+DOMAIN-SUFFIX,digicert.com
+DOMAIN,ocsp.verisign.net
+DOMAIN-SUFFIX,apple-dns.net
+DOMAIN,sandbox.itunes.apple.com
+DOMAIN-SUFFIX,apps.apple.com
+DOMAIN-SUFFIX,blobstore.apple.com
+DOMAIN,cvws.icloud-content.com
+PROCESS-NAME,News
