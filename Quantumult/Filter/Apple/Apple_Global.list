@@ -1,0 +1,23 @@
+#API 服务类 推荐选择账号所在区，购买、发起下载
+
+#TestFlight防屏蔽策略
+DOMAIN,testflight.apple.com,Apple
+
+#Apple服务会连接的 API
+DOMAIN-SUFFIX,aaplimg.com,Apple
+DOMAIN-SUFFIX,apple.co,Apple
+DOMAIN-SUFFIX,itunes.com,Apple
+DOMAIN-SUFFIX,digicert.com,Apple
+DOMAIN-SUFFIX,apple-dns.net,Apple
+DOMAIN-SUFFIX,cdn-apple.com,Apple
+
+#apple.com相关，与surge策略不同
+DOMAIN,developer.apple.com,Apple
+DOMAIN-SUFFIX,blobstore.apple.com,Apple
+
+#
+DOMAIN,beta.music.apple.com,Apple
+DOMAIN,cdn.apple-cloudkit.com,Apple
+DOMAIN,js-cdn.music.apple.com,Apple
+DOMAIN-SUFFIX,itunes.apple.com,Apple
+DOMAIN-SUFFIX,apps.apple.com,Apple
