@@ -1,0 +1,10 @@
+HOST,developer.apple.com,Apple
+HOST-SUFFIX,digicert.com,Apple
+HOST,ocsp.verisign.net,Apple
+HOST-SUFFIX,apple-dns.net,Apple
+HOST,testflight.apple.com,Apple
+HOST,sandbox.itunes.apple.com,Apple
+HOST,itunes.apple.com,Apple
+HOST-SUFFIX,apps.apple.com,Apple
+HOST-SUFFIX,blobstore.apple.com,Apple
+HOST,cvws.icloud-content.com,Apple
