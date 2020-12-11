@@ -13,6 +13,7 @@ payload:
   
   # (IP Blackhole)
   # > Google
+  - DOMAIN-SUFFIX,services.googleapis.cn
   - DOMAIN-SUFFIX,abc.xyz
   - DOMAIN-SUFFIX,advertisercommunity.com
   - DOMAIN-SUFFIX,ampproject.org
