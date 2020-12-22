@@ -1,0 +1,8 @@
+#!name=DiDa List
+#!desc=滴答清单
+
+[MITM]
+hostname = dida365.com
+
+[Script]
+Dida = requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/leompsy/nzw9314/master/NobyDa/QuantumultX/File/DiDaQingDan.js,type=http-response,pattern=^https:\/\/dida365\.com\/api\/v2\/user\/status
