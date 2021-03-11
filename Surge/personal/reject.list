@@ -6,3 +6,8 @@ DOMAIN,caiyun51.com
 DOMAIN,bai.caiyun72.com
 DOMAIN,caiyun72.com
 URL-REGEX,^http://cdn-1rtb.caiyunapp.com/creative/.*$
+
+# >豆瓣广告过滤
+DOMAIN-SUFFIX,erebor.douban.com
+URL-REGEX,^https?://img\d.doubanio.com/rda
+URL-REGEX,^https?:\/\/img\d\.doubanio\.com\/view\/dale-online\/dale_ad\/
