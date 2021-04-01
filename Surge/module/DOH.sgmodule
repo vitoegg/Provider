@@ -1,6 +1,0 @@
-#!name=DoH Server
-#!desc=Enable DNS over HTTPS (DoH) .
-
-[General]
-doh-server = https://doh.pub/dns-query, https://dns.alidns.com/dns-query
-dns-server = 223.5.5.5, 114.114.114.114,119.29.29.29
