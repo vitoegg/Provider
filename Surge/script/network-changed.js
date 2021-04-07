@@ -10,24 +10,21 @@ if (wifiChanged()) {
     $notification.post(
       '网络模式切换!',
       'Outbound Mode: Direct',
-      `Wi-Fi: ${$network.wifi.ssid}`,
-      `IP address: ${$network.v4.primaryAddress}`
+      `Wi-Fi: ${$network.wifi.ssid}` + '\n' + `IP address: ${$network.v4.primaryAddress}`
     );
   } else if ($network.v4.primaryInterface == "en0") {
         $surge.setOutboundMode('rule');
         $notification.post(
           '网络模式切换!',
           'Outbound Mode: Rule',
-          `Wi-Fi: ${$network.wifi.ssid}`,
-          `IP address: ${$network.v4.primaryAddress}`
+          `Wi-Fi: ${$network.wifi.ssid}` + '\n' + `IP address: ${$network.v4.primaryAddress}`
         );
   } else {
         $surge.setOutboundMode('rule');
         $notification.post(
           '网络模式切换!',
           'Outbound Mode: Rule',
-          'NetWork: CELLULAR',
-          `IP address: ${$network.v4.primaryAddress}`
+          'NetWork: CELLULAR' + '\n' + `IP address: ${$network.v4.primaryAddress}`
         );
   }
 }
