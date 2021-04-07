@@ -3,7 +3,7 @@
 #!system=ios
 
 [Script]
-微博超话 = type=cron,cronexp="25 11  * * *",script-path=https://raw.githubusercontent.com/vitoegg/Provider/master/Surge/script/WeiboCheckin.js,wake-system=true,timeout=600
+微博超话 = type=cron,cronexp="35 11  * * *",script-path=https://raw.githubusercontent.com/vitoegg/Provider/master/Surge/script/WeiboCheckin.js,wake-system=true,timeout=600
 
 [MITM]
 hostname = api.weibo.cn, mapi.weibo.com 
