@@ -13,7 +13,7 @@ if (wifiChanged()) {
       `Wi-Fi: ${$network.wifi.ssid}`,
       `IP address: ${$network.v4.primaryAddress}`
     );
-  } else if ($network.wifi.ssid != '(null)') {
+  } else if ($network.v4.primaryInterface == "en0") {
         $surge.setOutboundMode('rule');
         $notification.post(
           '网络模式切换!',
