@@ -8,23 +8,23 @@ if (wifiChanged()) {
   if (WIFI_DONT_NEED_PROXYS.includes($network.wifi.ssid)) {
     $surge.setOutboundMode('direct');
     $notification.post(
-      '网络模式切换!',
-      'Outbound Mode: Direct',
-      `Wi-Fi: ${$network.wifi.ssid}` + '\n' + `IP address: ${$network.v4.primaryAddress}`
+      '📢网络模式切换',
+      'Mode: Direct',
+      `Wi-Fi: ${$network.wifi.ssid}` + '\n' + `New IP address: ${$network.v4.primaryAddress}`
     );
   } else if ($network.v4.primaryInterface == "en0") {
         $surge.setOutboundMode('rule');
         $notification.post(
-          '网络模式切换!',
-          'Outbound Mode: Rule',
-          `Wi-Fi: ${$network.wifi.ssid}` + '\n' + `IP address: ${$network.v4.primaryAddress}`
+          '📢网络模式切换',
+          'Mode: Rule',
+          `Wi-Fi: ${$network.wifi.ssid}` + '\n' + `New IP address: ${$network.v4.primaryAddress}`
         );
   } else {
         $surge.setOutboundMode('rule');
         $notification.post(
-          '网络模式切换!',
+          '📢网络模式切换',
           'Outbound Mode: Rule',
-          'NetWork: CELLULAR' + '\n' + `IP address: ${$network.v4.primaryAddress}`
+          'NetWork: CELLULAR' + '\n' + `New IP address: ${$network.v4.primaryAddress}`
         );
   }
 }
