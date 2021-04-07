@@ -8,16 +8,16 @@ if (wifiChanged()) {
   if (WIFI_DONT_NEED_PROXYS.includes($network.wifi.ssid)) {
     $surge.setOutboundMode('direct');
     $notification.post(
-      'Outbound',
-      `Now used Direct Mode`,
-      'IP address: ${$network.v4.primaryAddress}'
+      'OutboundChanged!',
+      'Now used Direct Mode',
+      `IP address: ${$network.v4.primaryAddress}`
     );
   } else {
     $surge.setOutboundMode('rule');
     $notification.post(
-      'Outbound',
-      `Now used Rule Mode`,
-      'IP address: ${$network.v4.primaryAddress}'
+      'OutboundChanged!',
+      'Now used Rule Mode',
+      `IP address: ${$network.v4.primaryAddress}`
     );
   }
 }
