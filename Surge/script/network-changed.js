@@ -3,22 +3,32 @@
  * 如果是家里WI-FI则开启直连模式
  * 如果不是家里WI-FI则开启代理模式
  */
-const WIFI_DONT_NEED_PROXYS = ['Tech','MyWifi'];
+const WIFI_DONT_NEED_PROXYS = ['Tech'];
 if (wifiChanged()) {
   if (WIFI_DONT_NEED_PROXYS.includes($network.wifi.ssid)) {
     $surge.setOutboundMode('direct');
     $notification.post(
-      'OutboundChanged!',
-      'Now used Direct Mode',
+      '网络模式切换!',
+      'Outbound Mode: Direct',
+      `Wi-Fi: ${$network.wifi.ssid}`,
       `IP address: ${$network.v4.primaryAddress}`
     );
+  } else if ($network.wifi.ssid != '(null)') {
+        $surge.setOutboundMode('rule');
+        $notification.post(
+          '网络模式切换!',
+          'Outbound Mode: Rule',
+          `Wi-Fi: ${$network.wifi.ssid}`,
+          `IP address: ${$network.v4.primaryAddress}`
+        );
   } else {
-    $surge.setOutboundMode('rule');
-    $notification.post(
-      'OutboundChanged!',
-      'Now used Rule Mode',
-      `IP address: ${$network.v4.primaryAddress}`
-    );
+        $surge.setOutboundMode('rule');
+        $notification.post(
+          '网络模式切换!',
+          'Outbound Mode: Rule',
+          'NetWork: CELLULAR',
+          `IP address: ${$network.v4.primaryAddress}`
+        );
   }
 }
 function wifiChanged() {
