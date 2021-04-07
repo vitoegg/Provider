@@ -4,7 +4,7 @@
 //引用自: https://github.com/Tempoblink/Surge-Scripts/blob/master/network-changed.js
 
 //The Notification Format.
-let TITLE = '网络切换,出站模式变更!';
+let TITLE = 'Outbound Changed!';
 let SUBTITLE_CELLULAR = 'Cellular: ';
 let SUBTITLE_WIFI = 'Wi-Fi: ';
 let ABOUT_MODE = 'Outbound mode: ';
