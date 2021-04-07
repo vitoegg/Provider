@@ -4,36 +4,42 @@
 //引用自: https://github.com/Tempoblink/Surge-Scripts/blob/master/network-changed.js
 
 //The Notification Format.
+//The Notification Format.
 let TITLE = 'Outbound Changed!';
+let SUBTITLE_CELLULAR = 'NetWork: ';
+let SUBTITLE_WIFI = 'Wi-Fi: ';
 let ABOUT_MODE = 'Outbound mode: ';
 let ABOUT_IP = 'New IP address: ';
 
-//black ssid.
+//Home ssid.
 
-let BLOCKLIST = [
+let PROXYWIFI = [
             "Tech",
             "MyWifi"
     ];
 
 //The default outbound: 'Direct' or 'Rule' or 'Global-proxy'.
-let BlockList = "Direct";
-let Others = "Rule";
+let DirectMode = "Direct";
+let RuleMode = "Rule";
 
 function changeOutboundMode(mode) {
     ABOUT_IP += $network.v4.primaryAddress;
     if($surge.setOutboundMode(mode.toLowerCase()))
-        $notification.post(TITLE, ABOUT_MODE + mode + '\n' + ABOUT_IP);
+        $notification.post(TITLE, NETWORK, ABOUT_MODE + mode + '\n' + ABOUT_IP);
 }
 
 //wifi select outbound
+let NETWORK = "";
 if ($network.v4.primaryInterface == "en0") {
-    if (BLOCKLIST.indexOf($network.wifi.ssid) != -1) {
-        changeOutboundMode(BlockList);
+    NETWORK += SUBTITLE_WIFI + $network.wifi.ssid;
+    if (PROXYWIFI.indexOf($network.wifi.ssid) != -1) {
+        changeOutboundMode(DirectMode);
     } else {
-        changeOutboundMode(Others);
+        changeOutboundMode(RuleMode);
     }
 }else {
-    changeOutboundMode(Others);
+    NETWORK += SUBTITLE_CELLULAR + Cellular-Data;
+    changeOutboundMode(RuleMode);
 }
 
 $done();
