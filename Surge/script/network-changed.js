@@ -8,17 +8,16 @@ if (wifiChanged()) {
   if (WIFI_DONT_NEED_PROXYS.includes($network.wifi.ssid)) {
     $surge.setOutboundMode('direct');
     $notification.post(
-      'Surge',
-      `Wi-Fi changed to ${$network.wifi.ssid}`,
-      'use direct mode'
+      'Outbound',
+      `Now used Direct Mode`,
+      'IP address: ${$network.v4.primaryAddress}'
     );
   } else {
-    $surge.setSelectGroupPolicy('Final-select', 'Group');
     $surge.setOutboundMode('rule');
     $notification.post(
-      'Surge',
-      `Wi-Fi changed to ${$network.wifi.ssid}`,
-      'use rule-based proxy mode'
+      'Outbound',
+      `Now used Rule Mode`,
+      'IP address: ${$network.v4.primaryAddress}'
     );
   }
 }
@@ -30,3 +29,5 @@ function wifiChanged() {
   }
   return changed;
 }
+
+$done();
