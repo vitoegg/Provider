@@ -22,7 +22,7 @@ let Others = "Rule";
 function changeOutboundMode(mode) {
     ABOUT_IP += $network.v4.primaryAddress;
     if($surge.setOutboundMode(mode.toLowerCase()))
-        $notification.post(TITLE, NETWORK, ABOUT_MODE + mode + '\n' + ABOUT_IP);
+        $notification.post(TITLE, ABOUT_MODE + mode + '\n' + ABOUT_IP);
 }
 
 //wifi select outbound
