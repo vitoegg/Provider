@@ -11,4 +11,7 @@ payload:
   - DOMAIN-SUFFIX,unsplash.com
   - DOMAIN-SUFFIX,infinitynewtab.com
   - DOMAIN-SUFFIX,live.com
+  - DOMAIN-SUFFIX,updates.bjango.com
+  - DOMAIN-SUFFIX,updates.istatmenus.app
+  - DOMAIN-SUFFIX,cdn.bjango.com
 
