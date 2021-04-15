@@ -13,5 +13,5 @@ URL-REGEX,^https?://img\d.doubanio.com/rda
 URL-REGEX,^https?:\/\/img\d\.doubanio\.com\/view\/dale-online\/dale_ad\/
 
 # >口袋48
-URL-REGEX,^https?:\/\/pocketapi\.48\.cn\/home\/api\/ad\/
-
+URL-REGEX,^https?:\/\/pocketapi\.48\.cn\/home\/api\/ad\/v1\/popupAd$
+URL-REGEX,^https?:\/\/pocketapi\.48\.cn\/home\/api\/ad\/v1\/bootAd$
