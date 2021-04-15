@@ -11,3 +11,8 @@ URL-REGEX,^http://cdn-1rtb.caiyunapp.com/creative/.*$
 DOMAIN-SUFFIX,erebor.douban.com
 URL-REGEX,^https?://img\d.doubanio.com/rda
 URL-REGEX,^https?:\/\/img\d\.doubanio\.com\/view\/dale-online\/dale_ad\/
+
+# >口袋48
+URL-REGEX,^https://pocketapi.48.cn/home/api/ad/v1/popupAd$
+URL-REGEX,^https://pocketapi.48.cn/home/api/ad/v1/bootAd$
+URL-REGEX,^https://pocketapi.48.cn/home/api/home/v1/boot/voice.*$
