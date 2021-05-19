@@ -20,4 +20,4 @@ URL-REGEX,^http://cdn-1rtb.caiyunapp.com/creative/.*$,REJECT
 
 
 [MITM]
-cdn-1rtb.caiyunapp.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com
+hostname = cdn-1rtb.caiyunapp.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com
