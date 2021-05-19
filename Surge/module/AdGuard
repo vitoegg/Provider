@@ -51,4 +51,4 @@ BiliBili_我的页面处理 = type=http-response,requires-body=1,max-size=0,patt
 
 
 [MITM]
-hostname = cdn-1rtb.caiyunapp.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com
+hostname = cdn-1rtb.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com
