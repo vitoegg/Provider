@@ -1,5 +1,0 @@
-#!name=AdGuardDomain
-#!desc=Domain去广告规则,需搭配MITM
-
-[Rule]
-DOMAIN-SET,https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/AdvertisingLite/AdvertisingLite_Domain.list,REJECT
