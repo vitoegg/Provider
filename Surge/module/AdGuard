@@ -1,0 +1,23 @@
+#!name=AdGuard
+#!desc=Script去广告规则
+#!from=https://github.com/blackmatrix7/ios_rule_script/blob/master/rewrite/Surge/AllInOne/AllInOne.sgmodule
+
+[Rule]
+#彩云天气去广告
+DOMAIN,ad.caiyunapp.com,REJECT
+DOMAIN,caiyun51.com,REJECT
+DOMAIN,bai.caiyun72.com,REJECT
+DOMAIN,caiyun72.com,REJECT
+URL-REGEX,^http://cdn-1rtb.caiyunapp.com/creative/.*$,REJECT
+
+
+[URL Rewrite]
+#豆瓣去广告
+^https?:\/\/erebor\.douban\.com\/count\/\?ad= - reject
+^https?:\/\/img\d\.doubanio\.com\/view\/dale-online\/dale_ad\/ - reject
+^https?:\/\/api\.douban\.com\/v2\/app_ads\/common_ads data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank.gif"
+^https?:\/\/api\.douban\.com\/v2\/app_ads\/splash data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank.txt"
+
+
+[MITM]
+cdn-1rtb.caiyunapp.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com
