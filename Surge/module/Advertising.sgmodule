@@ -1,4 +1,4 @@
-#!name=Advertising
+#!name=AdGuardDomain
 #!desc=Domain去广告规则,需搭配MITM
 
 [Rule]
