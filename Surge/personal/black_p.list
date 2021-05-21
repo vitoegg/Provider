@@ -12,6 +12,7 @@ DOMAIN-SUFFIX,infinitynewtab.com
 DOMAIN-SUFFIX,updates.bjango.com
 DOMAIN-SUFFIX,updates.istatmenus.app
 DOMAIN-SUFFIX,cdn.bjango.com
+DOMAIN-SUFFIX,campaign-archive.com
 
 # PN
 PROCESS-NAME,Backup and Sync
