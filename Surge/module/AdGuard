@@ -8,11 +8,13 @@
 
 [Rule]
 ##彩云天气去广告
-DOMAIN,ad.caiyunapp.com,REJECT
+DOMAIN-SUFFIX,ad.caiyunapp.com,REJECT
+DOMAIN-SUFFIX,admobile.top,REJECT
+DOMAIN-SUFFIX,ad.caiyunapp.com,REJECT
 DOMAIN,caiyun51.com,REJECT
 DOMAIN,bai.caiyun72.com,REJECT
 DOMAIN,caiyun72.com,REJECT
-URL-REGEX,^http://cdn-1rtb.caiyunapp.com/creative/.*$,REJECT
+
 
 ##Bilibili去广告
 DOMAIN-SUFFIX,cm.bilibili.com,REJECT
@@ -44,6 +46,9 @@ RULE-SET,https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/s
 ##zhihu
 # 禁止知乎下发配置
 ^https?:\/\/api\.zhihu\.com\/ab\/api\/v1\/products\/zhihu\/platforms\/ios\/config - reject
+
+##彩云天气去广告
+^https?:\/\/cdn-1rtb\.caiyunapp\.com/creative/.*$ - reject
 
 ##重定向
 ^https?:\/\/(ditu|maps).google\.cn https://maps.google.com 302
