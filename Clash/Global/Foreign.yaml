@@ -339,3 +339,6 @@ payload:
   - DOMAIN-SUFFIX,yahooapis.com
   - DOMAIN-SUFFIX,yandex.ru
   - DOMAIN-SUFFIX,zoom.us
+  - DOMAIN-SUFFIX,nssurge.com
+  - DOMAIN-SUFFIX,mitsea.com
+  - DOMAIN-SUFFIX,.xyz
