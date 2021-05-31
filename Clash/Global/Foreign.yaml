@@ -232,6 +232,7 @@ payload:
   # > 毒药测速
   - DOMAIN-SUFFIX,duyaoss.com
   # > 其他
+  - DOMAIN-SUFFIX,inoreader.com
   - DOMAIN-SUFFIX,1password.com
   - DOMAIN-SUFFIX,adobe.com
   - DOMAIN-SUFFIX,adobedtm.com
