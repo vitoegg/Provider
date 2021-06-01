@@ -110,6 +110,11 @@ payload:
   - DOMAIN-SUFFIX,microsofttranslator.com
   - DOMAIN-SUFFIX,windows.com
   - DOMAIN-SUFFIX,windows.net
+  # Office资源下载
+  - DOMAIN-SUFFIX,data.microsoft.com
+  - DOMAIN-SUFFIX,officecdn-microsoft-com.akamaized.net
+  - DOMAIN-SUFFIX,mobile.pipe.aria.microsoft.com
+  - DOMAIN-KEYWORD,officecdn
   # OneDrive
   - DOMAIN-SUFFIX,1drv.com
   - DOMAIN-SUFFIX,onedrive.com
@@ -303,6 +308,7 @@ payload:
   - DOMAIN-SUFFIX,evernote.com
   - DOMAIN-SUFFIX,fastly.net
   - DOMAIN-SUFFIX,feedly.com
+  - DOMAIN-SUFFIX,freenom.com
   - DOMAIN-SUFFIX,flickr.com
   - DOMAIN-SUFFIX,flickriver.com
   - DOMAIN-SUFFIX,flipboard.com
