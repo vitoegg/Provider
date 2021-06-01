@@ -56,9 +56,22 @@ payload:
   - DOMAIN-SUFFIX,gitbook.io
   # > Dlercloud
   - DOMAIN-SUFFIX,dlercloud.com
-  - DOMAIN-SUFFIX,cloudflare.com
   - DOMAIN-SUFFIX,dler.cloud
   - DOMAIN-SUFFIX,dler.io
+  # > DeepL
+  - DOMAIN-SUFFIX,deepl.com
+  # > Docker  
+  - DOMAIN,d1q6f0aelx0por.cloudfront.net
+  - DOMAIN,d2wy8f7a9ursnm.cloudfront.net
+  - DOMAIN,d36jcksde1wxzq.cloudfront.net
+  - DOMAIN-SUFFIX,compose-spec.io
+  - DOMAIN-SUFFIX,docker.com
+  - DOMAIN-SUFFIX,docker.io
+  - DOMAIN-SUFFIX,dockerhub.com
+  # > Dropbox
+  - DOMAIN-SUFFIX,dropbox.com
+  - DOMAIN-SUFFIX,dropboxapi.com
+  - DOMAIN-SUFFIX,dropboxusercontent.com
   # > Facebook 
   - DOMAIN-SUFFIX,cdninstagram.com
   - DOMAIN-SUFFIX,facebook.com
@@ -77,6 +90,10 @@ payload:
   - DOMAIN-SUFFIX,rocksdb.org
   - DOMAIN-SUFFIX,whatsapp.com
   - DOMAIN-SUFFIX,whatsapp.net
+  # > Fixiv
+  - DOMAIN-SUFFIX,pixiv.net
+  - DOMAIN-SUFFIX,pixiv.org
+  - DOMAIN-SUFFIX,pximg.net
   # > Github
   - DOMAIN-SUFFIX,github.com 
   - DOMAIN-SUFFIX,github.io
@@ -86,37 +103,6 @@ payload:
   # > Instagram  
   - DOMAIN-SUFFIX,instagram.com
   - DOMAIN-SUFFIX,cdninstagram.com 
-  # > Twitter
-  - DOMAIN-SUFFIX,pscp.tv
-  - DOMAIN-SUFFIX,periscope.tv
-  - DOMAIN-SUFFIX,t.co
-  - DOMAIN-SUFFIX,twimg.co
-  - DOMAIN-SUFFIX,twimg.com
-  - DOMAIN-SUFFIX,twitpic.com
-  - DOMAIN-SUFFIX,twitter.com
-  - DOMAIN-SUFFIX,vine.co
-  # > DeepL
-  - DOMAIN-SUFFIX,deepl.com
-  # > Docker  
-  - DOMAIN,d1q6f0aelx0por.cloudfront.net
-  - DOMAIN,d2wy8f7a9ursnm.cloudfront.net
-  - DOMAIN,d36jcksde1wxzq.cloudfront.net
-  - DOMAIN-SUFFIX,compose-spec.io
-  - DOMAIN-SUFFIX,docker.com
-  - DOMAIN-SUFFIX,docker.io
-  - DOMAIN-SUFFIX,dockerhub.com
-  # > Wikimedia Foundation
-  - DOMAIN-SUFFIX,wikileaks.org
-  - DOMAIN-SUFFIX,wikimapia.org
-  - DOMAIN-SUFFIX,wikimedia.org
-  - DOMAIN-SUFFIX,wikinews.org
-  - DOMAIN-SUFFIX,wikipedia.org
-  - DOMAIN-SUFFIX,wikiquote.org
-  - DOMAIN-SUFFIX,wikipedia.com
-  # > Dropbox
-  - DOMAIN-SUFFIX,dropbox.com
-  - DOMAIN-SUFFIX,dropboxapi.com
-  - DOMAIN-SUFFIX,dropboxusercontent.com
   # > Microsoft
   - DOMAIN-SUFFIX,aka.ms
   - DOMAIN-SUFFIX,outlook.com
@@ -129,11 +115,32 @@ payload:
   - DOMAIN-SUFFIX,onedrive.com
   - DOMAIN-SUFFIX,storage.live.com
   - DOMAIN,oneclient.sfx.ms
+  # Oracle
+  - DOMAIN-SUFFIX,oracle.com
+  - DOMAIN-SUFFIX,trustarc.com
+  - DOMAIN-SUFFIX,truste.com
   # Playstation
   - DOMAIN-SUFFIX,playstation.com
   - DOMAIN-SUFFIX,playstation.net
   - DOMAIN-SUFFIX,playstationnetwork.com
   - DOMAIN-SUFFIX,sonyentertainmentnetwork.com
+  # > Pinterest
+  - DOMAIN-SUFFIX,pinterest.at
+  - DOMAIN-SUFFIX,pinterest.ca
+  - DOMAIN-SUFFIX,pinterest.co.uk
+  - DOMAIN-SUFFIX,pinterest.com
+  - DOMAIN-SUFFIX,pinterest.de
+  - DOMAIN-SUFFIX,pinterest.fr
+  - DOMAIN-SUFFIX,pinterest.jp
+  - DOMAIN-SUFFIX,pinterest.se
+  # > PayPal
+  - DOMAIN-SUFFIX,paypal.com
+  - DOMAIN-SUFFIX,paypal.me
+  - DOMAIN-SUFFIX,paypalobjects.com
+  # > Reddit
+  - DOMAIN-SUFFIX,redd.it
+  - DOMAIN-SUFFIX,reddit.com
+  - DOMAIN-SUFFIX,redditmedia.com
   # Steam
   - DOMAIN-SUFFIX,steam-chat.com
   - DOMAIN-SUFFIX,steamcontent.com
@@ -149,6 +156,15 @@ payload:
   - DOMAIN,steamusercontent-a.akamaihd.net
   - DOMAIN,steamusercontent-a.akamaihd.net
   - DOMAIN,steamuserimages-a.akamaihd.net
+  # > Twitter
+  - DOMAIN-SUFFIX,pscp.tv
+  - DOMAIN-SUFFIX,periscope.tv
+  - DOMAIN-SUFFIX,t.co
+  - DOMAIN-SUFFIX,twimg.co
+  - DOMAIN-SUFFIX,twimg.com
+  - DOMAIN-SUFFIX,twitpic.com
+  - DOMAIN-SUFFIX,twitter.com
+  - DOMAIN-SUFFIX,vine.co
   # > The New York Times
   - DOMAIN-SUFFIX,nyt.com
   - DOMAIN-SUFFIX,nytchina.com
@@ -158,27 +174,15 @@ payload:
   - DOMAIN-SUFFIX,nytimg.com
   - DOMAIN-SUFFIX,nytlog.com
   - DOMAIN-SUFFIX,nytstyle.com
-  # > Pinterest
-  - DOMAIN-SUFFIX,pinterest.at
-  - DOMAIN-SUFFIX,pinterest.ca
-  - DOMAIN-SUFFIX,pinterest.co.uk
-  - DOMAIN-SUFFIX,pinterest.com
-  - DOMAIN-SUFFIX,pinterest.de
-  - DOMAIN-SUFFIX,pinterest.fr
-  - DOMAIN-SUFFIX,pinterest.jp
-  - DOMAIN-SUFFIX,pinterest.se
-  # > PayPal
-  - DOMAIN-SUFFIX,paypal.com
-  - DOMAIN-SUFFIX,paypal.me
-  - DOMAIN-SUFFIX,paypalobjects.com
-  # > Fixiv
-  - DOMAIN-SUFFIX,pixiv.net
-  - DOMAIN-SUFFIX,pixiv.org
-  - DOMAIN-SUFFIX,pximg.net
-  # > Reddit
-  - DOMAIN-SUFFIX,redd.it
-  - DOMAIN-SUFFIX,reddit.com
-  - DOMAIN-SUFFIX,redditmedia.com
+  # > Wikimedia Foundation
+  - DOMAIN-SUFFIX,wikileaks.org
+  - DOMAIN-SUFFIX,wikimapia.org
+  - DOMAIN-SUFFIX,wikimedia.org
+  - DOMAIN-SUFFIX,wikinews.org
+  - DOMAIN-SUFFIX,wikipedia.org
+  - DOMAIN-SUFFIX,wikiquote.org
+  - DOMAIN-SUFFIX,wikipedia.com
+  # 额外Streaming
   # (Music)
   # > Deezer
   - PROCESS-NAME,deezer.android.app
@@ -255,8 +259,6 @@ payload:
   - DOMAIN-SUFFIX,phprcdn.com
   - DOMAIN-SUFFIX,pornhub.com
   - DOMAIN-SUFFIX,pornhubpremium.com
-  # > 毒药测速
-  - DOMAIN-SUFFIX,duyaoss.com
   # > 其他
   - DOMAIN-SUFFIX,inoreader.com
   - DOMAIN-SUFFIX,1password.com
@@ -291,6 +293,7 @@ payload:
   - DOMAIN-SUFFIX,chinatimes.com
   - DOMAIN-SUFFIX,cnet.com
   - DOMAIN-SUFFIX,cnn.com
+  - DOMAIN-SUFFIX,duyaoss.com
   - DOMAIN-SUFFIX,disconnect.me
   - DOMAIN-SUFFIX,discuss.com.hk
   - DOMAIN-SUFFIX,dribbble.com
@@ -369,6 +372,3 @@ payload:
   - DOMAIN-SUFFIX,yandex.ru
   - DOMAIN-SUFFIX,zoom.us
   - DOMAIN-SUFFIX,zendesk.com
-  - DOMAIN-SUFFIX,.xyz
-  - DOMAIN-SUFFIX,.pro
-  - DOMAIN-SUFFIX,.org
