@@ -6,16 +6,3 @@ payload:
   - DOMAIN-SUFFIX,googleusercontent.com
 # > Google Search
   - DOMAIN-KEYWORD,www.google.
-## >> Android
-  - DOMAIN-SUFFIX,android.com
-  - DOMAIN-SUFFIX,android.pool.ntp.org
-  - DOMAIN-SUFFIX,android.clients.google.com 
-  - DOMAIN-SUFFIX,androidify.com
-## >> Chrome
-  - DOMAIN-SUFFIX,chrome.com
-  - DOMAIN-SUFFIX,chromeexperiments.com
-  - DOMAIN-SUFFIX,chromestatus.com
-  - DOMAIN-SUFFIX,chromium.org
-  - DOMAIN-SUFFIX,webmproject.org
-  - DOMAIN-SUFFIX,webrtc.org 
-  
