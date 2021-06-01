@@ -1,0 +1,6 @@
+# Link:https://cdn.jsdelivr.net/gh/blackmatrix7/ios_rule_script/rule/Surge/Speedtest/Speedtest.list
+DOMAIN-SUFFIX,fast.com
+DOMAIN-SUFFIX,ooklaserver.net
+DOMAIN-SUFFIX,speed.cloudflare.com
+DOMAIN-KEYWORD,speedtest
+USER-AGENT,SpeedTest*
