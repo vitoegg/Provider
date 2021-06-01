@@ -1,4 +1,8 @@
 payload:
+  # > 18+
+  - DOMAIN-KEYWORD,sis001
+  - DOMAIN-KEYWORD,cool18
+  - DOMAIN-KEYWORD,jav
   # > Amazon
   - DOMAIN-SUFFIX,amazon.nl
   - DOMAIN-SUFFIX,amazon.com.mx
@@ -102,7 +106,12 @@ payload:
   - DOMAIN-SUFFIX,githubusercontent.com
   # > Instagram  
   - DOMAIN-SUFFIX,instagram.com
-  - DOMAIN-SUFFIX,cdninstagram.com 
+  - DOMAIN-SUFFIX,cdninstagram.com
+  # >iStat Update
+  - DOMAIN-SUFFIX,updates.bjango.com
+  - DOMAIN-SUFFIX,updates.istatmenus.app
+  - DOMAIN-SUFFIX,cdn.bjango.com
+  - DOMAIN-SUFFIX,campaign-archive.com
   # > Microsoft
   - DOMAIN-SUFFIX,aka.ms
   - DOMAIN-SUFFIX,outlook.com
@@ -318,6 +327,7 @@ payload:
   - DOMAIN-SUFFIX,img.ly
   - DOMAIN-SUFFIX,imgur.com
   - DOMAIN-SUFFIX,instapaper.com
+  - DOMAIN-SUFFIX,infinitynewtab.com
   - DOMAIN-SUFFIX,ip.sb
   - DOMAIN-SUFFIX,leetcode.com
   - DOMAIN-SUFFIX,mailchimp.com
