@@ -1,9 +1,7 @@
 payload:
 # > Google
   - DOMAIN-SUFFIX,google.com
-  - DOMAIN-SUFFIX,googleapis.com
   - DOMAIN-SUFFIX,gmail.com
-  - DOMAIN-SUFFIX,ytimg.com
   # 仅适用于Clash Premium内核
   - PROCESS-NAME,com.android.vending
   - PROCESS-NAME,com.google.android.gms
@@ -16,6 +14,3 @@ payload:
   - DOMAIN-SUFFIX,googleusercontent.com
 # > Google Search
   - DOMAIN-KEYWORD,www.google.
-  - DOMAIN-KEYWORD,google
-  - DOMAIN-KEYWORD,googlesource
-  - DOMAIN-KEYWORD,gstatic
