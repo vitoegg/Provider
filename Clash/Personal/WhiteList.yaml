@@ -1,5 +1,9 @@
 payload:
 
+#Apple
+ - DOMAIN-SUFFIX,mzstatic.com
+ - DOMAIN-SUFFIX,aaplimg.com
+ 
 #阿里巴巴
  - DOMAIN-SUFFIX,alibaba.com
  - DOMAIN-SUFFIX,alibabausercontent.com
