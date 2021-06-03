@@ -1,6 +1,7 @@
 payload:
 # > Google
   - DOMAIN-SUFFIX,google.com
+  - DOMAIN-SUFFIX,googleapis.com
   - DOMAIN-SUFFIX,gmail.com
   - DOMAIN-SUFFIX,ytimg.com  
 # > Google Drive
