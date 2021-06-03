@@ -1,14 +1,18 @@
 payload:
 
-#Personal
- - DOMAIN-KEYWORD,diyibanzhu
- - DOMAIN-KEYWORD,dybz
- - DOMAIN-SUFFIX,axus.com
- - DOMAIN-SUFFIX,flomo.app
- - DOMAIN-SUFFIX,48.cn
- - DOMAIN-SUFFIX,xinruimz-isv.isvjcloud.com
- - DOMAIN-SUFFIX,umeng.com
-
+#阿里巴巴
+ - DOMAIN-SUFFIX,alibaba.com
+ - DOMAIN-SUFFIX,alibabausercontent.com
+ - DOMAIN-SUFFIX,alicdn.com
+ - DOMAIN-SUFFIX,alipay.com
+ - DOMAIN-SUFFIX,amap.com
+ - DOMAIN-SUFFIX,dingtalk.com
+ - DOMAIN-SUFFIX,soku.com
+ - DOMAIN-SUFFIX,taobao.com
+ - DOMAIN-SUFFIX,tmall.com
+ - DOMAIN-SUFFIX,tmall.hk
+ - DOMAIN-SUFFIX,ykimg.com
+ 
 #百度
  - DOMAIN-SUFFIX,baidu.com
  - DOMAIN-SUFFIX,baidubcr.com
@@ -24,21 +28,6 @@ payload:
  - DOMAIN-SUFFIX,snssdk.com
  - DOMAIN-SUFFIX,iesdouyin.com
  - DOMAIN-SUFFIX,toutiao.com
-
-#阿里巴巴
- - DOMAIN-SUFFIX,alibaba.com
- - DOMAIN-SUFFIX,alibabausercontent.com
- - DOMAIN-SUFFIX,alicdn.com
- - DOMAIN-SUFFIX,alipay.com
- - DOMAIN-SUFFIX,amap.com
- - DOMAIN-SUFFIX,dingtalk.com
- - DOMAIN-SUFFIX,soku.com
- - DOMAIN-SUFFIX,taobao.com
- - DOMAIN-SUFFIX,tmall.com
- - DOMAIN-SUFFIX,tmall.hk
- - DOMAIN-SUFFIX,ykimg.com
- - DOMAIN-SUFFIX,qiniu.com
- - DOMAIN-SUFFIX,qiniucdn.com
 
 #腾讯
  - DOMAIN-SUFFIX,gtimg.com
@@ -131,7 +120,6 @@ payload:
  - DOMAIN-SUFFIX,xiaojuchefu.cn
  - DOMAIN-SUFFIX,xiaojukeji.com
 
-
 #流媒体
 # > Bilibili
  - DOMAIN-SUFFIX,biliapi.net
@@ -178,8 +166,6 @@ payload:
  - DOMAIN-SUFFIX,microsoftonline.com
  - DOMAIN-SUFFIX,office.com
  - DOMAIN-SUFFIX,office365.com
- - DOMAIN-SUFFIX,hotmail.com
- - DOMAIN-SUFFIX,outlook.com
 
 #新闻
  - DOMAIN-SUFFIX,sspai.com
@@ -187,6 +173,11 @@ payload:
  - DOMAIN-SUFFIX,ifanr.com
  - DOMAIN-SUFFIX,app.so
  - DOMAIN-SUFFIX,coolbuy.com
+ - DOMAIN-SUFFIX,ithome.com
+ - DOMAIN-SUFFIX,qdaily.com
+ - DOMAIN-SUFFIX,sohu.com
+ - DOMAIN-SUFFIX,soku.com
+ - DOMAIN-SUFFIX,soso.com
 
 #小米
  - DOMAIN-SUFFIX,mi.com
@@ -212,22 +203,39 @@ payload:
  - DOMAIN-SUFFIX,163.com
  - DOMAIN-SUFFIX,youdao.com
 
-
 #服务
- - DOMAIN-SUFFIX,flomo.app
- - DOMAIN-SUFFIX,48.cn
- - DOMAIN-SUFFIX,ruguoapp.com
- - DOMAIN-SUFFIX,okjike.com
- - DOMAIN-SUFFIX,jellow.site
+ - DOMAIN-SUFFIX,12306.cn
+ - DOMAIN-SUFFIX,12306.com
  - DOMAIN-SUFFIX,115.com
+ - DOMAIN-SUFFIX,48.cn
+ - DOMAIN-SUFFIX,58.com
+ - DOMAIN-SUFFIX,axus.com
  - DOMAIN-SUFFIX,bitqiu.com
  - DOMAIN-SUFFIX,ctrip.com
  - DOMAIN-SUFFIX,caiyunapp.com
+ - DOMAIN-SUFFIX,flomo.app
+ - DOMAIN-SUFFIX,fir.im
  - DOMAIN-SUFFIX,ipip.net
+ - DOMAIN-SUFFIX,jellow.site
+ - DOMAIN-SUFFIX,jianshu.com
+ - DOMAIN-SUFFIX,jianshu.io
+ - DOMAIN-SUFFIX,jianshuapi.com
+ - DOMAIN-SUFFIX,okjike.com
+ - DOMAIN-SUFFIX,qiniucdn.com
+ - DOMAIN-SUFFIX,qiniudn.com
  - DOMAIN-SUFFIX,oschina.net
+ - DOMAIN-SUFFIX,ruguoapp.com
  - DOMAIN-SUFFIX,segmentfault.com
  - DOMAIN-SUFFIX,smzdm.com
+ - DOMAIN-SUFFIX,umeng.com 
  - DOMAIN-SUFFIX,weather.com
  - DOMAIN-SUFFIX,xunlei.com
+ - DOMAIN-SUFFIX,xinruimz-isv.isvjcloud.com
  - DOMAIN,download.jetbrains.com
  - DOMAIN,images-cn.ssl-images-amazon.com
+ 
+ #Personal 
+ - DOMAIN-SUFFIX,edu.cn
+ - DOMAIN-SUFFIX,cn
+ - DOMAIN-KEYWORD,diyibanzhu
+ - DOMAIN-KEYWORD,dybz
