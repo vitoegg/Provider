@@ -20,18 +20,6 @@ payload:
   - DOMAIN-KEYWORD,amazon
   - DOMAIN,mainnet.infura.io
   - DOMAIN,api.metaswap.codefi.network
-  ## >> Android
-  - DOMAIN-SUFFIX,android.com
-  - DOMAIN-SUFFIX,android.pool.ntp.org
-  - DOMAIN-SUFFIX,android.clients.google.com 
-  - DOMAIN-SUFFIX,androidify.com
-  ## >> Chrome
-  - DOMAIN-SUFFIX,chrome.com
-  - DOMAIN-SUFFIX,chromeexperiments.com
-  - DOMAIN-SUFFIX,chromestatus.com
-  - DOMAIN-SUFFIX,chromium.org
-  - DOMAIN-SUFFIX,webmproject.org
-  - DOMAIN-SUFFIX,webrtc.org 
   # > Cloudflare
   - DOMAIN-SUFFIX,cloudflare-dns.com
   - DOMAIN-SUFFIX,cloudflare-ipfs.com
@@ -90,10 +78,6 @@ payload:
   - DOMAIN-SUFFIX,rocksdb.org
   - DOMAIN-SUFFIX,whatsapp.com
   - DOMAIN-SUFFIX,whatsapp.net
-  # > Fixiv
-  - DOMAIN-SUFFIX,pixiv.net
-  - DOMAIN-SUFFIX,pixiv.org
-  - DOMAIN-SUFFIX,pximg.net
   # > Github
   - DOMAIN-SUFFIX,github.com 
   - DOMAIN-SUFFIX,github.io
@@ -120,7 +104,6 @@ payload:
   - DOMAIN-SUFFIX,data.microsoft.com
   - DOMAIN-SUFFIX,officecdn-microsoft-com.akamaized.net
   - DOMAIN-SUFFIX,mobile.pipe.aria.microsoft.com
-  - DOMAIN-KEYWORD,officecdn
   # OneDrive
   - DOMAIN-SUFFIX,1drv.com
   - DOMAIN-SUFFIX,onedrive.com
@@ -130,11 +113,6 @@ payload:
   - DOMAIN-SUFFIX,oracle.com
   - DOMAIN-SUFFIX,trustarc.com
   - DOMAIN-SUFFIX,truste.com
-  # Playstation
-  - DOMAIN-SUFFIX,playstation.com
-  - DOMAIN-SUFFIX,playstation.net
-  - DOMAIN-SUFFIX,playstationnetwork.com
-  - DOMAIN-SUFFIX,sonyentertainmentnetwork.com
   # > Pinterest
   - DOMAIN-SUFFIX,pinterest.at
   - DOMAIN-SUFFIX,pinterest.ca
@@ -152,21 +130,6 @@ payload:
   - DOMAIN-SUFFIX,redd.it
   - DOMAIN-SUFFIX,reddit.com
   - DOMAIN-SUFFIX,redditmedia.com
-  # Steam
-  - DOMAIN-SUFFIX,steam-chat.com
-  - DOMAIN-SUFFIX,steamcontent.com
-  - DOMAIN-SUFFIX,steamgames.com
-  - DOMAIN-SUFFIX,steampowered.com
-  - DOMAIN-SUFFIX,steamstat.us
-  - DOMAIN-SUFFIX,steamstatic.com
-  - DOMAIN-SUFFIX,steamusercontent.com
-  - DOMAIN,steambroadcast.akamaized.net
-  - DOMAIN,steamcdn-a.akamaihd.net
-  - DOMAIN,steamcommunity-a.akamaihd.net
-  - DOMAIN,steamstore-a.akamaihd.net
-  - DOMAIN,steamusercontent-a.akamaihd.net
-  - DOMAIN,steamusercontent-a.akamaihd.net
-  - DOMAIN,steamuserimages-a.akamaihd.net
   # > Twitter
   - DOMAIN-SUFFIX,pscp.tv
   - DOMAIN-SUFFIX,periscope.tv
@@ -176,42 +139,14 @@ payload:
   - DOMAIN-SUFFIX,twitpic.com
   - DOMAIN-SUFFIX,twitter.com
   - DOMAIN-SUFFIX,vine.co
-  # > The New York Times
-  - DOMAIN-SUFFIX,nyt.com
-  - DOMAIN-SUFFIX,nytchina.com
-  - DOMAIN-SUFFIX,nytcn.me
-  - DOMAIN-SUFFIX,nytco.com
-  - DOMAIN-SUFFIX,nytimes.com
-  - DOMAIN-SUFFIX,nytimg.com
-  - DOMAIN-SUFFIX,nytlog.com
-  - DOMAIN-SUFFIX,nytstyle.com
   # > Wikimedia Foundation
   - DOMAIN-SUFFIX,wikileaks.org
   - DOMAIN-SUFFIX,wikimapia.org
   - DOMAIN-SUFFIX,wikimedia.org
-  - DOMAIN-SUFFIX,wikinews.org
   - DOMAIN-SUFFIX,wikipedia.org
-  - DOMAIN-SUFFIX,wikiquote.org
   - DOMAIN-SUFFIX,wikipedia.com
   # 额外Streaming
   # (Music)
-  # > Deezer
-  - PROCESS-NAME,deezer.android.app
-  - DOMAIN-SUFFIX,deezer.com
-  - DOMAIN-SUFFIX,dzcdn.net
-  # > JOOX
-  - PROCESS-NAME,com.tencent.ibg.joox
-  - PROCESS-NAME,com.tencent.ibg.jooxtv
-  - DOMAIN-SUFFIX,joox.com
-  - DOMAIN-KEYWORD,jooxweb-api
-  # > KKBOX
-  - PROCESS-NAME,com.skysoft.kkbox.android
-  - DOMAIN-SUFFIX,kkbox.com
-  - DOMAIN-SUFFIX,kkbox.com.tw
-  - DOMAIN-SUFFIX,kfs.io
-  # > Pandora
-  - PROCESS-NAME,com.pandora.android
-  - DOMAIN-SUFFIX,pandora.com
   # > SoundCloud
   - PROCESS-NAME,com.soundcloud.android
   - DOMAIN-SUFFIX,p-cdn.us
@@ -221,50 +156,9 @@ payload:
   - PROCESS-NAME,com.aspiro.tidal
   - DOMAIN-SUFFIX,tidal.com
   # (Video)
-  # > discovery+
-  - PROCESS-NAME,com.discovery.discoveryplus.mobile
-  - DOMAIN-SUFFIX,disco-api.com
-  - DOMAIN-SUFFIX,discoveryplus.co.uk
-  - DOMAIN-SUFFIX,discoveryplus.com
-  - DOMAIN-SUFFIX,discoveryplus.in
-  - DOMAIN-SUFFIX,dnitv.com
-  # > encoreTVB
-  - PROCESS-NAME,com.tvbusa.encore
-  - DOMAIN-SUFFIX,encoretvb.com
-  - DOMAIN,edge.api.brightcove.com
-  - DOMAIN,bcbolt446c5271-a.akamaihd.net
   # > FriDay
   - DOMAIN-SUFFIX,fetnet.net
   - DOMAIN-SUFFIX,friday.tw  
-  # > 华文电视
-  # USER-AGENT,HWTVMobile*
-  - DOMAIN-SUFFIX,5itv.tv
-  - DOMAIN-SUFFIX,ocnttv.com
-  # > Hulu
-  - PROCESS-NAME,com.hulu.plus
-  - DOMAIN-SUFFIX,hulu.com
-  - DOMAIN-SUFFIX,huluim.com
-  - DOMAIN-SUFFIX,hulustream.com
-  # > My5
-  - PROCESS-NAME,com.mobileiq.demand5
-  - DOMAIN-SUFFIX,channel5.com
-  - DOMAIN-SUFFIX,my5.tv
-  - DOMAIN,d349g9zuie06uo.cloudfront.net
-  # > myTV SUPER
-  - PROCESS-NAME,com.tvb.mytvsuper
-  - DOMAIN-SUFFIX,mytvsuper.com
-  - DOMAIN-SUFFIX,tvb.com
-  # > Paramount+
-  - PROCESS-NAME,com.cbs.app
-  - DOMAIN-SUFFIX,cbsi.com
-  - DOMAIN-SUFFIX,cbsaavideo.com
-  - DOMAIN-SUFFIX,cbsivideo.com
-  - DOMAIN-SUFFIX,paramountplus.com
-  - DOMAIN-SUFFIX,pplusstatic.com
-  - DOMAIN,cbsi.live.ott.irdeto.com
-  - DOMAIN,cbsplaylistserver.aws.syncbak.com
-  - DOMAIN,cbsservice.aws.syncbak.com
-  - DOMAIN,link.theplatform.com
   # > Pornhub
   - DOMAIN-SUFFIX,phncdn.com
   - DOMAIN-SUFFIX,phprcdn.com
@@ -291,17 +185,6 @@ payload:
   - DOMAIN-SUFFIX,blog.com
   - DOMAIN-SUFFIX,blogcdn.com
   - DOMAIN-SUFFIX,blogger.com
-  - DOMAIN-SUFFIX,blogsmithmedia.com
-  - DOMAIN-SUFFIX,blogspot.com
-  - DOMAIN-SUFFIX,blogspot.hk
-  - DOMAIN-SUFFIX,bloomberg.com
-  - DOMAIN-SUFFIX,cdn.angruo.com
-  - DOMAIN-SUFFIX,cdn.segment.com
-  - DOMAIN-SUFFIX,cdnst.net
-  - DOMAIN-SUFFIX,change.org
-  - DOMAIN-SUFFIX,channelnewsasia.com
-  - DOMAIN-SUFFIX,chinadigitaltimes.net
-  - DOMAIN-SUFFIX,chinatimes.com
   - DOMAIN-SUFFIX,cnet.com
   - DOMAIN-SUFFIX,cnn.com
   - DOMAIN-SUFFIX,duyaoss.com
@@ -321,25 +204,19 @@ payload:
   - DOMAIN-SUFFIX,ifixit.com
   - DOMAIN-SUFFIX,ift.tt
   - DOMAIN-SUFFIX,ifttt.com
-  - DOMAIN-SUFFIX,img.ly
   - DOMAIN-SUFFIX,imgur.com
   - DOMAIN-SUFFIX,instapaper.com
   - DOMAIN-SUFFIX,infinitynewtab.com
   - DOMAIN-SUFFIX,ip.sb
-  - DOMAIN-SUFFIX,leetcode.com
   - DOMAIN-SUFFIX,mailchimp.com
-  - DOMAIN-SUFFIX,mindnode.com
   - DOMAIN-SUFFIX,mitsea.com
   - DOMAIN-SUFFIX,notion.so
   - DOMAIN-SUFFIX,nssurge.com
-  - DOMAIN-SUFFIX,openvpn.net
   - DOMAIN-SUFFIX,openwrt.org
-  - DOMAIN-SUFFIX,optimizely.com
   - DOMAIN-SUFFIX,pinterest.com
   - DOMAIN-SUFFIX,pixelmator.com
   - DOMAIN-SUFFIX,quora.com
   - DOMAIN-SUFFIX,quoracdn.net
-  - DOMAIN-SUFFIX,rime.im
   - DOMAIN-SUFFIX,slack-edge.com
   - DOMAIN-SUFFIX,slack-msgs.com
   - DOMAIN-SUFFIX,slack.com
@@ -349,23 +226,14 @@ payload:
   - DOMAIN-SUFFIX,t66y.com
   - DOMAIN-SUFFIX,target.com
   - DOMAIN-SUFFIX,techcrunch.com
-  - DOMAIN-SUFFIX,teddysun.com
-  - DOMAIN-SUFFIX,textnow.com
-  - DOMAIN-SUFFIX,textnow.me
   - DOMAIN-SUFFIX,tmblr.co
   - DOMAIN-SUFFIX,todoist.com
-  - DOMAIN-SUFFIX,torrentprivacy.com
-  - DOMAIN-SUFFIX,torrentproject.se
-  - DOMAIN-SUFFIX,torrentz.eu
   - DOMAIN-SUFFIX,trakt.tv
   - DOMAIN-SUFFIX,ulyssesapp.com
   - DOMAIN-SUFFIX,unsplash.com
-  - DOMAIN-SUFFIX,uploaded.net
-  - DOMAIN-SUFFIX,uploader.jp
   - DOMAIN-SUFFIX,v2ex.co
   - DOMAIN-SUFFIX,v2ex.com
   - DOMAIN-SUFFIX,v2ray.com
-  - DOMAIN-SUFFIX,vevo.com
   - DOMAIN-SUFFIX,viber.com
   - DOMAIN-SUFFIX,vimeo.com
   - DOMAIN-SUFFIX,vimeocdn.com
@@ -383,10 +251,11 @@ payload:
   - DOMAIN-SUFFIX,yimg.com
   - DOMAIN-SUFFIX,yahooapis.com
   - DOMAIN-SUFFIX,yandex.ru
-  - DOMAIN-SUFFIX,zoom.us
   - DOMAIN-SUFFIX,zendesk.com
   # > 18+
   - DOMAIN-KEYWORD,sis001
   - DOMAIN-KEYWORD,cool18
   - DOMAIN-KEYWORD,jav
   - DOMAIN-KEYWORD,18comic
+  # > Office资源更新
+  - DOMAIN-KEYWORD,officecdn
