@@ -50,6 +50,72 @@ RULE-SET,https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/s
 ##彩云天气去广告
 ^https?:\/\/cdn-1rtb\.caiyunapp\.com/creative/.*$ - reject
 
+##
+#From1:https://github.com/GFBG-IT/QuantumultX/blob/main/Advertising.conf
+#From2:https://github.com/DivineEngine/Profiles/blob/master/Surge/Module/Block/Advertising.sgmodule
+##
+# > 淘宝 - gw.alicdn.com,heic.alicdn.com
+^https?:\/\/(gw|heic)\.alicdn\.com\/\w{2}s\/.+\.jpg_(9\d{2}|\d{4}) url reject
+^https?:\/\/(gw|heic)\.alicdn\.com\/imgextra\/.+\d{4}-\d{4}\.jpg_(9\d{2}|\d{4}) url reject
+
+# > 闲鱼 - acs.m.taobao.com
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.taobao\.idle\.home\.welcome\/ url reject
+
+# > 飞猪 - acs.m.taobao.com
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.activity\.querytmsresources\/ url reject
+
+# > 高德地图 - m*.amap.com
+^https?:\/\/m\d\.amap\.com\/ws\/valueadded\/alimama\/splash_screen\/ url reject
+
+# > 饿了么 - cube.elemecdn.com
+^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_\d{3},h_\d{4}\/format,webp\/ url reject
+^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_1\d{3},h_2\d{3}\/format,webp\/ url reject
+^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_6\d{2},h_8\d{2}\/format,webp\/ url reject
+^https?:\/\/cube\.elemecdn\.com\/\w\/\w{2}\/\w+mp4\.mp4\? url reject
+
+# > 百度地图 - newclient.map.baidu.com
+^https?:\/\/newclient\.map\.baidu\.com\/client\/phpui2\/\?qt=ads - reject
+
+# > 贝壳 - app.api.ke.com
+^https?:\/\/app\.api\.ke\.com\/config\/config\/bootpage - reject
+
+# > 携程 - m.ctrip.com
+^https?:\/\/m\.ctrip\.com\/restapi\/soa2\/\d+\/json\/getAdsList - reject
+
+# > 中国联通营业厅 - m.client.10010.com
+^https?:\/\/m\.client\.10010\.com\/mobileService\/customer\/accountListData\.htm url reject
+^https?:\/\/m\.client\.10010\.com\/uniAdmsInterface\/getWelcomeAd url reject
+
+# > 中国电信营业厅- cloud.189.cn
+^https?:\/\/cloud\.189\.cn\/include\/splash\/ url reject
+
+# > 京东 - ms.jr.jd.com,img*.360buyimg.com,bdsp-x.jd.com,dsp-x.jd.com
+^https?:\/\/(bdsp-x|dsp-x)\.jd\.com\/adx\/ url reject
+^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/na\/m\/getLoadingPicture url reject
+^https?:\/\/img\d+\.360buyimg\.com\/jddjadvertise\/ url reject
+
+# > MI - api.jr.mi.com,api-mifit*.huami.com
+^https?:\/\/api\.m\.mi\.com\/v\d\/app\/start url reject
+^https?:\/\/api\.jr\.mi\.com\/v\d\/adv\/ url reject
+^https?:\/\/api\.jr\.mi\.com\/jr\/api\/playScreen url reject
+^https?:\/\/(api-mifit|api-mifit-\w+)\.huami\.com\/discovery\/mi\/discovery\/\w+_ad\? url reject
+
+# > 美团 - img.meituan.net,p*.meituan.net,s3plus.meituan.net,flowplus.meituan.net
+^https?:\/\/img\.meituan\.net\/(adunion|display|dpmobile|midas)\/\w+\.(gif|jpg|jpg\.webp)$ url reject
+^https?:\/\/(s3plus|flowplus)\.meituan\.net\/v\d\/\w+\/linglong\/\w+\.(gif|jpg|mp4) url reject
+^https?:\/\/p\d\.meituan\.net\/(bizad|wmbanner)\/\w+\.jpg url reject
+^https?:\/\/p\d\.meituan\.net\/movie\/\w+\.jpg\?may_covertWebp url reject
+
+# > 雪球 - api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/promotion\/(display_cache|display_ad|feed_display|search_ad) - reject
+^https?:\/\/(api|promo)\.xueqiu\.com\/promotion\/(display_cache|display_ad|feed_display|search_ad) - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/brand\/search\/v1\.json - reject
+^https?:\/\/api\.xueqiu\.com\/brand\/search\/v1\.json - reject
+
+# > 小红书 - www.xiaohongshu.com
+^https?:\/\/www\.xiaohongshu\.com\/api\/sns\/v\d\/system_service\/splash_config - reject
+
+
 ##重定向
 ^https?:\/\/(ditu|maps).google\.cn https://maps.google.com 302
 ^https?:\/\/(www.)?(g|google)\.cn https://www.google.com 302
@@ -93,5 +159,5 @@ wb_launch.js = type=http-response,requires-body=1,pattern=^https?://(sdk|wb)app\
 wb_ad.js = type=http-response,requires-body=1,max-size=-1,pattern=^https?://m?api\.weibo\.c(n|om)/2/(statuses/(unread|extend|positives/get|(friends|video)(/|_)(mix)?timeline)|stories/(video_stream|home_list)|(groups|fangle)/timeline|profile/statuses|comments/build_comments|photo/recommend_list|service/picfeed|searchall|cardlist|page|!/(photos/pic_recommend_status|live/media_homelist)|video/tiny_stream_video_list|photo/info|remind/unread_count),script-path=https://raw.githubusercontent.com/yichahucha/surge/master/wb_ad.js
 
 [MITM]
-hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com
+hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com,gw.alicdn.com,heic.alicdn.com,acs.m.taobao.com,m*.amap.com, cube.elemecdn.com,newclient.map.baidu.com,app.api.ke.com,m.ctrip.com,m.client.10010.com,cloud.189.cn,ms.jr.jd.com,img*.360buyimg.com,bdsp-x.jd.com,dsp-x.jd.com,api.jr.mi.com,api-mifit*.huami.com,img.meituan.net,p*.meituan.net,s3plus.meituan.net,flowplus.meituan.net,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.xiaohongshu.com
 
