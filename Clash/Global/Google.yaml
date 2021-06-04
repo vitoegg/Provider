@@ -1,6 +1,7 @@
 payload:
 # > Google
   - DOMAIN-SUFFIX,google.com
+  - DOMAIN-SUFFIX,googleapis.com
   - DOMAIN-SUFFIX,gmail.com
   # 仅适用于Clash Premium内核
   - PROCESS-NAME,com.android.vending
