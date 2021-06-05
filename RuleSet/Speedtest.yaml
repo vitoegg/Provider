@@ -1,6 +1,6 @@
-
-# Link:https://github.com/lhie1/Rules/blob/master/Surge/Surge%203/Provider/Speedtest.list
-# 更新时间：2021.06.05
+payload:
+ # Link:https://github.com/lhie1/Rules/blob/master/Surge/Surge%203/Provider/Speedtest.list
+ # 更新时间：2021.06.05
 
  # > Fast
  - DOMAIN-SUFFIX,fast.com
