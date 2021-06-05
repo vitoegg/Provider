@@ -233,5 +233,4 @@ payload:
   - DOMAIN-SUFFIX,yahooapis.com
   - DOMAIN-SUFFIX,zendesk.com
   # > KeyWord终极匹配
-  # > Office资源更新
-  - DOMAIN-KEYWORD,officecdn
+  # > 
