@@ -74,7 +74,7 @@ Module包含自定义和外部引用，为了保持及时更新不使用CDN链�
 
 `订阅同步`
 
-- https://raw.githubusercontent.com/vitoegg/Provider/master/Module/Subsync.sgmodule
+- https://raw.githubusercontent.com/vitoegg/Provider/master/Module/SubSync.sgmodule
 
 
 
