@@ -1,4 +1,14 @@
 payload:
+  # >18+
+  - DOMAIN-SUFFIX,sis001.com
+  - DOMAIN-SUFFIX,cool18.com
+  - DOMAIN-SUFFIX,javdb.com
+  - DOMAIN-SUFFIX,javbus.com
+  - DOMAIN-SUFFIX,javlibrary.com
+  - DOMAIN-SUFFIX,18comic.vip
+  - DOMAIN-SUFFIX,18comic.org
+  - DOMAIN-SUFFIX,18comic.art
+  - DOMAIN-SUFFIX,18comic.company
   # > Amazon
   - DOMAIN-SUFFIX,amazon.com
   - DOMAIN-SUFFIX,amazontrust.com
@@ -222,10 +232,6 @@ payload:
   - DOMAIN-SUFFIX,yimg.com
   - DOMAIN-SUFFIX,yahooapis.com
   - DOMAIN-SUFFIX,zendesk.com
-  # > 18+
-  - DOMAIN-KEYWORD,sis001
-  - DOMAIN-KEYWORD,cool18
-  - DOMAIN-KEYWORD,jav
-  - DOMAIN-KEYWORD,18comic
+  # > KeyWord终极匹配
   # > Office资源更新
   - DOMAIN-KEYWORD,officecdn
