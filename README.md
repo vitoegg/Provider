@@ -11,8 +11,9 @@
 因为 raw.githubusercontent.com 已被污染，所以转换成CDN链接
 
 ```
-**Apple**
+Apple
 ```
+`Apple`
 
 1. Direct
 https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Apple/Direct.list
