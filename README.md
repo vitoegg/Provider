@@ -62,11 +62,11 @@ Module包含自定义和外部引用，为了保持及时更新不使用CDN链�
 
 `Adguard`
 
-- https://raw.githubusercontent.com/vitoegg/Provider/master/Module/AdGuard
+- https://raw.githubusercontent.com/vitoegg/Provider/master/Module/AdGuard.sgmodule
 
 `连接模式`
 
-- https://raw.githubusercontent.com/vitoegg/Provider/master/master/Module/OutboundMode.sgmodule
+- https://raw.githubusercontent.com/vitoegg/Provider/master/Module/OutboundMode.sgmodule
 
 `订阅管理`
 
@@ -74,7 +74,7 @@ Module包含自定义和外部引用，为了保持及时更新不使用CDN链�
 
 `订阅同步`
 
-- https://raw.githubusercontent.com/vitoegg/Provider/master/master/Module/Subsync.sgmodule
+- https://raw.githubusercontent.com/vitoegg/Provider/master/Module/Subsync.sgmodule
 
 
 
