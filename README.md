@@ -12,6 +12,12 @@
 
 **Apple**
 
+```
+git status
+git add
+git commit
+```
+
 、、、
 
 https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Apple/Direct.list
