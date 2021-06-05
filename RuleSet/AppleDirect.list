@@ -1,3 +1,6 @@
+#link:https://github.com/geekdada/surge-list/blob/master/surgio-snippet/apple.tpl
+#更新日期:2021.06.05
+
 ###AppStore
 USER-AGENT,AppStore*
 AND,((NOT,((USER-AGENT,*com.apple.WebKit*))),(USER-AGENT,*com.apple.*))
