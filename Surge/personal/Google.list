@@ -11,5 +11,8 @@ DOMAIN-SUFFIX,docs.google.com
 DOMAIN-SUFFIX,drive.google.com
 DOMAIN-SUFFIX,googledrive.com
 DOMAIN-SUFFIX,googleusercontent.com
+# > YouTube Music
+USER-AGENT,com.google.ios.youtubemusic*
+USER-AGENT,YouTubeMusic*
 # > Google Search
 DOMAIN-KEYWORD,www.google.
