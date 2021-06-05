@@ -15,5 +15,11 @@
 `Direct`
 
 - https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Apple/Direct.list
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Apple/Direct.yaml
+
+`System`
+
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Apple/System.list
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Apple/System.yaml
 
 
