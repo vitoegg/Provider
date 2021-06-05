@@ -1,0 +1,242 @@
+payload:
+#阿里巴巴
+ - DOMAIN-SUFFIX,alibaba.com
+ - DOMAIN-SUFFIX,alibabausercontent.com
+ - DOMAIN-SUFFIX,alicdn.com
+ - DOMAIN-SUFFIX,alipay.com
+ - DOMAIN-SUFFIX,amap.com
+ - DOMAIN-SUFFIX,dingtalk.com
+ - DOMAIN-SUFFIX,soku.com
+ - DOMAIN-SUFFIX,taobao.com
+ - DOMAIN-SUFFIX,tmall.com
+ - DOMAIN-SUFFIX,tmall.hk
+ - DOMAIN-SUFFIX,ykimg.com
+ 
+#百度
+ - DOMAIN-SUFFIX,baidu.com
+ - DOMAIN-SUFFIX,baidubcr.com
+ - DOMAIN-SUFFIX,baidupan.com
+ - DOMAIN-SUFFIX,baidupcs.com
+ - DOMAIN-SUFFIX,bdimg.com
+ - DOMAIN-SUFFIX,bdstatic.com
+ - DOMAIN-SUFFIX,yunjiasu-cdn.net
+
+#字节跳动
+ - DOMAIN-SUFFIX,feiliao.com
+ - DOMAIN-SUFFIX,pstatp.com
+ - DOMAIN-SUFFIX,snssdk.com
+ - DOMAIN-SUFFIX,iesdouyin.com
+ - DOMAIN-SUFFIX,toutiao.com
+
+#腾讯
+ - DOMAIN-SUFFIX,gtimg.com
+ - DOMAIN-SUFFIX,idqqimg.com
+ - DOMAIN-SUFFIX,igamecj.com
+ - DOMAIN-SUFFIX,myapp.com
+ - DOMAIN-SUFFIX,myqcloud.com
+ - DOMAIN-SUFFIX,qq.com
+ - DOMAIN-SUFFIX,qqmail.com
+ - DOMAIN-SUFFIX,qqurl.com
+ - DOMAIN-SUFFIX,servicewechat.com
+ - DOMAIN-SUFFIX,tencent.com
+ - DOMAIN-SUFFIX,tencent-cloud.net
+ - DOMAIN-SUFFIX,tenpay.com
+ - DOMAIN-SUFFIX,wechat.com
+ - DOMAIN,file-igamecj.akamaized.net
+ - DOMAIN-SUFFIX,qidian.com
+
+#新浪
+ - DOMAIN-SUFFIX,wbimg.cn
+ - DOMAIN-SUFFIX,wbimg.com
+ - DOMAIN-SUFFIX,wbimg.com.cn
+ - DOMAIN-SUFFIX,wcdn.cn
+ - DOMAIN-SUFFIX,weibo.cn
+ - DOMAIN-SUFFIX,weibo.com
+ - DOMAIN-SUFFIX,weibo.com.cn
+ - DOMAIN-SUFFIX,weibo.tv
+ - DOMAIN-SUFFIX,weibocdn.com
+ - DOMAIN-SUFFIX,weiboums.com
+ - DOMAIN-SUFFIX,weipan.cn
+ - DOMAIN-SUFFIX,weipan.com.cn
+ - DOMAIN-SUFFIX,xiaoka.tv
+ - DOMAIN-SUFFIX,t.cn
+ - DOMAIN-SUFFIX,sinaurl.cn
+ - DOMAIN-SUFFIX,sina.cn
+ - DOMAIN-SUFFIX,sina.com
+ - DOMAIN-SUFFIX,sina.com.cn
+ - DOMAIN-SUFFIX,sina.net
+ - DOMAIN-SUFFIX,sinaapp.com
+ - DOMAIN-SUFFIX,sinacdn.com
+ - DOMAIN-SUFFIX,sinacloud.cn
+ - DOMAIN-SUFFIX,sinacloud.com
+ - DOMAIN-SUFFIX,sinacloud.com.cn
+ - DOMAIN-SUFFIX,sinacloud.net
+
+#豆瓣
+ - DOMAIN-SUFFIX,douban.com
+ - DOMAIN-SUFFIX,doubanio.com
+
+#京东
+ - DOMAIN-SUFFIX,jd.com
+ - DOMAIN-SUFFIX,jd.hk
+ - DOMAIN-SUFFIX,jdpay.com
+ - DOMAIN-SUFFIX,360buyimg.com
+ - DOMAIN-SUFFIX,yihaodianimg.com
+ - DOMAIN-SUFFIX,suning.com
+
+#O2O服务
+# > Meituan
+ - DOMAIN-SUFFIX,dianping.com
+ - DOMAIN-SUFFIX,maoyan.com
+ - DOMAIN-SUFFIX,meituan.com
+ - DOMAIN-SUFFIX,meituan.net
+ - DOMAIN-SUFFIX,mtyun.com
+ - DOMAIN-SUFFIX,neixin.cn
+ - DOMAIN-SUFFIX,sankuai.com
+# > ele
+ - DOMAIN-SUFFIX,ele.me
+ - DOMAIN-SUFFIX,eleme.cn
+ - DOMAIN-SUFFIX,eleme.io
+ - DOMAIN-SUFFIX,elemecdn.cn
+ - DOMAIN-SUFFIX,elemecdn.com
+ - DOMAIN-SUFFIX,fengniaopaotui.cn
+ - DOMAIN-SUFFIX,fengniaozhongbao.cn
+ - DOMAIN-SUFFIX,xingxuanwaimai.com
+# > DiDi
+ - DOMAIN-SUFFIX,didialift.com
+ - DOMAIN-SUFFIX,didiapp.net.cn
+ - DOMAIN-SUFFIX,didichuxing.com
+ - DOMAIN-SUFFIX,didiglobal.com
+ - DOMAIN-SUFFIX,didistatic.com
+ - DOMAIN-SUFFIX,diditaxi.com
+ - DOMAIN-SUFFIX,diditaxi.com.cn
+ - DOMAIN-SUFFIX,didiwuxian.com
+ - DOMAIN-SUFFIX,didiyun.com
+ - DOMAIN-SUFFIX,didiyun.org
+ - DOMAIN-SUFFIX,didiyunapi.com
+ - DOMAIN-SUFFIX,juyanwenjuan.com
+ - DOMAIN-SUFFIX,udache.com
+ - DOMAIN-SUFFIX,xiaojuchefu.cn
+ - DOMAIN-SUFFIX,xiaojukeji.com
+
+#流媒体
+# > Bilibili
+ - DOMAIN-SUFFIX,biliapi.net
+ - DOMAIN-SUFFIX,bilibili.com
+ - DOMAIN-SUFFIX,bilivideo.com
+ - DOMAIN-SUFFIX,hdslb.com
+# > Tencent Video
+ - DOMAIN-SUFFIX,video.qq.com
+ - DOMAIN-SUFFIX,i.qq.com
+ - DOMAIN-SUFFIX,v.qq.com
+# > iQiyi
+ - DOMAIN-SUFFIX,iqiyi.com
+ - DOMAIN-SUFFIX,71edge.com
+# > Youku
+ - DOMAIN-SUFFIX,soku.com
+ - DOMAIN-SUFFIX,youku.com
+ - DOMAIN-SUFFIX,ykimg.com
+# > XiGua
+ - DOMAIN-SUFFIX,ixigua.com
+ - DOMAIN-SUFFIX,snssdk.com
+# > HunanTV
+ - DOMAIN-SUFFIX,hitv.com
+ - DOMAIN-SUFFIX,hunantv.com
+ - DOMAIN-SUFFIX,mgtv.com
+# > QQ Music
+ - DOMAIN-SUFFIX,music.qq.com
+ - DOMAIN-SUFFIX,music.tc.qq.com
+ - DOMAIN-SUFFIX,qqmusic.qq.com
+ - DOMAIN-SUFFIX,tencentmusic.com
+ - DOMAIN-SUFFIX,y.qq.com
+ - DOMAIN,aqqmusic.tc.qq.com
+ - DOMAIN,moo.qq.com
+# > Ximalaya
+ - DOMAIN-SUFFIX,ximalaya.com
+ - DOMAIN-SUFFIX,xmcdn.com
+# > Lizhi
+ - DOMAIN-SUFFIX,lizhi.fm
+# > Xiaoyuzhou
+ - DOMAIN-SUFFIX,xiaoyuzhoufm.com
+ - DOMAIN-SUFFIX,xyzcdn.net
+
+#微软
+ - DOMAIN-SUFFIX,microsoft.com
+ - DOMAIN-SUFFIX,microsoftonline.com
+ - DOMAIN-SUFFIX,office.com
+ - DOMAIN-SUFFIX,office365.com
+
+#新闻
+ - DOMAIN-SUFFIX,sspai.com
+ - DOMAIN-SUFFIX,36kr.com
+ - DOMAIN-SUFFIX,ifanr.com
+ - DOMAIN-SUFFIX,app.so
+ - DOMAIN-SUFFIX,coolbuy.com
+ - DOMAIN-SUFFIX,ithome.com
+ - DOMAIN-SUFFIX,qdaily.com
+ - DOMAIN-SUFFIX,sohu.com
+ - DOMAIN-SUFFIX,soku.com
+ - DOMAIN-SUFFIX,soso.com
+
+#小米
+ - DOMAIN-SUFFIX,mi.com
+ - DOMAIN-SUFFIX,mi-img.com
+ - DOMAIN-SUFFIX,xiaomi.com
+ - DOMAIN-SUFFIX,xiaomi.net
+ - DOMAIN-SUFFIX,xiaomicp.com
+ - DOMAIN-SUFFIX,miui.com
+ - DOMAIN-SUFFIX,miwifi.com
+ - DOMAIN-SUFFIX,duokan.com
+
+#知乎
+ - DOMAIN-SUFFIX,zhihu.com
+ - DOMAIN-SUFFIX,zhimg.com
+
+#网易
+ - DOMAIN-SUFFIX,netease.com
+ - DOMAIN-SUFFIX,netease.im
+ - DOMAIN-SUFFIX,lofter.com
+ - DOMAIN-SUFFIX,126.com
+ - DOMAIN-SUFFIX,126.net
+ - DOMAIN-SUFFIX,127.net
+ - DOMAIN-SUFFIX,163.com
+ - DOMAIN-SUFFIX,youdao.com
+
+#服务
+ - DOMAIN-SUFFIX,12306.cn
+ - DOMAIN-SUFFIX,12306.com
+ - DOMAIN-SUFFIX,115.com
+ - DOMAIN-SUFFIX,48.cn
+ - DOMAIN-SUFFIX,58.com
+ - DOMAIN-SUFFIX,axus.com
+ - DOMAIN-SUFFIX,bitqiu.com
+ - DOMAIN-SUFFIX,ctrip.com
+ - DOMAIN-SUFFIX,caiyunapp.com
+ - DOMAIN-SUFFIX,dida365.com
+ - DOMAIN-SUFFIX,flomo.app
+ - DOMAIN-SUFFIX,flomoapp.com
+ - DOMAIN-SUFFIX,fir.im
+ - DOMAIN-SUFFIX,ipip.net
+ - DOMAIN-SUFFIX,jellow.site
+ - DOMAIN-SUFFIX,jianshu.com
+ - DOMAIN-SUFFIX,jianshu.io
+ - DOMAIN-SUFFIX,jianshuapi.com
+ - DOMAIN-SUFFIX,okjike.com
+ - DOMAIN-SUFFIX,qiniucdn.com
+ - DOMAIN-SUFFIX,qiniudn.com
+ - DOMAIN-SUFFIX,oschina.net
+ - DOMAIN-SUFFIX,ruguoapp.com
+ - DOMAIN-SUFFIX,segmentfault.com
+ - DOMAIN-SUFFIX,smzdm.com
+ - DOMAIN-SUFFIX,umeng.com 
+ - DOMAIN-SUFFIX,weather.com
+ - DOMAIN-SUFFIX,xunlei.com
+ - DOMAIN-SUFFIX,xinruimz-isv.isvjcloud.com
+ - DOMAIN,download.jetbrains.com
+ - DOMAIN,images-cn.ssl-images-amazon.com
+ 
+ #Personal 
+ - DOMAIN-SUFFIX,edu.cn
+ - DOMAIN-SUFFIX,cn
+ - DOMAIN-KEYWORD,diyibanzhu
+ - DOMAIN-KEYWORD,dybz
