@@ -1,5 +1,5 @@
 payload:
-# > Google
+  # > Google
   - DOMAIN-SUFFIX,google.com
   - DOMAIN-SUFFIX,googleapis.com
   - DOMAIN-SUFFIX,gmail.com
@@ -8,10 +8,13 @@ payload:
   - PROCESS-NAME,com.google.android.gms
   - PROCESS-NAME,com.google.android.gsf
   - PROCESS-NAME,com.google.android.play.games
-# > Google Drive
+  # > Google Drive
   - DOMAIN-SUFFIX,docs.google.com
   - DOMAIN-SUFFIX,drive.google.com
   - DOMAIN-SUFFIX,googledrive.com
   - DOMAIN-SUFFIX,googleusercontent.com
-# > Google Search
+  # > Youtube Music
+  - PROCESS-NAME,com.google.android.apps.youtube.music
+  - PROCESS-NAME,com.google.android.youtube.tvmusic
+  # > Google Search
   - DOMAIN-KEYWORD,www.google.
