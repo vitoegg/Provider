@@ -60,9 +60,9 @@
 ## Module Links
 Module包含自定义和外部引用，为了保持及时更新不使用CDN链接。
 
-`Adguard`
+`AdScript`
 
-- https://raw.githubusercontent.com/vitoegg/Provider/master/Module/AdGuard.sgmodule
+- https://raw.githubusercontent.com/vitoegg/Provider/master/Module/AdScript.sgmodule
 
 `连接模式`
 
