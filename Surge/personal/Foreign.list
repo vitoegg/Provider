@@ -4,12 +4,6 @@ DOMAIN-SUFFIX,amazon.com
 DOMAIN-SUFFIX,amazontrust.com
 DOMAIN-SUFFIX,amazonaws.com  
 DOMAIN-SUFFIX,media-amazon.com  
-DOMAIN-SUFFIX,adsblock.org  
-DOMAIN-SUFFIX,test-app.link
-DOMAIN-SUFFIX,bugsnag.com
-DOMAIN-SUFFIX,cloudfront.net
-DOMAIN-SUFFIX,webtest.net
-DOMAIN-SUFFIX,mozaws.net
 DOMAIN-SUFFIX,*-amazon.com  
 DOMAIN-SUFFIX,ssl-images-amazon.com
 DOMAIN-SUFFIX,m.media-amazon.com 
