@@ -10,6 +10,10 @@
 ## 规则Link
 因为 raw.githubusercontent.com 已被污染，所以转换成CDN链接
 
-**Apple
+**Apple**
+、、、
 
-https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Apple/Direct.list
+https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Apple/Direct.list
+
+、、、
+
