@@ -7,8 +7,8 @@
 
 3、Module仅支持Surge，且会引用Script中的js文件
 
-## 规则Link
-因为 raw.githubusercontent.com 已被污染，所以转换成CDN链接
+## RuleSet Links
+因为 raw.githubusercontent.com 已被污染，所以转换成CDN链接;cdn.jsdelivr.net修改成purge.jsdelivr.net可以强制刷新CDN文件。
 
 **Apple**
 
@@ -21,5 +21,61 @@
 
 - https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Apple/System.list
 - https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Apple/System.yaml
+
+`iCloud`
+
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Apple/iCloud.list
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Apple/iCloud.yaml
+
+
+**Proxy**
+
+`Google`
+
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Proxy/Google.list
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Proxy/Google.yaml
+
+`Foreign`
+
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Proxy/Foreign.list
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Proxy/Foreign.yaml
+
+
+**Direct**
+
+`China`
+
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Direct/China.list
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Direct/China.yaml
+
+
+**Extra**
+
+`Speedtest`
+
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Extra/Speedtest.list
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Extra/Speedtest.yaml
+
+
+## Module Links
+Module包含自定义和外部引用，为了保持及时更新不使用CDN链接。
+
+`Adguard`
+
+- https://raw.githubusercontent.com/vitoegg/Provider/master/Module/AdGuard
+
+`连接模式`
+
+- https://raw.githubusercontent.com/vitoegg/Provider/master/master/Module/OutboundMode.sgmodule
+
+`订阅管理`
+
+- https://raw.githubusercontent.com/Peng-YM/Sub-Store/master/config/Surge.sgmodule
+
+`订阅同步`
+
+- https://raw.githubusercontent.com/vitoegg/Provider/master/master/Module/Subsync.sgmodule
+
+
 
 
