@@ -3,14 +3,6 @@
 #link:https://github.com/blackmatrix7/ios_rule_script/blob/master/rewrite/Surge/Advertising/Advertising.sgmodule
 #更新时间：2021.06.05
 
-[General]
-force-http-engine-hosts = %APPEND% *.cp31.ott.cibntv.net,*.ott.cibntv.net,116.253.24.*,119.18.193.135,119.79*,122.14.246.33,123.59.31.1,124.14*,124.193*,175.102.178.52,175.6.26.*,211.162*,220.112*,220.169.153.*
-
-[Rule]
-DOMAIN,api.cupid.dns.iqiyi.com,REJECT
-DOMAIN,video-ad.sm.cn,REJECT-DROP
-DOMAIN-SUFFIX,cupid.iqiyi.com,REJECT
-
 [URL Rewrite]
 ^https:\/\/(www|cn)\.pornhub\.com\/_xa\/ads.* - reject
 ^https:\/\/.*\.bebi\.com\/.* - reject
