@@ -1,7 +1,0 @@
-# Link:blackmatrix7/ios_rule_script/rule/Surge/Speedtest
-# Total:5
-DOMAIN-SUFFIX,fast.com
-DOMAIN-SUFFIX,ooklaserver.net
-DOMAIN-SUFFIX,speed.cloudflare.com
-DOMAIN-KEYWORD,speedtest
-USER-AGENT,SpeedTest*
