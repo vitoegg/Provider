@@ -3,6 +3,7 @@
 #!bilibili=https://github.com/blackmatrix7/ios_rule_script/blob/master/script/bilibili/bilibili_plus.sgmodule
 #!zhihu=https://github.com/blackmatrix7/ios_rule_script/blob/master/script/zhihu/zhihu_plus.sgmodule
 #!allinone=https://github.com/blackmatrix7/ios_rule_script/blob/master/rewrite/Surge/AllInOne/AllInOne.sgmodule
+#!weibo=https://github.com/yichahucha/surge/blob/master/sg_sub.sgmodule
 
 [URL Rewrite]
 
