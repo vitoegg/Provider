@@ -64,6 +64,12 @@ Module包含自定义和外部引用，为了保持及时更新不使用CDN链�
 
 - https://raw.githubusercontent.com/vitoegg/Provider/master/Module/AdScript.sgmodule
 
+
+`AdRewrite`
+
+- https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rewrite/Surge/AdvertisingLite/AdvertisingLite_Classical.sgmodule
+
+
 `连接模式`
 
 - https://raw.githubusercontent.com/vitoegg/Provider/master/Module/OutboundMode.sgmodule
