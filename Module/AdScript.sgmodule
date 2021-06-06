@@ -22,9 +22,14 @@
 # 禁止知乎下发配置
 ^https?:\/\/api\.zhihu\.com\/ab\/api\/v1\/products\/zhihu\/platforms\/ios\/config - reject
 
-##彩云天气去广告
+##彩云天气去广告 - cdn-1rtb.caiyunapp.com,ad.caiyunapp.com
 ^https?:\/\/cdn-1rtb\.caiyunapp\.com/creative/.*$ - reject
 ^https?:\/\/ad\.caiyunapp\.com - reject
+
+##口袋48 - pocketapi.48.cn
+^https:\/\/pocketapi\.48\.cn\/home\/api\/ad\/ - reject
+^https:\/\/pocketapi\.48\.cn\/home\/api\/home\/v1\/boot\/voice? - reject
+^https:\/\/pocketapi\.48\.cn\/\im\/api\/v1\/bubble\/db\/ - reject
 
 ##重定向
 ^https?:\/\/(ditu|maps).google\.cn https://maps.google.com 302
@@ -64,9 +69,9 @@ BiliBili_标签页处理 = type=http-response,requires-body=1,max-size=0,pattern
 知乎_预置关键词去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/search\/preset_words\?,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
 知乎_评论去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/(comment_v5\/)?(answers|comments?|articles|pins)\/\d+\/(root_|child_)?comments?,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
 
-##weibo
+##weibo - api.weibo.cn,mapi.weibo.com,*.uve.weibo.com
 wb_launch.js = type=http-response,requires-body=1,pattern=^https?://(sdk|wb)app\.uve\.weibo\.com(/interface/sdk/sdkad.php|/wbapplua/wbpullad.lua),script-path=https://raw.githubusercontent.com/yichahucha/surge/master/wb_launch.js
 wb_ad.js = type=http-response,requires-body=1,max-size=-1,pattern=^https?://m?api\.weibo\.c(n|om)/2/(statuses/(unread|extend|positives/get|(friends|video)(/|_)(mix)?timeline)|stories/(video_stream|home_list)|(groups|fangle)/timeline|profile/statuses|comments/build_comments|photo/recommend_list|service/picfeed|searchall|cardlist|page|!/(photos/pic_recommend_status|live/media_homelist)|video/tiny_stream_video_list|photo/info|remind/unread_count),script-path=https://raw.githubusercontent.com/yichahucha/surge/master/wb_ad.js
 
 [MITM]
-hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,ad.caiyunapp.com
+hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,ad.caiyunapp.com,pocketapi.48.cn
