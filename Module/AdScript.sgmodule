@@ -3,23 +3,6 @@
 #!bilibili=https://github.com/blackmatrix7/ios_rule_script/blob/master/script/bilibili/bilibili_plus.sgmodule
 #!zhihu=https://github.com/blackmatrix7/ios_rule_script/blob/master/script/zhihu/zhihu_plus.sgmodule
 #!allinone=https://github.com/blackmatrix7/ios_rule_script/blob/master/rewrite/Surge/AllInOne/AllInOne.sgmodule
-#!weibo=https://github.com/yichahucha/surge/blob/master/sg_sub.sgmodule
-
-[Rule]
-##彩云天气去广告
-DOMAIN-SUFFIX,ad.caiyunapp.com,REJECT
-DOMAIN-SUFFIX,admobile.top,REJECT
-DOMAIN-SUFFIX,ad.caiyunapp.com,REJECT
-DOMAIN,caiyun51.com,REJECT
-DOMAIN,bai.caiyun72.com,REJECT
-DOMAIN,caiyun72.com,REJECT
-
-
-##Bilibili去广告
-DOMAIN-SUFFIX,cm.bilibili.com,REJECT
-URL-REGEX,^https?:\/\/api\.bilibili\.com\/x\/v2\/dm\/ad,REJECT
-
-
 
 [URL Rewrite]
 
