@@ -26,6 +26,8 @@
 ^https?:\/\/cdn-1rtb\.caiyunapp\.com/creative/.*$ - reject
 ^https?:\/\/ad\.caiyunapp\.com - reject
 
+##口袋48 - pocketapi.48.cn
+^https:\/\/pocketapi\.48\.cn\/home\/api\/ad\/ - reject
 
 ##重定向
 ^https?:\/\/(ditu|maps).google\.cn https://maps.google.com 302
@@ -48,8 +50,6 @@
 ^https?:\/\/api\.zhihu\.com\/(notifications\/v\d\/count|v\d\/package|me\/guides|drama\/living-info|ad|fringe|commercial|market\/popovers|.*featured-comment-ad) data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank_dict.json"
 # 屏蔽消息页面上拉的用户精选
 ^https?:\/\/api\.zhihu\.com/moments/hybrid\? data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank_dict.json"
-##口袋48 - pocketapi.48.cn
-^https:\/\/pocketapi\.48\.cn\/home\/api\/ad\/ data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank_dict.json"
 
 
 [Script]
