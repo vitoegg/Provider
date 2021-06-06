@@ -29,7 +29,6 @@
 ##口袋48 - pocketapi.48.cn
 ^https:\/\/pocketapi\.48\.cn\/home\/api\/ad\/ - reject
 ^https:\/\/pocketapi\.48\.cn\/home\/api\/home\/v1\/boot\/voice? - reject
-^https:\/\/pocketapi\.48\.cn\/\im\/api\/v1\/bubble\/db\/ - reject
 
 ##重定向
 ^https?:\/\/(ditu|maps).google\.cn https://maps.google.com 302
