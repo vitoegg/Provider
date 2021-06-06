@@ -76,8 +76,9 @@ URL-REGEX,^https?:\/\/api\.bilibili\.com\/x\/v2\/dm\/ad,REJECT
 # > 贝壳 - app.api.ke.com
 ^https?:\/\/app\.api\.ke\.com\/config\/config\/bootpage - reject
 
-# > 携程 - m.ctrip.com
+# > 携程 - m.ctrip.com,dimg04.c-ctrip.com
 ^https?:\/\/m\.ctrip\.com\/restapi\/soa2\/\d+\/json\/getAdsList - reject
+^https?:\/\/dimg04\.c-ctrip\.com\/images\/\w+(_\d{4}){2} - reject
 
 # > 滴滴 - img-ys011.didistatic.com,img*.ddimg.cn,ct.xiaojukeji.com,res.xiaojukeji.com
 ^https?:\/\/img-ys011\.didistatic\.com\/static\/ad_oss\/image-\d{4}-\d{4}\/ - reject
@@ -124,6 +125,90 @@ URL-REGEX,^https?:\/\/api\.bilibili\.com\/x\/v2\/dm\/ad,REJECT
 ^https?:\/\/(api|promo)\.xueqiu\.com\/promotion\/(display_cache|display_ad|feed_display|search_ad) - reject
 ^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/brand\/search\/v1\.json - reject
 ^https?:\/\/api\.xueqiu\.com\/brand\/search\/v1\.json - reject
+^https?:\/\/api\.xueqiu\.com\/ads\/display - reject
+
+# > 友盟 - alogs.umeng.co,alogs.umeng.com,msg.umengcloud.com,ulogs.umeng.com,ulogs.umengcloud.com
+^https:\/\/msg\.umengcloud\.com\/admsg\/ - reject
+^https?:\/\/alogs\.umeng\.co - reject
+^https?:\/\/ulogs\.umeng\.com - reject
+^https?:\/\/ulogs\.umengcloud\.com - reject
+
+# > 石墨 - shimo.im
+^https?:\/\/shimo\.im\/api\/ads\?(.+?) - reject
+
+# > 微信 - mp.weixin.qq.com,szextshort.weixin.qq.com
+^https:\/\/mp\.weixin\.qq\.com\/mp\/ad.* - reject
+^https?:\/\/mp\.weixin\.qq.com\/mp\/ad_complaint - reject
+^https?:\/\/mp\.weixin\.qq.com\/mp\/ad_video - reject
+^https?:\/\/mp\.weixin\.qq.com\/mp\/advertisement_report - reject
+^https?:\/\/mp\.weixin\.qq\.com\/(s|mp)\/(ad_|advertisement|getappmsgad|report|appmsgreport|appmsgpicreport) - reject
+^https?:\/\/szextshort\.weixin\.qq\.com\/cgi-bin\/mmoc-bin\/ad\/ - reject
+
+
+# > 通用 - api.share.mob.com
+^https?:\/\/api\.share\.mob\.com\/snsconf - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(:\d+)?\/V\d\/splash\/getSplashV\d\.action$ - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d):\d+/xygj-config-api\/queryData - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d):\d+\/allOne\.php\?ad_name - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/(adgateway|adv)\/ - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/(outadservice|ting\/preload)\/ - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/.+\.tc\.qq\.com\/.+p201\.1\.mp4\? - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/EcomResourceServer/AdPlayPage/adinfo - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/MobileAdServer\/ - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/[a-z.]+\.tc\.qq\.com\/[\w\W]+=v3004 - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/[a-z.]+\.tc\.qq\.com\/[\w\W]+_p20\d_ - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/[a-z.]+\.tc\.qq\.com\/[\w\W]+p20\d\.1\.mp4\? - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/\w+\/\w+\/(sync|newRnSync|mlog) - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/api\/v\d\/app_square\/start_up_with_ad$ - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/brand\/search\/v1\.json - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/c\/s\/splashSchedule - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/eapi\/ad\/ - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/g\.real\?aid=text_ad - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/img\/ad\.union\.api\/ - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/music\/common\/upload\/t_splash_info\/ - reject
+^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/promotion\/(display_cache|display_ad|feed_display|search_ad) - reject
+^https?:\/\/(101\.201\.175\.228|182\.92\.251\.113)\/brand\/search\/v1\.json - reject
+^https?:\/\/(2(5[0-5]{1}|[0-4]\d{1})|[0-1]?\d{1,2})(\.(2(5[0-5]{1}|[0-4]\d{1})|[0-1]?\d{1,2})){3}\/(adgateway|adv)\/ - reject
+^https?:\/\/(2(5[0-5]{1}|[0-4]\d{1})|[0-1]?\d{1,2})(\.(2(5[0-5]{1}|[0-4]\d{1})|[0-1]?\d{1,2})){3}\/EcomResourceServer/AdPlayPage/adinfo - reject
+^https?:\/\/(2(5[0-5]{1}|[0-4]\d{1})|[0-1]?\d{1,2})(\.(2(5[0-5]{1}|[0-4]\d{1})|[0-1]?\d{1,2})){3}\/MobileAdServer\/ - reject
+^https?:\/\/(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/ting\/preload\/ - reject
+^https?:\/\/(\d{1,3}\.){1,3}\d{1,3}\/view\/dale-online\/dale_ad\/ - reject
+^https?:\/\/(\d{1,3}\.){3}\d{1,3}/(variety|vlive\.qqvideo)\.tc\.qq\.com/ - reject
+^https?:\/\/.+?\/(mixer|track2)\? - reject
+^https?:\/\/.+?\/allOne\.php\?ad_name - reject
+^https?:\/\/.+?\.mp4\?ccode=0902 - reject
+^https?:\/\/.+?\.mp4\?sid= - reject
+^https?:\/\/.+?\/cdn-adn\/ - reject
+^https?:\/\/.+?\/eapi\/(ad|log)\/ - reject
+^https?:\/\/.+?\/eapi\/[ad|event]\/ - reject
+^https?:\/\/.+?\/eapi\/ad\/ - reject
+^https?:\/\/.+?\/img\/ad\.union\.api\/ - reject
+^https?:\/\/.+?\/img\/web\.business\.image\/ - reject
+^https?:\/\/.+?\/resource\/m\/promo\/adsense - reject
+^https?:\/\/.+?\/resource\/m\/sys\/app\/adpos - reject
+^https?:\/\/.+?\/tips\/fcgi-bin\/fcg_get_advert - reject
+^https?:\/\/.+?\/v1\/iflyad\/ - reject
+^https?:\/\/.+?\/v2\/app_ads\/ - reject
+^https?:\/\/.+?\/v\d\/iflyad\/ - reject
+^https?:\/\/.+?\/variety.tc.qq.com\/ - reject
+^https?:\/\/.+?\/videos\/KnifeHit_4\/gear3\/ - reject
+^https?:\/\/.+?\/vips-mobile\/router\.do\?api_key= - reject
+^https?:\/\/.+?\/weico4ad\/ad\/ - reject
+^https?:\/\/.+?allOne\.php\?ad_name=main_splash_ios - reject
+^https?:\/\/.+?ccode=0902 - reject
+^https?:\/\/.+?resource=article\/recommend\&accessToken= - reject
+^https?:\/\/101\.201\.175\.228\/ads\/display - reject
+^https?:\/\/113\.200\.76\.*?:16420\/sxtd\.bike2\.01\/getkey\.do - reject
+^https?:\/\/118\.178\.214\.118\/yyting\/advertclient\/ClientAdvertList\.action - reject
+^https?:\/\/119\.18\.193\.135\/(adgateway|adv)\/ - reject
+^https?:\/\/122\.14\.246\.33\/MobileAdServer\/ - reject
+^https?:\/\/123\.59\.30\.10\/adv\/advInfos - reject
+^https?:\/\/123\.59\.31\.1\/(adgateway|adv)\/ - reject
+^https?:\/\/182\.92\.244\.70\/d\/json\/ - reject
+^https?:\/\/192\.133.+?\.mp4$ - reject
+^https?:\/\/203\.205\.255\.16\/retrieval\/getAd - reject
+^https?:\/\/211\.98\.71\.(195|196|226):8080\/ - reject
+
 
 ##重定向
 ^https?:\/\/(ditu|maps).google\.cn https://maps.google.com 302
@@ -168,4 +253,4 @@ wb_launch.js = type=http-response,requires-body=1,pattern=^https?://(sdk|wb)app\
 wb_ad.js = type=http-response,requires-body=1,max-size=-1,pattern=^https?://m?api\.weibo\.c(n|om)/2/(statuses/(unread|extend|positives/get|(friends|video)(/|_)(mix)?timeline)|stories/(video_stream|home_list)|(groups|fangle)/timeline|profile/statuses|comments/build_comments|photo/recommend_list|service/picfeed|searchall|cardlist|page|!/(photos/pic_recommend_status|live/media_homelist)|video/tiny_stream_video_list|photo/info|remind/unread_count),script-path=https://raw.githubusercontent.com/yichahucha/surge/master/wb_ad.js
 
 [MITM]
-hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com,ss0.bdstatic.com,gw.alicdn.com,heic.alicdn.com,acs.m.taobao.com,m*.amap.com, cube.elemecdn.com,newclient.map.baidu.com,app.api.ke.com,m.ctrip.com,m.client.10010.com,cloud.189.cn,ms.jr.jd.com,img*.360buyimg.com,bdsp-x.jd.com,dsp-x.jd.com,api.jr.mi.com,api-mifit*.huami.com,img.meituan.net,p*.meituan.net,s3plus.meituan.net,flowplus.meituan.net,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.xiaohongshu.com,img-ys011.didistatic.com,img*.ddimg.cn,ct.xiaojukeji.com,res.xiaojukeji.com,www.duokan.com
+hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com,ss0.bdstatic.com,gw.alicdn.com,heic.alicdn.com,acs.m.taobao.com,m*.amap.com, cube.elemecdn.com,newclient.map.baidu.com,app.api.ke.com,m.ctrip.com,m.client.10010.com,cloud.189.cn,ms.jr.jd.com,img*.360buyimg.com,bdsp-x.jd.com,dsp-x.jd.com,api.jr.mi.com,api-mifit*.huami.com,img.meituan.net,p*.meituan.net,s3plus.meituan.net,flowplus.meituan.net,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.xiaohongshu.com,img-ys011.didistatic.com,img*.ddimg.cn,ct.xiaojukeji.com,res.xiaojukeji.com,www.duokan.com,api.share.mob.com,mp.weixin.qq.com,szextshort.weixin.qq.com,shimo.im,alogs.umeng.co,alogs.umeng.com,msg.umengcloud.com,ulogs.umeng.com,ulogs.umengcloud.com
