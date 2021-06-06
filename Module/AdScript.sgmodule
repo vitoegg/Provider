@@ -26,9 +26,6 @@
 ^https?:\/\/cdn-1rtb\.caiyunapp\.com/creative/.*$ - reject
 ^https?:\/\/ad\.caiyunapp\.com - reject
 
-##口袋48 - pocketapi.48.cn
-#^https:\/\/pocketapi\.48\.cn\/home\/api\/ad\/ - reject
-
 ##重定向
 ^https?:\/\/(ditu|maps).google\.cn https://maps.google.com 302
 ^https?:\/\/(www.)?(g|google)\.cn https://www.google.com 302
@@ -54,7 +51,7 @@
 
 [Script]
 ##Pocket48
-Pocket48_启动广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/pocketapi\.48\.cn\/((home\/api\/ad\/v1\/bootAd)|(home\/api\/ad\/v1\/popupAd)),script-path=https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Pocket48.js
+Pocket48_启动广告 = type=http-response,requires-body=1,pattern=^https?://pocketapi\.48\.cn(/home/api/ad/v1/bootAd|(home/api/ad/v1/popupAd),script-path=https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Pocket48.js
 
 ##Bilibili
 BiliBili_推荐去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/app\.bilibili\.com\/x\/v2\/feed\/index,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/bilibili/bilibili_plus.js
