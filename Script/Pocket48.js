@@ -6,7 +6,7 @@ const path2 = "/home/api/ad/v1/popupAd";
 if (url.indexOf(path1) != -1){
   let obj = JSON.parse(body);
     obj["content"]["adExist"] = false;
-    obj["content"]["zipUrl"] = "https://source.48.cn/2099017/433677.zip";
+    obj["content"]["zipUrl"] = "null";
     body=JSON.stringify(obj);
  };
    
