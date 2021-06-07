@@ -1,15 +1,27 @@
 payload:
 #阿里巴巴
  - DOMAIN-SUFFIX,alibaba.com
+ - DOMAIN-SUFFIX,aliapp.org
+ - DOMAIN-SUFFIX,alibabacloud.com
  - DOMAIN-SUFFIX,alibabausercontent.com
  - DOMAIN-SUFFIX,alicdn.com
- - DOMAIN-SUFFIX,alipay.com
- - DOMAIN-SUFFIX,amap.com
- - DOMAIN-SUFFIX,dingtalk.com
- - DOMAIN-SUFFIX,soku.com
+ - DOMAIN-SUFFIX,alicloudccp.com
+ - DOMAIN-SUFFIX,aliexpress.com
+ - DOMAIN-SUFFIX,aliimg.com
  - DOMAIN-SUFFIX,taobao.com
+ - DOMAIN-SUFFIX,taobaocdn.com
+ - DOMAIN-SUFFIX,tbcache.com
+ - DOMAIN-SUFFIX,tbcdn.com
  - DOMAIN-SUFFIX,tmall.com
  - DOMAIN-SUFFIX,tmall.hk
+ - DOMAIN-SUFFIX,alipay.com
+ - DOMAIN-SUFFIX,alipayobjects.com
+ - DOMAIN-SUFFIX,aliyun.com
+ - DOMAIN-SUFFIX,aliyuncdn.com
+ - DOMAIN-SUFFIX,aliyuncs.com
+ - DOMAIN-SUFFIX,aliyundrive.com
+ - DOMAIN-SUFFIX,amap.com
+ - DOMAIN-SUFFIX,dingtalk.com
  - DOMAIN-SUFFIX,ykimg.com
  
 #百度
@@ -29,21 +41,26 @@ payload:
  - DOMAIN-SUFFIX,toutiao.com
 
 #腾讯
- - DOMAIN-SUFFIX,gtimg.com
- - DOMAIN-SUFFIX,idqqimg.com
- - DOMAIN-SUFFIX,igamecj.com
- - DOMAIN-SUFFIX,myapp.com
- - DOMAIN-SUFFIX,myqcloud.com
  - DOMAIN-SUFFIX,qq.com
  - DOMAIN-SUFFIX,qqmail.com
  - DOMAIN-SUFFIX,qqurl.com
  - DOMAIN-SUFFIX,servicewechat.com
+ - DOMAIN-SUFFIX,gtimg.com
+ - DOMAIN-SUFFIX,idqqimg.com
+ - DOMAIN-SUFFIX,igamecj.com
+ - DOMAIN-SUFFIX,smtcdns.com
+ - DOMAIN-SUFFIX,smtcdns.net
+ - DOMAIN-SUFFIX,myapp.com
+ - DOMAIN-SUFFIX,myqcloud.com
+ - DOMAIN-SUFFIX,soso.com
  - DOMAIN-SUFFIX,tencent.com
+ - DOMAIN-SUFFIX,tencentmind.com
  - DOMAIN-SUFFIX,tencent-cloud.net
  - DOMAIN-SUFFIX,tenpay.com
  - DOMAIN-SUFFIX,wechat.com
- - DOMAIN,file-igamecj.akamaized.net
+ - DOMAIN-SUFFIX,weixin.com
  - DOMAIN-SUFFIX,qidian.com
+ - DOMAIN,file-igamecj.akamaized.net
 
 #新浪
  - DOMAIN-SUFFIX,wbimg.cn
@@ -56,8 +73,6 @@ payload:
  - DOMAIN-SUFFIX,weibo.tv
  - DOMAIN-SUFFIX,weibocdn.com
  - DOMAIN-SUFFIX,weiboums.com
- - DOMAIN-SUFFIX,weipan.cn
- - DOMAIN-SUFFIX,weipan.com.cn
  - DOMAIN-SUFFIX,xiaoka.tv
  - DOMAIN-SUFFIX,t.cn
  - DOMAIN-SUFFIX,sinaurl.cn
@@ -80,9 +95,12 @@ payload:
  - DOMAIN-SUFFIX,jd.com
  - DOMAIN-SUFFIX,jd.hk
  - DOMAIN-SUFFIX,jdpay.com
+ - DOMAIN-SUFFIX,jdcloud.com
+ - DOMAIN-SUFFIX,jcloudcs.com
+ - DOMAIN-SUFFIX,360buy.com
  - DOMAIN-SUFFIX,360buyimg.com
+ - DOMAIN-SUFFIX,paipai.com
  - DOMAIN-SUFFIX,yihaodianimg.com
- - DOMAIN-SUFFIX,suning.com
 
 #O2O服务
 # > Meituan
@@ -156,6 +174,8 @@ payload:
  - DOMAIN-SUFFIX,xmcdn.com
 # > Lizhi
  - DOMAIN-SUFFIX,lizhi.fm
+ - DOMAIN-SUFFIX,lizhi.io
+ - DOMAIN-SUFFIX,lizhifm.com
 # > Xiaoyuzhou
  - DOMAIN-SUFFIX,xiaoyuzhoufm.com
  - DOMAIN-SUFFIX,xyzcdn.net
@@ -238,7 +258,5 @@ payload:
  - DOMAIN,images-cn.ssl-images-amazon.com
  
  #Personal 
- - DOMAIN-SUFFIX,edu.cn
- - DOMAIN-SUFFIX,cn
  - DOMAIN-KEYWORD,diyibanzhu
  - DOMAIN-KEYWORD,dybz
