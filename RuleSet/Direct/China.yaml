@@ -257,7 +257,8 @@ payload:
  - DOMAIN-SUFFIX,xinruimz-isv.isvjcloud.com
  - DOMAIN,download.jetbrains.com
  - DOMAIN,images-cn.ssl-images-amazon.com
- 
  #Personal 
  - DOMAIN-KEYWORD,diyibanzhu
  - DOMAIN-KEYWORD,dybz
+ # Clash专属
+ - DOMAIN-SUFFIX,cn
