@@ -1,0 +1,5 @@
+#!name=Auto Change
+#!desc=根据连接的网络自动调整代理模式
+
+[Script]
+Auto Change = type=event,event-name=network-changed,script-path=https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Auto-Change.js
