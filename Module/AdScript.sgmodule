@@ -17,6 +17,8 @@
 ^https?:\/\/cdn-1rtb\.caiyunapp\.com/creative/.*$ - reject
 ^https?:\/\/ad\.caiyunapp\.com - reject
 
+^http?:\/\/*\.mob\.com - reject
+
 ##豆瓣去广告
 ^https?:\/\/erebor\.douban\.com\/count\/\?ad= - reject
 ^https?:\/\/img\d\.doubanio\.com\/view\/dale-online\/dale_ad\/ - reject
