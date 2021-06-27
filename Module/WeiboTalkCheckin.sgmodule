@@ -1,0 +1,5 @@
+#!name=WeiboTalk
+#!desc=微博超话自动签到
+
+[Script]
+微博超话 = type=cron,cronexp="38 1  * * *",script-path=https://raw.githubusercontent.com/toulanboy/scripts/master/weibo/weibotalk.js,wake-system=true,timeout=600
