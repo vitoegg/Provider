@@ -6,40 +6,44 @@
 #!weibo=https://github.com/yichahucha/surge/blob/master/sg_sub.sgmodule
 
 [URL Rewrite]
-# 可能的一些推广(beta)
-^https?:\/\/api\.bilibili\.com\/pgc\/season\/app\/related\/recommend\? - reject
-
-##zhihu
-# 禁止知乎下发配置
-^https?:\/\/api\.zhihu\.com\/ab\/api\/v1\/products\/zhihu\/platforms\/ios\/config - reject
-
-##彩云天气去广告 - cdn-1rtb.caiyunapp.com,ad.caiyunapp.com
-^https?:\/\/cdn-1rtb\.caiyunapp\.com/creative/.*$ - reject
-^https?:\/\/ad\.caiyunapp\.com - reject
-
 ##豆瓣去广告
 ^https?:\/\/erebor\.douban\.com\/count\/\?ad= - reject
 ^https?:\/\/img\d\.doubanio\.com\/view\/dale-online\/dale_ad\/ - reject
 ^https?:\/\/api\.douban\.com\/v2\/app_ads\/common_ads data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank.gif"
 ^https?:\/\/api\.douban\.com\/v2\/app_ads\/splash data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank.txt"
 
+# Bilibili可能的一些推广(beta)
+^https?:\/\/api\.bilibili\.com\/pgc\/season\/app\/related\/recommend\? - reject
+
+##彩云天气去广告 - cdn-1rtb.caiyunapp.com,ad.caiyunapp.com
+^https?:\/\/cdn-1rtb\.caiyunapp\.com/creative/.*$ - reject
+^https?:\/\/ad\.caiyunapp\.com - reject
+
 ##地铁通去广告
 ^https?:\/\/\w+\.gdt\.qq\.com - reject
 ^https?:\/\/mi\.gdt\.qq\.com\/gdt_mview\.fcg - reject
 ^https?:\/\/sdk\.e\.qq\.com\/getad - reject
 
+##zhihu
+# 禁止知乎下发配置
+^https?:\/\/api\.zhihu\.com\/ab\/api\/v1\/products\/zhihu\/platforms\/ios\/config - reject
+# 拦截知乎品牌提问广告
+^https?:\/\/api\.zhihu\.com\/brand\/question\/\d+/card\? - reject
+^https?:\/\/www\.zhihu\.com\/api\/v\d+\/brand\/question/\d+/card\? - reject
+# 知乎拦截部分预加载
+^https?:\/\/www\.zhihu\.com\/appview\/(p|v2\/answer|zvideo)\/.*entry=(preload-topstory|preload-search|preload-subscription) - reject
+# 知乎其他广告拦截
+^https?:\/\/api\.zhihu\.com\/(notifications\/v\d\/count|v\d\/package|me\/guides|drama\/living-info|ad|fringe|commercial|market\/popovers|.*featured-comment-ad) - reject
+
 ##重定向
 ^https?:\/\/(ditu|maps).google\.cn https://maps.google.com 302
 ^https?:\/\/(www.)?(g|google)\.cn https://www.google.com 302
 
-[Map Local]
-# 知乎去除最常访问
-^https?:\/\/api\.zhihu\.com\/moments\/recent data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank_dict.json"
-# 知乎其他广告拦截
-^https?:\/\/api\.zhihu\.com\/(notifications\/v\d\/count|v\d\/package|me\/guides|drama\/living-info|ad|fringe|commercial|market\/popovers|.*featured-comment-ad) data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank_dict.json"
-
-
 [Script]
+##weibo
+wb_launch.js = type=http-response,requires-body=1,pattern=^https?://(sdk|wb)app\.uve\.weibo\.com(/interface/sdk/sdkad.php|/wbapplua/wbpullad.lua),script-path=https://raw.githubusercontent.com/yichahucha/surge/master/wb_launch.js
+wb_ad.js = type=http-response,requires-body=1,max-size=-1,pattern=^https?://m?api\.weibo\.c(n|om)/2/(statuses/(unread|extend|positives/get|(friends|video)(/|_)(mix)?timeline)|stories/(video_stream|home_list)|(groups|fangle)/timeline|profile/statuses|comments/build_comments|photo/recommend_list|service/picfeed|searchall|cardlist|page|!/(photos/pic_recommend_status|live/media_homelist)|video/tiny_stream_video_list|photo/info|remind/unread_count),script-path=https://raw.githubusercontent.com/yichahucha/surge/master/wb_ad.js
+
 ##Bilibili
 BiliBili_推荐去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/app\.bilibili\.com\/x\/v2\/feed\/index,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/bilibili/bilibili_plus.js
 BiliBili_动态去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.vc\.bilibili\.com\/dynamic_svr\/v1\/dynamic_svr\/dynamic_(history|new)\?,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/bilibili/bilibili_plus.js
@@ -47,15 +51,13 @@ BiliBili_开屏去广告 = type=http-response,requires-body=1,max-size=0,pattern
 BiliBili_标签页处理 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/app\.bilibili\.com\/x\/resource\/show\/tab,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/bilibili/bilibili_plus.js
 
 ##zhihu
+知乎_处理用户信息 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/people\/,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
 知乎_信息流去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/(moments|topstory)(\/|\?)?(recommend|action=|feed_type=)(?!\/people),script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
 知乎_回答列表去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/v4\/questions,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
-知乎_官方消息去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/notifications\/v3\/(message|timeline\/entry\/system_message),script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
 知乎_预置关键词去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/search\/preset_words\?,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
+知乎_热搜去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/search\/top_search\/tabs\/hot\/items,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
+知乎_热榜去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/topstory\/hot-lists?(\?|\/),script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
 知乎_评论去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/(comment_v5\/)?(answers|comments?|articles|pins)\/\d+\/(root_|child_)?comments?,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
-
-##weibo
-wb_launch.js = type=http-response,requires-body=1,pattern=^https?://(sdk|wb)app\.uve\.weibo\.com(/interface/sdk/sdkad.php|/wbapplua/wbpullad.lua),script-path=https://raw.githubusercontent.com/yichahucha/surge/master/wb_launch.js
-wb_ad.js = type=http-response,requires-body=1,max-size=-1,pattern=^https?://m?api\.weibo\.c(n|om)/2/(statuses/(unread|extend|positives/get|(friends|video)(/|_)(mix)?timeline)|stories/(video_stream|home_list)|(groups|fangle)/timeline|profile/statuses|comments/build_comments|photo/recommend_list|service/picfeed|searchall|cardlist|page|!/(photos/pic_recommend_status|live/media_homelist)|video/tiny_stream_video_list|photo/info|remind/unread_count),script-path=https://raw.githubusercontent.com/yichahucha/surge/master/wb_ad.js
 
 [MITM]
 hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,ad.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com,mi.gdt.qq.com,w.gdt.qq.com,sdk.e.qq.com
