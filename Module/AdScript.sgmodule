@@ -24,8 +24,6 @@
 ^https?:\/\/mi\.gdt\.qq\.com\/gdt_mview\.fcg - reject
 ^https?:\/\/sdk\.e\.qq\.com\/getad - reject
 
-^https?:\/\/api\.qieman\.com\/pmdj\/v1\/special\/splash - reject
-
 ##zhihu
 # 禁止知乎下发配置
 ^https?:\/\/api\.zhihu\.com\/ab\/api\/v1\/products\/zhihu\/platforms\/ios\/config - reject
