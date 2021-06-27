@@ -23,6 +23,11 @@
 ^https?:\/\/api\.douban\.com\/v2\/app_ads\/common_ads data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank.gif"
 ^https?:\/\/api\.douban\.com\/v2\/app_ads\/splash data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank.txt"
 
+##地铁通去广告
+^https?:\/\/\w+\.gdt\.qq\.com - reject
+^https?:\/\/mi\.gdt\.qq\.com\/gdt_mview\.fcg - reject
+^https?:\/\/sdk\.e\.qq\.com\/getad - reject
+
 ##重定向
 ^https?:\/\/(ditu|maps).google\.cn https://maps.google.com 302
 ^https?:\/\/(www.)?(g|google)\.cn https://www.google.com 302
@@ -53,4 +58,4 @@ wb_launch.js = type=http-response,requires-body=1,pattern=^https?://(sdk|wb)app\
 wb_ad.js = type=http-response,requires-body=1,max-size=-1,pattern=^https?://m?api\.weibo\.c(n|om)/2/(statuses/(unread|extend|positives/get|(friends|video)(/|_)(mix)?timeline)|stories/(video_stream|home_list)|(groups|fangle)/timeline|profile/statuses|comments/build_comments|photo/recommend_list|service/picfeed|searchall|cardlist|page|!/(photos/pic_recommend_status|live/media_homelist)|video/tiny_stream_video_list|photo/info|remind/unread_count),script-path=https://raw.githubusercontent.com/yichahucha/surge/master/wb_ad.js
 
 [MITM]
-hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,ad.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com
+hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,ad.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com,mi.gdt.qq.com,w.gdt.qq.com,sdk.e.qq.com
