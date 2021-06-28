@@ -5,17 +5,17 @@
 #!weibo=https://github.com/yichahucha/surge/blob/master/sg_sub.sgmodule
 
 [URL Rewrite]
-##豆瓣去广告
+# > 豆瓣去广告
 ^https?:\/\/erebor\.douban\.com\/count\/\?ad= - reject
 ^https?:\/\/img\d\.doubanio\.com\/view\/dale-online\/dale_ad\/ - reject
 ^https?:\/\/api\.douban\.com\/v2\/app_ads\/common_ads data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank.gif"
 ^https?:\/\/api\.douban\.com\/v2\/app_ads\/splash data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank.txt"
 
-##彩云天气去广告 - cdn-1rtb.caiyunapp.com,ad.caiyunapp.com
+# > 彩云天气去广告
 ^https?:\/\/cdn-1rtb\.caiyunapp\.com/creative/.*$ - reject
 ^https?:\/\/ad\.caiyunapp\.com - reject
 
-##地铁通去广告
+# > 地铁通去广告
 ^https?:\/\/\w+\.gdt\.qq\.com - reject
 ^https?:\/\/mi\.gdt\.qq\.com\/gdt_mview\.fcg - reject
 ^https?:\/\/sdk\.e\.qq\.com\/getad - reject
@@ -25,7 +25,7 @@
 #From2:https://github.com/zqzess/rule_for_quantumultX/blob/master/QuantumultX/rewrite/MyRewrite_lite.conf
 #From3:https://github.com/NobyDa/Script/blob/master/Surge/Module/RewriteRules.sgmodule
 
-# > 微信 - mp.weixin.qq.com,szextshort.weixin.qq.com
+# > 微信
 ^https:\/\/mp\.weixin\.qq\.com\/mp\/ad.* - reject
 ^https?:\/\/mp\.weixin\.qq.com\/mp\/ad_complaint - reject
 ^https?:\/\/mp\.weixin\.qq.com\/mp\/ad_video - reject
@@ -33,18 +33,18 @@
 ^https?:\/\/mp\.weixin\.qq\.com\/(s|mp)\/(ad_|advertisement|getappmsgad|report|appmsgreport|appmsgpicreport) - reject
 ^https?:\/\/szextshort\.weixin\.qq\.com\/cgi-bin\/mmoc-bin\/ad\/ - reject
 
-# > 京东 - ms.jr.jd.com,img*.360buyimg.com,bdsp-x.jd.com,dsp-x.jd.com
+# > 京东
 ^https?:\/\/(bdsp-x|dsp-x)\.jd\.com\/adx\/ - reject
 ^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/na\/m\/getLoadingPicture - reject
 ^https?:\/\/img\d+\.360buyimg\.com\/jddjadvertise\/ - reject
 
-# > MI - api.jr.mi.com,api-mifit*.huami.com
+# > MI
 ^https?:\/\/api\.m\.mi\.com\/v\d\/app\/start - reject
 ^https?:\/\/api\.jr\.mi\.com\/v\d\/adv\/ - reject
 ^https?:\/\/api\.jr\.mi\.com\/jr\/api\/playScreen - reject
 ^https?:\/\/(api-mifit|api-mifit-\w+)\.huami\.com\/discovery\/mi\/discovery\/\w+_ad\? - reject
 
-# > 滴滴 - img-ys011.didistatic.com,img*.ddimg.cn,ct.xiaojukeji.com,res.xiaojukeji.com
+# > 滴滴
 ^https?:\/\/img-ys011\.didistatic\.com\/static\/ad_oss\/image-\d{4}-\d{4}\/ - reject
 ^https?:\/\/img\d{2}\.ddimg\.cn\/upload_img\/.+?\/670x900 - reject
 ^https?:\/\/img\d{2}\.ddimg\.cn\/upload_img\/.+?\/750x1064 - reject
@@ -52,11 +52,11 @@
 ^https?:\/\/res\.xiaojukeji\.com\/resapi\/activity\/get(Ruled|Preload|PasMultiNotices) - reject
 ^https?:\/\/res\.xiaojukeji\.com\/resapi\/activity\/mget - reject
 
-# > 百度地图 - newclient.map.baidu.com
+# > 百度地图
 ^https?:\/\/ss0\.bdstatic\.com/.+_\d{3}_\d{4}\.jpg - reject
 ^https:\/\/dss0\.bdstatic\.com\/.+/tam-ogel\/.+\.jpg - reject
 
-# > 美团点评 - img.meituan.net,p*.meituan.net,s3plus.meituan.net,flowplus.meituan.net
+# > 美团点评
 ^https?:\/\/img\.meituan\.net\/(adunion|display|dpmobile|midas)\/\w+\.(gif|jpg|jpg\.webp)$ - reject
 ^https?:\/\/(s3plus|flowplus)\.meituan\.net\/v\d\/\w+\/linglong\/\w+\.(gif|jpg|mp4) - reject
 ^https?:\/\/p\d\.meituan\.net\/(bizad|wmbanner)\/\w+\.jpg - reject
@@ -65,72 +65,72 @@
 ^https?:\/\/p\d\.meituan\.net\/(mmc|wmbanner)\/ - reject
 ^https?:\/\/p\d\.meituan\.net\/wmbanner\/[A-Za-z0-9]+\.jpg - reject
 
-# > 饿了么 - elemecdn.com
+# > 饿了么
 ^https?:\/\/elemecdn\.com\/.+?\/sitemap - reject
 ^https?:\/\/fuss10\.elemecdn\.com\/.+?\/w\/640\/h\/\d{3,4} - reject
 ^https?:\/\/fuss10\.elemecdn\.com\/.+?\/w\/750\/h\/\d{3,4} - reject
 ^https?:\/\/fuss10\.elemecdn\.com\/.+?\.mp4 - reject
 
-# > 中国联通营业厅 - m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn
+# > 中国联通营业厅
 ^https?:\/\/m\.client\.10010\.com\/mobileService\/(activity|customer)\/(accountListData|get_client_adv|get_startadv) - reject
 ^https?:\/\/m\.client\.10010\.com\/uniAdmsInterface\/(getHomePageAd|getWelcomeAd) - reject
 ^https?:\/\/m1\.ad\.10010\.com\/noticeMag\/images\/imageUpload\/2\d{3} - reject
 ^https?:\/\/res\.mall\.10010\.cn\/mall\/common\/js\/fa\.js?referer= - reject
 
-# > 雪球 - api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228
+# > 雪球
 ^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/promotion\/(display_cache|display_ad|feed_display|search_ad) - reject
 ^https?:\/\/(api|promo)\.xueqiu\.com\/promotion\/(display_cache|display_ad|feed_display|search_ad) - reject
 ^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/brand\/search\/v1\.json - reject
 ^https?:\/\/api\.xueqiu\.com\/brand\/search\/v1\.json - reject
 ^https?:\/\/api\.xueqiu\.com\/ads\/display - reject
 
-# > 多看 - www.duokan.com
+# > 多看
 ^https?:\/\/www\.duokan\.com/pictures? - reject
 ^https?:\/\/www\.duokan\.com/promotion_day - reject
 
-# > 淘宝 - gw.alicdn.com,heic.alicdn.com
+# > 淘宝
 ^https?:\/\/(gw|heic)\.alicdn\.com\/\w{2}s\/.+\.jpg_(9\d{2}|\d{4}) - reject
 ^https?:\/\/(gw|heic)\.alicdn\.com\/imgextra\/.+\d{4}-\d{4}\.jpg_(9\d{2}|\d{4}) - reject
 
-# > 闲鱼 - acs.m.taobao.com
+# > 闲鱼
 ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.taobao\.idle\.home\.welcome\/ - reject
 
-# > 飞猪 - acs.m.taobao.com
+# > 飞猪
 ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.activity\.querytmsresources\/ - reject
 
-# 携程 - ma-adx.ctrip.com,m.ctrip.com
+# > 携程 - ma-adx.ctrip.com,m.ctrip.com
 ^https:\/\/ma-adx\.ctrip\.com\/_ma\.gif - reject
 ^https:\/\/m\.ctrip\.com\/restapi\/.+\/json\/tripAds - reject
 ^https:\/\/m\.ctrip\.com\/html5\/webresource\/js\/iscroll\.js$ - reject
 
 ##zhihu
-# 禁止知乎下发配置
+# > 禁止知乎下发配置
 ^https?:\/\/api\.zhihu\.com\/ab\/api\/v1\/products\/zhihu\/platforms\/ios\/config - reject
-# 知乎拦截部分预加载
+# > 知乎拦截部分预加载
 ^https?:\/\/www\.zhihu\.com\/appview\/(p|v2\/answer|zvideo)\/.*entry=(preload-topstory|preload-search|preload-subscription) - reject
-# 知乎其他广告拦截
+# > 知乎其他广告拦截
 ^https?:\/\/api\.zhihu\.com\/(notifications\/v\d\/count|v\d\/package|me\/guides|drama\/living-info|ad|fringe|commercial|market\/popovers|.*featured-comment-ad) - reject
 
 ##重定向
-#Google
+# > Google
 ^https?:\/\/(www.)?(g|google)\.cn https://www.google.com 302
 ^https:\/\/www\.google\.com\.hk\/ https://www.google.com/ncr 302
-# Safari禁止知乎跳转 App
+# > Safari禁止知乎跳转 App
 ^https?://link\.zhihu\.com/\?target=https?%3A//(.*) https://$1 302
 ^https?://oia\.zhihu\.com https://zhuanlan.zhihu.com 302
 
 [Script]
-##weibo
+# > 微博
 wb_launch.js = type=http-response,requires-body=1,pattern=^https?://(sdk|wb)app\.uve\.weibo\.com(/interface/sdk/sdkad.php|/wbapplua/wbpullad.lua),script-path=https://raw.githubusercontent.com/yichahucha/surge/master/wb_launch.js
 wb_ad.js = type=http-response,requires-body=1,max-size=-1,pattern=^https?://m?api\.weibo\.c(n|om)/2/(statuses/(unread|extend|positives/get|(friends|video)(/|_)(mix)?timeline)|stories/(video_stream|home_list)|(groups|fangle)/timeline|profile/statuses|comments/build_comments|photo/recommend_list|service/picfeed|searchall|cardlist|page|!/(photos/pic_recommend_status|live/media_homelist)|video/tiny_stream_video_list|photo/info|remind/unread_count),script-path=https://raw.githubusercontent.com/yichahucha/surge/master/wb_ad.js
 
-##Bilibili
+# > 哔哩哔哩
 BiliBili_推荐去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/app\.bilibili\.com\/x\/v2\/feed\/index,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/bilibili/bilibili_plus.js
 BiliBili_动态去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.vc\.bilibili\.com\/dynamic_svr\/v1\/dynamic_svr\/dynamic_(history|new)\?,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/bilibili/bilibili_plus.js
 BiliBili_开屏去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/app\.bilibili\.com\/x\/v2\/splash\/list,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/bilibili/bilibili_plus.js
 BiliBili_标签页处理 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/app\.bilibili\.com\/x\/resource\/show\/tab,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/bilibili/bilibili_plus.js
 
-##zhihu
+# > 知乎
 知乎_处理用户信息 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/people\/,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
 知乎_信息流去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/(moments|topstory)(\/|\?)?(recommend|action=|feed_type=)(?!\/people),script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
 知乎_回答列表去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/v4\/questions,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
@@ -139,7 +139,7 @@ BiliBili_标签页处理 = type=http-response,requires-body=1,max-size=0,pattern
 知乎_热榜去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/topstory\/hot-lists?(\?|\/),script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
 知乎_评论去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/api\.zhihu\.com\/(comment_v5\/)?(answers|comments?|articles|pins)\/\d+\/(root_|child_)?comments?,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js
 
-##meituan
+# > 美团外卖
 美团外卖_开屏去广告 = type=http-response,requires-body=1,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/startup/startup.js,pattern=^https?:\/\/wmapi\.meituan\.com\/api\/v\d+\/loadInfo?
 
 [MITM]
