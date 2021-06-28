@@ -24,12 +24,12 @@
 ^https?:\/\/sdk\.e\.qq\.com\/getad - reject
 
 # > 微信
-^https:\/\/mp\.weixin\.qq\.com\/mp\/ad.* - reject
-^https?:\/\/mp\.weixin\.qq.com\/mp\/ad_complaint - reject
-^https?:\/\/mp\.weixin\.qq.com\/mp\/ad_video - reject
-^https?:\/\/mp\.weixin\.qq.com\/mp\/advertisement_report - reject
-^https?:\/\/mp\.weixin\.qq\.com\/(s|mp)\/(ad_|advertisement|getappmsgad|report|appmsgreport|appmsgpicreport) - reject
-^https?:\/\/szextshort\.weixin\.qq\.com\/cgi-bin\/mmoc-bin\/ad\/ - reject
+#^https:\/\/mp\.weixin\.qq\.com\/mp\/ad.* - reject
+#^https?:\/\/mp\.weixin\.qq.com\/mp\/ad_complaint - reject
+#^https?:\/\/mp\.weixin\.qq.com\/mp\/ad_video - reject
+#^https?:\/\/mp\.weixin\.qq.com\/mp\/advertisement_report - reject
+#^https?:\/\/mp\.weixin\.qq\.com\/(s|mp)\/(ad_|advertisement|getappmsgad|report|appmsgreport|appmsgpicreport) - reject
+#^https?:\/\/szextshort\.weixin\.qq\.com\/cgi-bin\/mmoc-bin\/ad\/ - reject
 
 # > 京东
 ^https?:\/\/(bdsp-x|dsp-x)\.jd\.com\/adx\/ - reject
@@ -138,6 +138,9 @@ BiliBili_标签页处理 = type=http-response,requires-body=1,max-size=0,pattern
 
 # > 美团外卖
 美团外卖_开屏去广告 = type=http-response,requires-body=1,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/startup/startup.js,pattern=^https?:\/\/wmapi\.meituan\.com\/api\/v\d+\/loadInfo?
+
+# > 微信公众号
+微信公众号去广告 = type=http-response,pattern=^https?:\/\/mp\.weixin\.qq\.com\/mp\/getappmsgad,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/NobyDa/Script/master/QuantumultX/File/Wechat.js
 
 [MITM]
 hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,ad.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com,mi.gdt.qq.com,w.gdt.qq.com,sdk.e.qq.com,*.google.com.hk,*.g.cn,*.google.cn,mp.weixin.qq.com,szextshort.weixin.qq.com,ms.jr.jd.com,img*.360buyimg.com,bdsp-x.jd.com,dsp-x.jd.com,api.jr.mi.com,api-mifit*.huami.com,img-ys011.didistatic.com,img*.ddimg.cn,ct.xiaojukeji.com,res.xiaojukeji.com,dss0.bdstatic.com,ss0.bdstatic.com,img.meituan.net,p*.meituan.net,s3plus.meituan.net,flowplus.meituan.net,elemecdn.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com,gw.alicdn.com,heic.alicdn.com,acs.m.taobao.com,wmapi.meituan.com,ma-adx.ctrip.com,m.ctrip.com
