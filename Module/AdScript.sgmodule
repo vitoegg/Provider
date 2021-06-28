@@ -3,6 +3,9 @@
 #!bilibili=https://github.com/blackmatrix7/ios_rule_script/blob/master/script/bilibili/bilibili_plus.sgmodule
 #!zhihu=https://github.com/blackmatrix7/ios_rule_script/blob/master/script/zhihu/zhihu_plus.sgmodule
 #!weibo=https://github.com/yichahucha/surge/blob/master/sg_sub.sgmodule
+#From1:https://github.com/DivineEngine/Profiles/blob/master/Surge/Module/Block/Advertising.sgmodule
+#From2:https://github.com/zqzess/rule_for_quantumultX/blob/master/QuantumultX/rewrite/MyRewrite_lite.conf
+#From3:https://github.com/NobyDa/Script/blob/master/Surge/Module/RewriteRules.sgmodule
 
 [URL Rewrite]
 # > 豆瓣去广告
@@ -19,11 +22,6 @@
 ^https?:\/\/\w+\.gdt\.qq\.com - reject
 ^https?:\/\/mi\.gdt\.qq\.com\/gdt_mview\.fcg - reject
 ^https?:\/\/sdk\.e\.qq\.com\/getad - reject
-
-##
-#From1:https://github.com/DivineEngine/Profiles/blob/master/Surge/Module/Block/Advertising.sgmodule
-#From2:https://github.com/zqzess/rule_for_quantumultX/blob/master/QuantumultX/rewrite/MyRewrite_lite.conf
-#From3:https://github.com/NobyDa/Script/blob/master/Surge/Module/RewriteRules.sgmodule
 
 # > 微信
 ^https:\/\/mp\.weixin\.qq\.com\/mp\/ad.* - reject
@@ -98,12 +96,11 @@
 # > 飞猪
 ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.activity\.querytmsresources\/ - reject
 
-# > 携程 - ma-adx.ctrip.com,m.ctrip.com
+# > 携程
 ^https:\/\/ma-adx\.ctrip\.com\/_ma\.gif - reject
 ^https:\/\/m\.ctrip\.com\/restapi\/.+\/json\/tripAds - reject
 ^https:\/\/m\.ctrip\.com\/html5\/webresource\/js\/iscroll\.js$ - reject
 
-##zhihu
 # > 禁止知乎下发配置
 ^https?:\/\/api\.zhihu\.com\/ab\/api\/v1\/products\/zhihu\/platforms\/ios\/config - reject
 # > 知乎拦截部分预加载
@@ -111,7 +108,7 @@
 # > 知乎其他广告拦截
 ^https?:\/\/api\.zhihu\.com\/(notifications\/v\d\/count|v\d\/package|me\/guides|drama\/living-info|ad|fringe|commercial|market\/popovers|.*featured-comment-ad) - reject
 
-##重定向
+#重定向
 # > Google
 ^https?:\/\/(www.)?(g|google)\.cn https://www.google.com 302
 ^https:\/\/www\.google\.com\.hk\/ https://www.google.com/ncr 302
