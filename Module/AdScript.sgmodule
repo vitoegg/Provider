@@ -11,9 +11,6 @@
 ^https?:\/\/api\.douban\.com\/v2\/app_ads\/common_ads data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank.gif"
 ^https?:\/\/api\.douban\.com\/v2\/app_ads\/splash data="https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/blank/blank.txt"
 
-# Bilibili可能的一些推广(beta)
-^https?:\/\/api\.bilibili\.com\/pgc\/season\/app\/related\/recommend\? - reject
-
 ##彩云天气去广告 - cdn-1rtb.caiyunapp.com,ad.caiyunapp.com
 ^https?:\/\/cdn-1rtb\.caiyunapp\.com/creative/.*$ - reject
 ^https?:\/\/ad\.caiyunapp\.com - reject
@@ -22,17 +19,6 @@
 ^https?:\/\/\w+\.gdt\.qq\.com - reject
 ^https?:\/\/mi\.gdt\.qq\.com\/gdt_mview\.fcg - reject
 ^https?:\/\/sdk\.e\.qq\.com\/getad - reject
-
-##zhihu
-# 禁止知乎下发配置
-^https?:\/\/api\.zhihu\.com\/ab\/api\/v1\/products\/zhihu\/platforms\/ios\/config - reject
-# 拦截知乎品牌提问广告
-^https?:\/\/api\.zhihu\.com\/brand\/question\/\d+/card\? - reject
-^https?:\/\/www\.zhihu\.com\/api\/v\d+\/brand\/question/\d+/card\? - reject
-# 知乎拦截部分预加载
-^https?:\/\/www\.zhihu\.com\/appview\/(p|v2\/answer|zvideo)\/.*entry=(preload-topstory|preload-search|preload-subscription) - reject
-# 知乎其他广告拦截
-^https?:\/\/api\.zhihu\.com\/(notifications\/v\d\/count|v\d\/package|me\/guides|drama\/living-info|ad|fringe|commercial|market\/popovers|.*featured-comment-ad) - reject
 
 ##
 #From1:https://github.com/DivineEngine/Profiles/blob/master/Surge/Module/Block/Advertising.sgmodule
@@ -117,6 +103,14 @@
 ^https:\/\/m\.ctrip\.com\/restapi\/.+\/json\/tripAds - reject
 ^https:\/\/m\.ctrip\.com\/html5\/webresource\/js\/iscroll\.js$ - reject
 
+##zhihu
+# 禁止知乎下发配置
+^https?:\/\/api\.zhihu\.com\/ab\/api\/v1\/products\/zhihu\/platforms\/ios\/config - reject
+# 知乎拦截部分预加载
+^https?:\/\/www\.zhihu\.com\/appview\/(p|v2\/answer|zvideo)\/.*entry=(preload-topstory|preload-search|preload-subscription) - reject
+# 知乎其他广告拦截
+^https?:\/\/api\.zhihu\.com\/(notifications\/v\d\/count|v\d\/package|me\/guides|drama\/living-info|ad|fringe|commercial|market\/popovers|.*featured-comment-ad) - reject
+
 ##重定向
 #Google
 ^https?:\/\/(www.)?(g|google)\.cn https://www.google.com 302
@@ -149,4 +143,4 @@ BiliBili_标签页处理 = type=http-response,requires-body=1,max-size=0,pattern
 美团外卖_开屏去广告 = type=http-response,requires-body=1,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/startup/startup.js,pattern=^https?:\/\/wmapi\.meituan\.com\/api\/v\d+\/loadInfo?
 
 [MITM]
-hostname =  %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,ad.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com,mi.gdt.qq.com,w.gdt.qq.com,sdk.e.qq.com,*.google.com.hk,*.g.cn,*.google.cn,mp.weixin.qq.com,szextshort.weixin.qq.com,ms.jr.jd.com,img*.360buyimg.com,bdsp-x.jd.com,dsp-x.jd.com,api.jr.mi.com,api-mifit*.huami.com,img-ys011.didistatic.com,img*.ddimg.cn,ct.xiaojukeji.com,res.xiaojukeji.com,dss0.bdstatic.com,ss0.bdstatic.com,img.meituan.net,p*.meituan.net,s3plus.meituan.net,flowplus.meituan.net,elemecdn.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com,gw.alicdn.com,heic.alicdn.com,acs.m.taobao.com,wmapi.meituan.com,ma-adx.ctrip.com,m.ctrip.com
+hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,ad.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com,mi.gdt.qq.com,w.gdt.qq.com,sdk.e.qq.com,*.google.com.hk,*.g.cn,*.google.cn,mp.weixin.qq.com,szextshort.weixin.qq.com,ms.jr.jd.com,img*.360buyimg.com,bdsp-x.jd.com,dsp-x.jd.com,api.jr.mi.com,api-mifit*.huami.com,img-ys011.didistatic.com,img*.ddimg.cn,ct.xiaojukeji.com,res.xiaojukeji.com,dss0.bdstatic.com,ss0.bdstatic.com,img.meituan.net,p*.meituan.net,s3plus.meituan.net,flowplus.meituan.net,elemecdn.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com,gw.alicdn.com,heic.alicdn.com,acs.m.taobao.com,wmapi.meituan.com,ma-adx.ctrip.com,m.ctrip.com
