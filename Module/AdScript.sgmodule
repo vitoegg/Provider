@@ -45,6 +45,8 @@
 # > 百度地图
 ^https?:\/\/ss0\.bdstatic\.com/.+_\d{3}_\d{4}\.jpg - reject
 ^https:\/\/dss0\.bdstatic\.com\/.+/tam-ogel\/.+\.jpg - reject
+^https:\/\/dss0\.bdstatic\.com\/*.mp4 - reject
+^http:\/\/ecmb\.bdimg\.com\/ - reject
 
 # > 美团点评
 ^https?:\/\/img\.meituan\.net\/(adunion|display|dpmobile|midas)\/\w+\.(gif|jpg|jpg\.webp)$ - reject
