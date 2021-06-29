@@ -28,7 +28,7 @@
 ^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/na\/m\/getLoadingPicture - reject
 ^https?:\/\/img\d+\.360buyimg\.com\/jddjadvertise\/ - reject
 
-# > MI
+# > 小米
 ^https?:\/\/api\.m\.mi\.com\/v\d\/app\/start - reject
 ^https?:\/\/api\.jr\.mi\.com\/v\d\/adv\/ - reject
 ^https?:\/\/api\.jr\.mi\.com\/jr\/api\/playScreen - reject
@@ -81,6 +81,9 @@
 # > 淘宝
 ^https?:\/\/(gw|heic)\.alicdn\.com\/\w{2}s\/.+\.jpg_(9\d{2}|\d{4}) - reject
 ^https?:\/\/(gw|heic)\.alicdn\.com\/imgextra\/.+\d{4}-\d{4}\.jpg_(9\d{2}|\d{4}) - reject
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.o2o\.ad\.gateway\.get\/ - reject
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.alibaba\.advertisementservice\.getadv - reject
+^https?+:\/\/amdc\.m\.taobao\.com\/amdc\/mobileDispatch - reject
 
 # > 闲鱼
 ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.taobao\.idle\.home\.welcome\/ - reject
@@ -135,4 +138,4 @@ BiliBili_标签页处理 = type=http-response,requires-body=1,max-size=0,pattern
 微信公众号去广告 = type=http-response,pattern=^https?:\/\/mp\.weixin\.qq\.com\/mp\/getappmsgad,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/NobyDa/Script/master/QuantumultX/File/Wechat.js
 
 [MITM]
-hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,ad.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com,mi.gdt.qq.com,w.gdt.qq.com,sdk.e.qq.com,*.google.com.hk,*.g.cn,*.google.cn,mp.weixin.qq.com,ms.jr.jd.com,img*.360buyimg.com,bdsp-x.jd.com,dsp-x.jd.com,api.jr.mi.com,api-mifit*.huami.com,img-ys011.didistatic.com,img*.ddimg.cn,ct.xiaojukeji.com,res.xiaojukeji.com,dss0.bdstatic.com,ss0.bdstatic.com,img.meituan.net,p*.meituan.net,s3plus.meituan.net,flowplus.meituan.net,elemecdn.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com,gw.alicdn.com,heic.alicdn.com,acs.m.taobao.com,wmapi.meituan.com,ma-adx.ctrip.com,m.ctrip.com
+hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,ad.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com,mi.gdt.qq.com,w.gdt.qq.com,sdk.e.qq.com,*.google.com.hk,*.g.cn,*.google.cn,mp.weixin.qq.com,ms.jr.jd.com,img*.360buyimg.com,bdsp-x.jd.com,dsp-x.jd.com,api.jr.mi.com,api-mifit*.huami.com,img-ys011.didistatic.com,img*.ddimg.cn,ct.xiaojukeji.com,res.xiaojukeji.com,dss0.bdstatic.com,ss0.bdstatic.com,img.meituan.net,p*.meituan.net,s3plus.meituan.net,flowplus.meituan.net,elemecdn.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com,gw.alicdn.com,heic.alicdn.com,acs.m.taobao.com,amdc.m.taobao.com,wmapi.meituan.com,ma-adx.ctrip.com,m.ctrip.com
