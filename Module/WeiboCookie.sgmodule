@@ -1,8 +1,0 @@
-#!name=WeiboCookie
-#!desc=获取微博签到Cookie
-
-[Script]
-微博超话cookie获取 = type=http-request,pattern=^https?://m?api\.weibo\.c(n|om)\/2\/(cardlist|page\/button),script-path=https://raw.githubusercontent.com/toulanboy/scripts/master/weibo/weibotalk.cookie.js
-
-[MITM]
-hostname = api.weibo.cn
