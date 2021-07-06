@@ -133,13 +133,6 @@ payload:
   - DOMAIN-SUFFIX,twitpic.com
   - DOMAIN-SUFFIX,twitter.com
   - DOMAIN-SUFFIX,vine.co
-# > Telegram 
-  - DOMAIN-SUFFIX,t.me
-  - DOMAIN-SUFFIX,tdesktop.com
-  - DOMAIN-SUFFIX,telegra.ph
-  - DOMAIN-SUFFIX,telegram.me
-  - DOMAIN-SUFFIX,telegram.org
-  - DOMAIN-SUFFIX,telesco.pe
 # > Wikimedia Foundation
   - DOMAIN-SUFFIX,wikileaks.org
   - DOMAIN-SUFFIX,wikimapia.org
