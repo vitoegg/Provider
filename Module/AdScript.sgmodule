@@ -109,7 +109,6 @@
 #重定向
 # > Google
 ^https?:\/\/(www.)?(g|google)\.cn https://www.google.com 302
-^https:\/\/www\.google\.com\.hk\/ https://www.google.com/ncr 302
 # > Safari禁止知乎跳转 App
 ^https?://link\.zhihu\.com/\?target=https?%3A//(.*) https://$1 302
 ^https?://oia\.zhihu\.com https://zhuanlan.zhihu.com 302
