@@ -137,7 +137,7 @@ payload:
  - DOMAIN-SUFFIX,xiaojuchefu.cn
  - DOMAIN-SUFFIX,xiaojukeji.com
 
-#流媒体
+ # 流媒体
  # > Bilibili
  - DOMAIN-SUFFIX,biliapi.net
  - DOMAIN-SUFFIX,bilibili.com
@@ -221,12 +221,6 @@ payload:
  - DOMAIN-SUFFIX,127.net
  - DOMAIN-SUFFIX,163.com
  - DOMAIN-SUFFIX,youdao.com
-
- # > 阻止错误代理(Clash Only)
- - PROCESS-NAME,Surge,DIRECT
- - PROCESS-NAME,Surge 4,DIRECT
- - PROCESS-NAME,Surge%204,DIRECT
- - PROCESS-NAME,Thunder,DIRECT
 
  # > 服务
  - DOMAIN-SUFFIX,12306.cn
