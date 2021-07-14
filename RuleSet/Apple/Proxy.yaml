@@ -18,7 +18,7 @@ payload:
   - DOMAIN-SUFFIX,itunes-apple.com.akadns.net
 
   # > Develop
-  - PROCESS-NAME,trustd,Proxy
+  - PROCESS-NAME,trustd
   - DOMAIN,testflight.apple.com
   - DOMAIN,developer.apple.com
   - DOMAIN-SUFFIX,digicert.com
