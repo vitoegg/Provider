@@ -1,5 +1,5 @@
 payload:
-#阿里巴巴
+ # > 阿里巴巴
  - DOMAIN-SUFFIX,alibaba.com
  - DOMAIN-SUFFIX,aliapp.org
  - DOMAIN-SUFFIX,alibabacloud.com
@@ -24,7 +24,7 @@ payload:
  - DOMAIN-SUFFIX,dingtalk.com
  - DOMAIN-SUFFIX,ykimg.com
  
-#百度
+ # > 百度
  - DOMAIN-SUFFIX,baidu.com
  - DOMAIN-SUFFIX,baidubcr.com
  - DOMAIN-SUFFIX,baidupan.com
@@ -33,14 +33,14 @@ payload:
  - DOMAIN-SUFFIX,bdstatic.com
  - DOMAIN-SUFFIX,yunjiasu-cdn.net
 
-#字节跳动
+ # > 字节跳动
  - DOMAIN-SUFFIX,feiliao.com
  - DOMAIN-SUFFIX,pstatp.com
  - DOMAIN-SUFFIX,snssdk.com
  - DOMAIN-SUFFIX,iesdouyin.com
  - DOMAIN-SUFFIX,toutiao.com
 
-#腾讯
+ # > 腾讯
  - DOMAIN-SUFFIX,qq.com
  - DOMAIN-SUFFIX,qqmail.com
  - DOMAIN-SUFFIX,qqurl.com
@@ -62,7 +62,7 @@ payload:
  - DOMAIN-SUFFIX,qidian.com
  - DOMAIN,file-igamecj.akamaized.net
 
-#新浪
+ # > 新浪
  - DOMAIN-SUFFIX,wbimg.cn
  - DOMAIN-SUFFIX,wbimg.com
  - DOMAIN-SUFFIX,wbimg.com.cn
@@ -87,11 +87,11 @@ payload:
  - DOMAIN-SUFFIX,sinacloud.com.cn
  - DOMAIN-SUFFIX,sinacloud.net
 
-#豆瓣
+ # > 豆瓣
  - DOMAIN-SUFFIX,douban.com
  - DOMAIN-SUFFIX,doubanio.com
 
-#京东
+ # > 京东
  - DOMAIN-SUFFIX,jd.com
  - DOMAIN-SUFFIX,jd.hk
  - DOMAIN-SUFFIX,jdpay.com
@@ -102,8 +102,8 @@ payload:
  - DOMAIN-SUFFIX,paipai.com
  - DOMAIN-SUFFIX,yihaodianimg.com
 
-#O2O服务
-# > Meituan
+ # O2O服务
+ # > Meituan
  - DOMAIN-SUFFIX,dianping.com
  - DOMAIN-SUFFIX,maoyan.com
  - DOMAIN-SUFFIX,meituan.com
@@ -111,7 +111,7 @@ payload:
  - DOMAIN-SUFFIX,mtyun.com
  - DOMAIN-SUFFIX,neixin.cn
  - DOMAIN-SUFFIX,sankuai.com
-# > ele
+ # > ele
  - DOMAIN-SUFFIX,ele.me
  - DOMAIN-SUFFIX,eleme.cn
  - DOMAIN-SUFFIX,eleme.io
@@ -120,7 +120,7 @@ payload:
  - DOMAIN-SUFFIX,fengniaopaotui.cn
  - DOMAIN-SUFFIX,fengniaozhongbao.cn
  - DOMAIN-SUFFIX,xingxuanwaimai.com
-# > DiDi
+ # > DiDi
  - DOMAIN-SUFFIX,didialift.com
  - DOMAIN-SUFFIX,didiapp.net.cn
  - DOMAIN-SUFFIX,didichuxing.com
@@ -138,30 +138,30 @@ payload:
  - DOMAIN-SUFFIX,xiaojukeji.com
 
 #流媒体
-# > Bilibili
+ # > Bilibili
  - DOMAIN-SUFFIX,biliapi.net
  - DOMAIN-SUFFIX,bilibili.com
  - DOMAIN-SUFFIX,bilivideo.com
  - DOMAIN-SUFFIX,hdslb.com
-# > Tencent Video
+ # > Tencent Video
  - DOMAIN-SUFFIX,video.qq.com
  - DOMAIN-SUFFIX,i.qq.com
  - DOMAIN-SUFFIX,v.qq.com
-# > iQiyi
+ # > iQiyi
  - DOMAIN-SUFFIX,iqiyi.com
  - DOMAIN-SUFFIX,71edge.com
-# > Youku
+ # > Youku
  - DOMAIN-SUFFIX,soku.com
  - DOMAIN-SUFFIX,youku.com
  - DOMAIN-SUFFIX,ykimg.com
-# > XiGua
+ # > XiGua
  - DOMAIN-SUFFIX,ixigua.com
  - DOMAIN-SUFFIX,snssdk.com
-# > HunanTV
+ # > HunanTV
  - DOMAIN-SUFFIX,hitv.com
  - DOMAIN-SUFFIX,hunantv.com
  - DOMAIN-SUFFIX,mgtv.com
-# > QQ Music
+ # > QQ Music
  - DOMAIN-SUFFIX,music.qq.com
  - DOMAIN-SUFFIX,music.tc.qq.com
  - DOMAIN-SUFFIX,qqmusic.qq.com
@@ -169,24 +169,24 @@ payload:
  - DOMAIN-SUFFIX,y.qq.com
  - DOMAIN,aqqmusic.tc.qq.com
  - DOMAIN,moo.qq.com
-# > Ximalaya
+ # > Ximalaya
  - DOMAIN-SUFFIX,ximalaya.com
  - DOMAIN-SUFFIX,xmcdn.com
-# > Lizhi
+ # > Lizhi
  - DOMAIN-SUFFIX,lizhi.fm
  - DOMAIN-SUFFIX,lizhi.io
  - DOMAIN-SUFFIX,lizhifm.com
-# > Xiaoyuzhou
+ # > Xiaoyuzhou
  - DOMAIN-SUFFIX,xiaoyuzhoufm.com
  - DOMAIN-SUFFIX,xyzcdn.net
 
-#微软
+ # > 微软
  - DOMAIN-SUFFIX,microsoft.com
  - DOMAIN-SUFFIX,microsoftonline.com
  - DOMAIN-SUFFIX,office.com
  - DOMAIN-SUFFIX,office365.com
 
-#新闻
+ # > 新闻
  - DOMAIN-SUFFIX,sspai.com
  - DOMAIN-SUFFIX,36kr.com
  - DOMAIN-SUFFIX,ifanr.com
@@ -198,7 +198,7 @@ payload:
  - DOMAIN-SUFFIX,soku.com
  - DOMAIN-SUFFIX,soso.com
 
-#小米
+ # > 小米
  - DOMAIN-SUFFIX,mi.com
  - DOMAIN-SUFFIX,mi-img.com
  - DOMAIN-SUFFIX,xiaomi.com
@@ -208,11 +208,11 @@ payload:
  - DOMAIN-SUFFIX,miwifi.com
  - DOMAIN-SUFFIX,duokan.com
 
-#知乎
+ # > 知乎
  - DOMAIN-SUFFIX,zhihu.com
  - DOMAIN-SUFFIX,zhimg.com
 
-#网易
+ # > 网易
  - DOMAIN-SUFFIX,netease.com
  - DOMAIN-SUFFIX,netease.im
  - DOMAIN-SUFFIX,lofter.com
@@ -222,7 +222,13 @@ payload:
  - DOMAIN-SUFFIX,163.com
  - DOMAIN-SUFFIX,youdao.com
 
-#服务
+ # > 阻止错误代理(Clash Only)
+ - PROCESS-NAME,Surge,DIRECT
+ - PROCESS-NAME,Surge 4,DIRECT
+ - PROCESS-NAME,Surge%204,DIRECT
+ - PROCESS-NAME,Thunder,DIRECT
+
+ # > 服务
  - DOMAIN-SUFFIX,12306.cn
  - DOMAIN-SUFFIX,12306.com
  - DOMAIN-SUFFIX,115.com
@@ -257,7 +263,8 @@ payload:
  - DOMAIN-SUFFIX,xinruimz-isv.isvjcloud.com
  - DOMAIN,download.jetbrains.com
  - DOMAIN,images-cn.ssl-images-amazon.com
- #Personal 
+ 
+ # > Personal 
  - DOMAIN-KEYWORD,diyibanzhu
  - DOMAIN-KEYWORD,dybz
  # Clash专属
