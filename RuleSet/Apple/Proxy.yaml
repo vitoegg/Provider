@@ -1,7 +1,7 @@
 payload:
   #Link1:https://github.com/Hackl0us/SS-Rule-Snippet/blob/master/Rulesets/Clash/Basic/Apple-proxy.yaml
   #Link2:https://github.com/geekdada/surge-list/blob/master/surgio-snippet/apple.tpl
-  #更新时间:2021-07-14
+  #更新时间:2021-07-16
   
   # > AppStore
   - DOMAIN-SUFFIX,apps.apple.com
