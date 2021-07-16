@@ -6,6 +6,7 @@ payload:
   # > AppStore
   - DOMAIN-SUFFIX,apps.apple.com
   - DOMAIN,profile.gc.apple.com
+  - DOMAIN,friend.gc.apple.com
   - DOMAIN,stats.gc.apple.com
   - DOMAIN,bag.itunes.apple.com
   - DOMAIN,play.itunes.apple.com
