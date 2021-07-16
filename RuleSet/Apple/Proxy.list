@@ -3,9 +3,9 @@
 #更新时间:2021-07-14
 
 # > AppStore
-DOMAIN,apps.apple.com
-DOMAIN,api-edge.apps.apple.com
-DOMAIN,api.apps.apple.com
+DOMAIN-SUFFIX,apps.apple.com
+DOMAIN,profile.gc.apple.com
+DOMAIN,stats.gc.apple.com
 DOMAIN,bag.itunes.apple.com
 DOMAIN,play.itunes.apple.com
 DOMAIN,sandbox.itunes.apple.com
@@ -13,7 +13,8 @@ DOMAIN,se.itunes.apple.com
 DOMAIN,se-edge.itunes.apple.com
 DOMAIN,su.itunes.apple.com
 DOMAIN,upp.itunes.apple.com
-DOMAIN-SUFFIX,buy.itunes.apple.com
+DOMAIN,radio-activity.itunes.apple.com
+DOMAIN-KEYWORD,buy.itunes.apple.com
 DOMAIN-SUFFIX,itunes-apple.com.akadns.net
 
 # > Develop
