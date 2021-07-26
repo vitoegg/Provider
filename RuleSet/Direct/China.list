@@ -64,6 +64,8 @@ DOMAIN-SUFFIX,wechat.com
 DOMAIN-SUFFIX,weixin.com
 DOMAIN-SUFFIX,qidian.com
 DOMAIN,file-igamecj.akamaized.net
+IP-CIDR,182.254.116.0/24,no-resolve
+IP-CIDR,203.205.254.0/23,no-resolve
 
 #新浪
 DOMAIN-SUFFIX,wbimg.cn
