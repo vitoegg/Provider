@@ -2,23 +2,18 @@ payload:
   # > Google
   - DOMAIN-SUFFIX,google.com
   - DOMAIN-SUFFIX,google.com.hk
+  - DOMAIN-SUFFIX,google.com.jp
   - DOMAIN-SUFFIX,googleapis.cn
   - DOMAIN-SUFFIX,googleapis.com
   - DOMAIN-SUFFIX,gstatic.cn
   - DOMAIN-SUFFIX,gstatic.com
   - DOMAIN-SUFFIX,gmail.com
-  # 仅适用于Clash Premium内核
-  - PROCESS-NAME,com.android.vending
-  - PROCESS-NAME,com.google.android.gms
-  - PROCESS-NAME,com.google.android.gsf
-  - PROCESS-NAME,com.google.android.play.games
+
   # > Google Drive
   - DOMAIN-SUFFIX,docs.google.com
   - DOMAIN-SUFFIX,drive.google.com
   - DOMAIN-SUFFIX,googledrive.com
   - DOMAIN-SUFFIX,googleusercontent.com
-  # > Youtube Music
-  - PROCESS-NAME,com.google.android.apps.youtube.music
-  - PROCESS-NAME,com.google.android.youtube.tvmusic
+  
   # > Google Search
   - DOMAIN-KEYWORD,www.google.
