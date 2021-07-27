@@ -8,7 +8,6 @@ payload:
  #iOS AppStore
  - DOMAIN,iosapps.itunes.apple.com
  #Mac AppStore
- - PROCESS-NAME,storedownloadd
  - DOMAIN,osxapps.itunes.apple.com
  - DOMAIN,oscdn.apple.com
 
