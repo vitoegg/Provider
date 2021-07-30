@@ -3,6 +3,7 @@
 # Link2: https://github.com/DivineEngine/Profiles/blob/master/Clash/RuleSet/Extra/Apple/Apple.yaml
 # update:2021-07-30
 payload:
+  - DOMAIN,apple.comscoreresearch.com
   - DOMAIN-SUFFIX,aaplimg.com
   - DOMAIN-SUFFIX,akadns.net
   - DOMAIN-SUFFIX,apple-cloudkit.com
@@ -18,13 +19,11 @@ payload:
   - DOMAIN-SUFFIX,icloud.com
   - DOMAIN-SUFFIX,icloud.com.cn
   - DOMAIN-SUFFIX,icloud-content.com
-  - DOMAIN-SUFFIX,ios-icloud.com
   - DOMAIN-SUFFIX,itunes.com
   - DOMAIN-SUFFIX,me.com
   - DOMAIN-SUFFIX,mzstatic.com
   - DOMAIN-SUFFIX,store.apple.com.edgekey.net
   - DOMAIN-SUFFIX,www.apple.com.edgekey.net
-  - DOMAIN-SUFFIX,wwwicloud.com
   - DOMAIN-KEYWORD,icloud.com.akadns.net
   - DOMAIN-KEYWORD,apple.com.akadns.net
   - DOMAIN-KEYWORD,testflight
