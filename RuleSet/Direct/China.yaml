@@ -249,6 +249,7 @@ payload:
  - DOMAIN-SUFFIX,okjike.com
  - DOMAIN-SUFFIX,qiniucdn.com
  - DOMAIN-SUFFIX,qiniudn.com
+ - DOMAIN-SUFFIX,qiaobutang.com
  - DOMAIN-SUFFIX,oschina.net
  - DOMAIN-SUFFIX,openwrt.cc
  - DOMAIN-SUFFIX,ruguoapp.com
