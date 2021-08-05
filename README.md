@@ -12,6 +12,11 @@
 
 **Apple**
 
+`Service`
+
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Apple/Service.list
+- https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Apple/Service.yaml
+
 `Proxy`
 
 - https://cdn.jsdelivr.net/gh/vitoegg/Provider@master/RuleSet/Apple/Proxy.list
