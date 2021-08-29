@@ -22,9 +22,9 @@ if [ -f ${CONF} ]; then
   mkdir /etc/snell/
   echo "Generating new config..."
   echo "[snell-server]" >>${CONF}
-  echo "listen = 0.0.0.0:59187" >>${CONF}
+  echo "listen = 0.0.0.0:59188" >>${CONF}
   echo "psk = ${PSK}" >>${CONF}
-  echo "obfs = http" >>${CONF}
+  echo "obfs = tls" >>${CONF}
 fi
 if [ -f ${SYSTEMD} ]; then
   echo "Found existing service..."
