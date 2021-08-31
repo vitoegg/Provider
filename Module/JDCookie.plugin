@@ -1,0 +1,5 @@
+
+http-request ^https:\/\/(api\.m|me-api|ms\.jr)\.jd\.com\/(client\.action\?functionId=signBean|user_new\/info\/GetJDUserInfoUnion\?|gw\/generic\/hy\/h5\/m\/appSign\?) script-path=https://raw.githubusercontent.com/NobyDa/Script/master/JD-DailyBonus/JD_DailyBonus.js, requires-body=1, tag=获取京东Cookie
+
+[MITM]
+hostname = api.m.jd.com, ms.jr.jd.com, me-api.jd.com
