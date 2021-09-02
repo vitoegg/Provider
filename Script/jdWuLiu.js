@@ -29,7 +29,7 @@ $.isMuteLog = true;
 $.page = 1;
 
 let isNotify = true;//是否通知,仅限nodejs
-let cookies = './jdCookie.js';
+let cookie = './jdCookie.js';
 
 // 清除过期缓存
 const length = $.carriageIdArr.length;
