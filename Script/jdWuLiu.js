@@ -28,14 +28,13 @@ $.carriageIdArr = JSON.parse($.getData($.CARRIAGE_ID_ARR_KEY) || '[]');
 $.isMuteLog = true;
 $.page = 1;
 
-let cookies = [];
-$.getData('JD_COOKIE') && cookies.push($.getData('JD_COOKIE'));
-$.getData('JD_COOKIE2') && cookies.push($.getData('JD_COOKIE2'));
+cookies = configinfo.get('main', 'JD_COOKIE')
 
-const extraCookies = JSON.parse($.getData('JD_COOKIE') || '[]').map(
-  (item) => item.cookie
-);
-cookies = Array.from(new Set([...cookies, ...extraCookies]));
+# JD_COOKIE=cookie （多账号&分隔）
+if "JD_COOKIE" in os.environ:
+    if len(os.environ["JD_COOKIE"]) > 10:
+        cookies = os.environ["JD_COOKIE"]
+        print("已获取并使用Env环境 Cookie")
 
 // 清除过期缓存
 const length = $.carriageIdArr.length;
