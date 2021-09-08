@@ -1,7 +1,6 @@
 /*
 成家有福 长长久久
 2021-8-18 ~ 2021-8-25
-https://lzdz1-isv.isvjcloud.com/dingzhi/dz/openCard/activity/45670?activityId=9ef833504aaf436ebd84a3b762c32ead
 */
 const $ = new Env("成家有福 长长久久");
 const jdCookieNode = $.isNode() ? require('./jdCookie.js') : '';
