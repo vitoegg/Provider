@@ -263,6 +263,10 @@ payload:
  - DOMAIN-SUFFIX,xinruimz-isv.isvjcloud.com
  - DOMAIN,download.jetbrains.com
  - DOMAIN,images-cn.ssl-images-amazon.com
+
+ # > JDHelp 
+ - DOMAIN-SUFFIX,helpu.cf
+ - DOMAIN-SUFFIX,jdsharecode.xyz
  
  # > Personal 
  - DOMAIN-KEYWORD,diyibanzhu
