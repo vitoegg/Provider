@@ -1,0 +1,231 @@
+#Global
+# >18+
+HOST-SUFFIX,sis001.com
+HOST-SUFFIX,cool18.com
+HOST-SUFFIX,javdb.com
+HOST-SUFFIX,javbus.com
+HOST-SUFFIX,javlibrary.com
+HOST-SUFFIX,t66y.com
+HOST-SUFFIX,xvideos.com
+HOST-SUFFIX,x-art.com
+# > Amazon
+HOST-SUFFIX,amazon.com
+HOST-SUFFIX,amazontrust.com
+HOST-SUFFIX,amazonaws.com  
+HOST-SUFFIX,media-amazon.com  
+HOST-SUFFIX,*-amazon.com  
+HOST-SUFFIX,ssl-images-amazon.com
+HOST-SUFFIX,m.media-amazon.com 
+# > Cloudflare
+HOST-SUFFIX,cloudflare-dns.com
+HOST-SUFFIX,cloudflare-ipfs.com
+HOST-SUFFIX,cloudflare.com
+HOST-SUFFIX,cloudflare.net
+HOST-SUFFIX,cloudflareapps.com
+HOST-SUFFIX,cloudflarebolt.com
+HOST-SUFFIX,cloudflareclient.com
+# > Developer
+HOST-SUFFIX,apache.org
+HOST-SUFFIX,docker.com
+HOST-SUFFIX,gitlab.com
+HOST-SUFFIX,gitlab.io
+HOST-SUFFIX,gitcdn.xyz 
+HOST-SUFFIX,medium.com
+HOST-SUFFIX,quay.io
+HOST-SUFFIX,reddit.com
+HOST-SUFFIX,spring.io
+HOST-SUFFIX,spring.net
+HOST-SUFFIX,stackoverflow.com
+HOST-SUFFIX,gitbook.com
+HOST-SUFFIX,gitbook.io
+# > Dlercloud
+HOST-SUFFIX,dlercloud.com
+# > DeepL
+HOST-SUFFIX,deepl.com
+# > Docker  
+HOST,d1q6f0aelx0por.cloudfront.net
+HOST,d2wy8f7a9ursnm.cloudfront.net
+HOST,d36jcksde1wxzq.cloudfront.net
+HOST-SUFFIX,compose-spec.io
+HOST-SUFFIX,docker.com
+HOST-SUFFIX,docker.io
+HOST-SUFFIX,dockerhub.com
+# > Dropbox
+HOST-SUFFIX,dropbox.com
+HOST-SUFFIX,dropboxapi.com
+HOST-SUFFIX,dropboxusercontent.com
+# > Facebook 
+HOST-SUFFIX,facebook.com
+HOST-SUFFIX,facebook.net
+HOST-SUFFIX,fb.com
+HOST-SUFFIX,fb.me
+HOST-SUFFIX,fbaddins.com
+HOST-SUFFIX,fbcdn.net
+HOST-SUFFIX,fbsbx.com
+HOST-SUFFIX,fbworkmail.com
+HOST-SUFFIX,m.me
+HOST-SUFFIX,messenger.com
+HOST-SUFFIX,oculus.com
+HOST-SUFFIX,oculuscdn.com
+HOST-SUFFIX,rocksdb.org
+HOST-SUFFIX,whatsapp.com
+HOST-SUFFIX,whatsapp.net
+# > Github
+HOST-SUFFIX,github.com 
+HOST-SUFFIX,github.io
+HOST-SUFFIX,githubapp.com
+HOST-SUFFIX,githubassets.com
+HOST-SUFFIX,githubusercontent.com
+# > Instagram  
+HOST-SUFFIX,instagram.com
+HOST-SUFFIX,cdninstagram.com
+#>istat update
+HOST-SUFFIX,updates.bjango.com
+HOST-SUFFIX,updates.istatmenus.app
+HOST-SUFFIX,cdn.bjango.com
+HOST-SUFFIX,campaign-archive.com
+# > Microsoft
+HOST-SUFFIX,aka.ms
+HOST-SUFFIX,hotmail.com
+HOST-SUFFIX,outlook.com
+HOST-SUFFIX,onenote.com
+HOST-SUFFIX,microsofttranslator.com
+HOST-SUFFIX,windows.com
+HOST-SUFFIX,windows.net
+# Office资源下载
+HOST-SUFFIX,data.microsoft.com
+HOST-SUFFIX,officecdn-microsoft-com.akamaized.net
+HOST-SUFFIX,mobile.pipe.aria.microsoft.com
+# OneDrive
+HOST-SUFFIX,1drv.com
+HOST-SUFFIX,onedrive.com
+HOST-SUFFIX,storage.live.com
+HOST,oneclient.sfx.ms
+# Oracle
+HOST-SUFFIX,oracle.com
+HOST-SUFFIX,trustarc.com
+HOST-SUFFIX,truste.com
+# > PayPal
+HOST-SUFFIX,paypal.com
+HOST-SUFFIX,paypal.me
+HOST-SUFFIX,paypalobjects.com
+# > Reddit
+HOST-SUFFIX,redd.it
+HOST-SUFFIX,reddit.com
+HOST-SUFFIX,redditmedia.com
+# > Twitter
+HOST-SUFFIX,pscp.tv
+HOST-SUFFIX,periscope.tv
+HOST-SUFFIX,t.co
+HOST-SUFFIX,twimg.co
+HOST-SUFFIX,twimg.com
+HOST-SUFFIX,twitpic.com
+HOST-SUFFIX,twitter.com
+HOST-SUFFIX,vine.co
+# > Wikimedia Foundation
+HOST-SUFFIX,wikileaks.org
+HOST-SUFFIX,wikimapia.org
+HOST-SUFFIX,wikimedia.org
+HOST-SUFFIX,wikinews.org
+HOST-SUFFIX,wikipedia.org
+HOST-SUFFIX,wikiquote.org
+HOST-SUFFIX,wikipedia.com
+# 额外Streaming
+# (Music)
+# > SoundCloud
+HOST-SUFFIX,p-cdn.us
+HOST-SUFFIX,sndcdn.com
+HOST-SUFFIX,soundcloud.com
+# (Video)
+# > FriDay
+HOST-SUFFIX,fetnet.net
+HOST-SUFFIX,friday.tw  
+# > Pornhub
+HOST-SUFFIX,phncdn.com
+HOST-SUFFIX,phprcdn.com
+HOST-SUFFIX,pornhub.com
+HOST-SUFFIX,pornhubpremium.com
+# > 其他
+HOST-SUFFIX,inoreader.com
+HOST-SUFFIX,1password.com
+HOST-SUFFIX,9to5mac.com
+HOST-SUFFIX,adobe.com
+HOST-SUFFIX,adobedtm.com
+HOST-SUFFIX,apkpure.com
+HOST-SUFFIX,bandwagonhost.com
+HOST-SUFFIX,box.com
+HOST-SUFFIX,box.net
+HOST-SUFFIX,boxun.com
+HOST-SUFFIX,blog.com
+HOST-SUFFIX,blogcdn.com
+HOST-SUFFIX,blogger.com
+HOST-SUFFIX,cnet.com
+HOST-SUFFIX,cnn.com
+HOST-SUFFIX,duyaoss.com
+HOST-SUFFIX,disconnect.me
+HOST-SUFFIX,discuss.com.hk
+HOST-SUFFIX,dribbble.com
+HOST-SUFFIX,duckduckgo.com
+HOST-SUFFIX,economist.com
+HOST-SUFFIX,engadget.com
+HOST-SUFFIX,evernote.com
+HOST-SUFFIX,fastly.net
+HOST-SUFFIX,feedly.com
+HOST-SUFFIX,freenom.com
+HOST-SUFFIX,flickr.com
+HOST-SUFFIX,flickriver.com
+HOST-SUFFIX,flipboard.com
+HOST-SUFFIX,ifixit.com
+HOST-SUFFIX,ift.tt
+HOST-SUFFIX,ifttt.com
+HOST-SUFFIX,imgur.com
+HOST-SUFFIX,instapaper.com
+HOST-SUFFIX,ip.sb
+HOST-SUFFIX,infinitynewtab.com
+HOST-SUFFIX,mailchimp.com
+HOST-SUFFIX,mitsea.com
+HOST-SUFFIX,notion.so
+HOST-SUFFIX,nssurge.com
+HOST-SUFFIX,openwrt.org
+HOST-SUFFIX,quora.com
+HOST-SUFFIX,quoracdn.net
+USER-AGENT,Slack*
+HOST-SUFFIX,slack.com
+HOST-SUFFIX,slack-edge.com
+HOST-SUFFIX,slack-msgs.com
+HOST-SUFFIX,substack.com
+HOST-SUFFIX,sony.com
+HOST-SUFFIX,shazam.com
+HOST-SUFFIX,skype.com
+HOST-SUFFIX,target.com
+HOST-SUFFIX,techcrunch.com
+HOST-SUFFIX,todoist.com
+HOST-SUFFIX,trakt.tv
+HOST-SUFFIX,trello.com
+HOST-SUFFIX,ulyssesapp.com
+HOST-SUFFIX,unsplash.com
+HOST-SUFFIX,v2ex.co
+HOST-SUFFIX,vevo.com
+HOST-SUFFIX,vimeo.com
+HOST-SUFFIX,vimeocdn.com
+HOST-SUFFIX,vimperator.org
+HOST-SUFFIX,vsco.co
+HOST-SUFFIX,vultr.com
+HOST-SUFFIX,w3schools.com
+HOST-SUFFIX,wordpress.com
+HOST-SUFFIX,wsj.com
+HOST-SUFFIX,wsj.net
+HOST-SUFFIX,xda-developers.com
+HOST-SUFFIX,yahoo.com
+HOST-SUFFIX,yimg.com
+HOST-SUFFIX,yahooapis.com
+HOST-SUFFIX,zendesk.com
+# 域名匹配
+HOST-SUFFIX,eu
+HOST-SUFFIX,jp
+HOST-SUFFIX,kr
+HOST-SUFFIX,sg
+HOST-SUFFIX,uk
+HOST-SUFFIX,us
+# KeyWord终极匹配
+# >
