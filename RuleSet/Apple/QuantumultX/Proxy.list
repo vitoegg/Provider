@@ -1,7 +1,3 @@
-#Link1:https://github.com/Hackl0us/SS-Rule-Snippet/blob/master/Rulesets/Surge/Basic/Apple-proxy.list
-#Link2:https://github.com/geekdada/surge-list/blob/master/surgio-snippet/apple.tpl
-#更新时间:2021-07-14
-
 # > AppStore
 HOST-SUFFIX,apps.apple.com,Apple
 HOST,profile.gc.apple.com,Apple
