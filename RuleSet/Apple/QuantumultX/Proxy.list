@@ -3,26 +3,26 @@
 #更新时间:2021-07-14
 
 # > AppStore
-HOST-SUFFIX,apps.apple.com
-HOST,profile.gc.apple.com
-HOST,friend.gc.apple.com
-HOST,stats.gc.apple.com
-HOST,bag.itunes.apple.com
-HOST,play.itunes.apple.com
-HOST,sandbox.itunes.apple.com
-HOST,se.itunes.apple.com
-HOST,se-edge.itunes.apple.com
-HOST,su.itunes.apple.com
-HOST,upp.itunes.apple.com
-HOST,radio-activity.itunes.apple.com
-HOST-KEYWORD,buy.itunes.apple.com
-HOST-SUFFIX,itunes-apple.com.akadns.net
+HOST-SUFFIX,apps.apple.com,Apple
+HOST,profile.gc.apple.com,Apple
+HOST,friend.gc.apple.com,Apple
+HOST,stats.gc.apple.com,Apple
+HOST,bag.itunes.apple.com,Apple
+HOST,play.itunes.apple.com,Apple
+HOST,sandbox.itunes.apple.com,Apple
+HOST,se.itunes.apple.com,Apple
+HOST,se-edge.itunes.apple.com,Apple
+HOST,su.itunes.apple.com,Apple
+HOST,upp.itunes.apple.com,Apple
+HOST,radio-activity.itunes.apple.com,Apple
+HOST-KEYWORD,buy.itunes.apple.com,Apple
+HOST-SUFFIX,itunes-apple.com.akadns.net,Apple
 
 # > Develop
-USER-AGENT,com.apple.trustd*
-HOST,testflight.apple.com
-HOST,developer.apple.com
-HOST-SUFFIX,digicert.com
+USER-AGENT,com.apple.trustd*,Apple
+HOST,testflight.apple.com,Apple
+HOST,developer.apple.com,Apple
+HOST-SUFFIX,digicert.com,Apple
 
 # > Other
-HOST-SUFFIX,blobstore.apple.com
+HOST-SUFFIX,blobstore.apple.com,Apple
