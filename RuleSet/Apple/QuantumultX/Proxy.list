@@ -1,0 +1,28 @@
+#Link1:https://github.com/Hackl0us/SS-Rule-Snippet/blob/master/Rulesets/Surge/Basic/Apple-proxy.list
+#Link2:https://github.com/geekdada/surge-list/blob/master/surgio-snippet/apple.tpl
+#更新时间:2021-07-14
+
+# > AppStore
+HOST-SUFFIX,apps.apple.com
+HOST,profile.gc.apple.com
+HOST,friend.gc.apple.com
+HOST,stats.gc.apple.com
+HOST,bag.itunes.apple.com
+HOST,play.itunes.apple.com
+HOST,sandbox.itunes.apple.com
+HOST,se.itunes.apple.com
+HOST,se-edge.itunes.apple.com
+HOST,su.itunes.apple.com
+HOST,upp.itunes.apple.com
+HOST,radio-activity.itunes.apple.com
+HOST-KEYWORD,buy.itunes.apple.com
+HOST-SUFFIX,itunes-apple.com.akadns.net
+
+# > Develop
+USER-AGENT,com.apple.trustd*
+HOST,testflight.apple.com
+HOST,developer.apple.com
+HOST-SUFFIX,digicert.com
+
+# > Other
+HOST-SUFFIX,blobstore.apple.com
