@@ -1,0 +1,24 @@
+# > AppStore
+HOST-SUFFIX,apps.apple.com,Apple
+HOST,profile.gc.apple.com,Apple
+HOST,friend.gc.apple.com,Apple
+HOST,stats.gc.apple.com,Apple
+HOST,bag.itunes.apple.com,Apple
+HOST,play.itunes.apple.com,Apple
+HOST,sandbox.itunes.apple.com,Apple
+HOST,se.itunes.apple.com,Apple
+HOST,se-edge.itunes.apple.com,Apple
+HOST,su.itunes.apple.com,Apple
+HOST,upp.itunes.apple.com,Apple
+HOST,radio-activity.itunes.apple.com,Apple
+HOST-KEYWORD,buy.itunes.apple.com,Apple
+HOST-SUFFIX,itunes-apple.com.akadns.net,Apple
+
+# > Develop
+USER-AGENT,com.apple.trustd*,Apple
+HOST,testflight.apple.com,Apple
+HOST,developer.apple.com,Apple
+HOST-SUFFIX,digicert.com,Apple
+
+# > Other
+HOST-SUFFIX,blobstore.apple.com,Apple
