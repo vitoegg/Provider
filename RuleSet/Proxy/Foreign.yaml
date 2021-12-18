@@ -189,6 +189,7 @@ payload:
   - DOMAIN-SUFFIX,instapaper.com
   - DOMAIN-SUFFIX,infinitynewtab.com
   - DOMAIN-SUFFIX,ip.sb
+  - DOMAIN-SUFFIX,linkedin.com
   - DOMAIN-SUFFIX,mailchimp.com
   - DOMAIN-SUFFIX,mitsea.com
   - DOMAIN-SUFFIX,notion.so
