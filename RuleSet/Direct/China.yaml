@@ -249,6 +249,7 @@ payload:
  - DOMAIN,cdn.jsdelivr.net
  - DOMAIN,purge.jsdelivr.net
  - DOMAIN-SUFFIX,okjike.com
+ - DOMAIN-SUFFIX,oracle.com
  - DOMAIN-SUFFIX,qiniucdn.com
  - DOMAIN-SUFFIX,qiniudn.com
  - DOMAIN-SUFFIX,qiaobutang.com
