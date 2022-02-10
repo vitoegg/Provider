@@ -9,8 +9,7 @@
 
 [Rule]
 # > Advertising
-RULE-SET,https://cdn.jsdelivr.net/gh/DivineEngine/Profiles@master/Surge/Ruleset/Guard/Advertising.list,REJECT
-DOMAIN-SET,https://cdn.jsdelivr.net/gh/DivineEngine/Profiles@master/Surge/Ruleset/Guard/AdvertisingPlus.list,REJECT
+DOMAIN-SET,https://raw.githubusercontent.com/DivineEngine/Profiles/master/Surge/Ruleset/Guard/AdvertisingPlus.list,REJECT
 
 [URL Rewrite]
 # > 豆瓣去广告
