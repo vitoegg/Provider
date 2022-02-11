@@ -4,3 +4,5 @@ payload:
  - DOMAIN,appstoreconnect.apple.com
  - DOMAIN,itcmobile.itunes.apple.com
  - DOMAIN,uclient-api.itunes.apple.com
+ # App Store Connect
+ - DOMAIN-SUFFIX,zoominfo.com
