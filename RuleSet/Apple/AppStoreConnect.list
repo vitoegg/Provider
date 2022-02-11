@@ -1,0 +1,8 @@
+# Link:https://github.com/DivineEngine/Profiles/tree/master/Surge/Ruleset/Extra/Apple
+
+# > App Store Connect
+DOMAIN,xp.apple.com
+DOMAIN,appstoreconnect.apple.com
+DOMAIN,iosapps-ssl.itunes.apple.com
+DOMAIN,itcmobile.itunes.apple.com
+DOMAIN,uclient-api.itunes.apple.com
