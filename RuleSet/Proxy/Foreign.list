@@ -130,6 +130,9 @@ DOMAIN-SUFFIX,wikinews.org
 DOMAIN-SUFFIX,wikipedia.org
 DOMAIN-SUFFIX,wikiquote.org
 DOMAIN-SUFFIX,wikipedia.com
+# > Web 3
+DOMAIN-SUFFIX,opensea.io
+DOMAIN-SUFFIX,metamask.io
 # 额外Streaming
 # (Music)
 # > SoundCloud
