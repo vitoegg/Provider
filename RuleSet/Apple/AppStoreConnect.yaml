@@ -6,3 +6,4 @@ payload:
  - DOMAIN,uclient-api.itunes.apple.com
  # App Store Connect
  - DOMAIN-SUFFIX,zoominfo.com
+ - DOMAIN-SUFFIX,linkedin.com
