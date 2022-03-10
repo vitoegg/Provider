@@ -17,6 +17,7 @@ DOMAIN,upp.itunes.apple.com
 DOMAIN,radio-activity.itunes.apple.com
 DOMAIN-KEYWORD,buy.itunes.apple.com
 DOMAIN-SUFFIX,itunes-apple.com.akadns.net
+DOMAIN-SUFFIX,searchads.apple.com
 
 # > Develop
 USER-AGENT,com.apple.trustd*
