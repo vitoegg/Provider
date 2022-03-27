@@ -265,6 +265,7 @@ DOMAIN-SUFFIX,jianshu.io
 DOMAIN-SUFFIX,jianshuapi.com
 DOMAIN,cdn.jsdelivr.net
 DOMAIN,purge.jsdelivr.net
+DOMAIN-SUFFIX,mtcgame.com
 DOMAIN-SUFFIX,okjike.com
 DOMAIN-SUFFIX,oracle.com
 DOMAIN-SUFFIX,openwrt.cc
@@ -275,6 +276,7 @@ DOMAIN-SUFFIX,oschina.net
 DOMAIN-SUFFIX,ruguoapp.com
 DOMAIN-SUFFIX,segmentfault.com
 DOMAIN-SUFFIX,smzdm.com
+DOMAIN-SUFFIX,seagm.com
 DOMAIN-SUFFIX,umeng.com 
 DOMAIN-SUFFIX,weather.com
 DOMAIN-SUFFIX,xunlei.com
