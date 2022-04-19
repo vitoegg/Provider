@@ -11,14 +11,7 @@
 dotcunited suspend=true
 
 [Rule]
-# > Qidian
-DOMAIN-SUFFIX,cj.qidian.com,REJECT
-DOMAIN-SUFFIX,game.qidian.com,REJECT
-DOMAIN-SUFFIX,o.if.qidian.com,REJECT
-DOMAIN-SUFFIX,tongji.qidian.com,REJECT
-DOMAIN-SUFFIX,game.eve.mdt.qq.com,REJECT
-DOMAIN-SUFFIX,game.str.mdt.qq.com,REJECT
-DOMAIN-SUFFIX,oth.eve.mdt.qq.com,REJECT
+# > No Rules
 
 [URL Rewrite]
 # > 豆瓣去广告
