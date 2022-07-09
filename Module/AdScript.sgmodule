@@ -76,13 +76,6 @@ dotcunited suspend=true
 ^https?:\/\/www\.duokan\.com/pictures? - reject
 ^https?:\/\/www\.duokan\.com/promotion_day - reject
 
-# > 禁止知乎下发配置
-^https?:\/\/api\.zhihu\.com\/ab\/api\/v1\/products\/zhihu\/platforms\/ios\/config - reject
-# > 知乎拦截部分预加载
-^https?:\/\/www\.zhihu\.com\/appview\/(p|v2\/answer|zvideo)\/.*entry=(preload-topstory|preload-search|preload-subscription) - reject
-# > 知乎其他广告拦截
-^https?:\/\/api\.zhihu\.com\/(notifications\/v\d\/count|v\d\/package|me\/guides|drama\/living-info|ad|fringe|commercial|market\/popovers|.*featured-comment-ad) - reject
-
 #bilibili
 # 去除搜索中的大家都在搜
 ^https?:\/\/api\.vc\.bilibili\.com\/search_svr\/v\d\/Search\/recommend_words - reject
@@ -106,17 +99,8 @@ BiliBili_开屏去广告 = type=http-response,requires-body=1,max-size=0,pattern
 BiliBili_标签页处理 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/app\.bilibili\.com\/x\/resource\/show\/tab,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/bilibili/bilibili_plus.js
 BiliBili_我的页面处理 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/app\.bilibili\.com\/x\/v2\/account\/mine,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/bilibili/bilibili_plus.js
 
-# > 知乎
-知乎_优化软件配置 = type=http-response,requires-body=1,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js,pattern=^https?:\/\/appcloud2\.zhihu\.com\/v\d+\/config
-知乎_信息流去广告及黑名单增强 = type=http-response,requires-body=1,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js,pattern=^https?:\/\/api\.zhihu\.com\/(moments|topstory)(\/|\?)?(recommend|action=|feed_type=)(?!\/people)
-知乎_回答内容优化 = type=http-response,requires-body=1,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js,pattern=^https?:\/\/www\.zhihu\.com\/appview\/v2\/answer\/.*(entry=(?!(preload-topstory|preload-search|preload-subscription)))?
-知乎_回答列表去广告及黑名单增强 = type=http-response,requires-body=1,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js,pattern=^https?:\/\/api\.zhihu\.com\/v4\/questions
-知乎_处理用户信息 = type=http-response,requires-body=1,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js,pattern=^https?:\/\/api\.zhihu\.com\/people
-知乎_官方消息去广告 = type=http-response,requires-body=1,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js,pattern=^https?:\/\/api\.zhihu\.com\/notifications\/v3\/(message\?|timeline\/entry\/system_message)
-知乎_热搜去广告 = type=http-response,requires-body=1,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js,pattern=^https?:\/\/api\.zhihu\.com\/search\/top_search\/tabs\/hot\/items
-知乎_热榜去广告 = type=http-response,requires-body=1,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js,pattern=^https?:\/\/api\.zhihu\.com\/topstory\/hot-lists?(\?|\/)
-知乎_评论去广告 = type=http-response,requires-body=1,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js,pattern=^https?:\/\/api\.zhihu\.com\/(comment_v5\/)?(answers|comments?|articles|pins)\/\d+\/(root_|child_)?comments?
-知乎_预置关键词去广告 = type=http-response,requires-body=1,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/zhihu/zhihu_plus.js,pattern=^https?:\/\/api\.zhihu\.com\/search\/preset_words\?
+# > 美团外卖
+美团外卖_开屏去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/wmapi\.meituan\.com\/api\/v\d+\/loadInfo?,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/startup/startup.js
 
 [MITM]
-hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,www.zhihu.com,api.zhihu.com,zhuanlan.zhihu.com,appcloud2.zhihu.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,ad.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com,mi.gdt.qq.com,w.gdt.qq.com,sdk.e.qq.com,api.jr.mi.com,*.bdstatic.com,newclient.map.baidu.com,img.meituan.net,p*.meituan.net,s3plus.meituan.net,flowplus.meituan.net,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com
+hostname = %APPEND% app.bilibili.com,api.bilibili.com,api.live.bilibili.com,api.vc.bilibili.com,api.weibo.cn,mapi.weibo.com,*.uve.weibo.com,cdn-1rtb.caiyunapp.com,ad.caiyunapp.com,api.douban.com,erebor.douban.com,img.doubanio.com,img1.doubanio.com,img3.doubanio.com,mi.gdt.qq.com,w.gdt.qq.com,sdk.e.qq.com,api.jr.mi.com,*.bdstatic.com,newclient.map.baidu.com,img.meituan.net,p*.meituan.net,s3plus.meituan.net,flowplus.meituan.net,wmapi.meituan.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com
