@@ -3,9 +3,6 @@
 #!bilibili=https://github.com/blackmatrix7/ios_rule_script/blob/master/script/bilibili/bilibili_plus.sgmodule
 #!zhihu=https://github.com/blackmatrix7/ios_rule_script/blob/master/script/zhihu/zhihu_plus.sgmodule
 #!weibo=https://github.com/yichahucha/surge/blob/master/sg_sub.sgmodule
-#From1:https://github.com/DivineEngine/Profiles/blob/master/Surge/Module/Block/Advertising.sgmodule
-#From2:https://github.com/zqzess/rule_for_quantumultX/blob/master/QuantumultX/rewrite/MyRewrite_lite.conf
-#From3:https://github.com/NobyDa/Script/blob/master/Surge/Module/RewriteRules.sgmodule
 
 [SSID Setting]
 dotcunited suspend=true
