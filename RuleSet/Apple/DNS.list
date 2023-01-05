@@ -1,0 +1,17 @@
+[Host]
+#Apple DNS
+
+apple.com = server:119.29.29.29
+icloud.com = server:119.29.29.29
+itunes.com = server:119.29.29.29
+appstore.com = server:119.29.29.29
+mzstatic.com = server:119.29.29.29
+akadns.net = server:119.29.29.29
+aaplimg.com = server:119.29.29.29
+apple.co = server:119.29.29.29
+appsto.re = server:119.29.29.29
+cdn-apple.com = server:119.29.29.29
+icloud-content.com = server:119.29.29.29
+edgekey.net = server:119.29.29.29
+apple-cloudkit.com = server:119.29.29.29
+apple-dns.net = server:119.29.29.29
