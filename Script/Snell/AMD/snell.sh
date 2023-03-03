@@ -22,7 +22,7 @@ if [ -f ${CONF} ]; then
   mkdir /etc/snell/
   echo "Generating new config..."
   echo "[snell-server]" >>${CONF}
-  echo "listen = 127.0.0.1:443" >>${CONF}
+  echo "listen = 127.0.0.1:5886" >>${CONF}
   echo "psk = ${PSK}" >>${CONF}
   echo "ipv6 = false" >>${CONF}
 fi
@@ -39,7 +39,7 @@ else
   echo "[Service]" >>${SYSTEMD}
   echo "Type=simple" >>${SYSTEMD}
   echo "LimitNOFILE=32768" >>${SYSTEMD}
-  echo "ExecStart=/usr/local/bin/snell-server -c /etc/snell/snell-server.conf" >>${SYSTEMD}
+  echo "ExecStart=/usr/local/bin/snell-server -c /etc/snell-server.conf" >>${SYSTEMD}
   echo "" >>${SYSTEMD}
   echo "[Install]" >>${SYSTEMD}
   echo "WantedBy=multi-user.target" >>${SYSTEMD}
