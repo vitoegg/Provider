@@ -4,5 +4,8 @@ DOMAIN-SUFFIX,openai.com
 # Bing
 DOMAIN-SUFFIX,bing.com
 
+# Poe
+DOMAIN-SUFFIX,poe.com
+
 # Bard
 DOMAIN-SUFFIX,bard.google.com
