@@ -1,0 +1,7 @@
+payload:
+  # > OpenAI
+  - DOMAIN-SUFFIX,openai.com
+  # > Bing
+  - DOMAIN-SUFFIX,bing.com
+  # > Poe
+  - DOMAIN-SUFFIX,poe.com
