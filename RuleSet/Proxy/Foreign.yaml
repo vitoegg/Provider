@@ -9,6 +9,13 @@ payload:
   - DOMAIN-SUFFIX,xvideos.com
   - DOMAIN-SUFFIX,x-art.com
   - DOMAIN-SUFFIX,ys20230308.com
+  # >Comic 18+
+  - DOMAIN-SUFFIX,18comic.vip
+  - DOMAIN-SUFFIX,msp-comic.xyz
+  - DOMAIN-SUFFIX,msp-comic1.xyz
+  - DOMAIN-SUFFIX,18comic.org
+  - DOMAIN-SUFFIX,18comic.art
+  - DOMAIN-SUFFIX,18comic.compan
   # > Amazon
   - DOMAIN-SUFFIX,amazon.com
   - DOMAIN-SUFFIX,amazontrust.com
