@@ -183,12 +183,6 @@ payload:
  - DOMAIN-SUFFIX,xiaoyuzhoufm.com
  - DOMAIN-SUFFIX,xyzcdn.net
 
- # > 微软
- - DOMAIN-SUFFIX,microsoft.com
- - DOMAIN-SUFFIX,microsoftonline.com
- - DOMAIN-SUFFIX,office.com
- - DOMAIN-SUFFIX,office365.com
-
  # > 新闻
  - DOMAIN-SUFFIX,sspai.com
  - DOMAIN-SUFFIX,36kr.com
