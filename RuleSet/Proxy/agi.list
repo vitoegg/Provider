@@ -17,5 +17,9 @@ DOMAIN-SUFFIX,bing.com
 DOMAIN-SUFFIX,poe.com
 DOMAIN-SUFFIX,quora.com
 
+# Raycast
+DOMAIN-SUFFIX,raycast.com
+DOMAIN-SUFFIX,sentry.io
+
 # Bard
 DOMAIN-SUFFIX,bard.google.com
