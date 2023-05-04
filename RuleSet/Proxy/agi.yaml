@@ -12,6 +12,9 @@ payload:
   - DOMAIN,openaicom.imgix.net
   # > Bing
   - DOMAIN-SUFFIX,bing.com
+  # > Raycast
+  - DOMAIN-SUFFIX,raycast.com
+  - DOMAIN-SUFFIX,sentry.io
   # > Poe
   - DOMAIN-SUFFIX,poe.com
   - DOMAIN-SUFFIX,quora.com
