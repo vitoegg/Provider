@@ -10,6 +10,8 @@ payload:
   - DOMAIN,production-openaicom-storage.azureedge.net
   - DOMAIN,o33249.ingest.sentry.io
   - DOMAIN,openaicom.imgix.net
+  # > Claude
+  - DOMAIN-SUFFIX,anthropic.com
   # > Bing
   - DOMAIN-SUFFIX,bing.com
   # > Raycast
