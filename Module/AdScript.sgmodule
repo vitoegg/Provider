@@ -17,6 +17,7 @@ dotcunited suspend=true
 # > 彩云天气去广告
 ^https?:\/\/cdn-1rtb\.caiyunapp\.com/creative/.*$ - reject
 ^https?:\/\/ad\.caiyunapp\.com - reject
+^https?:\/\/ad\.cyapi\.cn - reject
 
 
 # > 小米
