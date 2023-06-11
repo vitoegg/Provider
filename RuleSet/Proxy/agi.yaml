@@ -17,7 +17,10 @@ payload:
   - DOMAIN-SUFFIX,bing.com
   # > Raycast
   - DOMAIN-SUFFIX,raycast.com
-  - DOMAIN-SUFFIX,sentry.io
+
   # > Poe
   - DOMAIN-SUFFIX,poe.com
   - DOMAIN-SUFFIX,quora.com
+
+  # > Bard
+  - DOMAIN-SUFFIX,bard.google.com
