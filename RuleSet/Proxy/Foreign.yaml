@@ -235,6 +235,7 @@ payload:
   - DOMAIN-SUFFIX,yimg.com
   - DOMAIN-SUFFIX,yahooapis.com
   - DOMAIN-SUFFIX,zendesk.com
+  - DOMAIN-SUFFIX,hedwig.pub
   # 域名匹配
   - DOMAIN-SUFFIX,eu
   - DOMAIN-SUFFIX,jp
@@ -242,5 +243,6 @@ payload:
   - DOMAIN-SUFFIX,sg
   - DOMAIN-SUFFIX,uk
   - DOMAIN-SUFFIX,us
+  - DOMAIN-SUFFIX,pub
   # > KeyWord终极匹配
   # > 
