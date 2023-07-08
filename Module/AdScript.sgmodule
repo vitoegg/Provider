@@ -14,11 +14,6 @@ dotcunited suspend=true
 ^https?:\/\/api\.douban\.com\/v2\/app_ads\/common_ads - reject
 ^https?:\/\/api\.douban\.com\/v2\/app_ads\/splash - reject
 
-# > 彩云天气去广告
-^https?:\/\/cdn-1rtb\.caiyunapp\.com/creative/.*$ - reject
-^https?:\/\/ad\.caiyunapp\.com - reject
-^https?:\/\/ad\.cyapi\.cn - reject
-
 
 # > 小米
 ^https?:\/\/api\.m\.mi\.com\/v\d\/app\/start - reject
@@ -62,11 +57,6 @@ dotcunited suspend=true
 ^https?:\/\/www\.duokan\.com/pictures? - reject
 ^https?:\/\/www\.duokan\.com/promotion_day - reject
 
-# 闲鱼 //gw.alicdn.com, acs.m.taobao.com
-^https:\/\/gw\.alicdn\.com\/mt\/ - reject
-^https:\/\/gw\.alicdn\.com\/tfs\/.+\d{3,4}-\d{4} - reject
-^https:\/\/gw\.alicdn\.com\/tps\/.+\d{3,4}-\d{4} - reject
-^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.taobao\.idle\.home\.welcome - reject
 
 # 美团 //img.meituan.net, s3plus.meituan.net
 ^http:\/\/wmapi\.meituan\.com\/api\/v7\/(loadInfo|openscreen|startpicture)\? - reject
@@ -80,25 +70,28 @@ dotcunited suspend=true
 ^https:\/\/fuss10.elemecdn.com\/.+\.mp4 - reject
 ^https:\/\/www1.elecfans.com\/www\/delivery - reject
 
-#bilibili
-# 去除搜索中的大家都在搜
-^https?:\/\/api\.vc\.bilibili\.com\/search_svr\/v\d\/Search\/recommend_words - reject
-# 去除动态中的话题
-^https?:\/\/api\.vc\.bilibili\.com\/topic_svr\/v1\/topic_svr - reject
-# 可能的一些推广(beta)
-^https?:\/\/api\.bilibili\.com\/pgc\/season\/app\/related\/recommend\? - reject
 
-# 百度地图
-# > 百度地图_搜索推广
-^https?:\/\/newclient\.map\.baidu\.com\/client\/phpui.*qt=hw - reject
-# > 百度地图_开屏广告|首页左上角广告
-^https?:\/\/newclient\.map\.baidu\.com\/client\/phpui2\/\?qt=ads - reject
-# > 百度地图_DNS处理
-^https?:\/\/httpdns\.baidubce\.com - reject
-# > 百度地图_各种商业推广
-^https?:\/\/newclient\.map\.baidu\.com\/client\/crossmarketing - reject
-# > 百度地图_我的页面地图动态
-^https?:\/\/newclient\.map\.baidu\.com\/client\/usersystem\/home\/dynamic - reject
+# 京东金融 去除开屏广告
+# hostname = ms.jr.jd.com
+^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/newna\/m\/getLoadingPicture - reject-200
+
+# 穿山甲/拼多多之类广告
+# hostname = adim.pinduoduo.com
+^https:\/\/(adim|images)\.pinduoduo\.com\/(.+\/toutiao|mrk\/.+) - reject
+# hostname = video-dsp.pddpic.com
+^https:\/\/video-dsp\.pddpic\.com\/market-dsp-video\/.+ - reject
+# hostname = *.gdt.qq.com
+^http[s]?:\/\/.*\.gdt\.qq\.com\/gdt_mview.fcg - reject
+# hostname = access.pangolin-sdk-toutiao*.com,
+^http[s]?:\/\/api-access\.pangolin-sdk-toutiao.*\.com - reject
+# hostname = *.pglstatp-toutiao.com
+^http[s]?:\/\/.*\.pglstatp-toutiao\.com\/.+ - reject
+# hostname = adsmind.gdtimg.com
+^https?:\/\/adsmind\.gdtimg\.com\/ads_svp_video.+ - reject
+# hostname = pgdt.gtimg.cn
+^https:\/\/pgdt\.gtimg\.cn - reject
+# hostname = us.l.qq.com
+^https?:\/\/us\.l\.qq\.com\/exapp.+ - reject
 
 
 [Script]
