@@ -162,6 +162,9 @@ payload:
   - DOMAIN-SUFFIX,phprcdn.com
   - DOMAIN-SUFFIX,pornhub.com
   - DOMAIN-SUFFIX,pornhubpremium.com
+  # > Google VPN
+  - DOMAIN-SUFFIX,cloud.cupronickel.goog
+  - DOMAIN-SUFFIX,googleapis.com
   # > 其他
   - DOMAIN-SUFFIX,inoreader.com
   - DOMAIN-SUFFIX,1password.com
