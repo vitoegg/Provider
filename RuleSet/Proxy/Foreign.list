@@ -13,7 +13,6 @@ DOMAIN-SUFFIX,amazon.com
 DOMAIN-SUFFIX,amazontrust.com
 DOMAIN-SUFFIX,amazonaws.com  
 DOMAIN-SUFFIX,media-amazon.com  
-DOMAIN-SUFFIX,*-amazon.com  
 DOMAIN-SUFFIX,ssl-images-amazon.com
 DOMAIN-SUFFIX,m.media-amazon.com 
 # > Cloudflare
