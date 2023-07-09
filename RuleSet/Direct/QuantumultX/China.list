@@ -197,12 +197,6 @@ HOST-SUFFIX,lizhifm.com
 HOST-SUFFIX,xiaoyuzhoufm.com
 HOST-SUFFIX,xyzcdn.net
 
-#微软
-HOST-SUFFIX,microsoft.com
-HOST-SUFFIX,microsoftonline.com
-HOST-SUFFIX,office.com
-HOST-SUFFIX,office365.com
-
 #新闻
 HOST-SUFFIX,sspai.com
 HOST-SUFFIX,36kr.com
@@ -252,6 +246,7 @@ HOST-SUFFIX,axus.com
 HOST-SUFFIX,bitqiu.com
 HOST-SUFFIX,ctrip.com
 HOST-SUFFIX,caiyunapp.com
+HOST-SUFFIX,cmbchina.com
 HOST-SUFFIX,dida365.com
 HOST-SUFFIX,flomo.app
 HOST-SUFFIX,flomoapp.com
@@ -264,6 +259,7 @@ HOST-SUFFIX,jianshu.io
 HOST-SUFFIX,jianshuapi.com
 HOST,cdn.jsdelivr.net
 HOST,purge.jsdelivr.net
+HOST-SUFFIX,mtcgame.com
 HOST-SUFFIX,okjike.com
 HOST-SUFFIX,openwrt.cc
 HOST-SUFFIX,qiniucdn.com
@@ -273,13 +269,14 @@ HOST-SUFFIX,oschina.net
 HOST-SUFFIX,ruguoapp.com
 HOST-SUFFIX,segmentfault.com
 HOST-SUFFIX,smzdm.com
-HOST-SUFFIX,umeng.com
+HOST-SUFFIX,seagm.com
+HOST-SUFFIX,umeng.com 
 HOST-SUFFIX,weather.com
 HOST-SUFFIX,xunlei.com
 HOST-SUFFIX,xinruimz-isv.isvjcloud.com
 HOST,download.jetbrains.com
 HOST,images-cn.ssl-images-amazon.com
 
-#Personal
+#Personal 
 HOST-KEYWORD,diyibanzhu
 HOST-KEYWORD,dybz
