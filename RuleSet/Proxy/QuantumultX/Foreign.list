@@ -13,7 +13,6 @@ HOST-SUFFIX,amazon.com
 HOST-SUFFIX,amazontrust.com
 HOST-SUFFIX,amazonaws.com  
 HOST-SUFFIX,media-amazon.com  
-HOST-SUFFIX,*-amazon.com  
 HOST-SUFFIX,ssl-images-amazon.com
 HOST-SUFFIX,m.media-amazon.com 
 # > Cloudflare
@@ -130,6 +129,9 @@ HOST-SUFFIX,wikinews.org
 HOST-SUFFIX,wikipedia.org
 HOST-SUFFIX,wikiquote.org
 HOST-SUFFIX,wikipedia.com
+# > Web 3
+HOST-SUFFIX,opensea.io
+HOST-SUFFIX,metamask.io
 # 额外Streaming
 # (Music)
 # > SoundCloud
@@ -159,6 +161,7 @@ HOST-SUFFIX,boxun.com
 HOST-SUFFIX,blog.com
 HOST-SUFFIX,blogcdn.com
 HOST-SUFFIX,blogger.com
+HOST-SUFFIX,cdn.jsdelivr.net
 HOST-SUFFIX,cnet.com
 HOST-SUFFIX,cnn.com
 HOST-SUFFIX,duyaoss.com
@@ -221,6 +224,7 @@ HOST-SUFFIX,yahoo.com
 HOST-SUFFIX,yimg.com
 HOST-SUFFIX,yahooapis.com
 HOST-SUFFIX,zendesk.com
+HOST-SUFFIX,hedwig.pub
 # 域名匹配
 HOST-SUFFIX,eu
 HOST-SUFFIX,jp
@@ -228,5 +232,6 @@ HOST-SUFFIX,kr
 HOST-SUFFIX,sg
 HOST-SUFFIX,uk
 HOST-SUFFIX,us
+HOST-SUFFIX,pub
 # KeyWord终极匹配
 # >
