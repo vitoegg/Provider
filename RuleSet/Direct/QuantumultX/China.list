@@ -64,8 +64,8 @@ HOST-SUFFIX,wechat.com,direct
 HOST-SUFFIX,weixin.com,direct
 HOST-SUFFIX,qidian.com,direct
 HOST,file-igamecj.akamaized.net,direct
-IP-CIDR,182.254.116.0/24,no-resolve,direct
-IP-CIDR,203.205.254.0/23,no-resolve,direct
+IP-CIDR,182.254.116.0/24,direct
+IP-CIDR,203.205.254.0/23,direct
 
 #新浪
 HOST-SUFFIX,wbimg.cn,direct
