@@ -13,6 +13,7 @@ payload:
   - DOMAIN,openaicom.imgix.net
   # > Claude
   - DOMAIN-SUFFIX,anthropic.com
+  - DOMAIN-SUFFIX,claude.ai
   # > Bing
   - DOMAIN-SUFFIX,bing.com
   # > Raycast
