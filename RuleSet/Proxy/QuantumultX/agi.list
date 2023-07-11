@@ -13,6 +13,7 @@ HOST,openaicom.imgix.net,Global
 
 #Claude
 HOST-SUFFIX,anthropic.com,Global
+HOST-SUFFIX,claude.ai,Global
 
 # Bing
 HOST-SUFFIX,bing.com,Global
