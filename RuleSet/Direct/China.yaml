@@ -243,7 +243,6 @@ payload:
  - DOMAIN,cdn.jsdelivr.net
  - DOMAIN,purge.jsdelivr.net
  - DOMAIN-SUFFIX,okjike.com
- - DOMAIN-SUFFIX,oracle.com
  - DOMAIN-SUFFIX,qiniucdn.com
  - DOMAIN-SUFFIX,qiniudn.com
  - DOMAIN-SUFFIX,qiaobutang.com
@@ -256,6 +255,7 @@ payload:
  - DOMAIN-SUFFIX,weather.com
  - DOMAIN-SUFFIX,xunlei.com
  - DOMAIN-SUFFIX,xinruimz-isv.isvjcloud.com
+ - DOMAIN-SUFFIX,jianguoyun.com
  - DOMAIN,download.jetbrains.com
  - DOMAIN,images-cn.ssl-images-amazon.com
  
@@ -264,3 +264,4 @@ payload:
  - DOMAIN-KEYWORD,dybz
  # Clash专属
  - DOMAIN-SUFFIX,cn
+ - DST-PORT,10001-65535,DIRECT
