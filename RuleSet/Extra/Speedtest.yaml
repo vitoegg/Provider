@@ -18,7 +18,7 @@ payload:
  - '+.webtest.net'
 
  # > Clash专属，排除异常请求
- - '+.speedtest'
+ - 'speedtest'
 
  # > Speed Test by Cloudflare
  - '+.speed.cloudflare.com'
