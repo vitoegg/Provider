@@ -3,13 +3,13 @@ payload:
  # 更新时间：2021.06.05
 
  # > Fast
- - DOMAIN-SUFFIX,fast.com
+ - '+.fast.com'
 
  # > Speedtest by Ookla
- - DOMAIN-SUFFIX,speedtest.net
- - DOMAIN-SUFFIX,ooklaserver.net
+ - '+.speedtest.net'
+ - '+.ooklaserver.net'
  # > Clash专属，排除异常请求
- - DOMAIN-KEYWORD,speedtest
+ - '+.speedtest'
 
  # > Speed Test by Cloudflare
- - DOMAIN-SUFFIX,speed.cloudflare.com
+ - 'speed.cloudflare.com'
