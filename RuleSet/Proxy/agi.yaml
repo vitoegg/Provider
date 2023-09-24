@@ -4,24 +4,24 @@ payload:
   - '+.ai.com'
   - '+.identrust.com'
   - '+.sentry.io'
-  - '.chat.openai.com.cdn.cloudflare.net'
-  - DOMAIN,openaiapi-site.azureedge.net
-  - DOMAIN,openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net
-  - DOMAIN,openaicomproductionae4b.blob.core.windows.net
-  - DOMAIN,production-openaicom-storage.azureedge.net
-  - DOMAIN,o33249.ingest.sentry.io
-  - DOMAIN,openaicom.imgix.net
+  - 'chat.openai.com.cdn.cloudflare.net'
+  - 'openaiapi-site.azureedge.net'
+  - 'openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net'
+  - 'openaicomproductionae4b.blob.core.windows.net'
+  - 'production-openaicom-storage.azureedge.net'
+  - 'o33249.ingest.sentry.io'
+  - 'openaicom.imgix.net'
   # > Claude
-  - DOMAIN-SUFFIX,anthropic.com
-  - DOMAIN-SUFFIX,claude.ai
+  - '+.anthropic.com'
+  - '+.claude.ai'
   # > Bing
-  - DOMAIN-SUFFIX,bing.com
+  - '+.bing.com'
   # > Raycast
-  - DOMAIN-SUFFIX,raycast.com
+  - '+.raycast.com'
 
   # > Poe
-  - DOMAIN-SUFFIX,poe.com
-  - DOMAIN-SUFFIX,quora.com
+  - '+.poe.com'
+  - '+.quora.com'
 
   # > Bard
-  - DOMAIN-SUFFIX,bard.google.com
+  - '+.bard.google.com'
