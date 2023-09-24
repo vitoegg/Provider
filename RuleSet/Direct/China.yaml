@@ -33,12 +33,51 @@ payload:
  - DOMAIN-SUFFIX,bdstatic.com
  - DOMAIN-SUFFIX,yunjiasu-cdn.net
 
- # > 字节跳动
+ # ByteDance
+ - DOMAIN-SUFFIX,amemv.com
+ - DOMAIN-SUFFIX,bdxiguaimg.com
+ - DOMAIN-SUFFIX,bdxiguastatic.com
+ - DOMAIN-SUFFIX,byted-static.com
+ - DOMAIN-SUFFIX,bytedance.com
+ - DOMAIN-SUFFIX,bytedance.net
+ - DOMAIN-SUFFIX,bytedns.net
+ - DOMAIN-SUFFIX,bytednsdoc.com
+ - DOMAIN-SUFFIX,bytegoofy.com
+ - DOMAIN-SUFFIX,byteimg.com
+ - DOMAIN-SUFFIX,bytescm.com
+ - DOMAIN-SUFFIX,bytetos.com
+ - DOMAIN-SUFFIX,bytexservice.com
+ - DOMAIN-SUFFIX,douyin.com
+ - DOMAIN-SUFFIX,douyincdn.com
+ - DOMAIN-SUFFIX,douyinpic.com
+ - DOMAIN-SUFFIX,douyinstatic.com
+ - DOMAIN-SUFFIX,douyinvod.com
+ - DOMAIN-SUFFIX,feelgood.cn
  - DOMAIN-SUFFIX,feiliao.com
+ - DOMAIN-SUFFIX,gifshow.com
+ - DOMAIN-SUFFIX,huoshan.com
+ - DOMAIN-SUFFIX,huoshanzhibo.com
+ - DOMAIN-SUFFIX,ibytedapm.com
+ - DOMAIN-SUFFIX,iesdouyin.com
+ - DOMAIN-SUFFIX,ixigua.com
+ - DOMAIN-SUFFIX,kspkg.com
  - DOMAIN-SUFFIX,pstatp.com
  - DOMAIN-SUFFIX,snssdk.com
- - DOMAIN-SUFFIX,iesdouyin.com
  - DOMAIN-SUFFIX,toutiao.com
+ - DOMAIN-SUFFIX,toutiao13.com
+ - DOMAIN-SUFFIX,toutiaoapi.com
+ - DOMAIN-SUFFIX,toutiaocdn.com
+ - DOMAIN-SUFFIX,toutiaocdn.net
+ - DOMAIN-SUFFIX,toutiaocloud.com
+ - DOMAIN-SUFFIX,toutiaohao.com
+ - DOMAIN-SUFFIX,toutiaohao.net
+ - DOMAIN-SUFFIX,toutiaoimg.com
+ - DOMAIN-SUFFIX,toutiaopage.com
+ - DOMAIN-SUFFIX,wukong.com
+ - DOMAIN-SUFFIX,zijieapi.com
+ - DOMAIN-SUFFIX,zijieimg.com
+ - DOMAIN-SUFFIX,zjbyte.com
+ - DOMAIN-SUFFIX,zjcdn.com
 
  # > 腾讯
  - DOMAIN-SUFFIX,qq.com
@@ -151,8 +190,14 @@ payload:
  - DOMAIN-SUFFIX,i.qq.com
  - DOMAIN-SUFFIX,v.qq.com
  # > iQiyi
- - DOMAIN-SUFFIX,iqiyi.com
+ - DOMAIN-SUFFIX,71.am
  - DOMAIN-SUFFIX,71edge.com
+ - DOMAIN-SUFFIX,iqiyi.com
+ - DOMAIN-SUFFIX,iqiyipic.com
+ - DOMAIN-SUFFIX,ppsimg.com
+ - DOMAIN-SUFFIX,qiyi.com
+ - DOMAIN-SUFFIX,qiyipic.com
+ - DOMAIN-SUFFIX,qy.net
  # > Youku
  - DOMAIN-SUFFIX,soku.com
  - DOMAIN-SUFFIX,youku.com
@@ -219,7 +264,18 @@ payload:
  - DOMAIN-SUFFIX,163.com
  - DOMAIN-SUFFIX,youdao.com
 
+ # > 迅雷
+ - DOMAIN-SUFFIX,00cdn.com
+ - DOMAIN-SUFFIX,88cdn.com
+ - DOMAIN-SUFFIX,kanimg.com
+ - DOMAIN-SUFFIX,kankan.com
+ - DOMAIN-SUFFIX,p2cdn.com
+ - DOMAIN-SUFFIX,sandai.net
+ - DOMAIN-SUFFIX,thundercdn.com
+ - DOMAIN-SUFFIX,xunlei.com
+ 
  # > 服务
+ - DOMAIN-SUFFIX,10010.com
  - DOMAIN-SUFFIX,12306.cn
  - DOMAIN-SUFFIX,12306.com
  - DOMAIN-SUFFIX,115.com
@@ -253,7 +309,6 @@ payload:
  - DOMAIN-SUFFIX,smzdm.com
  - DOMAIN-SUFFIX,umeng.com 
  - DOMAIN-SUFFIX,weather.com
- - DOMAIN-SUFFIX,xunlei.com
  - DOMAIN-SUFFIX,xinruimz-isv.isvjcloud.com
  - DOMAIN-SUFFIX,jianguoyun.com
  - DOMAIN,download.jetbrains.com
