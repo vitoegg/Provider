@@ -32,6 +32,13 @@ dotcunited suspend=true
 ^https?:\/\/p\d.meituan.net\/movie\/.*?\?may_covertWebp - reject
 ^https?:\/\/p\d\.meituan\.net\/(mmc|wmbanner)\/ - reject
 ^https?:\/\/p\d\.meituan\.net\/wmbanner\/[A-Za-z0-9]+\.jpg - reject
+^https?:\/\/peisongapi\.meituan\.com\/client\/getInitiateImage - reject
+^https?:\/\/.*\.meituan\.com\/(client\/getInitiateImage|api\/.+\/startpicture) - reject-200
+^https?:\/\/img\.meituan\.net\/(bizad|brandCpt)\/\w+\.(png|jpg) - reject
+^https?:\/\/.*\.meituan\.com\/api\/v\d\/(openscreen\?ad|appstatus\?ad|loadInfo\?|startpicture) - reject
+^http:\/\/s3plus\.meituan\.net\/.*\/brandcpt-vedio\/.*\?time - reject
+^http:\/\/wmapi\.meituan\.com\/api\/v7\/(loadInfo|openscreen|startpicture)\? - reject
+^https?:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(brandcpt-vedio|waimai-alita)\/\w+\?? - reject
 
 # > 中国联通营业厅
 ^https?:\/\/m\.client\.10010\.com\/mobileService\/(activity|customer)\/(accountListData|get_client_adv|get_startadv) - reject
@@ -50,18 +57,19 @@ dotcunited suspend=true
 ^https?:\/\/www\.duokan\.com/pictures? - reject
 ^https?:\/\/www\.duokan\.com/promotion_day - reject
 
-
-# 美团 //img.meituan.net, s3plus.meituan.net
-^http:\/\/wmapi\.meituan\.com\/api\/v7\/(loadInfo|openscreen|startpicture)\? - reject
-^https:\/\/img\.meituan\.net\/bizad\/bizad_brandCpt_\d+ - reject
-^https?:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(brandcpt-vedio|waimai-alita)\/\w+\?? - reject
-
 # 饿了么 //elemecdn.com, fuss10.elemecdn.com, www1.elecfans.com
 ^https:\/\/elemecdn.com\/.+\/sitemap - reject
 ^https:\/\/fuss10.elemecdn.com\/.+\/w\/640\/h\/\d{3,4} - reject
 ^https:\/\/fuss10.elemecdn.com\/.+\/w\/750\/h\/\d{3,4} - reject
 ^https:\/\/fuss10.elemecdn.com\/.+\.mp4 - reject
 ^https:\/\/www1.elecfans.com\/www\/delivery - reject
+
+# > alibaba
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.alibaba\.advertisementservice\.getadv\/ - reject
+
+# > cainiao
+^https?:\/\/cn-acs\.m\.cainiao\.com\/gw\/mtop\.cainiao\.guoguo\.nbnetflow\.ads\.(show|mshow)\.cn\/ - reject
+
 
 # 高德地图
 ^https?:\/\/.*\.amap\.com\/ws\/boss\/order_web\/\w{8}_information _ reject-200
@@ -70,23 +78,16 @@ dotcunited suspend=true
 ^https?:\/\/.*\.amap\.com\/uploadimg\/\w+\.gif _ reject-img
 ^https?:\/\/.*\.amap\.com\/ws\/valueadded\/weather _ reject-dict
 
-# > 百度地图_搜索框下足记Tips@ddgksf2013
-^https?:\/\/newclient\.map\.baidu\.com\/client\/phpui.*qt=rgc - reject-dict
-# > 百度地图_搜索推广@ddgksf2013
-^https?:\/\/newclient\.map\.baidu\.com\/client\/phpui.*qt=hw - reject-dict
-# > 百度地图_开屏广告|首页左上角广告@ddgksf2013
-^https?:\/\/newclient\.map\.baidu\.com\/client\/phpui2\/\?qt=ads - reject-dict
-# > 百度地图_DNS处理@ddgksf2013
-^https?:\/\/httpdns\.baidubce\.com - reject-dict
-# > 百度地图_各种商业推广@ddgksf2013
-^https?:\/\/newclient\.map\.baidu\.com\/client\/crossmarketing - reject-dict
-# > 百度地图_我的页面地图动态@ddgksf2013
-^https?:\/\/newclient\.map\.baidu\.com\/client\/usersystem\/home\/dynamic - reject-dict
+# > 起点读书
+^https?:\/\/magev\d\.if\.qidian\.com\/argus\/api\/v\d\/client\/getsplashscreen - reject
 
 
-# 京东金融 去除开屏广告
-# hostname = ms.jr.jd.com
-^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/newna\/m\/getLoadingPicture - reject-200
+# 京东去广告
+# > jingdong
+^https?:\/\/api\.m\.jd\.com\/client\.action\?functionId=(start|queryMaterialAdverts) - reject
+# > jingdongjinrong
+^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture - reject
+
 
 # 穿山甲/拼多多之类广告
 # hostname = adim.pinduoduo.com
@@ -105,8 +106,6 @@ dotcunited suspend=true
 ^https:\/\/pgdt\.gtimg\.cn - reject
 # hostname = us.l.qq.com
 ^https?:\/\/us\.l\.qq\.com\/exapp.+ - reject
-# > alibaba
-^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.alibaba\.advertisementservice\.getadv\/ - reject
 
 
 # Bilibili
@@ -120,6 +119,8 @@ dotcunited suspend=true
 ^https://api.bilibili.com/pgc/season/player/cards - reject-dict
 #～BiliBili_哔哩哔哩_去除搜索中的大家都在搜@bm7
 ^https?:\/\/api\.vc\.bilibili\.com\/search_svr\/v\d\/Search\/recommend_words - reject
+# ～ BiliBili_哔哩哔哩_屏蔽DefaultWord@ddgksf2013
+^https?:\/\/(app\.bilibili\.com|grpc\.biliapi\.net)\/bilibili\.app\.interface\.v1\.Search\/Default - reject
 #～BiliBili_哔哩哔哩_去除动态中的话题@bm7
 ^https?:\/\/api\.vc\.bilibili\.com\/topic_svr\/v1\/topic_svr - reject-dict
 
@@ -172,6 +173,9 @@ dotcunited suspend=true
 # > kfc
 ^https?:\/\/res.kfc.com.cn\/advertisement\/ - reject
 
+# > 得物
+^https:\/\/app\.dewu\.com\/api\/v1\/app\/advertisement\/ - reject
+
 
 [Script]
 # > 微博
@@ -192,13 +196,20 @@ redbook_json10=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/a
 redbook_json11=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/search\/trending,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
 
 # > 哔哩哔哩
-BiliBili_观影去广告 = type=http-response,pattern=^https?:\/\/api\.(bilibili|biliapi)\.(com|net)\/pgc\/page\/cinema\/tab\?,requires-body=1,script-path=https://raw.githubusercontent.com/deezertidal/private/master/js-backup/Script/bilibili_json.js
-BiliBili_开屏去广告 = type=http-response,pattern=^https:\/\/app\.bilibili\.com\/x\/v2\/splash\/list,requires-body=1,script-path=https://raw.githubusercontent.com/deezertidal/private/master/js-backup/Script/bilibili_json.js
-BiliBili_推荐去广告 = type=http-response,pattern=^https?:\/\/app\.bilibili\.com\/x\/v2\/feed\/index,requires-body=1,script-path=https://raw.githubusercontent.com/deezertidal/private/master/js-backup/Script/bilibili_json.js
-BiliBili_追番去广告 = type=http-response,pattern=^https?:\/\/api\.(bilibili|biliapi)\.(com|net)\/pgc\/page\/bangumi,requires-body=1,script-path=https://raw.githubusercontent.com/deezertidal/private/master/js-backup/Script/bilibili_json.js
-BiliBili_直播去广告 = type=http-response,pattern=^https?:\/\/api\.live\.bilibili\.com\/xlive\/app-room\/v1\/index\/getInfoByRoom,requires-body=1,script-path=https://raw.githubusercontent.com/deezertidal/private/master/js-backup/Script/bilibili_json.js
+BiliBili_观影去广告 = type=http-response,pattern=^https?:\/\/api\.(bilibili|biliapi)\.(com|net)\/pgc\/page\/cinema\/tab\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+BiliBili_开屏去广告 = type=http-response,pattern=^https:\/\/app\.bilibili\.com\/x\/v2\/splash\/list,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+BiliBili_推荐去广告 = type=http-response,pattern=^https?:\/\/app\.bilibili\.com\/x\/v2\/feed\/index,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+BiliBili_去商品广告 = type=http-response,pattern=^https?:\/\/api\.bili(api|bili)\.(net|com)\/pgc\/season\/app\/related\/recommend\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+BiliBili_追番去广告 = type=http-response,pattern=^https?:\/\/api\.(bilibili|biliapi)\.(com|net)\/pgc\/page\/bangumi,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+BiliBili_直播去广告 = type=http-response,pattern=^https?:\/\/api\.live\.bilibili\.com\/xlive\/app-room\/v1\/index\/getInfoByRoom,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+BiliBili_直播去弹窗 = type=http-response,pattern=^https?:\/\/api\.live\.bilibili\.com\/xlive\/e-commerce-interface\/v\d\/ecommerce-user\/get_shopping_info\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+BiliBili_观影去广告 = type=http-response,pattern=^https?:\/\/api\.(bilibili|biliapi)\.(com|net)\/pgc\/page\/cinema\/tab\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+BiliBili_活动屏蔽 = type=http-response,pattern=^https?:\/\/app\.bilibili\.com\/x\/resource\/top\/activity,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+BiliBili_热搜屏蔽 = type=http-response,pattern=^https://app.bilibili.com/x/v2/search/square,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
 BiliBili_动态去广告 = type=http-response,pattern=^https?:\/\/api\.vc\.bilibili\.com\/dynamic_svr\/v1\/dynamic_svr\/dynamic_(history|new)\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_proto_beta.js
-BiliBili_搜索去广告 = type=http-response,pattern=^https?:\/\/(grpc\.biliapi\.net|app\.bilibili\.com)\/bilibili\.polymer\.app\.search\.v1\.Search\/SearchAll$,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_proto_beta.js
+BiliBili_去UP主广告 = type=http-response,pattern=^https?:\/\/(app\.bilibili\.com|grpc\.biliapi\.net)\/bilibili\.app\.(view|viewunite)\.v1\.View\/(View|TFInfo)$,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_proto_beta.js
+BiliBili_去综合广告 = type=http-response,pattern=^https?:\/\/(app\.bilibili\.com|grpc\.biliapi\.net)\/bilibili\.app\.dynamic\.v2\.Dynamic\/Dyn(All|Video)$,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_proto_beta.js
+BiliBili_搜索去广告 = type=http-response,pattern=^https?:\/\/(grpc\.biliapi\.net|app\.bilibili\.com)\/bilibili\.polymer\.app\.search\.v1\.Search\/SearchAll$,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_proto_beta.js
 BiliBili_青少年弹窗 = type=http-response,pattern=^https:\/\/(grpc\.biliapi\.net|app\.bilibili\.com)\/bilibili\.app\.interface\.v1\.Teenagers\/ModeStatus,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_proto_beta.js
 BiliBili_标签页处理 = type=http-response,pattern=^https?:\/\/app\.bilibili\.com\/x\/resource\/show\/tab,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
 BiliBili_我的页处理 = type=http-response,pattern=^https?:\/\/app\.bilibili\.com\/x\/v2\/account\/mine,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
@@ -212,7 +223,8 @@ BiliBili_高码率支持 = type=http-response,pattern=^https?:\/\/app\.bilibili\
 高德地图去广告4=type=http-response,script-path=^https?:\/\/.*\.amap\.com\/ws\/shield\/search\/new_hotword,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/amap.js
 
 # >京东
-京东去广告=type=http-response,pattern=^https?:\/\/api\.m\.jd\.com\/api\?functionId=delivery_show,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/startup.js
+京东去广告1=type=http-response,pattern=^https?:\/\/api\.m\.jd\.com\/api\?functionId=delivery_show,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/startup.js
+京东去广告2=type=http-response,pattern=^https?:\/\/api\.m\.jd\.com\/client\.action\?functionId=(hotWords|hotSearchTerms),requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/jd_json.js
 
 # >阿里巴巴
 阿里系去广告=type=http-response,pattern=^http:\/\/amdc\.m\.taobao\.com,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/amdc.js
@@ -221,4 +233,4 @@ BiliBili_高码率支持 = type=http-response,pattern=^https?:\/\/app\.bilibili\
 美团外卖_开屏去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/wmapi\.meituan\.com\/api\/v\d+\/loadInfo?,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/startup/startup.js
 
 [MITM]
-hostname = %APPEND% app.bilibili.com,api.live.bilibili.com,*.bilibili.com,*.bilibili.*,grpc.biliapi.net,*biliapi.net,api.jr.mi.com,home.mi.com,res.kfc.com.cn,mage*.if.qidian.com,adim.pinduoduo.com,video-dsp.pddpic.com,*.gdt.qq.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,acs.m.taobao.com,amdc.m.taobao.com,img.meituan.net,p*.meituan.net,s3plus.meituan.net,flowplus.meituan.net,wmapi.meituan.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com,3gimg.qq.com,47.97.20.12,gw.alicdn.com,acs.m.taobao.com,elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com,180.76.76.200,newclient.map.baidu.com,httpdns.baidubce.com,edith.xiaohongshu.com, www.xiaohongshu.com, pages.xiaohongshu.com, referee.xiaohongshu.com,180.76.76.200,newclient.map.baidu.com,httpdns.baidubce.com,api.m.jd.com,interface*.music.163.com
+hostname = %APPEND% app.bilibili.com,api.live.bilibili.com,*.bilibili.com,*.bilibili.*,grpc.biliapi.net,*biliapi.net,api.jr.mi.com,home.mi.com,res.kfc.com.cn,mage*.if.qidian.com,adim.pinduoduo.com,video-dsp.pddpic.com,*.gdt.qq.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,acs.m.taobao.com,amdc.m.taobao.com,peisongapi.meituan.com,img.meituan.net,s3plus.meituan.net,flowplus.meituan.net,p*.meituan.net,www.meituan.com,wmapi.meituan.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com,3gimg.qq.com,47.97.20.12,gw.alicdn.com,elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com,180.76.76.200,newclient.map.baidu.com,httpdns.baidubce.com,edith.xiaohongshu.com, www.xiaohongshu.com, pages.xiaohongshu.com, referee.xiaohongshu.com,180.76.76.200,newclient.map.baidu.com,httpdns.baidubce.com,api.m.jd.com,ms.jr.jd.com,interface*.music.163.com,acs.m.cainiao.com
