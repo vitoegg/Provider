@@ -176,24 +176,32 @@ dotcunited suspend=true
 # > 得物
 ^https:\/\/app\.dewu\.com\/api\/v1\/app\/advertisement\/ - reject
 
+# 小红书
+# > 小红书_通用广告请求
+^https?:\/\/www\.xiaohongshu\.com\/api\/sns\/v\d\/(tag\/)?ads - reject-dict
+# > 小红书_隐私屏蔽
+^https?:\/\/referee\.xiaohongshu\.com\/v\d\/stateReport - reject-dict
+# > 小红书_Switches
+^https?:\/\/pages\.xiaohongshu\.com\/data\/native\/matrix_switches - reject-dict
+# > 小红书_青少年请求
+^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/user\/teenager\/status - reject-dict
+# > 小红书_启动引导
+^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/guide\/home_guide - reject-dict
+
 
 [Script]
-# > 微博
-wb_launch.js = type=http-response,requires-body=1,pattern=^https?://(sdk|wb)app\.uve\.weibo\.com(/interface/sdk/sdkad.php|/wbapplua/wbpullad.lua),script-path=https://raw.githubusercontent.com/yichahucha/surge/master/wb_launch.js
-wb_ad.js = type=http-response,requires-body=1,max-size=-1,pattern=^https?://m?api\.weibo\.c(n|om)/2/(statuses/(unread|extend|positives/get|(friends|video)(/|_)(mix)?timeline)|stories/(video_stream|home_list)|(groups|fangle)/timeline|profile/statuses|comments/build_comments|photo/recommend_list|service/picfeed|searchall|cardlist|page|!/(photos/pic_recommend_status|live/media_homelist)|video/tiny_stream_video_list|photo/info|remind/unread_count),script-path=https://raw.githubusercontent.com/yichahucha/surge/master/wb_ad.js
-
 # > 小红书
 小红书_视频播放页商品推广=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/note\/widgets,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
-小红书_短视频流去水印=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/note\/redtube\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
-小红书_信息流视频去水印=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/note\/videofeed\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
-redbook_json4=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/note\/feed\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
-redbook_json5=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/system_service\/splash_config,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
-redbook_json6=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/homefeed\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
-redbook_json7=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/system_service\/config\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
-redbook_json8=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/search\/hot_list,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
-redbook_json9=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/search\/hint,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
-redbook_json10=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/homefeed\/categories,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
-redbook_json11=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/search\/trending,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+小红书_短视频去水印=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/note\/redtube\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+小红书_信息流去水印=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/note\/videofeed\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+小红书_图片去水印=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/note\/feed\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+小红书_开屏广告=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/system_service\/splash_config,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+小红书_首页瀑布流=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/homefeed\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+小红书_启动处理=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/system_service\/config\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+小红书_热搜发现=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/search\/hot_list,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+小红书_默认填词=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/search\/hint,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+小红书_去除购物=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/homefeed\/categories,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+小红书_猜你想搜=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/search\/trending,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
 
 # > 哔哩哔哩
 BiliBili_观影去广告 = type=http-response,pattern=^https?:\/\/api\.(bilibili|biliapi)\.(com|net)\/pgc\/page\/cinema\/tab\?,requires-body=1,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
@@ -233,4 +241,4 @@ BiliBili_高码率支持 = type=http-response,pattern=^https?:\/\/app\.bilibili\
 美团外卖_开屏去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/wmapi\.meituan\.com\/api\/v\d+\/loadInfo?,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/startup/startup.js
 
 [MITM]
-hostname = %APPEND% app.bilibili.com,api.live.bilibili.com,*.bilibili.com,*.bilibili.*,grpc.biliapi.net,*biliapi.net,api.jr.mi.com,home.mi.com,res.kfc.com.cn,mage*.if.qidian.com,adim.pinduoduo.com,video-dsp.pddpic.com,*.gdt.qq.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,acs.m.taobao.com,amdc.m.taobao.com,peisongapi.meituan.com,img.meituan.net,s3plus.meituan.net,flowplus.meituan.net,p*.meituan.net,www.meituan.com,wmapi.meituan.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com,3gimg.qq.com,47.97.20.12,gw.alicdn.com,elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com,180.76.76.200,newclient.map.baidu.com,httpdns.baidubce.com,edith.xiaohongshu.com,www.xiaohongshu.com,pages.xiaohongshu.com,referee.xiaohongshu.com,180.76.76.200,newclient.map.baidu.com,httpdns.baidubce.com,api.m.jd.com,ms.jr.jd.com,interface*.music.163.com,acs.m.cainiao.com,mage*.if.qidian.com
+hostname = %APPEND% app.bilibili.com,api.live.bilibili.com,*.bilibili.com,*.bilibili.*,grpc.biliapi.net,*biliapi.net,api.jr.mi.com,home.mi.com,res.kfc.com.cn,mage*.if.qidian.com,adim.pinduoduo.com,video-dsp.pddpic.com,*.gdt.qq.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,acs.m.taobao.com,amdc.m.taobao.com,peisongapi.meituan.com,img.meituan.net,s3plus.meituan.net,flowplus.meituan.net,p*.meituan.net,www.meituan.com,wmapi.meituan.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com,3gimg.qq.com,47.97.20.12,gw.alicdn.com,elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com,180.76.76.200,edith.xiaohongshu.com,www.xiaohongshu.com,pages.xiaohongshu.com,referee.xiaohongshu.com,180.76.76.200,api.m.jd.com,ms.jr.jd.com,interface*.music.163.com,acs.m.cainiao.com,mage*.if.qidian.com
