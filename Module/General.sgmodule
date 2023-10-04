@@ -76,46 +76,6 @@ URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/one - reject
 # > 金融
 ^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture - reject
 
-# 网易云音乐
-# > 网易云_评论弹窗
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/music\/partner\/picked\/user\/top - reject-dict
-# > 网易云_位置请求
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/lbs\/gpsStatus\/upload - reject-dict
-# > 网易云_每日推荐Tips
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/homepage\/daily\/song\/elf\/notice - reject-dict
-# > 网易云_通用广告请求
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/ad\/ - reject-dict
-# > 网易云_不知道是个啥
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/sp\/flow - reject-dict
-# > 网易云_屏蔽更新
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/ios\/upgrade - reject-dict
-# > 网易云_LIKE音乐上方推广
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/link\/position\/show\/resource - reject-dict
-# > 网易云_歌单上方推广
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?eapi\/resource-exposure\/config - reject-dict
-# > 网易云_搜索框专词
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/search\/specialkeyword - reject-dict
-# > 网易云_首页右上角激励图标
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/link\/scene\/show\/resource - reject-dict
-# > 网易云_搜索框推荐
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/search\/default - reject-dict
-# > 网易云_评论区下方广告[新版失效]
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/comment\/feed\/inserted - reject-dict
-# > 网易云_评论回复区广告
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/v1\/content\/exposure\/comment - reject-dict
-# > 网易云_搜索页猜你喜欢[卸载重装]
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/search\/rcmd\/keyword - reject-dict
-# > 网易云_搜索框填词
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/search\/default\/keyword - reject-dict
-# > 网易云_评论区右上角
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/comment\/hotcomment\/collect - reject-dict
-# > 网易云_活动推广
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/resource-exposure\/activity\/config - reject-dict
-# > 网易云_VIP歌曲提醒框
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/vipcenter/tspopup\/get - reject-dict
-# > 网易云_搜索页下方热搜Card[自行启用]
-^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/search\/chart - reject-dict
-
 # > 起点读书
 ^https?:\/\/magev\d\.if\.qidian\.com\/argus\/api\/v\d\/client\/getsplashscreen - reject
 
@@ -146,4 +106,4 @@ URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/one - reject
 广告联盟=type=http-response,pattern=^https:\/\/((api-access\.pangolin-sdk-toutiao|is\.snssdk)\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/adsense.js
 
 [MITM]
-hostname = %APPEND% api.jr.mi.com,home.mi.com,res.kfc.com.cn,acs.m.taobao.com,amdc.m.taobao.com,s3plus.meituan.net,flowplus.meituan.net,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com,3gimg.qq.com,47.97.20.12,gw.alicdn.com,elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com,180.76.76.200,api.m.jd.com,m.360buyimg.com,ms.jr.jd.com,interface*.music.163.com,acs.m.cainiao.com,magev6.if.qidian.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,mi.gdt.qq.com,open.e.kuaishou.com,as.xiaojukeji.com,pt-starimg.didistatic.com,security.xiaojukeji.com,guard.sec.xiaojukeji.com,conf.diditaxi.com.cn,api.udache.com,res.xiaojukeji.com,shop-gw.chengxinyouxuan.com,img-ys011.didistatic.com
+hostname = %APPEND% api.jr.mi.com,home.mi.com,res.kfc.com.cn,acs.m.taobao.com,amdc.m.taobao.com,s3plus.meituan.net,flowplus.meituan.net,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com,3gimg.qq.com,47.97.20.12,gw.alicdn.com,elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com,180.76.76.200,api.m.jd.com,m.360buyimg.com,ms.jr.jd.com,acs.m.cainiao.com,magev6.if.qidian.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,mi.gdt.qq.com,open.e.kuaishou.com,as.xiaojukeji.com,pt-starimg.didistatic.com,security.xiaojukeji.com,guard.sec.xiaojukeji.com,conf.diditaxi.com.cn,api.udache.com,res.xiaojukeji.com,shop-gw.chengxinyouxuan.com,img-ys011.didistatic.com
