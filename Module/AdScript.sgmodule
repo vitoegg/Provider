@@ -12,28 +12,28 @@
 
 # 滴滴
 # > 安全提示横幅
-URL-REGEX,^https:\/\/guard\.sec\.xiaojukeji\.com\/api\/guard\/psg\/v2\/getShieldStatus,REJECT
+^https:\/\/guard\.sec\.xiaojukeji\.com\/api\/guard\/psg\/v2\/getShieldStatus - reject
 # > 底部打车&代价推荐
-URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/one,REJECT
+URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/one - reject
 # > 福利专区-金融服务-公交-骑车-滴滴乐园
-URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/nav\/widget,REJECT
+^https:\/\/conf\.diditaxi\.com\.cn\/nav\/widget - reject
 # > 接送机-优惠商城
-URL-REGEX,^https:\/\/api\.udache\.com\/gulfstream,REJECT
+^https:\/\/api\.udache\.com\/gulfstream - reject
 # > 主页 领任务
-URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/api\/(component|fusion|dynamicmodule|usercenter),REJECT
-URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/dynamic,REJECT
+^https:\/\/conf\.diditaxi\.com\.cn\/api\/(component|fusion|dynamicmodule|usercenter) - reject
+^https:\/\/conf\.diditaxi\.com\.cn\/dynamic - reject
 # > 主页 非主流式悬浮挂件
-URL-REGEX,^https:\/\/res\.xiaojukeji\.com\/resapi\/activity\/mget,REJECT
+^https:\/\/res\.xiaojukeji\.com\/resapi\/activity\/mget - reject
 # > 商城
-URL-REGEX,^https:\/\/shop-gw\.chengxinyouxuan\.com\/(route|indexConfig|apolloConfig|getShopTuanInfos),REJECT
+^https:\/\/shop-gw\.chengxinyouxuan\.com\/(route|indexConfig|apolloConfig|getShopTuanInfos) - reject
 # > 开屏广告
-URL-REGEX,^https:\/\/img-ys011\.didistatic\.com\/static,REJECT
+^https:\/\/img-ys011\.didistatic\.com\/static - reject
 # > 骑行
-URL-REGEX,^https:\/\/pt-starimg\.didistatic\.com\/static,REJECT
+^https:\/\/pt-starimg\.didistatic\.com\/static - reject
 
 # > 美团 去广告
-URL-REGEX,^https:\/\/flowplus\.meituan\.net\/v1\/mss_\w+\/linglong\/\d+\.jpg$,REJECT
-URL-REGEX,^https:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(brandcpt-vedio|waimai-alita)\/\w+\.zip$,REJECT
+^https:\/\/flowplus\.meituan\.net\/v1\/mss_\w+\/linglong\/\d+\.jpg$ - reject
+^https:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(brandcpt-vedio|waimai-alita)\/\w+\.zip$ - reject
 
 # > 中国联通营业厅
 ^https?:\/\/m\.client\.10010\.com\/mobileService\/(activity|customer)\/(accountListData|get_client_adv|get_startadv) - reject
@@ -66,15 +66,15 @@ URL-REGEX,^https:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(brandcpt-vedio|waimai-a
 ^https?:\/\/cn-acs\.m\.cainiao\.com\/gw\/mtop\.cainiao\.guoguo\.nbnetflow\.ads\.(show|mshow)\.cn\/ - reject
 
 # > 拼多多
-URL-REGEX,^https?:\/\/api\.(pinduoduo|yangkeduo)\.com\/api\/cappuccino\/splash,REJECT
+^https?:\/\/api\.(pinduoduo|yangkeduo)\.com\/api\/cappuccino\/splash - reject
 
 
 # 京东去广告
 # > 商城
-URL-REGEX,^https?:\/\/api\.m\.jd\.com\/client\.action\?functionId=(start|queryMaterialAdverts),REJECT
-URL-REGEX,^https:\/\/m\.360buyimg\.com\/mobilecms\/s\d{4}x\d{4},REJECT
+^https?:\/\/api\.m\.jd\.com\/client\.action\?functionId=(start|queryMaterialAdverts) - reject
+^https:\/\/m\.360buyimg\.com\/mobilecms\/s\d{4}x\d{4},REJECT
 # > 金融
-URL-REGEX,^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture,REJECT
+^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture - reject
 
 
 # Bilibili
