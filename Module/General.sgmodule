@@ -1,4 +1,4 @@
-#!name=AdScript
+#!name=General
 #!desc=通过Script方式去除广告
 
 [URL Rewrite]
@@ -183,4 +183,4 @@ BiliBili_高码率支持 = type=http-response,pattern=^https?:\/\/app\.bilibili\
 广告联盟=type=http-response,pattern=^https:\/\/((api-access\.pangolin-sdk-toutiao|is\.snssdk)\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/adsense.js
 
 [MITM]
-hostname = %APPEND% app.bilibili.com,api.live.bilibili.com,*.bilibili.com,*.bilibili.*,grpc.biliapi.net,*biliapi.net,api.jr.mi.com,home.mi.com,res.kfc.com.cn,acs.m.taobao.com,amdc.m.taobao.com,s3plus.meituan.net,flowplus.meituan.net,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com,3gimg.qq.com,47.97.20.12,gw.alicdn.com,elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com,180.76.76.200,api.m.jd.com,m.360buyimg.com,ms.jr.jd.com,interface*.music.163.com,acs.m.cainiao.com,magev6.if.qidian.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,mi.gdt.qq.com,open.e.kuaishou.com,as.xiaojukeji.com,pt-starimg.didistatic.com,security.xiaojukeji.com,guard.sec.xiaojukeji.com,conf.diditaxi.com.cn,api.udache.com,res.xiaojukeji.com,shop-gw.chengxinyouxuan.com,img-ys011.didistatic.com
+hostname = %APPEND% ,api.jr.mi.com,home.mi.com,res.kfc.com.cn,acs.m.taobao.com,amdc.m.taobao.com,s3plus.meituan.net,flowplus.meituan.net,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com,3gimg.qq.com,47.97.20.12,gw.alicdn.com,elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com,180.76.76.200,api.m.jd.com,m.360buyimg.com,ms.jr.jd.com,interface*.music.163.com,acs.m.cainiao.com,magev6.if.qidian.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,mi.gdt.qq.com,open.e.kuaishou.com,as.xiaojukeji.com,pt-starimg.didistatic.com,security.xiaojukeji.com,guard.sec.xiaojukeji.com,conf.diditaxi.com.cn,api.udache.com,res.xiaojukeji.com,shop-gw.chengxinyouxuan.com,img-ys011.didistatic.com
