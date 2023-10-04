@@ -145,7 +145,7 @@ URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/one - reject
 # > 得物
 ^https:\/\/app\.dewu\.com\/api\/v1\/app\/advertisement\/ - reject
 
-
+[Script]
 # > 哔哩哔哩
 BiliBili_观影去广告 = type=http-response,pattern=^https?:\/\/api\.(bilibili|biliapi)\.(com|net)\/pgc\/page\/cinema\/tab\?,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
 BiliBili_开屏去广告 = type=http-response,pattern=^https:\/\/app\.bilibili\.com\/x\/v2\/splash\/list,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
