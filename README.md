@@ -79,13 +79,13 @@ Module包含自定义和外部引用，为了保持及时更新不使用CDN链�
 
 - https://raw.githubusercontent.com/vitoegg/Provider/master/Module/OutboundMode.sgmodule
 
-`订阅管理`
+`高德地图去广告`
 
-- [高德地图去广告](https://raw.githubusercontent.com/kokoryh/Script/master/Surge/module/amap.sgmodule)
+- https://raw.githubusercontent.com/kokoryh/Script/master/Surge/module/amap.sgmodule
 
-`订阅同步`
+`小红书去广告`
 
-- https://raw.githubusercontent.com/vitoegg/Provider/master/Module/SubSync.sgmodule
+- https://github.com/kokoryh/Script/blob/master/Surge/module/xiaohongshu.sgmodule
 
 
 
