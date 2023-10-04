@@ -1,11 +1,5 @@
 #!name=AdScript
 #!desc=通过Script方式去除广告
-#!bilibili=https://github.com/blackmatrix7/ios_rule_script/blob/master/script/bilibili/bilibili_plus.sgmodule
-#!zhihu=https://github.com/blackmatrix7/ios_rule_script/blob/master/script/zhihu/zhihu_plus.sgmodule
-#!weibo=https://github.com/yichahucha/surge/blob/master/sg_sub.sgmodule
-
-[SSID Setting]
-dotcunited suspend=true
 
 [URL Rewrite]
 # > 小米
@@ -13,28 +7,28 @@ dotcunited suspend=true
 ^https?:\/\/api\.jr\.mi\.com\/v\d\/adv\/ - reject
 ^https?:\/\/api\.jr\.mi\.com\/jr\/api\/playScreen - reject
 ^https?:\/\/(api-mifit|api-mifit-\w+)\.huami\.com\/discovery\/mi\/discovery\/\w+_ad\? - reject
-## 米家 //home.mi.com
+# > 米家 //home.mi.com
 ^https:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(banner|myTab)\? - reject
 
-# > 滴滴
-//01 安全提示横幅
+# 滴滴
+# > 安全提示横幅
 URL-REGEX,^https:\/\/guard\.sec\.xiaojukeji\.com\/api\/guard\/psg\/v2\/getShieldStatus,REJECT
-//02 底部打车&代价推荐
+# > 底部打车&代价推荐
 URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/one,REJECT
-//03 福利专区-金融服务-公交-骑车-滴滴乐园
+# > 福利专区-金融服务-公交-骑车-滴滴乐园
 URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/nav\/widget,REJECT
-//04 接送机-优惠商城
+# > 接送机-优惠商城
 URL-REGEX,^https:\/\/api\.udache\.com\/gulfstream,REJECT
-//05 主页 领任务
+# > 主页 领任务
 URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/api\/(component|fusion|dynamicmodule|usercenter),REJECT
 URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/dynamic,REJECT
-//06 主页 非主流式悬浮挂件
+# > 主页 非主流式悬浮挂件
 URL-REGEX,^https:\/\/res\.xiaojukeji\.com\/resapi\/activity\/mget,REJECT
-//07 商城
+# > 商城
 URL-REGEX,^https:\/\/shop-gw\.chengxinyouxuan\.com\/(route|indexConfig|apolloConfig|getShopTuanInfos),REJECT
-//08 开屏广告
+# > 开屏广告
 URL-REGEX,^https:\/\/img-ys011\.didistatic\.com\/static,REJECT
-//09 骑行
+# > 骑行
 URL-REGEX,^https:\/\/pt-starimg\.didistatic\.com\/static,REJECT
 
 # > 美团 去广告
