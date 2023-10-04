@@ -143,7 +143,7 @@ URL-REGEX,^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoa
 ^https?:\/\/magev\d\.if\.qidian\.com\/argus\/api\/v\d\/client\/getsplashscreen - reject
 
 # > 掌上生活
-#^https?:\/\/mlife\.cmbchina\.com\/ClientFaceService\/api\/mlife\.clientface\.clientservice\.api\.advertiseService\/preCacheAdvertiseSec - reject
+^https?:\/\/mlife\.cmbchina\.com\/ClientFaceService\/api\/mlife\.clientface\.clientservice\.api\.advertiseService\/preCacheAdvertiseSec - reject
 
 # > kfc
 ^https?:\/\/res.kfc.com.cn\/advertisement\/ - reject
