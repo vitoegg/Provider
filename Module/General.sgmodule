@@ -1,109 +1,119 @@
 #!name=General
-#!desc=通过Script方式去除广告
+#!desc=常规去广告配置
+
+[Rule]
+AND,((PROTOCOL,UDP), (DEST-PORT,443)),REJECT-NO-DROP
 
 [URL Rewrite]
-# > 小米
-^https?:\/\/api\.m\.mi\.com\/v\d\/app\/start - reject
-^https?:\/\/api\.jr\.mi\.com\/v\d\/adv\/ - reject
-^https?:\/\/api\.jr\.mi\.com\/jr\/api\/playScreen - reject
-^https?:\/\/(api-mifit|api-mifit-\w+)\.huami\.com\/discovery\/mi\/discovery\/\w+_ad\? - reject
-# > 米家 //home.mi.com
-^https:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(banner|myTab)\? - reject
-
-# 滴滴
-# > 安全提示横幅
-^https:\/\/guard\.sec\.xiaojukeji\.com\/api\/guard\/psg\/v2\/getShieldStatus - reject
-# > 底部打车&代价推荐
-URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/one - reject
-# > 福利专区-金融服务-公交-骑车-滴滴乐园
-^https:\/\/conf\.diditaxi\.com\.cn\/nav\/widget - reject
-# > 接送机-优惠商城
-^https:\/\/api\.udache\.com\/gulfstream - reject
-# > 主页 领任务
-^https:\/\/conf\.diditaxi\.com\.cn\/api\/(component|fusion|dynamicmodule|usercenter) - reject
-^https:\/\/conf\.diditaxi\.com\.cn\/dynamic - reject
-# > 主页 非主流式悬浮挂件
-^https:\/\/res\.xiaojukeji\.com\/resapi\/activity\/mget - reject
-# > 商城
-^https:\/\/shop-gw\.chengxinyouxuan\.com\/(route|indexConfig|apolloConfig|getShopTuanInfos) - reject
-# > 开屏广告
-^https:\/\/img-ys011\.didistatic\.com\/static - reject
-# > 骑行
-^https:\/\/pt-starimg\.didistatic\.com\/static - reject
-
-# > 美团 去广告
-^https:\/\/flowplus\.meituan\.net\/v1\/mss_\w+\/linglong\/\d+\.jpg$ - reject
-^https:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(brandcpt-vedio|waimai-alita)\/\w+\.zip$ - reject
-
-# > 中国联通营业厅
-^https?:\/\/m\.client\.10010\.com\/mobileService\/(activity|customer)\/(accountListData|get_client_adv|get_startadv) - reject
-^https?:\/\/m\.client\.10010\.com\/uniAdmsInterface\/(getHomePageAd|getWelcomeAd) - reject
-^https?:\/\/m1\.ad\.10010\.com\/noticeMag\/images\/imageUpload\/2\d{3} - reject
-^https?:\/\/res\.mall\.10010\.cn\/mall\/common\/js\/fa\.js?referer= - reject
-
-# > 雪球
-^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/promotion\/(display_cache|display_ad|feed_display|search_ad) - reject
-^https?:\/\/(api|promo)\.xueqiu\.com\/promotion\/(display_cache|display_ad|feed_display|search_ad) - reject
-^https?:\/\/((25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\.){3}(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)\/brand\/search\/v1\.json - reject
-^https?:\/\/api\.xueqiu\.com\/brand\/search\/v1\.json - reject
-^https?:\/\/api\.xueqiu\.com\/ads\/display - reject
-
-# > 多看
-^https?:\/\/www\.duokan\.com/pictures? - reject
-^https?:\/\/www\.duokan\.com/promotion_day - reject
-
-# 饿了么 //elemecdn.com, fuss10.elemecdn.com, www1.elecfans.com
+# 阿里巴巴
+# > 主站 - acs.m.taobao.com
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.alibaba\.advertisementservice\.getadv\/ - reject
+# > 飞猪 - acs.m.taobao.com
+^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.screen\.allresource - reject
+# > 菜鸟 - cn-acs.m.cainiao.com
+^https?:\/\/cn-acs\.m\.cainiao\.com\/gw\/mtop\.cainiao\.guoguo\.nbnetflow\.ads\.(show|mshow)\.cn\/ - reject
+# > 饿了么 - elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com
 ^https:\/\/elemecdn.com\/.+\/sitemap - reject
 ^https:\/\/fuss10.elemecdn.com\/.+\/w\/640\/h\/\d{3,4} - reject
 ^https:\/\/fuss10.elemecdn.com\/.+\/w\/750\/h\/\d{3,4} - reject
 ^https:\/\/fuss10.elemecdn.com\/.+\.mp4 - reject
 ^https:\/\/www1.elecfans.com\/www\/delivery - reject
 
-# > 阿里巴巴
-^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.alibaba\.advertisementservice\.getadv\/ - reject
+# 美团
+# > 通用 - flowplus.meituan.net,s3plus.meituan.net,peisongapi.meituan.com,img.meituan.net,p*.meituan.net
+^https:\/\/flowplus\.meituan\.net\/v1\/mss_\w+\/linglong\/\d+\.jpg$ - reject
+^https:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(brandcpt-vedio|waimai-alita)\/\w+\.zip$ - reject
+^https?:\/\/peisongapi\.meituan\.com\/client\/getInitiateImage - reject
+^https?:\/\/img\.meituan\.net\/(adunion|display|midas)\/\w+\.(gif|jpg|jpg\.webp)$ - reject
+^https?:\/\/(s3plus|flowplus)\.meituan\.net\/v\d\/\w+\/linglong\/\w+\.(gif|jpg|mp4) - reject
+^https?:\/\/p\d\.meituan\.net\/(bizad|wmbanner)\/\w+\.jpg - reject
+^https?:\/\/p\d\.meituan\.net\/movie\/\w+\.jpg\?may_covertWebp - reject
+# > 外卖 - img.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com
+^https?:\/\/img\.meituan\.net\/(bizad|brandCpt)\/\w+\.(png|jpg) url reject
+^https?:\/\/.*\.meituan\.com\/api\/v\d\/(openscreen\?ad|appstatus\?ad|loadInfo\?|startpicture) url reject
+^http:\/\/s3plus\.meituan\.net\/.*\/brandcpt-vedio\/.*\?time url reject
 
-# > 菜鸟
-^https?:\/\/cn-acs\.m\.cainiao\.com\/gw\/mtop\.cainiao\.guoguo\.nbnetflow\.ads\.(show|mshow)\.cn\/ - reject
-
-# > 拼多多
-^https?:\/\/api\.(pinduoduo|yangkeduo)\.com\/api\/cappuccino\/splash - reject
-
-
-# 京东去广告
-# > 商城
+# 京东
+# > 商城 - api.m.jd.com,m.360buyimg.com
 ^https?:\/\/api\.m\.jd\.com\/client\.action\?functionId=(start|queryMaterialAdverts) - reject
-^https:\/\/m\.360buyimg\.com\/mobilecms\/s\d{4}x\d{4},REJECT
-# > 金融
+^https:\/\/m\.360buyimg\.com\/mobilecms\/s\d{4}x\d{4} - reject
+# > 金融 - ms.jr.jd.com
 ^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture - reject
 
-# > 起点读书
+# 小米
+# > 通用 - api.m.mi.com
+^https?:\/\/api\.m\.mi\.com\/v\d\/app\/start - reject
+# > 小米有品 - shopapi.io.mi.com
+^https?:\/\/shopapi\.io\.mi\.com\/mtop\/mf\/resource\/homePage\/pageConfig - reject
+# > 米家 - home.mi.com
+^https:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(banner|myTab)\? - reject
+# > 多看 - www.duokan.com
+^https?:\/\/www\.duokan\.com/pictures? - reject
+^https?:\/\/www\.duokan\.com/promotion_day - reject
+
+# 滴滴
+# > 安全提示横幅 - guard.sec.xiaojukeji.com
+^https:\/\/guard\.sec\.xiaojukeji\.com\/api\/guard\/psg\/v2\/getShieldStatus - reject
+# > 底部打车&代价推荐 - conf.diditaxi.com.cn
+URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/one - reject
+# > 福利专区-金融服务-公交-骑车-滴滴乐园 - - conf.diditaxi.com.cn
+^https:\/\/conf\.diditaxi\.com\.cn\/nav\/widget - reject
+# > 接送机-优惠商城 - api.udache.com
+^https:\/\/api\.udache\.com\/gulfstream - reject
+# > 主页 领任务 - conf.diditaxi.com.cn
+^https:\/\/conf\.diditaxi\.com\.cn\/api\/(component|fusion|dynamicmodule|usercenter) - reject
+^https:\/\/conf\.diditaxi\.com\.cn\/dynamic - reject
+# > 主页 非主流式悬浮挂件 - res.xiaojukeji.com
+^https:\/\/res\.xiaojukeji\.com\/resapi\/activity\/mget - reject
+# > 商城 - shop-gw.chengxinyouxuan.com
+^https:\/\/shop-gw\.chengxinyouxuan\.com\/(route|indexConfig|apolloConfig|getShopTuanInfos) - reject
+# > 开屏广告 - img-ys011.didistatic.com
+^https:\/\/img-ys011\.didistatic\.com\/static - reject
+# > 骑行 - pt-starimg.didistatic.com
+^https:\/\/pt-starimg\.didistatic\.com\/static - reject
+
+# 爱回收 - gw.aihuishou.com
+^https?:\/\/gw.aihuishou.com\/app-portal\/home\/getadvertisement - reject
+
+# 中国联通 - m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn
+^https?:\/\/m\.client\.10010\.com\/mobileService\/(activity|customer)\/(accountListData|get_client_adv|get_startadv) - reject
+^https?:\/\/m\.client\.10010\.com\/uniAdmsInterface\/(getHomePageAd|getWelcomeAd) - reject
+^https?:\/\/m1\.ad\.10010\.com\/noticeMag\/images\/imageUpload\/2\d{3} - reject
+^https?:\/\/res\.mall\.10010\.cn\/mall\/common\/js\/fa\.js?referer= - reject
+
+# 雪球 - api.xueqiu.com,promo.xueqiu.com
+^https?:\/\/(api|promo)\.xueqiu\.com\/promotion\/(display_cache|display_ad|feed_display|search_ad) - reject
+^https?:\/\/api\.xueqiu\.com\/brand\/search\/v1\.json - reject
+^https?:\/\/api\.xueqiu\.com\/ads\/display - reject
+
+# 拼多多 - api.pinduoduo.com,api.yangkeduo.com
+^https?:\/\/api\.(pinduoduo|yangkeduo)\.com\/api\/cappuccino\/splash - reject
+
+# 起点读书 - mage*.if.qidian.com
 ^https?:\/\/magev\d\.if\.qidian\.com\/argus\/api\/v\d\/client\/getsplashscreen - reject
 
-# > 掌上生活
-^https?:\/\/mlife\.cmbchina\.com\/ClientFaceService\/api\/mlife\.clientface\.clientservice\.api\.advertiseService\/preCacheAdvertiseSec - reject
-
-# > kfc
+# KFC - res.kfc.com.cn
 ^https?:\/\/res.kfc.com.cn\/advertisement\/ - reject
 
-# > 得物
+# 得物 - app.dewu.com
 ^https:\/\/app\.dewu\.com\/api\/v1\/app\/advertisement\/ - reject
 
 [Script]
-# >京东
+# >京东 - api.m.jd.com
 京东去广告1=type=http-response,pattern=^https?:\/\/api\.m\.jd\.com\/api\?functionId=delivery_show,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/startup.js
 京东去广告2=type=http-response,pattern=^https?:\/\/api\.m\.jd\.com\/client\.action\?functionId=(hotWords|hotSearchTerms),requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/jd_json.js
 
-# >阿里巴巴
+# >阿里巴巴 - amdc.m.taobao.com
 阿里系去广告=type=http-response,pattern=^http:\/\/amdc\.m\.taobao\.com,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/amdc.js
 
-# >起点读书
+# >起点读书 - magev6.if.qidian.com
 起点去广告=type=http-response,pattern=^https:\/\/magev6\.if\.qidian\.com\/argus\/api\/(v4\/client\/getsplashscreen|v2\/deeplink\/geturl|v1\/(client\/getconf|bookshelf\/getHoverAdv|adv\/getadvlistbatch\?positions=iOS_tab|dailyrecommend\/getdailyrecommend)),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/qidian.js
 
-# > 美团外卖
-美团外卖_开屏去广告 = type=http-response,requires-body=1,max-size=0,pattern=^https?:\/\/wmapi\.meituan\.com\/api\/v\d+\/loadInfo?,script-path=https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/script/startup/startup.js
+# >微信 - mp.weixin.qq.com
+公众号去广告=type=http-response,pattern=^https?:\/\/mp\.weixin\.qq\.com\/mp\/getappmsgad,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/kokoryh/Script/master/js/self_use.js
 
-# > 广告联盟
+# > 广告联盟 - api-access.pangolin-sdk-toutiao.com,is.snssdk.com,mi.gdt.qq.com,open.e.kuaishou.com
 广告联盟=type=http-response,pattern=^https:\/\/((api-access\.pangolin-sdk-toutiao|is\.snssdk)\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/adsense.js
 
 [MITM]
-hostname = %APPEND% api.jr.mi.com,home.mi.com,res.kfc.com.cn,acs.m.taobao.com,amdc.m.taobao.com,s3plus.meituan.net,flowplus.meituan.net,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,182.92.251.113,101.201.175.228,www.duokan.com,3gimg.qq.com,47.97.20.12,gw.alicdn.com,elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com,180.76.76.200,api.m.jd.com,m.360buyimg.com,ms.jr.jd.com,acs.m.cainiao.com,magev6.if.qidian.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,mi.gdt.qq.com,open.e.kuaishou.com,as.xiaojukeji.com,pt-starimg.didistatic.com,security.xiaojukeji.com,guard.sec.xiaojukeji.com,conf.diditaxi.com.cn,api.udache.com,res.xiaojukeji.com,shop-gw.chengxinyouxuan.com,img-ys011.didistatic.com
+hostname = %INSERT% amdc.m.taobao.com,acs.m.taobao.com,cn-acs.m.cainiao.com,elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com, flowplus.meituan.net,s3plus.meituan.net,peisongapi.meituan.com,img.meituan.net,p*.meituan.net,www.meituan.com,wmapi.meituan.com, api.m.jd.com,m.360buyimg.com,ms.jr.jd.com, api.m.mi.com,shopapi.io.mi.com,www.duokan.com, guard.sec.xiaojukeji.com,conf.diditaxi.com.cn,api.udache.com,res.xiaojukeji.com,shop-gw.chengxinyouxuan.com,img-ys011.didistatic.com,pt-starimg.didistatic.com, gw.aihuishou.com, m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn, api.xueqiu.com,promo.xueqiu.com, api.pinduoduo.com,api.yangkeduo.com, mage*.if.qidian.com, res.kfc.com.cn, app.dewu.com, mp.weixin.qq.com, api-access.pangolin-sdk-toutiao.com,is.snssdk.com,mi.gdt.qq.com,open.e.kuaishou.com
