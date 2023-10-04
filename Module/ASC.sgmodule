@@ -1,9 +1,0 @@
-#!name=AppStoreConnect
-#!desc=App Store Connect访问加速
-
-
-[Rule]
-DOMAIN,xp.apple.com,Global
-DOMAIN,appstoreconnect.apple.com,Global
-DOMAIN,itcmobile.itunes.apple.com,Global
-DOMAIN,uclient-api.itunes.apple.com,Global
