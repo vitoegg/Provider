@@ -6,6 +6,11 @@
 [General]
 force-http-engine-hosts = %APPEND% weibointl.api.weibo.cn,wmapi.meituan.com
 
+[Map Local]
+^http:\/\/iadmusicmatvideo\.music\.126\.net data="https://raw.githubusercontent.com/Keywos/rule/main/mocks/blank.mp4"
+^https?:\/\/interface3?\.music\.163\.com\/eapi\/(community\/friends\/fans-group\/artist\/group\/get|user\/sub\/artist|music\/songshare\/text\/recommend\/get|mine\/applet\/redpoint|resniche\/position\/play\/new\/get) data="https://raw.githubusercontent.com/Keywos/rule/main/mocks/blank_dict.json"
+
+
 [URL Rewrite]
 # 广告联盟
 # > 拼多多 adim.pinduoduo.com,video-dsp.pddpic.com
