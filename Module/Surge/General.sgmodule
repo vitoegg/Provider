@@ -1,23 +1,45 @@
 #!name=General
 #!desc=常规去广告配置
 
-[Rule]
-AND,((PROTOCOL,UDP), (DEST-PORT,443)),REJECT-NO-DROP
+[General]
+force-http-engine-hosts = %APPEND% weibointl.api.weibo.cn,wmapi.meituan.com
 
 [URL Rewrite]
+# 广告联盟
+# > 拼多多 adim.pinduoduo.com,video-dsp.pddpic.com
+^https:\/\/(adim|images)\.pinduoduo\.com\/(.+\/toutiao|mrk\/.+) - reject
+^https:\/\/video-dsp\.pddpic\.com\/market-dsp-video - reject
+# > 字节跳动 - *.pglstatp-toutiao.com
+^http[s]?:\/\/.*\.pglstatp-toutiao\.com\/.+ - reject
+# > 腾讯 - adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,*.gdt.qq.com
+^https?:\/\/adsmind\.gdtimg\.com\/ads_svp_video.+ - reject
+^https:\/\/pgdt\.gtimg\.cn - reject
+^https?:\/\/us\.l\.qq\.com\/exapp.+ - reject
+^http[s]?:\/\/.*\.gdt\.qq\.com\/gdt_mview.+ - reject
+
 # 阿里巴巴
 # > 主站 - acs.m.taobao.com
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.taobao\.idle\.home\.welcome\/ - reject
 ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.alibaba\.advertisementservice\.getadv\/ - reject
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.o2o\.ad\.gateway\.get\/ - reject
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.film\.mtopadvertiseapi\.queryadvertise\/ - reject
 # > 飞猪 - acs.m.taobao.com
 ^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.screen\.allresource - reject
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.activity\.querytmsresources\/ - reject
 # > 菜鸟 - cn-acs.m.cainiao.com
 ^https?:\/\/cn-acs\.m\.cainiao\.com\/gw\/mtop\.cainiao\.guoguo\.nbnetflow\.ads\.(show|mshow)\.cn\/ - reject
-# > 饿了么 - elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com
+# > 饿了么 - elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com,cube.elemecdn.com,nr-op.elemecdn.com
 ^https:\/\/elemecdn.com\/.+\/sitemap - reject
 ^https:\/\/fuss10.elemecdn.com\/.+\/w\/640\/h\/\d{3,4} - reject
 ^https:\/\/fuss10.elemecdn.com\/.+\/w\/750\/h\/\d{3,4} - reject
-^https:\/\/fuss10.elemecdn.com\/.+\.mp4 - reject
+^https?:\/\/fuss10\.elemecdn\.com\/.+?\.mp4 - reject
 ^https:\/\/www1.elecfans.com\/www\/delivery - reject
+^https?://cube\.elemecdn\.com/[\w/]+\.jpeg\?x-oss-process=image/resize,m_fill,w_\d{3},h_\d{4}/format,webp/ - reject
+^https?://cube\.elemecdn\.com/[\w/]+\.jpeg\?x-oss-process=image/resize,m_fill,w_1\d{3},h_2\d{3}/format,webp/ - reject
+^https?://cube\.elemecdn\.com/[\w/]+\.jpeg\?x-oss-process=image/resize,m_fill,w_6\d{2},h_8\d{2}/format,webp/ - reject
+^https?://cube\.elemecdn\.com/\w/\w{2}/\w+mp4\.mp4\? - reject
+^https:\/\/(nr-op|cube)\.elemecdn\.com\/.+\.jpeg\?x-oss-process=image\/resize,m_fill,w_\d{4,},h_\d{4,}\/($|format,webp\/$) - reject
+
 
 # 美团
 # > 通用 - flowplus.meituan.net,s3plus.meituan.net,peisongapi.meituan.com,img.meituan.net,p*.meituan.net
@@ -98,6 +120,16 @@ URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/one - reject
 # 得物 - app.dewu.com
 ^https:\/\/app\.dewu\.com\/api\/v1\/app\/advertisement\/ - reject
 
+# 叮咚买菜 - maicai.api.ddxq.mobi
+^https?://maicai\.api\.ddxq\.mobi/advert/ - reject
+
+# 小程序_顺丰速运 - ucmp.sf-express.com
+^https?:\/\/ucmp\.sf-express\.com\/proxy\/operation-platform\/info-flow-adver\/query$ - reject
+
+# 高铁管家 - cdn.133.cn,jp.rsscc.com,jt.rsscc.com
+^http:\/\/cdn\.133\.cn\/md\/gtgj\/.+\/.+720x1280 - reject-dict
+^https?:\/\/[a-z]*\.rsscc\.com\/[a-z]*\/adver url reject
+
 [Script]
 # >京东 - api.m.jd.com
 京东去广告1=type=http-response,pattern=^https?:\/\/api\.m\.jd\.com\/api\?functionId=delivery_show,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/startup.js
@@ -112,8 +144,8 @@ URL-REGEX,^https:\/\/conf\.diditaxi\.com\.cn\/one - reject
 # >微信 - mp.weixin.qq.com
 公众号去广告=type=http-response,pattern=^https?:\/\/mp\.weixin\.qq\.com\/mp\/getappmsgad,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/kokoryh/Script/master/js/self_use.js
 
-# > 广告联盟 - api-access.pangolin-sdk-toutiao.com,is.snssdk.com,mi.gdt.qq.com,open.e.kuaishou.com
+# > 广告联盟 - api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com
 广告联盟=type=http-response,pattern=^https:\/\/((api-access\.pangolin-sdk-toutiao|is\.snssdk)\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/adsense.js
 
 [MITM]
-hostname = %INSERT% amdc.m.taobao.com,acs.m.taobao.com,cn-acs.m.cainiao.com,elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com, flowplus.meituan.net,s3plus.meituan.net,peisongapi.meituan.com,img.meituan.net,p*.meituan.net,www.meituan.com,wmapi.meituan.com, api.m.jd.com,m.360buyimg.com,ms.jr.jd.com, api.m.mi.com,shopapi.io.mi.com,www.duokan.com, guard.sec.xiaojukeji.com,conf.diditaxi.com.cn,api.udache.com,res.xiaojukeji.com,shop-gw.chengxinyouxuan.com,img-ys011.didistatic.com,pt-starimg.didistatic.com, gw.aihuishou.com, m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn, api.xueqiu.com,promo.xueqiu.com, api.pinduoduo.com,api.yangkeduo.com, mage*.if.qidian.com, res.kfc.com.cn, app.dewu.com, mp.weixin.qq.com, api-access.pangolin-sdk-toutiao.com,is.snssdk.com,mi.gdt.qq.com,open.e.kuaishou.com
+hostname = %INSERT% amdc.m.taobao.com,acs.m.taobao.com,cn-acs.m.cainiao.com,elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com,cube.elemecdn.com,nr-op.elemecdn.com, flowplus.meituan.net,s3plus.meituan.net,peisongapi.meituan.com,img.meituan.net,p*.meituan.net,www.meituan.com,wmapi.meituan.com, api.m.jd.com,m.360buyimg.com,ms.jr.jd.com, api.m.mi.com,shopapi.io.mi.com,www.duokan.com, guard.sec.xiaojukeji.com,conf.diditaxi.com.cn,api.udache.com,res.xiaojukeji.com,shop-gw.chengxinyouxuan.com,img-ys011.didistatic.com,pt-starimg.didistatic.com, gw.aihuishou.com, m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn, api.xueqiu.com,promo.xueqiu.com, api.pinduoduo.com,api.yangkeduo.com, mage*.if.qidian.com, res.kfc.com.cn, app.dewu.com, maicai.api.ddxq.mobi, ucmp.sf-express.com, mp.weixin.qq.com, api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com, adim.pinduoduo.com,video-dsp.pddpic.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,*.gdt.qq.com
