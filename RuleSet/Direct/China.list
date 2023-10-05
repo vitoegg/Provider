@@ -8,11 +8,50 @@
 .yunjiasu-cdn.net
 
 #字节跳动
+.amemv.com
+.bdxiguaimg.com
+.bdxiguastatic.com
+.byted-static.com
+.bytedance.com
+.bytedance.net
+.bytedns.net
+.bytednsdoc.com
+.bytegoofy.com
+.byteimg.com
+.bytescm.com
+.bytetos.com
+.bytexservice.com
+.douyin.com
+.douyincdn.com
+.douyinpic.com
+.douyinstatic.com
+.douyinvod.com
+.feelgood.cn
 .feiliao.com
+.gifshow.com
+.huoshan.com
+.huoshanzhibo.com
+.ibytedapm.com
+.iesdouyin.com
+.ixigua.com
+.kspkg.com
 .pstatp.com
 .snssdk.com
-.iesdouyin.com
 .toutiao.com
+.toutiao13.com
+.toutiaoapi.com
+.toutiaocdn.com
+.toutiaocdn.net
+.toutiaocloud.com
+.toutiaohao.com
+.toutiaohao.net
+.toutiaoimg.com
+.toutiaopage.com
+.wukong.com
+.zijieapi.com
+.zijieimg.com
+.zjbyte.com
+.zjcdn.com
 
 #阿里巴巴
 .alibaba.com
@@ -35,6 +74,8 @@
 .aliyuncdn.com
 .aliyuncs.com
 .aliyundrive.com
+.alikunlun.com
+.autonavi.com
 .amap.com
 .dingtalk.com
 .ykimg.com
@@ -226,6 +267,10 @@ moo.qq.com
 .163.com
 .youdao.com
 
+#DNS
+doh.pub
+dns.alidns.com
+doh.360.cn
 
 #服务
 .12306.cn
@@ -268,3 +313,7 @@ purge.jsdelivr.net
 .xinruimz-isv.isvjcloud.com
 download.jetbrains.com
 images-cn.ssl-images-amazon.com
+.cn
+.xn--fiqs8s
+.xn--55qx5d
+.xn--io0a7i
