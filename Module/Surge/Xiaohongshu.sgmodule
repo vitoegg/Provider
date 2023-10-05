@@ -3,18 +3,18 @@
 
 # From：https://raw.githubusercontent.com/ddgksf2013/Rewrite/master/AdBlock/XiaoHongShu.conf
 
-[URL Rewrite]
+[Map Local]
 # 小红书
 # > 小红书_通用广告请求
-URL-REGEX,^https?:\/\/www\.xiaohongshu\.com\/api\/sns\/v\d\/(tag\/)?ads,REJECT
+^https?:\/\/www\.xiaohongshu\.com\/api\/sns\/v\d\/(tag\/)?ads data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 # > 小红书_隐私屏蔽
-URL-REGEX,^https?:\/\/referee\.xiaohongshu\.com\/v\d\/stateReport,REJECT
+^https?:\/\/referee\.xiaohongshu\.com\/v\d\/stateReport data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 # > 小红书_Switches
-URL-REGEX,^https?:\/\/pages\.xiaohongshu\.com\/data\/native\/matrix_switches,REJECT
+^https?:\/\/pages\.xiaohongshu\.com\/data\/native\/matrix_switches data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 # > 小红书_青少年请求
-URL-REGEX,^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/user\/teenager\/status,REJECT
+^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/user\/teenager\/status data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 # > 小红书_启动引导
-URL-REGEX,^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/guide\/home_guide,REJECT
+^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/guide\/home_guide data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 
 [Script]
 启动处理=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/system_service\/config\?,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
@@ -30,4 +30,4 @@ URL-REGEX,^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/guide\/home_guide,
 图片去水印=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/note\/feed\?,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
 
 [MITM]
-hostname = %INSERT% pages.xiaohongshu.com, www.xiaohongshu.com, edith.xiaohongshu.com, referee.xiaohongshu.com
+hostname = %INSERT% pages.xiaohongshu.com,www.xiaohongshu.com,edith.xiaohongshu.com,referee.xiaohongshu.com
