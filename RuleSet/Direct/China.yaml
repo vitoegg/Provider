@@ -1,4 +1,8 @@
 payload:
+ # > DNS
+ - DOMAIN-SUFFIX,doh.pub
+ - DOMAIN-SUFFIX,dns.alidns.com
+ - DOMAIN-SUFFIX,doh.360.cn
  # > 阿里巴巴
  - DOMAIN-SUFFIX,alibaba.com
  - DOMAIN-SUFFIX,aliapp.org
@@ -132,6 +136,11 @@ payload:
  - DOMAIN-SUFFIX,douban.com
  - DOMAIN-SUFFIX,doubanio.com
 
+ # > 小红书
+ - DOMAIN-SUFFIX,xiaohongshu.com
+ - DOMAIN-SUFFIX,xhscdn.com
+ - DOMAIN-SUFFIX,xhscdn.net
+ 
  # > 京东
  - DOMAIN-SUFFIX,jd.com
  - DOMAIN-SUFFIX,jd.hk
