@@ -1,6 +1,8 @@
 #!name=General
 #!desc=常规去广告配置
 
+#From1:https://raw.githubusercontent.com/fmz200/wool_scripts/main/QuantumultX/rewrite/chongxie.txt
+
 [General]
 force-http-engine-hosts = %APPEND% weibointl.api.weibo.cn,wmapi.meituan.com
 
