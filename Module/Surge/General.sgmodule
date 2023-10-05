@@ -33,7 +33,6 @@ force-http-engine-hosts = %APPEND% weibointl.api.weibo.cn,wmapi.meituan.com
 ^https?:\/\/(?>heic|gw)\.alicdn\.com\/tfs\/TB1.+?-\d{4}-\d{4}\.jpg_1200x1200q90\.jpg_\.\w{3,4}$ data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
 ^https?:\/\/fuss10\.elemecdn\.com\/.+?\.mp4 data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-img.gif"
 ^https?:\/\/cube\.elemecdn\.com\/\w\/\w{2}\/\w+mp4\.mp4\? data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-img.gif"
-^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.wdk\.render\.querysinglepage\/3\.0 data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
 
 # 美团 - s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,flowplus.meituan.net,apimobile.meituan.com,img.meituan.net,p*.meituan.net,peisongapi.meituan.com
 ^https?:\/\/img\.meituan\.net\/(?>adunion|display|midas)\/.+?\.(gif|jpg|jpg\.webp)$ data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
