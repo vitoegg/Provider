@@ -12,6 +12,8 @@ payload:
  - DOMAIN-SUFFIX,alicloudccp.com
  - DOMAIN-SUFFIX,aliexpress.com
  - DOMAIN-SUFFIX,aliimg.com
+ - DOMAIN-SUFFIX,alikunlun.com
+ - DOMAIN-SUFFIX,autonavi.com
  - DOMAIN-SUFFIX,taobao.com
  - DOMAIN-SUFFIX,taobaocdn.com
  - DOMAIN-SUFFIX,tbcache.com
