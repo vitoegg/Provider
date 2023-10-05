@@ -55,8 +55,6 @@ force-http-engine-hosts = %APPEND% weibointl.api.weibo.cn,wmapi.meituan.com
 ^https?:\/\/cdn\.poizon\.com\/node-common\/.*.jpg data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
 
 # 起点读书 - mage*.if.qidian.com,qidian.qpic.cn
-^https:\/\/magev6\.if\.qidian\.com\/argus\/api\/v1\/adv url reject-dict
-^https:\/\/magev6\.if\.qidian\.com\/argus\/api\/v1\/followsubscribe url reject-dict
 ^https?:\/\/qidian\.qpic\.cn\/qidian_common url reject-img
 ^https?:\/\/mage\.if\.qidian\.com\/Atom\.axd\/Api\/Client\/GetConfIOS url reject-img
 
