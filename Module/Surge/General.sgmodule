@@ -17,7 +17,6 @@
 
 # 高铁管家 - cdn.133.cn,jp.rsscc.com,jt.rsscc.com
 ^http:\/\/cdn\.133\.cn\/md\/gtgj\/.+\/.+720x1280 data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
-^https?:\/\/[a-z]*\.rsscc\.com\/[a-z]*\/adver - reject
 
 # 阿里巴巴
 # > 开屏广告 - heic.alicdn.com,gw.alicdn.com,asp.cntv.myalicdn.com,fuss10.elemecdn.com,cube.elemecdn.com,acs.m.taobao.com
@@ -53,8 +52,6 @@
 # 起点读书 - mage*.if.qidian.com,qidian.qpic.cn
 ^https?:\/\/qidian\.qpic\.cn\/qidian_common data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-img.gif"
 ^https?:\/\/mage\.if\.qidian\.com\/Atom\.axd\/Api\/Client\/GetConfIOS data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-img.gif"
-
-
 
 [URL Rewrite]
 # 广告联盟
