@@ -3,9 +3,6 @@
 
 #From1:https://raw.githubusercontent.com/fmz200/wool_scripts/main/QuantumultX/rewrite/chongxie.txt
 
-[General]
-force-http-engine-hosts = %APPEND% weibointl.api.weibo.cn,wmapi.meituan.com
-
 [Map Local]
 # 肯德基 微信小程序 - orders.kfc.com.cn,dynamicad.kfc.com.cn,res.kfc.com.cn
 ^https:\/\/orders\.kfc\.com\.cn\/preorder-portal\/api\/v2\/coupon data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
@@ -54,8 +51,8 @@ force-http-engine-hosts = %APPEND% weibointl.api.weibo.cn,wmapi.meituan.com
 ^https?:\/\/cdn\.poizon\.com\/node-common\/.*.jpg data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
 
 # 起点读书 - mage*.if.qidian.com,qidian.qpic.cn
-^https?:\/\/qidian\.qpic\.cn\/qidian_common url reject-img
-^https?:\/\/mage\.if\.qidian\.com\/Atom\.axd\/Api\/Client\/GetConfIOS url reject-img
+^https?:\/\/qidian\.qpic\.cn\/qidian_common data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-img.gif"
+^https?:\/\/mage\.if\.qidian\.com\/Atom\.axd\/Api\/Client\/GetConfIOS data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-img.gif"
 
 
 
