@@ -86,6 +86,16 @@ payload:
   - IP-CIDR,211.152.148.0/23,no-resolve
   - IP-CIDR,212.64.0.0/17,no-resolve
   - IP-CIDR,212.129.128.0/17,no-resolve
+  - IP-CIDR,101.32.104.4/32,no-resolve
+  - IP-CIDR,101.32.104.41/32,no-resolve
+  - IP-CIDR,101.32.104.56/32,no-resolve
+  - IP-CIDR,101.32.118.25/32,no-resolve
+  - IP-CIDR,101.32.133.16/32,no-resolve
+  - IP-CIDR,101.32.133.209/32,no-resolve
+  - IP-CIDR,101.32.133.53/32,no-resolve
+  - IP-CIDR,129.226.107.244/32,no-resolve
+  - IP-CIDR,129.226.3.47/32,no-resolve
+  - IP-CIDR,43.156.222.0/24,no-resolve
  # 百度 Baidu
   - IP-CIDR,45.113.192.0/22,no-resolve
   - IP-CIDR,63.217.23.0/24,no-resolve
