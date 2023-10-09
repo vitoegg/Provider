@@ -111,6 +111,7 @@ file-igamecj.akamaized.net
 .weibo.com
 .weibo.com.cn
 .weibo.tv
+.weibocdn.cn
 .weibocdn.com
 .weiboums.com
 .xiaoka.tv
@@ -124,6 +125,7 @@ file-igamecj.akamaized.net
 .sinacdn.com
 .sinacloud.cn
 .sinaimg.cn
+.sinaimg.com
 .sinacloud.com
 .sinacloud.com.cn
 .sinacloud.net
@@ -268,10 +270,25 @@ moo.qq.com
 .163.com
 .youdao.com
 
-#DNS
-doh.pub
-dns.alidns.com
-doh.360.cn
+#迅雷
+.xunlei.com
+.thundercdn.com
+.00cdn.com
+.88cdn.com
+.kanimg.com
+.kankan.com
+.p2cdn.com
+.sandai.net
+
+# 公共CDN
+.ajax.aspnetcdn.com
+.ajax.cloudflare.com
+.code.jquery.com
+.baomitu.com
+.bootcss.com
+.jiasule.com
+.staticfile.org
+.upaiyun.com
 
 #服务
 .12306.cn
@@ -311,7 +328,6 @@ purge.jsdelivr.net
 .seagm.com
 .umeng.com 
 .weather.com
-.xunlei.com
 .xinruimz-isv.isvjcloud.com
 download.jetbrains.com
 images-cn.ssl-images-amazon.com
@@ -319,3 +335,8 @@ images-cn.ssl-images-amazon.com
 .xn--fiqs8s
 .xn--55qx5d
 .xn--io0a7i
+
+#DNS
+doh.pub
+dns.alidns.com
+doh.360.cn
