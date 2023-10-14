@@ -4,6 +4,7 @@ payload:
   - DOMAIN,www.asusrouter.com
   - DOMAIN-SUFFIX,lan
   - DOMAIN-SUFFIX,local
+  - DOMAIN-SUFFIX,cn
   - DOMAIN-SUFFIX,localhost
   - DOMAIN-SUFFIX,hiwifi.com
   - DOMAIN-SUFFIX,miwifi.com
