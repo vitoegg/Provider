@@ -1,5 +1,5 @@
 #!name=General
-#!desc=常规去广告配置
+#!desc=通用去除应用启动广告
 
 #From1:https://raw.githubusercontent.com/fmz200/wool_scripts/main/QuantumultX/rewrite/chongxie.txt
 
@@ -37,6 +37,8 @@
 ^https:\/\/flowplus\.meituan\.net\/v1\/mss_\w+\/linglong\/\d+\.jpg data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 ^https:\/\/img\.meituan\.net\/bizad\/bizad_brandCpt_\d+\.jpg data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 ^https:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(brandcpt-vedio|waimai-alita)\/\w+\.zip$ data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+^https:\/\/img\.meituan\.net\/dpmobile\/.+93241\.png data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+^https?:\/\/img\.meituan\.net\/dpmobile\/.*.(gif|jpg) data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
 
 # 雪球开屏广告 - api.xueqiu.com,promo.xueqiu.com,xqimg.imedao.com
 ^https?:\/\/xqimg\.imedao\.com\/[a-z0-9]{24}\.jpg$ data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
@@ -127,11 +129,16 @@
 # 高铁管家 - cdn.133.cn,jp.rsscc.com,jt.rsscc.com
 ^https?:\/\/[a-z]*\.rsscc\.com\/[a-z]*\/adver - reject
 
-# 饿了么 - elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com
+# 饿了么 - elemecdn.com,www1.elecfans.com
 ^https:\/\/elemecdn.com\/.+\/sitemap - reject
 ^https:\/\/fuss10.elemecdn.com\/.+\/w\/640\/h\/\d{3,4} - reject
 ^https:\/\/fuss10.elemecdn.com\/.+\/w\/750\/h\/\d{3,4} - reject
 ^https:\/\/fuss10.elemecdn.com\/.+\.mp4 - reject
+^https?:\/\/cube\.elemecdn\.com\/\w\/\w{2}\/\w+mp4\.mp4\? - reject
+^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_1\d{3},h_2\d{3}\/format,webp\/ - reject
+^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_6\d{2},h_8\d{2}\/format,webp\/ - reject
+^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_\d{3},h_\d{4}\/format,webp\/ - reject
+^https:\/\/(nr-op|cube)\.elemecdn\.com\/.+\.jpeg\?x-oss-process=image\/resize,m_fill,w_\d{4,},h_\d{4,}\/($|format,webp\/$) - reject
 ^https:\/\/www1.elecfans.com\/www\/delivery - reject
 
 # 闲鱼 - gw.alicdn.com
@@ -156,4 +163,4 @@
 广告联盟=type=http-response,pattern=^https:\/\/((api-access\.pangolin-sdk-toutiao|is\.snssdk)\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/adsense.js
 
 [MITM]
-hostname = %INSERT%  amdc.m.taobao.com,acs.m.taobao.com,guide-acs.m.taobao.com,poplayer.template.alibaba.com,elemecdn.com,fuss10.elemecdn.com,www1.elecfans.com,gw.alicdn.com flowplus.meituan.net,img.meituan.net,s3plus.meituan.net, api.m.jd.com,ms.jr.jd.com, home.mi.com, img-ys011.didistatic.com,conf.diditaxi.com.cn,pt-starimg.didistatic.com,res.xiaojukeji.com,guard.sec.xiaojukeji.com,shop-gw.chengxinyouxuan.com,api.udache.com, gw.aihuishou.com, m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn, api.xueqiu.com,promo.xueqiu.com,xqimg.imedao.com, api.pinduoduo.com,api.yangkeduo.com, mage*.if.qidian.com,qidian.qpic.cn, orders.kfc.com.cn,dynamicad.kfc.com.cn,res.kfc.com.cn, api.mcd.cn, cdn.133.cn,jp.rsscc.com,jt.rsscc.com, app.dewu.com,cdn.poizon.com, maicai.api.ddxq.mobi, ucmp.sf-express.com, mp.weixin.qq.com, api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com, adim.pinduoduo.com,video-dsp.pddpic.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,*.gdt.qq.com
+hostname = %INSERT%  amdc.m.taobao.com,acs.m.taobao.com,guide-acs.m.taobao.com,poplayer.template.alibaba.com,elemecdn.com,www1.elecfans.com,gw.alicdn.com flowplus.meituan.net,img.meituan.net,s3plus.meituan.net, api.m.jd.com,ms.jr.jd.com, home.mi.com, img-ys011.didistatic.com,conf.diditaxi.com.cn,pt-starimg.didistatic.com,res.xiaojukeji.com,guard.sec.xiaojukeji.com,shop-gw.chengxinyouxuan.com,api.udache.com, gw.aihuishou.com, m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn, api.xueqiu.com,promo.xueqiu.com,xqimg.imedao.com, api.pinduoduo.com,api.yangkeduo.com, mage*.if.qidian.com,qidian.qpic.cn, orders.kfc.com.cn,dynamicad.kfc.com.cn,res.kfc.com.cn, api.mcd.cn, cdn.133.cn,jp.rsscc.com,jt.rsscc.com, app.dewu.com,cdn.poizon.com, maicai.api.ddxq.mobi, ucmp.sf-express.com, mp.weixin.qq.com, api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com, adim.pinduoduo.com,video-dsp.pddpic.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,*.gdt.qq.com
