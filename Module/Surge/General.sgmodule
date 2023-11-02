@@ -1,5 +1,5 @@
 #!name=General
-#!desc=通用去除应用启动广告
+#!desc=去除常用应用启动广告
 
 #From1:https://raw.githubusercontent.com/fmz200/wool_scripts/main/QuantumultX/rewrite/chongxie.txt
 
@@ -38,6 +38,12 @@ DOMAIN-SUFFIX,163jiasu.com,REJECT-NO-DROP
 ^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.taobao\.idle\.home\.welcome data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 ^https:\/\/guide-acs\.m\.taobao\.com\/gw\/mtop\.cainiao\.adx\.flyad\.getad data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 ^https:\/\/guide-acs\.m\.taobao\.com\/gw\/mtop\.taobao\.(volvo\.secondfloor\.getconfig|wireless\.home\.newface\.awesome\.get) data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# > 闲鱼
+^https?:\/\/gw\.alicdn\.com\/tfs\/.+?\d{4}-\d{4}\/[a-z]{3}$ data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
+^https?:\/\/gw\.alicdn\.com\/tfs\/TB1.+?750-\d{4} data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
+^https?:\/\/heic\.alicdn\.com\/tps\/i4\/.+?\.jpg_1200x1200q90\.jpg_\.heic$ data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
+^https?:\/\/asp\.cntv\.myalicdn\.com\/.+?\?maxbr=850 data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
+^https?:\/\/(?>heic|gw)\.alicdn\.com\/tfs\/TB1.+?-\d{4}-\d{4}\.jpg_1200x1200q90\.jpg_\.\w{3,4}$ data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
 
 # 美团 - flowplus.meituan.net,img.meituan.net,s3plus.meituan.net
 ^http:\/\/wmapi\.meituan\.com\/api\/v7\/(loadInfo|openscreen|startpicture)\? data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
@@ -198,10 +204,13 @@ DOMAIN-SUFFIX,163jiasu.com,REJECT-NO-DROP
 ^https:\/\/(nr-op|cube)\.elemecdn\.com\/.+\.jpeg\?x-oss-process=image\/resize,m_fill,w_\d{4,},h_\d{4,}\/($|format,webp\/$) - reject
 ^https:\/\/www1.elecfans.com\/www\/delivery - reject
 
-# 闲鱼 - gw.alicdn.com
+# 闲鱼 - gw.alicdn.com,heic.alicdn.com,asp.cntv.myalicdn.com
 ^https:\/\/gw\.alicdn\.com\/mt\/ - reject
 ^https:\/\/gw\.alicdn\.com\/tfs\/.+\d{3,4}-\d{4} - reject
 ^https:\/\/gw\.alicdn\.com\/tps\/.+\d{3,4}-\d{4} - reject
+^https?:\/\/(gw|heic)\.alicdn\.com\/\w{2}s\/[\w\/.-]+\.jpg_(9\d{2}|\d{4}) - reject
+^https?:\/\/(gw|heic)\.alicdn\.com\/imgextra\/\w{2}\/[\w!]+-\d-tps-\d{3,4}-\d{4}\.jpg_(1\d{3}|9\d{2})x(1\d{3}|9\d{2})q\d0\.jpg_\.(heic|webp)$ - reject
+^https?:\/\/(gw|heic)\.alicdn\.com\/imgextra\/.+\d{4}-\d{4}\.jpg_(9\d{2}|\d{4}) - reject
 
 # Bilibili初始化处理
 # > 屏蔽IP请求
@@ -296,4 +305,4 @@ DOMAIN-SUFFIX,163jiasu.com,REJECT-NO-DROP
 广告联盟=type=http-response,pattern=^https:\/\/((api-access\.pangolin-sdk-toutiao|is\.snssdk)\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/adsense.js
 
 [MITM]
-hostname = amdc.m.taobao.com,acs.m.taobao.com,guide-acs.m.taobao.com,poplayer.template.alibaba.com,elemecdn.com,www1.elecfans.com,gw.alicdn.com,flowplus.meituan.net,img.meituan.net,s3plus.meituan.net,api.m.jd.com,ms.jr.jd.com,home.mi.com,img-ys011.didistatic.com,conf.diditaxi.com.cn,pt-starimg.didistatic.com,res.xiaojukeji.com,guard.sec.xiaojukeji.com,shop-gw.chengxinyouxuan.com,api.udache.com,gw.aihuishou.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,xqimg.imedao.com,api.pinduoduo.com,adim.pinduoduo.com,video-dsp.pddpic.com,api.yangkeduo.com,mage*.if.qidian.com,qidian.qpic.cn,res.kfc.com.cn,api.mcd.cn,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,app.dewu.com,cdn.poizon.com,maicai.api.ddxq.mobi,ucmp.sf-express.com,mp.weixin.qq.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,*.gdt.qq.com,app.bilibili.com,api.bilibili.com,api.live.bilibili.com,grpc.biliapi.net,*.amap.com,pages.xiaohongshu.com,www.xiaohongshu.com,edith.xiaohongshu.com,referee.xiaohongshu.com,interface*.music.163.com, ipv4.music.163.com, iadmusicmatvideo.music.126.net
+hostname = amdc.m.taobao.com,acs.m.taobao.com,guide-acs.m.taobao.com,poplayer.template.alibaba.com,elemecdn.com,www1.elecfans.com,gw.alicdn.com,heic.alicdn.com,asp.cntv.myalicdn.com,flowplus.meituan.net,img.meituan.net,s3plus.meituan.net,api.m.jd.com,ms.jr.jd.com,home.mi.com,img-ys011.didistatic.com,conf.diditaxi.com.cn,pt-starimg.didistatic.com,res.xiaojukeji.com,guard.sec.xiaojukeji.com,shop-gw.chengxinyouxuan.com,api.udache.com,gw.aihuishou.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,xqimg.imedao.com,api.pinduoduo.com,adim.pinduoduo.com,video-dsp.pddpic.com,api.yangkeduo.com,mage*.if.qidian.com,qidian.qpic.cn,res.kfc.com.cn,api.mcd.cn,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,app.dewu.com,cdn.poizon.com,maicai.api.ddxq.mobi,ucmp.sf-express.com,mp.weixin.qq.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,*.gdt.qq.com,app.bilibili.com,api.bilibili.com,api.live.bilibili.com,grpc.biliapi.net,*.amap.com,pages.xiaohongshu.com,www.xiaohongshu.com,edith.xiaohongshu.com,referee.xiaohongshu.com,interface*.music.163.com, ipv4.music.163.com, iadmusicmatvideo.music.126.net
