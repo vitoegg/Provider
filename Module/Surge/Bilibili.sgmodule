@@ -3,6 +3,10 @@
 
 #From:https://raw.githubusercontent.com/ddgksf2013/Rewrite/master/AdBlock/Bilibili.conf
 
+[Rule]
+DOMAIN,mall.bilibili.com,DIRECT
+DOMAIN,passport.bilibili.com,DIRECT
+
 [Map Local]
 # 开屏广告
 ^https://app.bilibili.com/x/v2/splash/show data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
@@ -14,6 +18,9 @@
 ^https?:\/\/api\.bilibili\.com\/x\/vip\/ads\/material\/report data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 # > 小卡片广告
 ^https://api.bilibili.com/pgc/season/player/cards data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# > 可能的一些推广(beta)
+^https?:\/\/api\.bili(bili\.com|api\.net)\/pgc\/season\/app\/related\/recommend\? data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+
 
 [URL Rewrite]
 # Bilibili初始化处理
@@ -27,7 +34,7 @@
 开屏去广告 = type=http-response,pattern=^https:\/\/app\.bilibili\.com\/x\/v2\/splash\/(brand\/list|event\/list2|list|show)\?,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/RuCu6/QuanX/main/Scripts/bilibili/bili.js
 
 # 点播页广告
-商品推广 = type=http-response,pattern=^https?:\/\/api\.bili(api|bili)\.(net|com)\/pgc\/season\/app\/related\/recommend\?,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+商品推广 = type=http-response,pattern=^https:\/\/(grpc\.biliapi\.net|app\.bilibili\.com)\/bilibili\.app\.(view|viewunite)\.v1\.View\/(View|ViewProgress)$,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
 
 # 直播页广告
 普通广告 = type=http-response,pattern=^https?:\/\/api\.live\.bilibili\.com\/xlive\/app-room\/v1\/index\/getInfoByRoom,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
@@ -35,8 +42,7 @@
 
 # 频道页广告
 推荐频道 = type=http-response,pattern=^https?:\/\/app\.bilibili\.com\/x\/v2\/feed\/index,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
-动画频道 = type=http-response,pattern=^https?:\/\/api\.(bilibili|biliapi)\.(com|net)\/pgc\/page\/bangumi,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
-影视频道 = type=http-response,pattern=^https?:\/\/api\.(bilibili|biliapi)\.(com|net)\/pgc\/page\/cinema\/tab\?,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+影视频道 = type=http-response,pattern=^https:\/\/api\.bilibili\.com\/pgc\/page\/(bangumi|cinema\/tab\?),requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
 直播频道 = type=http-response,pattern=^https?:\/\/api\.live\.bilibili\.com\/xlive\/app-interface\/v2\/index\/feed,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
 
 # Tab优化
@@ -46,4 +52,4 @@
 青少年 = type=http-response,pattern=^https:\/\/(grpc\.biliapi\.net|app\.bilibili\.com)\/bilibili\.app\.interface\.v1\.Teenagers\/ModeStatus,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_proto_beta.js
 
 [MITM]
-hostname = -broadcast.chat.bilibili.com, -*cdn*.biliapi.net, -*tracker*.biliapi.net, app.bilibili.com, api.live.bilibili.com, *.bilibili.com, *.bilibili.*, grpc.biliapi.net,*biliapi.net
+hostname = app.bilibili.com,api.bilibili.com,api.live.bilibili.com,grpc.biliapi.net
