@@ -4,13 +4,22 @@
 #From1:https://raw.githubusercontent.com/fmz200/wool_scripts/main/QuantumultX/rewrite/chongxie.txt
 
 [Rule]
-#Bilibili
+# Bilibili
 DOMAIN,mall.bilibili.com,DIRECT
 DOMAIN,passport.bilibili.com,DIRECT
-#京东
+
+# 京东
 DOMAIN,dns.jd.com,REJECT
 IP-CIDR,101.124.19.122/32,REJECT,no-resolve
 IP-CIDR6,2402:db40:5100:1011::5/128,REJECT,no-resolve
+
+# 网易云音乐
+DOMAIN,iadmusicmat.music.126.net,REJECT-NO-DROP
+DOMAIN,iadmat.nosdn.127.net,REJECT-NO-DROP
+DOMAIN,iadmatapk.nosdn.127.net,REJECT-NO-DROP
+DOMAIN,httpdns.n.netease.com,REJECT-NO-DROP
+DOMAIN,gdt.qq.com,REJECT-NO-DROP
+DOMAIN-SUFFIX,163jiasu.com,REJECT-NO-DROP
 
 [Map Local]
 # 高铁管家 - cdn.133.cn,jp.rsscc.com,jt.rsscc.com
@@ -69,6 +78,44 @@ IP-CIDR6,2402:db40:5100:1011::5/128,REJECT,no-resolve
 ^https://api.bilibili.com/pgc/season/player/cards data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 # > 可能的一些推广(beta)
 ^https?:\/\/api\.bili(bili\.com|api\.net)\/pgc\/season\/app\/related\/recommend\? data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+
+# 高德地图
+# > 搜索框 | 左下天气
+^https?:\/\/.*\.amap\.com\/ws\/(shield\/scene\/recommend|valueadded\/weather) data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# > Tip请求，如招聘代驾的广告等
+^https?:\/\/.*\.amap\.com\/ws\/boss\/order_web\/\w{8}_information data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
+
+# 小红书
+# > 小红书_通用广告请求
+^https?:\/\/www\.xiaohongshu\.com\/api\/sns\/v\d\/(tag\/)?ads data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# > 小红书_隐私屏蔽
+^https?:\/\/referee\.xiaohongshu\.com\/v\d\/stateReport data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# > 小红书_Switches
+^https?:\/\/pages\.xiaohongshu\.com\/data\/native\/matrix_switches data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# > 小红书_青少年请求
+^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/user\/teenager\/status data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# > 小红书_启动引导
+^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/guide\/home_guide data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# > 惊喜弹窗
+^https:\/\/edith\.xiaohongshu\.com\/api\/sns\/v1\/surprisebox\/(get_style|open|submit_action) data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+^https:\/\/www\.xiaohongshu\.com\/api\/marketing\/box\/trigger\? data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+^https:\/\/www\.xiaohongshu\.com\/api\/sns\/v1\/ads\/resource\? data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+
+# 网易云音乐
+# > 通用广告
+^http:\/\/iadmusicmatvideo\.music\.126\.net data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject.mp4"
+^https?:\/\/interface3?\.music\.163\.com\/eapi\/(community\/friends\/fans-group\/artist\/group\/get|user\/sub\/artist|music\/songshare\/text\/recommend\/get|mine\/applet\/redpoint|resniche\/position\/play\/new\/get) data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# (评论区｜评论右上角热评馆｜播放页评论)｜回复
+^https?:\/\/interface3?\.music\.163.com\/eapi\/(comment\/(feed\/inserted|hotcomment\/collect|tips\/v2\/get)|v\d\/content\/exposure\/comment\/banner) data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# 播放页live或直播｜(首页免或vip图标｜小提示)
+^https?:\/\/interface3?\.music\.163.com\/eapi\/(mlivestream\/entrance\/playpage|link\/(position\/show\/(strategy|resource)|scene\/show)) data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# 黑胶弹窗｜会员试用
+^https?:\/\/interface3?\.music\.163.com\/eapi\/(vipcenter\/tspopup\/get|vipauth\/app\/auth|music-vip-membership\/client\/vip\/info|zone\/songplay\/entry\/get) data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# 搜索页热搜卡片｜猜你喜欢｜我的应用下方提醒
+^https?:\/\/interface3?\.music\.163.com\/w?e?api\/(search\/(chart|default|rcmd\/keyword|specialkeyword)|(resource-exposure\/|middle\/clientcfg\/config)|activity\/bonus\/playpage\/time\/query) data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# 侧边栏
+^https?:\/\/interface3?\.music\.163\.com\/eapi\/(side-bar\/mini-program\/music-service\/account|delivery\/batch-deliver) data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+^https?:\/\/(ipv4|interface3?)\.music\.163.com\/eapi\/ad data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 
 [URL Rewrite]
 # 广告联盟
@@ -162,6 +209,36 @@ IP-CIDR6,2402:db40:5100:1011::5/128,REJECT,no-resolve
 # > 屏蔽DefaultWord
 ^https?:\/\/(app\.bilibili\.com|grpc\.biliapi\.net)\/bilibili\.app\.interface\.v1\.Search\/Default - reject
 
+# 高德地图
+# > 通用广告请求
+^https?:\/\/m5\.amap\.com\/ws\/asa\/ads_attribution - reject
+
+# 网易云音乐
+# > 网易云_评论弹窗
+^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/music\/partner\/picked\/user\/top - reject
+# > 网易云_位置请求
+^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/lbs\/gpsStatus\/upload - reject
+# > 网易云_每日推荐Tips
+^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/homepage\/daily\/song\/elf\/notice - reject
+# > 网易云_通用广告请求
+^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/ad\/ - reject
+# > 网易云_屏蔽更新
+^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/ios\/upgrade - reject
+# > 网易云_LIKE音乐上方推广
+^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/link\/position\/show\/resource - reject
+# > 网易云_歌单上方推广
+^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?eapi\/resource-exposure\/config - reject
+# > 网易云_搜索框专词
+^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/search\/specialkeyword - reject
+# > 网易云_搜索框推荐
+^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/search\/default - reject
+# > 网易云_搜索框填词
+^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/search\/default\/keyword - reject
+# > 网易云_评论区右上角
+^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/comment\/hotcomment\/collect - reject
+# > 网易云_活动推广
+^https?:\/\/interface(\d)?\.music\.163\.com\/w?e?api\/resource-exposure\/activity\/config - reject
+
 [Script]
 #Bilibili
 # >开屏广告 - app.bilibili.com
@@ -192,8 +269,31 @@ IP-CIDR6,2402:db40:5100:1011::5/128,REJECT,no-resolve
 # >起点读书 - magev6.if.qidian.com
 起点去广告=type=http-response,pattern=^https:\/\/magev6\.if\.qidian\.com\/argus\/api\/(v4\/client\/getsplashscreen|v2\/deeplink\/geturl|v1\/(client\/getconf|bookshelf\/getHoverAdv|adv\/getadvlistbatch\?positions=iOS_tab|dailyrecommend\/getdailyrecommend)),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/qidian.js
 
+# 高德地图
+# >搜索框热词 | 附近页面 | 我的页面 | 首页右中
+高德地图1=type=http-response,pattern=^https?:\/\/.*\.amap\.com\/ws\/shield\/(search\/(new_hotword|nearbyrec_smart)|dsp\/profile\/index\/nodefaas|frogserver\/aocs\/updatable),requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/amap.js
+# >开屏广告 | 首页底部 | 底栏角标
+高德地图2=type=http-response,pattern=^https?:\/\/.*\.amap\.com\/ws\/(valueadded\/alimama\/splash_screen|faas\/amap-navigation\/main-page|message\/notice\/list),requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/amap.js
+# >打车页面
+高德地图3=type=http-response,pattern=^https?:\/\/.*\.amap\.com\/ws\/promotion-web\/resource,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/amap.js
+# >首页顶部横幅
+高德地图4=type=http-response,pattern=^https?:\/\/.*\.amap\.com\/ws\/msgbox\/pull,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/amap.js
+
+# 小红书
+启动处理=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/system_service\/config\?,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+开屏广告=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/system_service\/splash_config,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+首页瀑布流=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/homefeed\?,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+热搜发现=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/search\/hot_list,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+默认填词=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/search\/hint,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+去除购物=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/homefeed\/categories,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+猜你想搜=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/search\/trending,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+商品推广=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/note\/widgets,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+短视频去水印=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/note\/redtube\?,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+信息流去水印=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/note\/videofeed\?,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+图片去水印=type=http-response,pattern=^https?:\/\/edith\.xiaohongshu\.com\/api\/sns\/v\d\/note\/feed\?,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/redbook_json.js
+
 # > 广告联盟 - api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com
 广告联盟=type=http-response,pattern=^https:\/\/((api-access\.pangolin-sdk-toutiao|is\.snssdk)\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/adsense.js
 
 [MITM]
-hostname = amdc.m.taobao.com,acs.m.taobao.com,guide-acs.m.taobao.com,poplayer.template.alibaba.com,elemecdn.com,www1.elecfans.com,gw.alicdn.com,flowplus.meituan.net,img.meituan.net,s3plus.meituan.net,api.m.jd.com,ms.jr.jd.com,home.mi.com,img-ys011.didistatic.com,conf.diditaxi.com.cn,pt-starimg.didistatic.com,res.xiaojukeji.com,guard.sec.xiaojukeji.com,shop-gw.chengxinyouxuan.com,api.udache.com,gw.aihuishou.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,xqimg.imedao.com,api.pinduoduo.com,adim.pinduoduo.com,video-dsp.pddpic.com,api.yangkeduo.com,mage*.if.qidian.com,qidian.qpic.cn,res.kfc.com.cn,api.mcd.cn,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,app.dewu.com,cdn.poizon.com,maicai.api.ddxq.mobi,ucmp.sf-express.com,mp.weixin.qq.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,*.gdt.qq.com,app.bilibili.com,api.bilibili.com,api.live.bilibili.com,grpc.biliapi.net
+hostname = amdc.m.taobao.com,acs.m.taobao.com,guide-acs.m.taobao.com,poplayer.template.alibaba.com,elemecdn.com,www1.elecfans.com,gw.alicdn.com,flowplus.meituan.net,img.meituan.net,s3plus.meituan.net,api.m.jd.com,ms.jr.jd.com,home.mi.com,img-ys011.didistatic.com,conf.diditaxi.com.cn,pt-starimg.didistatic.com,res.xiaojukeji.com,guard.sec.xiaojukeji.com,shop-gw.chengxinyouxuan.com,api.udache.com,gw.aihuishou.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,xqimg.imedao.com,api.pinduoduo.com,adim.pinduoduo.com,video-dsp.pddpic.com,api.yangkeduo.com,mage*.if.qidian.com,qidian.qpic.cn,res.kfc.com.cn,api.mcd.cn,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,app.dewu.com,cdn.poizon.com,maicai.api.ddxq.mobi,ucmp.sf-express.com,mp.weixin.qq.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,*.gdt.qq.com,app.bilibili.com,api.bilibili.com,api.live.bilibili.com,grpc.biliapi.net,*.amap.com,pages.xiaohongshu.com,www.xiaohongshu.com,edith.xiaohongshu.com,referee.xiaohongshu.com,interface*.music.163.com, ipv4.music.163.com, iadmusicmatvideo.music.126.net
