@@ -4,6 +4,10 @@
 #From1:https://raw.githubusercontent.com/fmz200/wool_scripts/main/QuantumultX/rewrite/chongxie.txt
 
 [Rule]
+#Bilibili
+DOMAIN,mall.bilibili.com,DIRECT
+DOMAIN,passport.bilibili.com,DIRECT
+#京东
 DOMAIN,dns.jd.com,REJECT
 IP-CIDR,101.124.19.122/32,REJECT,no-resolve
 IP-CIDR6,2402:db40:5100:1011::5/128,REJECT,no-resolve
@@ -53,6 +57,18 @@ IP-CIDR6,2402:db40:5100:1011::5/128,REJECT,no-resolve
 
 # 米家 - home.mi.com
 ^https:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(banner|carousel\/banners|myTab|openingBanner) data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+
+# Bilibili
+# > 开屏广告
+^https://app.bilibili.com/x/v2/splash/show data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# > 浮窗广告
+^https?:\/\/api\.bilibili\.com\/pgc\/activity\/deliver\/material\/receive data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# > Material_Ad
+^https?:\/\/api\.bilibili\.com\/x\/vip\/ads\/material\/report data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# > 小卡片广告
+^https://api.bilibili.com/pgc/season/player/cards data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+# > 可能的一些推广(beta)
+^https?:\/\/api\.bili(bili\.com|api\.net)\/pgc\/season\/app\/related\/recommend\? data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 
 [URL Rewrite]
 # 广告联盟
@@ -140,8 +156,31 @@ IP-CIDR6,2402:db40:5100:1011::5/128,REJECT,no-resolve
 ^https:\/\/gw\.alicdn\.com\/tfs\/.+\d{3,4}-\d{4} - reject
 ^https:\/\/gw\.alicdn\.com\/tps\/.+\d{3,4}-\d{4} - reject
 
+# Bilibili初始化处理
+# > 屏蔽IP请求
+^https?:\/\/app\.bilibili\.com\/x\/resource\/ip - reject
+# > 屏蔽DefaultWord
+^https?:\/\/(app\.bilibili\.com|grpc\.biliapi\.net)\/bilibili\.app\.interface\.v1\.Search\/Default - reject
 
 [Script]
+#Bilibili
+# >开屏广告 - app.bilibili.com
+开屏去广告 = type=http-response,pattern=^https:\/\/app\.bilibili\.com\/x\/v2\/splash\/(brand\/list|event\/list2|list|show)\?,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/RuCu6/QuanX/main/Scripts/bilibili/bili.js
+# >点播页广告
+商品推广 = type=http-response,pattern=^https:\/\/(grpc\.biliapi\.net|app\.bilibili\.com)\/bilibili\.app\.(view|viewunite)\.v1\.View\/(View|ViewProgress)$,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+# >直播页广告
+普通广告 = type=http-response,pattern=^https?:\/\/api\.live\.bilibili\.com\/xlive\/app-room\/v1\/index\/getInfoByRoom,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+浮窗广告 = type=http-response,pattern=^https?:\/\/api\.live\.bilibili\.com\/xlive\/e-commerce-interface\/v\d\/ecommerce-user\/get_shopping_info\?,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+# >频道页广告
+推荐频道 = type=http-response,pattern=^https?:\/\/app\.bilibili\.com\/x\/v2\/feed\/index,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+影视频道 = type=http-response,pattern=^https:\/\/api\.bilibili\.com\/pgc\/page\/(bangumi|cinema\/tab\?),requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+直播频道 = type=http-response,pattern=^https?:\/\/api\.live\.bilibili\.com\/xlive\/app-interface\/v2\/index\/feed,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+# >Tab优化
+首页Tab = type=http-response,pattern=^https:\/\/app\.bilibili\.com\/x\/resource\/(top\/activity|show\/tab\/v2)\?,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/RuCu6/QuanX/main/Scripts/bilibili/bili.js
+动态Tab = type=http-response,pattern=^https?:\/\/(app\.bilibili\.com|grpc\.biliapi\.net)\/bilibili\.app\.dynamic\.v2\.Dynamic\/Dyn(All|Video)$,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_proto_beta.js
+我的Tab = type=http-response,pattern=^https:\/\/app\.bilibili\.com\/x\/v2\/account\/(mine(\/ipad)?|myinfo)\?,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/RuCu6/QuanX/main/Scripts/bilibili/bili.js
+青少年 = type=http-response,pattern=^https:\/\/(grpc\.biliapi\.net|app\.bilibili\.com)\/bilibili\.app\.interface\.v1\.Teenagers\/ModeStatus,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_proto_beta.js
+
 # >京东 - api.m.jd.com
 京东去广告=type=http-response,pattern=^https:\/\/api\.m\.jd\.com\/client\.action\?functionId=(personinfoBusiness|start),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/RuCu6/QuanX/main/Scripts/myBlockAds.js
 
@@ -157,4 +196,4 @@ IP-CIDR6,2402:db40:5100:1011::5/128,REJECT,no-resolve
 广告联盟=type=http-response,pattern=^https:\/\/((api-access\.pangolin-sdk-toutiao|is\.snssdk)\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/adsense.js
 
 [MITM]
-hostname = amdc.m.taobao.com,acs.m.taobao.com,guide-acs.m.taobao.com,poplayer.template.alibaba.com,elemecdn.com,www1.elecfans.com,gw.alicdn.com,flowplus.meituan.net,img.meituan.net,s3plus.meituan.net,api.m.jd.com,ms.jr.jd.com,home.mi.com,img-ys011.didistatic.com,conf.diditaxi.com.cn,pt-starimg.didistatic.com,res.xiaojukeji.com,guard.sec.xiaojukeji.com,shop-gw.chengxinyouxuan.com,api.udache.com,gw.aihuishou.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,xqimg.imedao.com,api.pinduoduo.com,adim.pinduoduo.com,video-dsp.pddpic.com,api.yangkeduo.com,mage*.if.qidian.com,qidian.qpic.cn,res.kfc.com.cn,api.mcd.cn,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,app.dewu.com,cdn.poizon.com,maicai.api.ddxq.mobi,ucmp.sf-express.com,mp.weixin.qq.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,*.gdt.qq.com
+hostname = amdc.m.taobao.com,acs.m.taobao.com,guide-acs.m.taobao.com,poplayer.template.alibaba.com,elemecdn.com,www1.elecfans.com,gw.alicdn.com,flowplus.meituan.net,img.meituan.net,s3plus.meituan.net,api.m.jd.com,ms.jr.jd.com,home.mi.com,img-ys011.didistatic.com,conf.diditaxi.com.cn,pt-starimg.didistatic.com,res.xiaojukeji.com,guard.sec.xiaojukeji.com,shop-gw.chengxinyouxuan.com,api.udache.com,gw.aihuishou.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,xqimg.imedao.com,api.pinduoduo.com,adim.pinduoduo.com,video-dsp.pddpic.com,api.yangkeduo.com,mage*.if.qidian.com,qidian.qpic.cn,res.kfc.com.cn,api.mcd.cn,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,app.dewu.com,cdn.poizon.com,maicai.api.ddxq.mobi,ucmp.sf-express.com,mp.weixin.qq.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,*.gdt.qq.com,app.bilibili.com,api.bilibili.com,api.live.bilibili.com,grpc.biliapi.net
