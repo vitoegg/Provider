@@ -9,9 +9,9 @@ DOMAIN,mall.bilibili.com,DIRECT
 DOMAIN,passport.bilibili.com,DIRECT
 
 # 京东
-DOMAIN,dns.jd.com,REJECT
-IP-CIDR,101.124.19.122/32,REJECT,no-resolve
-IP-CIDR6,2402:db40:5100:1011::5/128,REJECT,no-resolve
+DOMAIN,dns.jd.com,REJECT-NO-DROP
+IP-CIDR,101.124.19.122/32,REJECT-NO-DROP,no-resolve
+IP-CIDR6,2402:db40:5100:1011::5/128,REJECT-NO-DROP,no-resolve
 
 # 网易云音乐
 DOMAIN,iadmusicmat.music.126.net,REJECT-NO-DROP
