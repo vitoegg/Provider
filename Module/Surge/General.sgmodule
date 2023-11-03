@@ -45,7 +45,7 @@ DOMAIN-SUFFIX,163jiasu.com,REJECT-NO-DROP
 ^https?:\/\/asp\.cntv\.myalicdn\.com\/.+?\?maxbr=850 data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
 ^https?:\/\/(?>heic|gw)\.alicdn\.com\/tfs\/TB1.+?-\d{4}-\d{4}\.jpg_1200x1200q90\.jpg_\.\w{3,4}$ data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
 
-# 美团 - flowplus.meituan.net,img.meituan.net,s3plus.meituan.net,p*.meituan.net
+# 美团 - flowplus.meituan.net,s3plus.meituan.net,img.meituan.net,p*.meituan.net,wmapi.meituan.com,peisongapi.meituan.com
 ^https:\/\/flowplus\.meituan\.net\/v1\/mss_\w+\/linglong\/\d+\.jpg data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 ^https:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(brandcpt-vedio|waimai-alita)\/\w+\.zip$ data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 ^https?:\/\/img\.meituan\.net\/(?>adunion|display|midas)\/.+?\.(gif|jpg|jpg\.webp)$ data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
@@ -201,7 +201,7 @@ DOMAIN-SUFFIX,163jiasu.com,REJECT-NO-DROP
 # 高铁管家 - cdn.133.cn,jp.rsscc.com,jt.rsscc.com
 ^https?:\/\/[a-z]*\.rsscc\.com\/[a-z]*\/adver - reject
 
-# 美团 - www.meituan.net,wmapi.meituan.net,apimobile.meituan.net,p*.meituan.net
+# 美团 - www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,p*.meituan.net
 # > 美团App 
 ^https?:\/\/s3plus\.meituan\.net\/.+?\/linglong\/ - reject
 ^https?:\/\/www\.meituan\.com\/api\/v\d\/appstatus\? - reject
@@ -330,4 +330,4 @@ DOMAIN-SUFFIX,163jiasu.com,REJECT-NO-DROP
 广告联盟=type=http-response,pattern=^https:\/\/((api-access\.pangolin-sdk-toutiao|is\.snssdk)\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/app2smile/rules/master/js/adsense.js
 
 [MITM]
-hostname = amdc.m.taobao.com,acs.m.taobao.com,guide-acs.m.taobao.com,poplayer.template.alibaba.com,cube.elemecdn.com,nr-op.elemecdn.com,fuss10.elemecdn.com,elemecdn.com,www1.elecfans.com,gw.alicdn.com,heic.alicdn.com,asp.cntv.myalicdn.com,flowplus.meituan.net,img.meituan.net,s3plus.meituan.net,www.meituan.net,wmapi.meituan.net,apimobile.meituan.net,p*.meituan.net,api.m.jd.com,ms.jr.jd.com,home.mi.com,img-ys011.didistatic.com,conf.diditaxi.com.cn,pt-starimg.didistatic.com,res.xiaojukeji.com,guard.sec.xiaojukeji.com,shop-gw.chengxinyouxuan.com,api.udache.com,gw.aihuishou.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,xqimg.imedao.com,api.pinduoduo.com,adim.pinduoduo.com,video-dsp.pddpic.com,api.yangkeduo.com,mage*.if.qidian.com,qidian.qpic.cn,res.kfc.com.cn,api.mcd.cn,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,app.dewu.com,cdn.poizon.com,maicai.api.ddxq.mobi,ucmp.sf-express.com,mp.weixin.qq.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,*.gdt.qq.com,app.bilibili.com,api.bilibili.com,api.live.bilibili.com,grpc.biliapi.net,*.amap.com,pages.xiaohongshu.com,www.xiaohongshu.com,edith.xiaohongshu.com,referee.xiaohongshu.com,interface*.music.163.com, ipv4.music.163.com, iadmusicmatvideo.music.126.net
+hostname = amdc.m.taobao.com,acs.m.taobao.com,guide-acs.m.taobao.com,poplayer.template.alibaba.com,cube.elemecdn.com,nr-op.elemecdn.com,fuss10.elemecdn.com,elemecdn.com,www1.elecfans.com,gw.alicdn.com,heic.alicdn.com,asp.cntv.myalicdn.com,flowplus.meituan.net,s3plus.meituan.net,img.meituan.net,p*.meituan.net,wmapi.meituan.com,peisongapi.meituan.com,www.meituan.com,apimobile.meituan.com,api.m.jd.com,ms.jr.jd.com,home.mi.com,img-ys011.didistatic.com,conf.diditaxi.com.cn,pt-starimg.didistatic.com,res.xiaojukeji.com,guard.sec.xiaojukeji.com,shop-gw.chengxinyouxuan.com,api.udache.com,gw.aihuishou.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.xueqiu.com,promo.xueqiu.com,xqimg.imedao.com,api.pinduoduo.com,adim.pinduoduo.com,video-dsp.pddpic.com,api.yangkeduo.com,mage*.if.qidian.com,qidian.qpic.cn,res.kfc.com.cn,api.mcd.cn,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,app.dewu.com,cdn.poizon.com,maicai.api.ddxq.mobi,ucmp.sf-express.com,mp.weixin.qq.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com,*.pglstatp-toutiao.com,adsmind.gdtimg.com,pgdt.gtimg.cn,us.l.qq.com,*.gdt.qq.com,app.bilibili.com,api.bilibili.com,api.live.bilibili.com,grpc.biliapi.net,*.amap.com,pages.xiaohongshu.com,www.xiaohongshu.com,edith.xiaohongshu.com,referee.xiaohongshu.com,interface*.music.163.com, ipv4.music.163.com, iadmusicmatvideo.music.126.net
