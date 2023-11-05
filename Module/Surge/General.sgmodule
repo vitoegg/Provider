@@ -209,7 +209,7 @@ DOMAIN-SUFFIX,163jiasu.com,REJECT-NO-DROP
 ^https:\/\/gw\.alicdn\.com\/mt\/ - reject
 ^https:\/\/gw\.alicdn\.com\/tfs\/.+\d{3,4}-\d{4} - reject
 ^https:\/\/gw\.alicdn\.com\/tps\/.+\d{3,4}-\d{4} - reject
-^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.taobao\.idle\.home\.welcome - reject
+^http:\/\/amdc\.m\.taobao\.com\/amdc\/mobileDispatch - reject
 
 # Bilibili初始化处理
 # > 屏蔽IP请求
