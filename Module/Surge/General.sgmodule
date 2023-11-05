@@ -35,6 +35,7 @@ DOMAIN-SUFFIX,163jiasu.com,REJECT-NO-DROP
 ^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.film\.mtopadvertiseapi\.queryadvertise data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 ^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.o2o\.ad\.gateway\.get data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 ^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.activity\.querytmsresources data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
+^https:\/\/guide-acs\.m\.taobao\.com\/gw\/mtop\.cainiao\.adx\.flyad\.getad data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 ^https:\/\/heic\.alicdn\.com\/imgextra\/i\d\/\d*\/?[\w!]+-\d-(octopus|tps-1125-1602|tps-1080-1920)\.(jp|pn)g_(1\d{3}|9\d{2})x(1\d{3}|9\d{2})q[59]0 data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 # > 淘宝
 ^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.taobao\.idle\.home\.welcome data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
@@ -46,13 +47,10 @@ DOMAIN-SUFFIX,163jiasu.com,REJECT-NO-DROP
 
 # 美团 - flowplus.meituan.net,s3plus.meituan.net,img.meituan.net,wmapi.meituan.com,peisongapi.meituan.com
 ^https:\/\/flowplus\.meituan\.net\/v1\/mss_\w+\/linglong\/\d+\.jpg data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
-#^https?:\/\/img\.meituan\.net\/(adunion|display|midas)\/\w+\.(gif|jpg|jpg\.webp)$ url reject
-
 # > 美团外卖
 ^https:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(brandcpt-vedio|waimai-alita)\/\w+\.zip$ data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 ^http:\/\/wmapi\.meituan\.com\/api\/v7\/(loadInfo|openscreen|startpicture)\? data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 ^https:\/\/img\.meituan\.net\/bizad\/bizad_brandCpt_\d+\.jpg data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
-#^https?:\/\/img\.meituan\.net\/(bizad|brandCpt)\/\w+\.(png|jpg) data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 # > 大众点评
 ^https:\/\/img\.meituan\.net\/dpmobile\/.+93241\.png data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 ^https?:\/\/img\.meituan\.net\/dpmobile\/.*.(gif|jpg) data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
@@ -250,7 +248,7 @@ DOMAIN-SUFFIX,163jiasu.com,REJECT-NO-DROP
 # >开屏广告 - app.bilibili.com
 开屏去广告 = type=http-response,pattern=^https:\/\/app\.bilibili\.com\/x\/v2\/splash\/(brand\/list|event\/list2|list|show)\?,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/RuCu6/QuanX/main/Scripts/bilibili/bili.js
 # >点播页广告
-商品推广 = type=http-response,pattern=^https:\/\/(grpc\.biliapi\.net|app\.bilibili\.com)\/bilibili\.app\.(view|viewunite)\.v1\.View\/(View|ViewProgress)$,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
+商品推广 = type=http-response,pattern=^https:\/\/(grpc\.biliapi\.net|app\.bilibili\.com)\/bilibili\.app\.(view|viewunite)\.v1\.View\/(View|ViewProgress)$,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/RuCu6/QuanX/main/Scripts/bilibili/biliProto.js
 # >直播页广告
 普通广告 = type=http-response,pattern=^https?:\/\/api\.live\.bilibili\.com\/xlive\/app-room\/v1\/index\/getInfoByRoom,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
 浮窗广告 = type=http-response,pattern=^https?:\/\/api\.live\.bilibili\.com\/xlive\/e-commerce-interface\/v\d\/ecommerce-user\/get_shopping_info\?,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
@@ -260,9 +258,9 @@ DOMAIN-SUFFIX,163jiasu.com,REJECT-NO-DROP
 直播频道 = type=http-response,pattern=^https?:\/\/api\.live\.bilibili\.com\/xlive\/app-interface\/v2\/index\/feed,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_json.js
 # >Tab优化
 首页Tab = type=http-response,pattern=^https:\/\/app\.bilibili\.com\/x\/resource\/(top\/activity|show\/tab\/v2)\?,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/RuCu6/QuanX/main/Scripts/bilibili/bili.js
-动态Tab = type=http-response,pattern=^https?:\/\/(app\.bilibili\.com|grpc\.biliapi\.net)\/bilibili\.app\.dynamic\.v2\.Dynamic\/Dyn(All|Video)$,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_proto_beta.js
+动态Tab = type=http-response,pattern=^https:\/\/(app\.bilibili\.com|grpc\.biliapi\.net)\/bilibili\.app\.dynamic\.v2\.Dynamic\/DynAll,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/RuCu6/QuanX/main/Scripts/bilibili/biliProto.js
 我的Tab = type=http-response,pattern=^https:\/\/app\.bilibili\.com\/x\/v2\/account\/(mine(\/ipad)?|myinfo)\?,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/RuCu6/QuanX/main/Scripts/bilibili/bili.js
-青少年 = type=http-response,pattern=^https:\/\/(grpc\.biliapi\.net|app\.bilibili\.com)\/bilibili\.app\.interface\.v1\.Teenagers\/ModeStatus,requires-body=1,max-size=0,script-path=https://github.com/ddgksf2013/Scripts/raw/master/bilibili_proto_beta.js
+青少年 = type=http-response,pattern=^https:\/\/(grpc\.biliapi\.net|app\.bilibili\.com)\/bilibili\.app\.interface\.v1\.Teenagers\/ModeStatus,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/RuCu6/QuanX/main/Scripts/bilibili/biliProto.js
 
 # >京东 - api.m.jd.com
 京东去广告=type=http-response,pattern=^https:\/\/api\.m\.jd\.com\/client\.action\?functionId=(personinfoBusiness|start),requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/RuCu6/QuanX/main/Scripts/myBlockAds.js
