@@ -43,7 +43,8 @@ DOMAIN-SUFFIX,163jiasu.com,REJECT-NO-DROP
 ^https:\/\/guide-acs\.m\.taobao\.com\/gw\/mtop\.cainiao\.adx\.flyad\.getad data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
 # > 飞猪
 ^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.screen\.(allresource|predict) data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
-
+# > 盒马
+^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.wdk\.render\.querysinglepage\/3\.0 data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
 
 # 美团 - flowplus.meituan.net,s3plus.meituan.net,img.meituan.net,wmapi.meituan.com,peisongapi.meituan.com
 ^https:\/\/flowplus\.meituan\.net\/v1\/mss_\w+\/linglong\/\d+\.jpg data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-dict.json"
@@ -64,6 +65,11 @@ DOMAIN-SUFFIX,163jiasu.com,REJECT-NO-DROP
 
 # 得物开屏广告 - cdn.poizon.com
 ^https?:\/\/cdn\.poizon\.com\/node-common\/.*.jpg data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
+
+# 招商银行 - webappcfg.paas.cmbchina.com
+^https?:\/\/webappcfg\.paas\.cmbchina\.com\/v\d\/func\/getmarketconfig data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
+# 掌上生活 - az1mbasecc.bas.cmbchina.com
+^https?:\/\/az1mbasecc\.bas\.cmbchina\.com\/Edge\/api\/mlife\.clientface\.clientservice\.api\.advertiseService\/preCacheAdvertiseSec data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-200.txt"
 
 # 起点读书 - mage.if.qidian.com,qidian.qpic.cn
 ^https?:\/\/qidian\.qpic\.cn\/qidian_common data="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/reject-img.gif"
