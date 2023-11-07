@@ -24,4 +24,8 @@ payload:
   - '+.quora.com'
 
   # > Bard
+  - 'bard.google.com'
   - '+.bard.google.com'
+
+  # X(Grok)
+  - '+.x.ai'
