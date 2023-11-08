@@ -1,4 +1,4 @@
-// 2023-08-24 12:45
+// 2023-11-08
 
 const url = $request.url;
 const header = $request.headers;
@@ -24,3 +24,4 @@ if (url.includes("/amdc/mobileDispatch")) {
   }
 } else {
   $done({});
+}
