@@ -74,7 +74,7 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 ^https?:\/\/p\d{1}\.meituan\.net\/(adunion|display|mmc|wmbanner)\/ reject
 # > 美团外卖
 ^http:\/\/wmapi\.meituan\.com\/api\/v7\/(loadInfo|openscreen|startpicture)\? reject-dict
-^https?:\/\/img\.meituan\.net\/bizad\/.*.(gif|jpg|mp4|jpg\.webp)$ reject-200
+^https:\/\/img\.meituan\.net\/bizad\/bizad_brandCpt_\d+\.(gif|jpg|mp4|jpg\.webp)$ reject-200
 ^http:\/\/s3plus\.meituan\.net\/.*\/brandcpt-vedio\/.*\?time reject
 # > 大众点评
 ^https:\/\/img\.meituan\.net\/dpmobile\/.+93241\.png reject-dict
