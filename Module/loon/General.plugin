@@ -1,0 +1,170 @@
+#!name = 基础广告过滤器
+#!desc = 屏蔽常用的应用广告
+#!openUrl = 
+#!author = Vitoegg
+#!icon = https://gitlab.com/lodepuly/vpn_tool/-/raw/main/Resource/Icon/80px/GitHub.png
+#!date = 2023-11-12 14:03
+
+[Rule]
+# 广告联盟
+DOMAIN, mi.gdt.qq.com, REJECT
+DOMAIN, open.e.kuaishou.com, REJECT
+DOMAIN-SUFFIX, snssdk.com, REJECT
+DOMAIN-KEYWORD, pangolin-sdk-toutiao, REJECT
+DOMAIN-KEYWORD, pglstatp-toutiao, REJECT
+# 通用广告
+DOMAIN-SUFFIX, doubleclick-cn.net, REJECT
+DOMAIN-SUFFIX, doubleclick.net, REJECT
+
+# 字节跳动
+DOMAIN, ad.zijieapi.com, REJECT
+DOMAIN, asiad.byteactivity.com, REJECT
+DOMAIN, asiad.byteactivity12.com, REJECT
+DOMAIN, p3-ad-sign.byteimg.com, REJECT
+DOMAIN, p6-ad-sign.byteimg.com, REJECT
+DOMAIN, p9-ad-sign.byteimg.com, REJECT
+
+# 美团
+DOMAIN, al-log.d.meituan.net, REJECT
+DOMAIN, babel-statistics-android.d.meituan.net, REJECT
+DOMAIN, maplocatesdksnapshot.d.meituan.net, REJECT
+DOMAIN, metrics-picture.d.meituan.net, REJECT
+DOMAIN, route-stats.d.meituan.net, REJECT
+
+# 小米
+DOMAIN, sdkconfig.ad.xiaomi.com, REJECT
+DOMAIN, data.mistat.xiaomi.com, REJECT
+DOMAIN, tracking.intl.miui.com, REJECT
+# 米家
+DOMAIN, sdkconfig.ad.xiaomi.com, REJECT
+
+# 微信小程序去广告通用规则
+DOMAIN,wxsnsdy.wxs.qq.com,REJECT
+DOMAIN,wxsmsdy.video.qq.com,REJECT
+DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
+
+[Rewrite]
+# 饿了么 - elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com
+^https:\/\/elemecdn.com\/.+\/sitemap reject
+^https:\/\/fuss10.elemecdn.com\/.+\/w\/640\/h\/\d{3,4} reject
+^https:\/\/fuss10.elemecdn.com\/.+\/w\/750\/h\/\d{3,4} reject
+^https:\/\/fuss10.elemecdn.com\/.+\.mp4 reject
+^https?:\/\/cube\.elemecdn\.com\/\w\/\w{2}\/\w+mp4\.mp4\? reject
+^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_1\d{3},h_2\d{3}\/format,webp\/ reject
+^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_6\d{2},h_8\d{2}\/format,webp\/ reject
+^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_\d{3},h_\d{4}\/format,webp\/ reject
+^https:\/\/(nr-op|cube)\.elemecdn\.com\/.+\.jpeg\?x-oss-process=image\/resize,m_fill,w_\d{4,},h_\d{4,}\/($|format,webp\/$) reject
+^https:\/\/www1.elecfans.com\/www\/delivery reject
+
+# 美团 - img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com
+# > 美团
+^https?:\/\/img\.meituan\.net\/(?>adunion|display|midas)\/.+?\.(gif|jpg|jpg\.webp)$ reject-200
+^https?:\/\/p\d\.meituan\.net\/wmbanner\/[A-Za-z0-9]+?\.jpg reject-200
+^https?:\/\/p\d\.meituan\.net\/movie\/[A-Za-z0-9]+?\.jpg\?may_covertWebp reject-200
+^https?:\/\/s3plus\.meituan\.net\/.+?\/linglong\/ reject
+^https?:\/\/s3plus\.meituan\.net\/v1\/mss_a002 reject-img
+^https?:\/\/www\.meituan\.com\/api\/v\d\/appstatus\? reject
+^https?:\/\/wmapi\.meituan\.com\/api\/v\d+\/loadInfo\? reject
+^https?:\/\/wmapi\.meituan\.com\/api\/v\d\/startpicture reject
+^https?:\/\/flowplus\.meituan\.net\/v\d\/\w+\/linglong\/\d+\.(gif|jpg|mp4) reject
+^https?:\/\/(s3plus|flowplus)\.meituan\.net\/v\d\/\w+\/linglong\/\w+\.(gif|jpg|mp4) reject
+^https?:\/\/apimobile\.meituan\.com\/appupdate\/mach\/checkUpdate? reject
+^https?:\/\/img\.meituan\.net\/(adunion|display|midas)\/\w+\.(gif|jpg|jpg\.webp)$ reject
+^https?:\/\/p\d.meituan.net\/movie\/.*?\?may_covertWebp reject-img
+^https?:\/\/p\d{1}\.meituan\.net\/(adunion|display|mmc|wmbanner)\/ reject
+# > 美团外卖
+^http:\/\/wmapi\.meituan\.com\/api\/v7\/(loadInfo|openscreen|startpicture)\? reject-dict
+^https?:\/\/img\.meituan\.net\/bizad\/.*.jpg reject-200
+^https?:\/\/img\.meituan\.net\/(bizad|brandCpt)\/\w+\.(png|jpg) reject
+^http:\/\/s3plus\.meituan\.net\/.*\/brandcpt-vedio\/.*\?time reject
+# > 大众点评
+^https:\/\/img\.meituan\.net\/dpmobile\/.+93241\.png reject-dict
+^https?:\/\/img\.meituan\.net\/dpmobile\/.*.(gif|jpg) reject-200
+# > 美团众包
+^https?:\/\/peisongapi\.meituan\.com\/client\/getInitiateImage reject-200
+
+# 微信公众号 - mp.weixin.qq.com
+^https:\/\/mp\.weixin\.qq\.com\/mp\/(cps_product_info|getappmsgad|masonryfeed|relatedarticle)\? reject-dict
+
+# 招商银行 - webappcfg.paas.cmbchina.com
+^https?:\/\/webappcfg\.paas\.cmbchina\.com\/v\d\/func\/getmarketconfig reject-200
+# 掌上生活 - az1mbasecc.bas.cmbchina.com
+^https?:\/\/az1mbasecc\.bas\.cmbchina\.com\/Edge\/api\/mlife\.clientface\.clientservice\.api\.advertiseService\/preCacheAdvertiseSec reject-200
+
+# 米家 - home.mi.com
+^https:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(banner|carousel\/banners|myTab|openingBanner) reject-dict
+
+# 阿里巴巴 - acs.m.taobao.com,gw.alicdn.com,heic.alicdn.com,asp.cntv.myalicdn.com
+# > 飞猪
+^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.screen\.(allresource|predict) reject-dict
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.activity\.querytmsresources\/1\.0\?type=originaljson reject-img
+^https?:\/\/gw\.alicdn\.com\/mt\/ reject
+^https?:\/\/gw\.alicdn\.com\/imgextra\/\w{2}\/[\w!]+-\d-tps-\d{3}-\d{4}\.(jpg|png)$ reject
+# > 闲鱼
+^https?:\/\/gw\.alicdn\.com\/tfs\/.+?\d{4}-\d{4}\/[a-z]{3}$ reject-200
+^https?:\/\/gw\.alicdn\.com\/tfs\/TB1.+?750-\d{4} reject-200
+^https?:\/\/heic\.alicdn\.com\/tps\/i4\/.+?\.jpg_1200x1200q90\.jpg_\.heic$ reject-200
+^https?:\/\/asp\.cntv\.myalicdn\.com\/.+?\?maxbr=850 reject-200
+^https?:\/\/(?>heic|gw)\.alicdn\.com\/tfs\/TB1.+?-\d{4}-\d{4}\.jpg_1200x1200q90\.jpg_\.\w{3,4}$ reject-200
+^https?:\/\/(gw|heic)\.alicdn\.com\/\w{2}s\/[\w\/.-]+\.jpg_(9\d{2}|\d{4}) reject
+^https?:\/\/(gw|heic)\.alicdn\.com\/imgextra\/\w{2}\/[\w!]+-\d-tps-\d{3,4}-\d{4}\.jpg_(1\d{3}|9\d{2})x(1\d{3}|9\d{2})q\d0\.jpg_\.(heic|webp)$ reject
+^https?:\/\/(gw|heic)\.alicdn\.com\/imgextra\/.+\d{4}-\d{4}\.jpg_(9\d{2}|\d{4}) reject
+^https:\/\/gw\.alicdn\.com\/mt\/ reject
+^https:\/\/gw\.alicdn\.com\/tfs\/.+\d{3,4}-\d{4} reject
+# > 盒马
+^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.wdk\.render\.querysinglepage\/3\.0 reject-200
+
+# 得物开屏广告 - app.dewu.com,cdn.poizon.com
+^https:\/\/app\.dewu\.com\/api\/v1\/app\/advertisement\/ reject
+^https?:\/\/cdn\.poizon\.com\/node-common\/.*.jpg reject-200
+
+# 京东金融 - m.360buyimg.com,ms.jr.jd.com
+^https:\/\/m.360buyimg.com\/mobilecms\/s1125x2436_jfs\/ reject-200
+^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture reject
+
+# 顺丰小程序 - mcs-mimp-web.sf-express.com,ucmp-static.sf-express.com,ucmp.sf-express.com
+^https:\/\/mcs-mimp-web\.sf-express\.com\/mcs-mimp\/integralPlanet\/getCxAdvertiseList reject-dict
+^https:\/\/ucmp-static\.sf-express\.com\/proxy\/wxbase\/wxTicket\/wxLiveStreamInfo\?pageNo reject-dict
+^https:\/\/ucmp\.sf-express\.com\/proxy\/operation-platform\/info-flow-adver\/query reject-dict
+^https:\/\/ucmp\.sf-express\.com\/proxy\/esgcempcore\/member(Goods\/pointMallService\/goodsList|Manage\/memberEquity\/queryRecommendEquity|ActLengthy\/fullGiveActivityService\/fullGiveInfo) reject-dict
+
+# > 肯德基小程序 - orders.kfc.com.cn,dynamicad.kfc.com.cn,res.kfc.com.cn
+^https:\/\/orders\.kfc\.com\.cn\/preorder-portal\/api\/v2\/coupon reject-dict
+^https:\/\/dynamicad\.kfc\.com\.cn\/api reject-dict
+^https:\/\/res\.kfc\.com\.cn\/CRM\/kfcad\/custom_v2\/wxapp reject-dict
+^https:\/\/orders\.kfc\.com\.cn\/preorder-portal\/api\/v2\/activity reject-dict
+
+# > 麦当劳小程序 - api.mcd.cn
+^https:\/\/api\.mcd\.cn\/bff\/portal\/home\/hotActivity reject-dict
+
+# 高铁管家 - cdn.133.cn,jp.rsscc.com,jt.rsscc.com
+^http:\/\/cdn\.133\.cn\/md\/gtgj\/.+\/.+720x1280 reject-dict
+^https?:\/\/[a-z]*\.rsscc\.com\/[a-z]*\/adver reject
+
+# 中国联通 - m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn
+^https?:\/\/m\.client\.10010\.com\/mobileService\/(activity|customer)\/(accountListData|get_client_adv|get_startadv) reject
+^https?:\/\/m\.client\.10010\.com\/uniAdmsInterface\/(getHomePageAd|getWelcomeAd) reject
+^https?:\/\/m1\.ad\.10010\.com\/noticeMag\/images\/imageUpload\/2\d{3} reject
+^https?:\/\/res\.mall\.10010\.cn\/mall\/common\/js\/fa\.js?referer= reject
+
+# 拼多多 - api.pinduoduo.com,api.yangkeduo.com
+^https:\/\/api\.(pinduoduo|yangkeduo)\.com\/api\/cappuccino\/splash reject
+
+# 雪球 - api.xueqiu.com, xqimg.imedao.com
+^https:\/\/api\.xueqiu\.com\/brand\/search\/v1\.json\? reject-dict
+^https?:\/\/xqimg\.imedao\.com\/[a-z0-9]{24}\.jpg$ reject-200
+^https:\/\/api\.xueqiu\.com\/snowpard\/launch_strategy\/query\.json\? reject-dict
+
+# 手机QQ - v6ii.gdt.qq.com
+^https:\/\/v6ii\.gdt\.qq\.com\/api\/gdt\.display\.QQAdService\.GetAds reject-dict
+
+# 盖得排行 - zone.guiderank-app.com
+https://zone.guiderank-app.com/guiderank-web/app/ad/listLaunchADByCity.do reject
+
+
+[Script]
+# 快手联盟、优量汇、穿山甲 - api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com
+http-response ^https:\/\/(api-access\.pangolin-sdk-toutiao\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?) script-path = https://gitlab.com/lodepuly/vpn_tool/-/raw/main/Resource/Script/Remove_ads_by_keli/adsense.js, requires-body = true, tag = 广告联盟
+
+[Mitm]
+hostname = elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com,img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,mp.weixin.qq.com,webappcfg.paas.cmbchina.com,az1mbasecc.bas.cmbchina.com,home.mi.com,acs.m.taobao.com,gw.alicdn.com,heic.alicdn.com,asp.cntv.myalicdn.com,app.dewu.com,cdn.poizon.com,m.360buyimg.com,ms.jr.jd.com,mcs-mimp-web.sf-express.com,ucmp-static.sf-express.com,ucmp.sf-express.com,orders.kfc.com.cn,dynamicad.kfc.com.cn,res.kfc.com.cn,api.mcd.cn,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.pinduoduo.com,api.yangkeduo.com,api.xueqiu.com, xqimg.imedao.com,v6ii.gdt.qq.com,zone.guiderank-app.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com
