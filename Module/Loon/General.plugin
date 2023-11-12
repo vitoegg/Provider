@@ -58,9 +58,9 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 
 # 美团 - img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com
 # > 美团
-^https?:\/\/img\.meituan\.net\/(?>adunion|display|midas)\/.+?\.(gif|jpg|jpg\.webp)$ reject-200
-^https?:\/\/p\d\.meituan\.net\/wmbanner\/[A-Za-z0-9]+?\.jpg reject-200
-^https?:\/\/p\d\.meituan\.net\/movie\/[A-Za-z0-9]+?\.jpg\?may_covertWebp reject-200
+^https?:\/\/img\.meituan\.net\/(?>adunion|display|midas)\/.+?\.(gif|jpg|jpg\.webp)$ reject-drop
+^https?:\/\/p\d\.meituan\.net\/wmbanner\/[A-Za-z0-9]+?\.jpg reject-drop
+^https?:\/\/p\d\.meituan\.net\/movie\/[A-Za-z0-9]+?\.jpg\?may_covertWebp reject-drop
 ^https?:\/\/s3plus\.meituan\.net\/.+?\/linglong\/ reject
 ^https?:\/\/s3plus\.meituan\.net\/v1\/mss_a002 reject-img
 ^https?:\/\/www\.meituan\.com\/api\/v\d\/appstatus\? reject
@@ -74,19 +74,19 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 ^https?:\/\/p\d{1}\.meituan\.net\/(adunion|display|mmc|wmbanner)\/ reject
 # > 美团外卖
 ^http:\/\/wmapi\.meituan\.com\/api\/v7\/(loadInfo|openscreen|startpicture)\? reject-dict
-^https?:\/\/img\.meituan\.net\/bizad\/.+?.(gif|jpg|mp4|jpg\.webp)$ reject-200
+^https?:\/\/img\.meituan\.net\/bizad\/.*.(gif|jpg|mp4|jpg\.webp)$ reject-drop
 ^http:\/\/s3plus\.meituan\.net\/.*\/brandcpt-vedio\/.*\?time reject
 # > 大众点评
 ^https:\/\/img\.meituan\.net\/dpmobile\/.+93241\.png reject-dict
-^https?:\/\/img\.meituan\.net\/dpmobile\/.*.(gif|jpg) reject-200
+^https?:\/\/img\.meituan\.net\/dpmobile\/.*.(gif|jpg) reject-drop
 # > 美团众包
-^https?:\/\/peisongapi\.meituan\.com\/client\/getInitiateImage reject-200
+^https?:\/\/peisongapi\.meituan\.com\/client\/getInitiateImage reject-drop
 
 # 微信公众号 - mp.weixin.qq.com
 ^https:\/\/mp\.weixin\.qq\.com\/mp\/(cps_product_info|getappmsgad|masonryfeed|relatedarticle)\? reject-dict
 
 # 招商银行 - webappcfg.paas.cmbchina.com
-^https?:\/\/webappcfg\.paas\.cmbchina\.com\/v\d\/func\/getmarketconfig reject-200
+^https?:\/\/webappcfg\.paas\.cmbchina\.com\/v\d\/func\/getmarketconfig reject-drop
 # 掌上生活 - az1mbasecc.bas.cmbchina.com
 ^https?:\/\/az1mbasecc\.bas\.cmbchina\.com\/Edge\/api\/mlife\.clientface\.clientservice\.api\.advertiseService\/preCacheAdvertiseSec reject-200
 
@@ -98,17 +98,17 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 ^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.screen\.(allresource|predict) reject-dict
 ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.activity\.querytmsresources\/1\.0\?type=originaljson reject-img
 # > 闲鱼
-^https?:\/\/m\.ykimg\.com\/material\/.+?.(gif|jpg|webp|mp4)$ reject-200
+^https?:\/\/m\.ykimg\.com\/material\/.+?.(gif|jpg|webp|mp4)$ reject-drop
 
 # > 盒马
-^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.wdk\.render\.querysinglepage\/3\.0 reject-200
+^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.wdk\.render\.querysinglepage\/3\.0 reject-drop
 
 # 得物开屏广告 - app.dewu.com,cdn.poizon.com
 ^https:\/\/app\.dewu\.com\/api\/v1\/app\/advertisement\/ reject
-^https?:\/\/cdn\.poizon\.com\/node-common\/.*.jpg reject-200
+^https?:\/\/cdn\.poizon\.com\/node-common\/.*.jpg reject-drop
 
 # 京东金融 - m.360buyimg.com,ms.jr.jd.com
-^https:\/\/m.360buyimg.com\/mobilecms\/s1125x2436_jfs\/ reject-200
+^https:\/\/m.360buyimg.com\/mobilecms\/s1125x2436_jfs\/ reject-drop
 ^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture reject
 
 # 顺丰小程序 - mcs-mimp-web.sf-express.com,ucmp-static.sf-express.com,ucmp.sf-express.com
