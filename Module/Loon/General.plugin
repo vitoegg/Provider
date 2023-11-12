@@ -74,8 +74,7 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 ^https?:\/\/p\d{1}\.meituan\.net\/(adunion|display|mmc|wmbanner)\/ reject
 # > 美团外卖
 ^http:\/\/wmapi\.meituan\.com\/api\/v7\/(loadInfo|openscreen|startpicture)\? reject-dict
-^https?:\/\/img\.meituan\.net\/bizad\/.*.jpg reject-200
-^https?:\/\/img\.meituan\.net\/(bizad|brandCpt)\/\w+\.(png|jpg) reject
+^https?:\/\/img\.meituan\.net\/(bizad|brandCpt)\/.+?\.(gif|jpg|jpg\.webp)$ reject-200
 ^http:\/\/s3plus\.meituan\.net\/.*\/brandcpt-vedio\/.*\?time reject
 # > 大众点评
 ^https:\/\/img\.meituan\.net\/dpmobile\/.+93241\.png reject-dict
@@ -101,17 +100,8 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 ^https?:\/\/gw\.alicdn\.com\/mt\/ reject
 ^https?:\/\/gw\.alicdn\.com\/imgextra\/\w{2}\/[\w!]+-\d-tps-\d{3}-\d{4}\.(jpg|png)$ reject
 # > 闲鱼
-^https?:\/\/m\.ykimg\.com\/material\/.+?.(gif|jpg|mp4)$ reject-200
-^https?:\/\/gw\.alicdn\.com\/tfs\/.+?\d{4}-\d{4}\/[a-z]{3}$ reject-200
-^https?:\/\/gw\.alicdn\.com\/tfs\/TB1.+?750-\d{4} reject-200
-^https?:\/\/heic\.alicdn\.com\/tps\/i4\/.+?\.jpg_1200x1200q90\.jpg_\.heic$ reject-200
-^https?:\/\/asp\.cntv\.myalicdn\.com\/.+?\?maxbr=850 reject-200
-^https?:\/\/(?>heic|gw)\.alicdn\.com\/tfs\/TB1.+?-\d{4}-\d{4}\.jpg_1200x1200q90\.jpg_\.\w{3,4}$ reject-200
-^https?:\/\/(gw|heic)\.alicdn\.com\/\w{2}s\/[\w\/.-]+\.jpg_(9\d{2}|\d{4}) reject
-^https?:\/\/(gw|heic)\.alicdn\.com\/imgextra\/\w{2}\/[\w!]+-\d-tps-\d{3,4}-\d{4}\.jpg_(1\d{3}|9\d{2})x(1\d{3}|9\d{2})q\d0\.jpg_\.(heic|webp)$ reject
-^https?:\/\/(gw|heic)\.alicdn\.com\/imgextra\/.+\d{4}-\d{4}\.jpg_(9\d{2}|\d{4}) reject
-^https:\/\/gw\.alicdn\.com\/mt\/ reject
-^https:\/\/gw\.alicdn\.com\/tfs\/.+\d{3,4}-\d{4} reject
+^https?:\/\/m\.ykimg\.com\/material\/.+?.(gif|jpg|webp|mp4)$ reject-200
+
 # > 盒马
 ^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.wdk\.render\.querysinglepage\/3\.0 reject-200
 
