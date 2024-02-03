@@ -10,6 +10,7 @@ payload:
   - DOMAIN-SUFFIX,miwifi.com
   - DOMAIN-SUFFIX,zte.home
   - DOMAIN-SUFFIX,tplogin.cn
+  - DOMAIN-KEYWORD,diyibanzhu
   # Lan IP
   - IP-CIDR,0.0.0.0/8,no-resolve
   - IP-CIDR,10.0.0.0/8,no-resolve
