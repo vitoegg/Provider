@@ -1,0 +1,26 @@
+payload:
+  # Router Login
+  - DOMAIN,router.asus.com
+  - DOMAIN,www.asusrouter.com
+  - DOMAIN-SUFFIX,lan
+  - DOMAIN-SUFFIX,local
+  - DOMAIN-SUFFIX,cn
+  - DOMAIN-SUFFIX,localhost
+  - DOMAIN-SUFFIX,hiwifi.com
+  - DOMAIN-SUFFIX,miwifi.com
+  - DOMAIN-SUFFIX,zte.home
+  - DOMAIN-SUFFIX,tplogin.cn
+  - DOMAIN-KEYWORD,diyibanzhu
+  # Lan IP
+  - IP-CIDR,0.0.0.0/8,no-resolve
+  - IP-CIDR,10.0.0.0/8,no-resolve
+  - IP-CIDR,100.64.0.0/10,no-resolve
+  - IP-CIDR,127.0.0.0/8,no-resolve
+  - IP-CIDR,172.16.0.0/12,no-resolve
+  - IP-CIDR,192.168.0.0/16,no-resolve
+  - IP-CIDR,198.18.0.0/16,no-resolve
+  - IP-CIDR,224.0.0.0/4,no-resolve
+  - IP-CIDR6,::1/128,no-resolve
+  - IP-CIDR6,fc00::/7,no-resolve
+  - IP-CIDR6,fe80::/10,no-resolve
+  - IP-CIDR6,fd00::/8,no-resolve
