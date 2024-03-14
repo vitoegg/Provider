@@ -61,6 +61,8 @@ payload:
   # > Google Gemini
   - 'gemini.google.com'
   - '+.gemini.google.com'
+  - 'aistudio.google.com'
+  - '+.aistudio.google.com'
   - '+.googleapis.com'
 
   # X(Grok)
