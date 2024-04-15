@@ -76,5 +76,7 @@ payload:
   - '+.x.ai'
 
   # ByteDance
+  - 'ciciai.com'
+  - 'coze.com'
   - '+.ciciai.com'
   - '+.coze.com'
