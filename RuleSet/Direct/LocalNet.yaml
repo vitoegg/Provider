@@ -1,10 +1,8 @@
 payload:
-  # Router Login
+  # Special
   - DOMAIN-SUFFIX,lan
   - DOMAIN-SUFFIX,local
   - DOMAIN-SUFFIX,cn
-  - DOMAIN-SUFFIX,localhost
-  - DOMAIN-SUFFIX,hiwifi.com
   - DOMAIN-SUFFIX,miwifi.com
   - DOMAIN-SUFFIX,zte.home
   - DOMAIN-SUFFIX,tplogin.cn
