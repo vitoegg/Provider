@@ -79,7 +79,7 @@ safebrowsing.googleapis.com
 .growingio.com
 # > MI
 .tracking.miui.com
-api.miwifi.com // 影响 Mi Wi-Fi(id859962702)，但建议注意 https://www.v2ex.com/t/746094
+api.miwifi.com
 data.mistat.xiaomi.com
 tracking.intl.miui.com
 # > TalkingData
