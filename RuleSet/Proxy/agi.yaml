@@ -62,7 +62,7 @@ payload:
   - 'services.bingapis.com'
   
   # > Raycast
-  - '+.raycast.com'
+  #- '+.raycast.com'
 
   # > Poe
   - '+.poe.com'
