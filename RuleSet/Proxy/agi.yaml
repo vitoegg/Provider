@@ -70,8 +70,19 @@ payload:
 
   # > Google Gemini
   - 'gemini.google.com'
+  - 'ai.google.dev'
   - 'aistudio.google.com'
+  - 'makersuite.google.com'
+  - 'alkalicore-pa.clients6.google.com'
+  - 'alkalimakersuite-pa.clients6.google.com'
   - 'generativelanguage.googleapis.com'
+  - 'geller-pa.googleapis.com'
+  - 'proactivebackend-pa.googleapis.com'
+  - '+.deepmind.com'
+  - '+.deepmind.google'
+  - '+.generativeai.google'
+  - '+.gemini.google.com'
+  - '+.aistudio.google.com'
 
   # X(Grok)
   - '+.x.ai'
