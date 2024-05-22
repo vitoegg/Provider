@@ -18,5 +18,3 @@ payload:
   - IP-CIDR,224.0.0.0/4,no-resolve
   #Download
   - DST-PORT,10001-65535,DIRECT
-  #Uptime
-  - SRC-PORT,3001,DIRECT
