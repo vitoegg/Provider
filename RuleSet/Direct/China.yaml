@@ -1,4 +1,6 @@
 payload:
+  #Download
+  - DST-PORT,10001-65535,DIRECT
  # > DNS
  - DOMAIN-SUFFIX,doh.pub
  - DOMAIN-SUFFIX,dns.alidns.com
