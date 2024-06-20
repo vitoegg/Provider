@@ -89,13 +89,20 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 # 米家 - home.mi.com
 ^https:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(banner|carousel\/banners|myTab|openingBanner) reject-dict
 
-# 阿里巴巴 - acs.m.taobao.com,gw.alicdn.com,heic.alicdn.com,asp.cntv.myalicdn.com,m.ykimg.com
+# 阿里巴巴 - acs.m.taobao.com,gw.alicdn.com,m.ykimg.com,iyes.youku.com,acs.m.goofish.com
 # > 飞猪
 ^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.screen\.(allresource|predict) reject-dict
 ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.activity\.querytmsresources\/1\.0\?type=originaljson reject-img
 # > 闲鱼
 ^https?:\/\/m\.ykimg\.com\/material\/.+?.(gif|jpg|webp|mp4) reject-200
-
+^https:\/\/gw\.alicdn\.com\/mt\/ reject
+^https:\/\/gw\.alicdn\.com\/tfs\/.+\d{3,4}-\d{4} reject
+^https:\/\/gw\.alicdn\.com\/tps\/.+\d{3,4}-\d{4} reject
+^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.taobao\.idle\.home\.welcome reject
+# 闲鱼 - 开屏广告
+^https:\/\/iyes\.youku\.com\/uts\/v1\/start\/ reject-dict
+# 闲鱼 - 底部浮层发布球
+^https:\/\/acs\.m\.goofish\.com\/gw\/mtop\.taobao\.idle\.user\.strategy\.get\/ reject-dict
 # > 盒马
 ^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.wdk\.render\.querysinglepage\/3\.0 reject-200
 
@@ -150,4 +157,4 @@ https://zone.guiderank-app.com/guiderank-web/app/ad/listLaunchADByCity.do reject
 http-response ^https:\/\/(api-access\.pangolin-sdk-toutiao\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?) script-path = https://gitlab.com/lodepuly/vpn_tool/-/raw/master/Resource/Script/Remove_ads_by_keli/adsense.js, requires-body = true, tag = 广告联盟
 
 [Mitm]
-hostname = elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com,img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,webappcfg.paas.cmbchina.com,home.mi.com,acs.m.taobao.com,m.ykimg.com,app.dewu.com,cdn.poizon.com,m.360buyimg.com,ms.jr.jd.com,mcs-mimp-web.sf-express.com,ucmp-static.sf-express.com,ucmp.sf-express.com,orders.kfc.com.cn,dynamicad.kfc.com.cn,res.kfc.com.cn,api.mcd.cn,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.pinduoduo.com,api.yangkeduo.com,api.xueqiu.com, xqimg.imedao.com,v6ii.gdt.qq.com,zone.guiderank-app.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com
+hostname = elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com,img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,webappcfg.paas.cmbchina.com,home.mi.com,acs.m.taobao.com,gw.alicdn.com,m.ykimg.com,iyes.youku.com,acs.m.goofish.com,app.dewu.com,cdn.poizon.com,m.360buyimg.com,ms.jr.jd.com,mcs-mimp-web.sf-express.com,ucmp-static.sf-express.com,ucmp.sf-express.com,orders.kfc.com.cn,dynamicad.kfc.com.cn,res.kfc.com.cn,api.mcd.cn,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.pinduoduo.com,api.yangkeduo.com,api.xueqiu.com, xqimg.imedao.com,v6ii.gdt.qq.com,zone.guiderank-app.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com
