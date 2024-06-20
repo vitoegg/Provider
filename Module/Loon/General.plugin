@@ -3,7 +3,7 @@
 #!openUrl = 
 #!author = Vitoegg
 #!icon = https://gitlab.com/lodepuly/vpn_tool/-/raw/main/Resource/Icon/80px/GitHub.png
-#!date = 2024-04-13 16:56:33
+#!date = 2024-06-20 09:20:33
 
 [Rule]
 # 广告联盟
@@ -42,9 +42,6 @@ DOMAIN, sdkconfig.ad.xiaomi.com, REJECT
 DOMAIN,wxsnsdy.wxs.qq.com,REJECT
 DOMAIN,wxsmsdy.video.qq.com,REJECT
 DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
-
-# 京东
-DOMAIN, waapdg.jd.com, REJECT
 
 
 [Rewrite]
@@ -148,22 +145,9 @@ DOMAIN, waapdg.jd.com, REJECT
 # 盖得排行 - zone.guiderank-app.com
 https://zone.guiderank-app.com/guiderank-web/app/ad/listLaunchADByCity.do reject
 
-# 滴滴 - img-ys011.didistatic.com,conf.diditaxi.com.cn,pt-starimg.didistatic.com,res.xiaojukeji.com,guard.sec.xiaojukeji.com,shop-gw.chengxinyouxuan.com,api.udache.com
-^https:\/\/img-ys011\.didistatic\.com\/static reject
-^https:\/\/conf\.diditaxi\.com\.cn\/one reject
-^https:\/\/conf\.diditaxi\.com\.cn\/nav\/widget reject
-^https:\/\/conf\.diditaxi\.com\.cn\/api\/(component|fusion|dynamicmodule|usercenter) reject
-^https:\/\/conf\.diditaxi\.com\.cn\/dynamic reject
-^https:\/\/pt-starimg\.didistatic\.com\/static reject
-^https:\/\/res\.xiaojukeji\.com\/resapi\/activity\/mget reject
-^https:\/\/res\.xiaojukeji\.com\/resapi\/activity\/get(Ruled|Preload|PasMultiNotices) reject
-^https:\/\/guard\.sec\.xiaojukeji\.com\/api\/guard\/psg\/v2\/getShieldStatus reject
-^https:\/\/shop-gw\.chengxinyouxuan\.com\/(route|indexConfig|apolloConfig|getShopTuanInfos) reject
-^https:\/\/api\.udache\.com\/gulfstream reject
-
 [Script]
 # 快手联盟、优量汇、穿山甲 - api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com
 http-response ^https:\/\/(api-access\.pangolin-sdk-toutiao\.com\/api\/ad\/union\/sdk\/get_ads|open\.e\.kuaishou\.com\/rest\/e\/v3\/open\/univ$|mi\.gdt\.qq\.com\/gdt_mview\.fcg\?) script-path = https://gitlab.com/lodepuly/vpn_tool/-/raw/master/Resource/Script/Remove_ads_by_keli/adsense.js, requires-body = true, tag = 广告联盟
 
 [Mitm]
-hostname = elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com,img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,webappcfg.paas.cmbchina.com,home.mi.com,acs.m.taobao.com,m.ykimg.com,app.dewu.com,cdn.poizon.com,m.360buyimg.com,ms.jr.jd.com,mcs-mimp-web.sf-express.com,ucmp-static.sf-express.com,ucmp.sf-express.com,orders.kfc.com.cn,dynamicad.kfc.com.cn,res.kfc.com.cn,api.mcd.cn,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.pinduoduo.com,api.yangkeduo.com,api.xueqiu.com, xqimg.imedao.com,v6ii.gdt.qq.com,zone.guiderank-app.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com,img-ys011.didistatic.com,conf.diditaxi.com.cn,pt-starimg.didistatic.com,res.xiaojukeji.com,guard.sec.xiaojukeji.com,shop-gw.chengxinyouxuan.com,api.udache.com
+hostname = elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com,img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,webappcfg.paas.cmbchina.com,home.mi.com,acs.m.taobao.com,m.ykimg.com,app.dewu.com,cdn.poizon.com,m.360buyimg.com,ms.jr.jd.com,mcs-mimp-web.sf-express.com,ucmp-static.sf-express.com,ucmp.sf-express.com,orders.kfc.com.cn,dynamicad.kfc.com.cn,res.kfc.com.cn,api.mcd.cn,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,api.pinduoduo.com,api.yangkeduo.com,api.xueqiu.com, xqimg.imedao.com,v6ii.gdt.qq.com,zone.guiderank-app.com,api-access.pangolin-sdk-toutiao.com,is.snssdk.com,open.e.kuaishou.com,mi.gdt.qq.com
