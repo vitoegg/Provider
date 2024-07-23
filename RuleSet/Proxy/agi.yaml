@@ -41,6 +41,7 @@ payload:
   # > Claude
   - '+.anthropic.com'
   - '+.claude.ai'
+  - 'cdn.usefathom.com'
   
   # > Bing
   - '+.bing.com'
