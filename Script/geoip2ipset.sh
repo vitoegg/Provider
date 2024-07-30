@@ -1,7 +1,7 @@
 #!/bin/bash
 
 tag="$1"
-custom_file="/etc/mosdns/rule/GeoIP_${tag}.txt"
+custom_file="/etc/script/GeoIP_${tag}.txt"
 
 # Function to download the file
 download_file() {
