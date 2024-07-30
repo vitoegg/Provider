@@ -1,46 +1,53 @@
 #!/bin/bash
 
-geoipfile="$1"
-tag="$2"
-tmpdir="/tmp/v2dat"
+tag="$1"
+custom_file="/etc/mosdns/rule/GeoIP_${tag}.txt"
 
-cd $(cd $(dirname $BASH_SOURCE) && pwd)
+# Function to download the file
+download_file() {
+    local url=""
+    case "$tag" in
+        "telegram")
+            url='https://raw.gitmirror.com/vitoegg/Provider/master/RuleSet/Extra/GeoIP_telegram.txt'
+            ;;
+        "netflix")
+            url='https://raw.gitmirror.com/vitoegg/Provider/master/RuleSet/Extra/GeoIP_netflix.txt'
+            ;;
+        *)
+            echo "Error: No download URL specified for tag: $tag"
+            exit 1
+            ;;
+    esac
 
-mkdir -p "$tmpdir"
-filename=$(basename -- "$geoipfile")
-filename="${filename%.*}"
-filename="$tmpdir/${filename}_$tag.txt"
+    echo "Downloading file for tag: $tag"
+    wget --timeout 5 -O "$custom_file" "$url"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to download file for tag: $tag"
+        exit 1
+    fi
+    echo "File downloaded successfully."
+}
 
-# Unpacd GeoIP
-/usr/bin/mosdns v2dat unpack-ip -o "$tmpdir" "$geoipfile:$tag"
-
-if test -f "$filename"; then
-    ipset destroy "$tag"
-    ipset create "$tag" hash:net
-
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        # Remove comments and leading/trailing whitespace
-        clean_line=$(echo "$line" | sed 's/#.*//g' | awk '{$1=$1};1')
-        
-        # Skip empty lines
-        [[ -z "$clean_line" ]] && continue
-        
-        # Check if it is a valid IPv4 CIDR
-        if echo "$clean_line" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$'; then
-            # Validate the IP address
-            if ipcalc -c "$clean_line" >/dev/null 2>&1; then
-                ipset add "$tag" "$clean_line"
-            else
-                echo "Warning: Invalid IPv4 CIDR: $clean_line"
-            fi
-        else
-            echo "Skipping non-IPv4 CIDR entry: $clean_line"
-        fi
-    done < "$filename"
-
-    echo "ipset '$tag' has been created and populated successfully"
-else
-    echo "Error: $filename does not exist"
+if [ -z "$tag" ]; then
+    echo "Usage: $0 <tag>"
+    exit 1
 fi
 
-rm -rf "$tmpdir"
+if [ ! -f "$custom_file" ]; then
+    echo "Custom file $custom_file does not exist. Attempting to download..."
+    download_file
+fi
+
+echo "Using file: $custom_file"
+
+ipset destroy "$tag" 2>/dev/null
+ipset create "$tag" hash:net
+
+while IFS= read -r line || [[ -n "$line" ]]; do
+    # Skip empty lines
+    [ -z "$line" ] && continue
+    
+    ipset add "$tag" "$line"
+done < "$custom_file"
+
+echo "ipset '$tag' has been created and populated."
