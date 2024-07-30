@@ -3,7 +3,6 @@
 geoipfile="$1"
 tag="$2"
 tmpdir="/tmp/v2dat"
-FW4=$(command -v fw4)
 
 cd $(cd $(dirname $BASH_SOURCE) && pwd)
 
@@ -12,35 +11,36 @@ filename=$(basename -- "$geoipfile")
 filename="${filename%.*}"
 filename="$tmpdir/${filename}_$tag.txt"
 
-# 使用本地 GeoIP 数据生成IPSET
-/usr/bin/v2dat unpack geoip -o "$tmpdir" -f "$tag" "$geoipfile"
+# Unpacd GeoIP
+/usr/bin/mosdns v2dat unpack-ip -o "$tmpdir" "$geoipfile:$tag"
 
 if test -f "$filename"; then
-    if [ -n "$FW4" ]; then
-        nft add set inet fw4 "$tag" { type ipv4_addr\; flags interval\;  auto-merge\; }
-        nft add set inet fw4 "${tag}6" { type ipv6_addr\; flags interval\;  auto-merge\; }
-        nft flush set inet fw4 "$tag"
-        nft flush set inet fw4 "${tag}6"
-    fi
-    ipset create "$tag" hash:net -!
-    ipset create "${tag}6" hash:net family inet6 -!
-    ipset flush "$tag"
-    ipset flush "${tag}6"
-    while read p; do
-        if ! grep -q ":" <<< "$p"; then
-            if [ -n "$FW4" ]; then
-                nft add element inet fw4 "$tag" { "$p" }
+    ipset destroy "$tag"
+    ipset create "$tag" hash:net
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        # Remove comments and leading/trailing whitespace
+        clean_line=$(echo "$line" | sed 's/#.*//g' | awk '{$1=$1};1')
+        
+        # Skip empty lines
+        [[ -z "$clean_line" ]] && continue
+        
+        # Check if it is a valid IPv4 CIDR
+        if echo "$clean_line" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$'; then
+            # Validate the IP address
+            if ipcalc -c "$clean_line" >/dev/null 2>&1; then
+                ipset add "$tag" "$clean_line"
+            else
+                echo "Warning: Invalid IPv4 CIDR: $clean_line"
             fi
-            ipset add "$tag" "$p"
         else
-            if [ -n "$FW4" ]; then
-                nft add element inet fw4 "${tag}6" { "$p" }
-            fi
-            ipset add "${tag}6" "$p"
+            echo "Skipping non-IPv4 CIDR entry: $clean_line"
         fi
-    done <"$filename"
+    done < "$filename"
+
+    echo "ipset '$tag' has been created and populated successfully"
 else
-    echo "$filename missing."
+    echo "Error: $filename does not exist"
 fi
 
 rm -rf "$tmpdir"
