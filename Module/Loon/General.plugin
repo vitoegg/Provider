@@ -2,7 +2,7 @@
 #!desc = 屏蔽常用的应用广告
 #!openUrl = 
 #!author = Vitoegg
-#!icon = https://gitlab.com/lodepuly/vpn_tool/-/raw/main/Resource/Icon/80px/GitHub.png
+#!icon = https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/General.png
 #!date = 2024-06-20 09:20:33
 
 [Rule]
