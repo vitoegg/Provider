@@ -73,8 +73,8 @@ cat >/usr/local/etc/xray/config.json<<EOF
                     "maxClientVer": "",
                     "maxTimeDiff": 0,
                     "shortIds": [
-                        "88",
-                        "123abc"
+                        "168",
+                        "0123456789abcdef"
                     ]
                 }
             }
@@ -108,7 +108,7 @@ UUID：${v2uuid}
 Public key：${rePublicKey}
 底层传输：reality
 SNI: www.amazon.com
-shortIds: 88
+shortIds: 168
 ====================================
 vless://${v2uuid}@$(getIP):${getPort}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.amazon.com&fp=chrome&pbk=${rePublicKey}&sid=88&type=tcp&headerType=none#1024-reality
 
