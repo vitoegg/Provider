@@ -10,7 +10,7 @@ Tip="${Green_font_prefix}[注意]${Font_color_suffix}"
 system_tune() {
     cat > /etc/sysctl.conf << EOF
 # 文件描述符限制
-fs.file-max=1000000
+fs.file-max=6815744
 
 # TCP congestion control
 net.core.default_qdisc = fq
@@ -23,8 +23,15 @@ net.ipv4.neigh.default.retrans_time_ms = 250
 net.ipv4.tcp_fin_timeout = 15
 net.ipv4.tcp_keepalive_probes = 3
 net.ipv4.tcp_keepalive_intvl = 30
+# 禁用显式拥塞通知 (ECN)
+net.ipv4.tcp_ecn=0
+# 禁用TCP快速重传优化
+net.ipv4.tcp_frto=0
+net.ipv4.tcp_rfc1337=0
 # 关闭慢启动重启(Slow-Start Restart)
 net.ipv4.tcp_slow_start_after_idle = 0
+# 禁用MTU探测
+net.ipv4.tcp_mtu_probing=0
 # 禁用连接保存
 net.ipv4.tcp_no_metrics_save=1
 # 启用TCP选择确认
@@ -47,7 +54,7 @@ net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 EOF
-    echo "1000000" > /proc/sys/fs/file-max
+    echo "6815744" > /proc/sys/fs/file-max
     sysctl -p && sysctl --system
 }
 
