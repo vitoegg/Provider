@@ -10,7 +10,7 @@ Tip="${Green_font_prefix}[注意]${Font_color_suffix}"
 system_tune() {
     cat > /etc/sysctl.conf << EOF
 # 文件描述符限制
-fs.file-max=1000000
+fs.file-max=6815744
 # TCP congestion control
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
@@ -49,7 +49,7 @@ net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 EOF
-    echo "1000000" > /proc/sys/fs/file-max
+    echo "6815744" > /proc/sys/fs/file-max
     sysctl -p && sysctl --system
 }
 
