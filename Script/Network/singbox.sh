@@ -25,7 +25,7 @@ esac
 echo "Choose a version option:"
 echo "1. Latest version"
 echo "2. Version 1.8.14"
-echo "3. Version 1.9.6"
+echo "3. Version 1.9.7"
 echo "4. Specify a custom version"
 read -p "Enter your choice (1-4): " VERSION_CHOICE
 
@@ -37,7 +37,7 @@ case $VERSION_CHOICE in
         VERSION="1.8.14"
         ;;
     3)
-        VERSION="1.9.6"
+        VERSION="1.9.7"
         ;;
     4)
         read -p "Enter the custom version (e.g., 1.8.14): " VERSION
