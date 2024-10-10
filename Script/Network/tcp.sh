@@ -14,6 +14,10 @@ fs.file-max=1000000
 # TCP congestion control
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
+# TCP连接保活优化
+net.ipv4.tcp_fin_timeout = 15
+net.ipv4.tcp_keepalive_probes = 3
+net.ipv4.tcp_keepalive_intvl = 30
 # 禁用显式拥塞通知 (ECN)
 net.ipv4.tcp_ecn=0
 # 禁用TCP快速重传优化
