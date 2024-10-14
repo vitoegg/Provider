@@ -3,9 +3,13 @@
 #!openUrl = 
 #!author = Vitoegg
 #!icon = https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/General.png
-#!date = 2024-09-01 16:20:33
+#!date = 2024-10-14 18:50:33
 
 [Rule]
+# 通用广告
+DOMAIN-SUFFIX, doubleclick-cn.net, REJECT
+DOMAIN-SUFFIX, doubleclick.net, REJECT
+
 # 美团
 DOMAIN, al-log.d.meituan.net, REJECT
 DOMAIN, babel-statistics-android.d.meituan.net, REJECT
