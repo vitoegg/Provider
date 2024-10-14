@@ -3,18 +3,20 @@
 
 1、Loon模块主要引用只可莉的仓库
 
-https://github.com/luestr/ProxyResource/tree/main/Tool/Loon/Plugin
-
-https://github.com/luestr/ProxyResource/blob/main/Tool/Loon/Plugin/Remove_ads_by_keli.plugin
+- https://github.com/luestr/ProxyResource/tree/main/Tool/Loon/Plugin
+- https://github.com/linuszlx/Loon
 
 2、规则从各个仓库中搜集，以及自己抓包补充
 
 ## Plugins Link
 目前Mobile App主用Loon，所以主要是引用Loon的插件
 
+`常用去广告`
+- https://github.com/luestr/ProxyResource/blob/main/Tool/Loon/Plugin/Remove_ads_by_keli.plugin
+
 `广告SDK`
 - https://raw.githubusercontent.com/luestr/ProxyResource/main/Tool/Loon/Plugin/BlockAdvertisers.plugin
-- 
+
 `HTTPDNS`
 - https://raw.githubusercontent.com/luestr/ProxyResource/main/Tool/Loon/Plugin/Block_HTTPDNS.plugin
 
