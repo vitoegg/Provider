@@ -3,7 +3,7 @@
 #!openUrl = 
 #!author = Vitoegg
 #!icon = https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/General.png
-#!date = 2024-10-14 19:50:39
+#!date = 2024-10-14 19:53:39
 
 [Rule]
 # 通用广告
@@ -66,6 +66,7 @@ DOMAIN, sdkconfig.ad.xiaomi.com, REJECT
 # > 飞猪
 ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.(popresource|screen) reject
 ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.guide\.guess\.what\.you\.like reject
+^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.activity\.querytmsresources\/1\.0\?type=originaljson reject-img
 
 # > 同程旅行开屏广告 - wx.17u.cn
 ^https?:\/\/wx\.17u\.cn\/xcxhomeapi\/((aggregator\/index)|(home\/(screen|banner|converge)))$ reject
