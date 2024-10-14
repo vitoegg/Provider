@@ -53,12 +53,6 @@ DOMAIN, sdkconfig.ad.xiaomi.com, REJECT
 ^https?:\/\/webappcfg\.paas\.cmbchina\.com\/v\d\/func\/getmarketconfig reject-200
 ^https:\/\/s3gw\.cmbimg\.com\/mbappinitads\/ reject
 
-# 掌上生活 - mbasecc.bas.cmbchina.com,mbasecc.bcs.cmbchina.com,intellicc.bcs.cmbchina.com
-# > 开屏广告
-^https?:\/\/mbasecc\.(bas|bcs)\.cmbchina\.com\/Edge\/api\/mlife\.clientface\.clientservice\.api\.advertiseService\/preCacheAdvertiseSec reject-dict
-# > 首页随机弹窗
-^https?:\/\/intellicc\.bcs\.cmbchina\.com\/Edge\/api\/mlife\.intelli\.adrender\.api\.AdWork\/getAdsBySlotId reject-dict
-
 # 米家 - home.mi.com
 ^https?:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(banner|myTab)\? reject-dict
 
@@ -115,4 +109,4 @@ http-response ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.ssif\.pattern\.
 http-response ^https?:\/\/umerp\.umetrip\.com\/gateway\/api\/umetrip\/native script-path = https://raw.githubusercontent.com/linuszlx/JS/refs/heads/main/Hanglvzongheng/Um.JS, tag=移除航旅首页广告
 
 [Mitm]
-hostname = elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com,img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,webappcfg.paas.cmbchina.com,s3gw.cmbimg.com,mbasecc.bas.cmbchina.com,mbasecc.bcs.cmbchina.com,intellicc.bcs.cmbchina.com,home.mi.com,acs.m.taobao.com,wx.17u.cn,app.dewu.com,cdn.poizon.com,m.360buyimg.com,ms.jr.jd.com,mcs-mimp-web.sf-express.com,ucmp-static.sf-express.com,ucmp.sf-express.com,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,woyunpan.10010sh.cn,umerp.umetrip.com,umerp.umetrip.com.cn,home.umetrip.com,bkclient.umetrip.com.cn,discardrp.umetrip.com,startup.umetrip.com,oss.umetrip.com
+hostname = elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com,img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,webappcfg.paas.cmbchina.com,s3gw.cmbimg.com,home.mi.com,acs.m.taobao.com,wx.17u.cn,app.dewu.com,cdn.poizon.com,m.360buyimg.com,ms.jr.jd.com,mcs-mimp-web.sf-express.com,ucmp-static.sf-express.com,ucmp.sf-express.com,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,woyunpan.10010sh.cn,umerp.umetrip.com,umerp.umetrip.com.cn,home.umetrip.com,bkclient.umetrip.com.cn,discardrp.umetrip.com,startup.umetrip.com,oss.umetrip.com
