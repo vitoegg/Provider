@@ -1,7 +1,7 @@
 # Provider
 个人自用的Loon、Surge模块和规则，以及一些自用的网络脚本
 
-1、Loon模块主要引用只可莉的仓库
+1、Loon模块主要引用以下仓库
 
 - https://github.com/luestr/ProxyResource/tree/main/Tool/Loon/Plugin
 - https://github.com/linuszlx/Loon
