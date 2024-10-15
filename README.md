@@ -5,6 +5,7 @@
 
 - https://github.com/luestr/ProxyResource/tree/main/Tool/Loon/Plugin
 - https://github.com/linuszlx/Loon
+- https://github.com/RuCu6/Loon
 
 2、规则从各个仓库中搜集，以及自己抓包补充
 
