@@ -10,7 +10,10 @@
 2、规则从各个仓库中搜集，以及自己抓包补充
 
 ## Plugins Link
-目前Mobile App主用Loon，所以主要是引用Loon的插件
+目前Mobile App主用Loon，所以主要是引用Loon的插件；Surge Module通过Script-Hub转换Loon Plugins来使用
+
+`Loon插件转Surge模块`
+- https://github.com/Script-Hub-Org/Script-Hub
 
 `常用去广告`
 - https://github.com/luestr/ProxyResource/blob/main/Tool/Loon/Plugin/Remove_ads_by_keli.plugin
