@@ -1,47 +1,49 @@
-# > OpenAI
+# https://testingcf.jsdelivr.net/gh/dler-io/Rules@main/Clash/Provider/AI%20Suite.yaml
+# > ChatGPT
 .ai.com
 .openai.com
-.algolia.net
-.api.statsig.com
-.auth0.com
-.cdn.cloudflare.net
-.challenges.cloudflare.com
-.chatgpt.livekit.cloud
 .chatgpt.com
-.client-api.arkoselabs.com
-.events.statsigapi.net
-.featuregates.org
-.host.livekit.cloud
-.identrust.com
-.intercom.io
-.intercomcdn.com
-.launchdarkly.com
+# > Chat GPT API & CDN
+.cdn.oaistatic.com
 .oaistatic.com
 .oaiusercontent.com
-.observeit.net
-.openaiapi-site.azureedge.net
-.openaicom.imgix.net
-.poe.com
-.segment.io
-.sentry.io
-.stripe.com
-.turn.livekit.cloud
-chatgpt.com
-client-api.arkoselabs.com
-openai-api.arkoselabs.com
+.o33249.ingest.sentry.io
+chat.openai.com.cdn.cloudflare.net
 openaiapi-site.azureedge.net
 openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net
 openaicomproductionae4b.blob.core.windows.net
 production-openaicom-storage.azureedge.net
+client-api.arkoselabs.com
+openai-api.arkoselabs.com
 openaicom.imgix.net
 browser-intake-datadoghq.com
-static.cloudflareinsights.com
+
+# > Siri
+.apple-relay.apple.com
+guzzoni.smoot.apple.com
  
 # > Claude
 .anthropic.com
 .claude.ai
 cdn.usefathom.com
- 
+
+# > Google Gemini
+.deepmind.com
+.deepmind.google
+.generativeai.google
+.gemini.google.com
+.aistudio.google.com
+.generativelanguage.googleapis.com
+.proactivebackend-pa.googleapis.com
+ai.google.dev
+makersuite.google.com
+alkalicore-pa.clients6.google.com
+alkalimakersuite-pa.clients6.google.com
+geller-pa.googleapis.com
+
+# > Meta AI
+.meta.ai
+
 # > Bing
 .bing.com
 .bingagencyawards.com
@@ -49,6 +51,7 @@ cdn.usefathom.com
 .bingsandbox.com
 .bingvisualsearch.com
 .bingworld.com
+.copilot.microsoft.com
 api.msn.com
 assets.msn.com
 dealczars.bing-shopping.microsoft-falcon.io
@@ -60,29 +63,13 @@ services.bingapis.com
 shopping.bing-shopping.microsoft-falcon.io
 sapphire.api.microsoftapp.net
 www.bingapis.com
- 
-# > Raycast
-#.raycast.com
 
 # > Poe
 .poe.com
 .quora.com
 
-# > Google Gemini
-gemini.google.com
-ai.google.dev
-aistudio.google.com
-makersuite.google.com
-alkalicore-pa.clients6.google.com
-alkalimakersuite-pa.clients6.google.com
-generativelanguage.googleapis.com
-geller-pa.googleapis.com
-proactivebackend-pa.googleapis.com
-.deepmind.com
-.deepmind.google
-.generativeai.google
-.gemini.google.com
-.aistudio.google.com
+# > Perplexity AI
+.perplexity.ai
 
 # X(Grok)
 .x.ai
@@ -92,7 +79,6 @@ ciciai.com
 coze.com
 .ciciai.com
 .coze.com
-
 # Meta
 meta.ai
 .meta.ai
