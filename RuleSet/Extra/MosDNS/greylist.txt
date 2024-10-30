@@ -1,0 +1,78 @@
+# > Chat GPT
+domain:ai.com
+domain:openai.com
+domain:chatgpt.com
+# > ChatGPT API & CDN
+domain:cdn.oaistatic.com
+domain:oaistatic.com
+domain:oaiusercontent.com
+domain:o33249.ingest.sentry.io
+full:chat.openai.com.cdn.cloudflare.net
+full:openaiapi-site.azureedge.net
+full:openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net
+full:openaicomproductionae4b.blob.core.windows.net
+full:production-openaicom-storage.azureedge.net
+full:client-api.arkoselabs.com
+full:openai-api.arkoselabs.com
+full:openaicom.imgix.net
+full:browser-intake-datadoghq.com
+
+# > Siri
+domain:apple-relay.apple.com
+full:guzzoni.smoot.apple.com
+ 
+# > Claude
+domain:anthropic.com
+domain:claude.ai
+full:cdn.usefathom.com
+
+# > Google Gemini
+domain:deepmind.com
+domain:deepmind.google
+domain:generativeai.google
+domain:gemini.google.com
+domain:aistudio.google.com
+domain:generativelanguage.googleapis.com
+domain:proactivebackend-pa.googleapis.com
+full:ai.google.dev
+full:makersuite.google.com
+full:alkalicore-pa.clients6.google.com
+full:alkalimakersuite-pa.clients6.google.com
+full:geller-pa.googleapis.com
+
+# > Meta AI
+domain:meta.ai
+
+# > Bing
+domain:bing.com
+domain:bingagencyawards.com
+domain:bingapistatistics.com
+domain:bingsandbox.com
+domain:bingvisualsearch.com
+domain:bingworld.com
+domain:copilot.microsoft.com
+full:api.msn.com
+full:assets.msn.com
+full:dealczars.bing-shopping.microsoft-falcon.io
+full:gateway.bingviz.microsoftapp.net
+full:location.microsoft.com
+full:login.microsoftonline.com
+full:self.events.data.microsoft.com
+full:services.bingapis.com
+full:shopping.bing-shopping.microsoft-falcon.io
+full:sapphire.api.microsoftapp.net
+full:www.bingapis.com
+
+# > Poe
+domain:poe.com
+domain:quora.com
+
+# > Perplexity AI
+domain:perplexity.ai
+
+# X(Grok)
+domain:x.ai
+
+# ByteDance
+domain:ciciai.com
+domain:coze.com
