@@ -38,7 +38,7 @@ net.ipv4.tcp_window_scaling=1
 net.ipv4.tcp_adv_win_scale=1
 net.ipv4.tcp_moderate_rcvbuf=1
 # 网络缓存区调整
-net.ipv4.tcp_rmem=8192 26214 13421773
+net.ipv4.tcp_rmem=8192 262144 13421773
 net.ipv4.tcp_wmem=4096 16384 6710886
 # 禁用IPv6
 net.ipv6.conf.all.disable_ipv6 = 1
