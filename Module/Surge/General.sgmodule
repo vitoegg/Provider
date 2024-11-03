@@ -11,6 +11,7 @@ DOMAIN-SUFFIX, doubleclick.net,REJECT,extended-matching,pre-matching
 
 # 米家
 DOMAIN, sdkconfig.ad.xiaomi.com,REJECT,extended-matching,pre-matching
+DEST-PORT,5222,REJECT,pre-matching
 
 # 中国联通
 DOMAIN-SUFFIX,m1.ad.10010.com,REJECT,extended-matching,pre-matching
