@@ -2,7 +2,7 @@
 #!desc=去除公共过滤器没有覆盖的个人需求
 #!homepage=https://surge.qingr.moe
 #!reffer=https://github.com/zirawell/R-Store
-#!date=2024-11-03 22:33:09
+#!date=2024-11-03 22:40:09
 
 [Rule]
 # 通用广告
@@ -69,9 +69,9 @@ DOMAIN-SUFFIX,m1.ad.10010.com,REJECT,extended-matching,pre-matching
 
 # 美团 - img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com
 # > 美团
-^https?:\/\/img\.meituan\.net\/(?>adunion|display|midas)\/.+?\.(gif|jpg|jpg\.webp)$ data="{}" status-code=200
-^https?:\/\/p\d\.meituan\.net\/wmbanner\/[A-Za-z0-9]+?\.jpg data="{}" status-code=200
-^https?:\/\/p\d\.meituan\.net\/movie\/[A-Za-z0-9]+?\.jpg\?may_covertWebp data="{}" status-code=200
+^https?:\/\/img\.meituan\.net\/(?>adunion|display|midas)\/.+?\.(gif|jpg|jpg\.webp)$ data-type=text data="{}" status-code=200
+^https?:\/\/p\d\.meituan\.net\/wmbanner\/[A-Za-z0-9]+?\.jpg data-type=text data="{}" status-code=200
+^https?:\/\/p\d\.meituan\.net\/movie\/[A-Za-z0-9]+?\.jpg\?may_covertWebp data-type=text data="{}" status-code=200
 ^https?:\/\/s3plus\.meituan\.net\/v1\/mss_a002 data-type=tiny-gif status-code=200
 ^https?:\/\/flowplus\.meituan\.net\/v\d\/\w+\/linglong\/\d+\.(gif|jpg|mp4) data-type=text data="{}" status-code=200
 ^https?:\/\/(s3plus|flowplus)\.meituan\.net\/v\d\/\w+\/linglong\/\w+\.(gif|jpg|mp4) data-type=text data="{}" status-code=200
@@ -79,7 +79,7 @@ DOMAIN-SUFFIX,m1.ad.10010.com,REJECT,extended-matching,pre-matching
 ^https?:\/\/p\d.meituan.net\/movie\/.*?\?may_covertWebp data-type=tiny-gif status-code=200
 # > 美团外卖
 ^https?:\/\/wmapi\.meituan\.com\/api\/v7\/(loadInfo|openscreen|startpicture) data-type=text data="{}" status-code=200
-^https?:\/\/img\.meituan\.net\/bizad\/.*.jpg data="{}" status-code=200
+^https?:\/\/img\.meituan\.net\/bizad\/.*.jpg data-type=text data="{}" status-code=200
 ^https:\/\/s3plus\.meituan\.net\/ocean-blk-index\/index\/blk_conf_\d+\.json data-type=text data="{}" status-code=200
 ^https:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(?:brandcpt-vedio|waimai-alita)\/\w+\.zip$ data-type=text data="{}" status-code=200
 # > 大众点评
@@ -90,7 +90,7 @@ DOMAIN-SUFFIX,m1.ad.10010.com,REJECT,extended-matching,pre-matching
 ^https?:\/\/p\d\.meituan\.net\/travelcube\/(?!c129a661)\w+\.gif data-type=tiny-gif status-code=200
 
 # 招商银行 - webappcfg.paas.cmbchina.com,s3gw.cmbimg.com
-^https?:\/\/webappcfg\.paas\.cmbchina\.com\/v\d\/func\/getmarketconfig data="{}" status-code=200
+^https?:\/\/webappcfg\.paas\.cmbchina\.com\/v\d\/func\/getmarketconfig data-type=text data="{}" status-code=200
 
 # 飞猪 - acs.m.taobao.com
 ^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.screen\.(allresource|predict) data-type=text data="{}" status-code=200
@@ -101,15 +101,15 @@ DOMAIN-SUFFIX,m1.ad.10010.com,REJECT,extended-matching,pre-matching
 ^https?:\/\/cdn\.poizon\.com\/node-common\/.*.jpg data-type=tiny-gif status-code=200
 
 # 京东金融 - m.360buyimg.com,ms.jr.jd.com
-^https:\/\/m.360buyimg.com\/mobilecms\/s1125x2436_jfs\/ data="{}" status-code=200
-^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture data="{}" status-code=200
+^https:\/\/m.360buyimg.com\/mobilecms\/s1125x2436_jfs\/ data-type=text data="{}" status-code=200
+^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture data-type=text data="{}" status-code=200
 
 # 高铁管家 - cdn.133.cn,jp.rsscc.com,jt.rsscc.com
 ^http:\/\/cdn\.133\.cn\/md\/gtgj\/.+\/.+720x1280 data-type=tiny-gif status-code=200
-^https?:\/\/[a-z]*\.rsscc\.com\/[a-z]*\/adver data="{}" status-code=200
+^https?:\/\/[a-z]*\.rsscc\.com\/[a-z]*\/adver data-type=text data="{}" status-code=200
 
 # 智家云盘 - woyunpan.10010sh.cn
-^https?:\/\/woyunpan\.10010sh\.cn\:8899\/rest\/activity\/SplashScreen\/randomSplashScreen data="{}" status-code=200
+^https?:\/\/woyunpan\.10010sh\.cn\:8899\/rest\/activity\/SplashScreen\/randomSplashScreen data-type=tiny-gif status-code=200
 
 [Script]
 # 飞猪 - acs.m.taobao.com
