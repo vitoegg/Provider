@@ -2,7 +2,7 @@
 #!desc=去除公共过滤器没有覆盖的个人需求
 #!homepage=https://surge.qingr.moe
 #!reffer=https://github.com/zirawell/R-Store
-#!date=2024-11-03 21:27:06
+#!date=2024-11-03 22:21:06
 
 [Rule]
 # 通用广告
@@ -62,7 +62,7 @@ DOMAIN-SUFFIX,m1.ad.10010.com,REJECT,extended-matching,pre-matching
 # 米家  - home.mi.com,app.zhoudamozi.com
 ^https:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(banner|carousel\/banners|myTab|openingBanner) data-type=text data="{}" status-code=200
 ^https:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(banner|myTab)\? data-type=text data="{}" status-code=200
-^http:\/\/app\.zhoudamozi\.com\/ad\/.+ data-type=text data=" " status-code=200
+^http:\/\/app\.zhoudamozi\.com\/ad\/.+ data-type=text data="{}" status-code=200
 
 # 饿了么 - elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com
 ^https:\/\/fuss10.elemecdn.com\/.+\.mp4 data-type=tiny-gif status-code=200
