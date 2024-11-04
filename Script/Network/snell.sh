@@ -104,8 +104,7 @@ main() {
     echo "正在生成配置文件..."
     cat > ${CONF} << EOF
 [snell-server]
-interface = 0.0.0.0
-port = ${PORT}
+listen = 0.0.0.0:${PORT}
 psk = ${PSK}
 ipv6 = false
 EOF
