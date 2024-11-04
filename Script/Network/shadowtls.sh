@@ -224,6 +224,13 @@ EOF
 # Show final configuration
 show_configuration() {
     print_progress "Installation completed successfully!"
+
+    echo "Service status:"
+    echo "----- Shadowsocks Service -----"
+    systemctl status shadowsocks.service --no-pager
+    echo
+    echo "----- ShadowTLS Service -----"
+    systemctl status shadowtls.service --no-pager
     
     echo -e "\n==========Shadowsocks Configuration==========="
     echo "Internal Port: ${ssport}"
@@ -235,13 +242,6 @@ show_configuration() {
     echo "Password: ${tls_password}"
     echo "TLS Server: m.hypai.org"
     echo -e "===========================================\n"
-    
-    echo "Service status:"
-    echo "----- Shadowsocks Service -----"
-    systemctl status shadowsocks.service --no-pager
-    echo
-    echo "----- ShadowTLS Service -----"
-    systemctl status shadowtls.service --no-pager
 }
 
 # Main execution
