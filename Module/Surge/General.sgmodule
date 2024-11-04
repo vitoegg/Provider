@@ -2,7 +2,7 @@
 #!desc=去除公共过滤器没有覆盖的个人需求
 #!homepage=https://surge.qingr.moe
 #!reffer=https://github.com/zirawell/R-Store
-#!date=2024-11-04 08:28:22
+#!date=2024-11-04 08:50:22
 
 [Rule]
 # 通用广告
@@ -96,10 +96,6 @@ DOMAIN-SUFFIX,m1.ad.10010.com,REJECT,extended-matching,pre-matching
 # 招商银行 - webappcfg.paas.cmbchina.com,s3gw.cmbimg.com
 ^https?:\/\/webappcfg\.paas\.cmbchina\.com\/v\d\/func\/getmarketconfig data-type=text data="{}" status-code=200
 
-# 飞猪 - acs.m.taobao.com
-#^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.screen\.(allresource|predict) data-type=tiny-gif status-code=200
-#^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.activity\.querytmsresources\/1\.0\?type=originaljson data-type=text data="{}" status-code=200
-
 # 得物开屏广告 - app.dewu.com,cdn.poizon.com
 ^https:\/\/app\.dewu\.com\/api\/v1\/app\/advertisement\/ data-type=text data="{}" status-code=200
 ^https?:\/\/cdn\.poizon\.com\/node-common\/.*.jpg data-type=tiny-gif status-code=200
@@ -116,11 +112,8 @@ DOMAIN-SUFFIX,m1.ad.10010.com,REJECT,extended-matching,pre-matching
 ^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx data-type=text data="{}" status-code=200
 
 [Script]
-# 飞猪 - acs.m.taobao.com
-飞猪去广告 = type=http-response, pattern=^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.ssif\.pattern\.home, script-path=https://raw.githubusercontent.com/zirawell/Ad-Cleaner/main/Collection/js/fliggy.js, requires-body=true
-
 # 大众点评 - *.dianping.com, img.meituan.net, p.meituan.com, rms.meituan.com, www.dpfile.com, awp-assets.meituan.net, s3plus.meituan.net, p*.meituan.net, ddplus.meituan.net, mars.meituan.com
 点评去广告 = type=http-response,pattern=^https?:\/\/img\.meituan\.net\/dpmobile\/,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/dianping.js,script-update-interval=0
 
 [MITM]
-hostname = %APPEND% elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com, img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,*.dianping.com,www.dpfile.com,p.meituan.com,rms.meituan.com,awp-assets.meituan.net,ddplus.meituan.net,mars.meituan.com, webappcfg.paas.cmbchina.com,s3gw.cmbimg.com, acs.m.taobao.com, home.mi.com,app.zhoudamozi.com, app.dewu.com,cdn.poizon.com, m.360buyimg.com,ms.jr.jd.com, cdn.133.cn,jp.rsscc.com,jt.rsscc.com, apapia-sqk.manmanbuy.com, woyunpan.10010sh.cn
+hostname = %APPEND% elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com, img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,*.dianping.com,www.dpfile.com,p.meituan.com,rms.meituan.com,awp-assets.meituan.net,ddplus.meituan.net,mars.meituan.com, webappcfg.paas.cmbchina.com,s3gw.cmbimg.com, acs.m.taobao.com, home.mi.com,app.zhoudamozi.com, app.dewu.com,cdn.poizon.com, m.360buyimg.com,ms.jr.jd.com, cdn.133.cn,jp.rsscc.com,jt.rsscc.com, apapia-sqk.manmanbuy.com, woyunpan.10010sh.cn:8899
