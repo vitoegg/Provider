@@ -147,6 +147,9 @@ After=network-online.target
 Wants=network-online.target systemd-networkd-wait-online.service
 
 [Service]
+Type=simple
+User=nobody
+LimitNOFILE=65536
 ExecStart=/usr/local/bin/ssserver -c /etc/shadowsocks/config.json
 Restart=on-failure
 RestartSec=5s
@@ -200,6 +203,8 @@ Wants=network-online.target systemd-networkd-wait-online.service
 
 [Service]
 Type=simple
+User=nobody
+LimitNOFILE=65536
 ExecStart=/usr/local/bin/shadow-tls --fastopen --v3 server --listen ::0:${listen_port} --server 127.0.0.1:${ssport} --tls m.hypai.org --password ${tls_password}
 Restart=on-failure
 RestartSec=5s
