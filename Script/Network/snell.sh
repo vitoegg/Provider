@@ -119,6 +119,8 @@ Wants=network-online.target systemd-networkd-wait-online.service
 
 [Service]
 Type=simple
+User=nobody
+LimitNOFILE=65536
 ExecStart=/usr/local/bin/snell-server -c ${CONF}
 Restart=on-failure
 RestartSec=5s
