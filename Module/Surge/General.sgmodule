@@ -2,7 +2,7 @@
 #!desc=去除公共过滤器没有覆盖的个人需求
 #!homepage=https://surge.qingr.moe
 #!reffer=https://github.com/zirawell/R-Store
-#!date=2024-11-04 08:50:22
+#!date=2024-11-04 08:55:22
 
 [Rule]
 # 通用广告
@@ -58,9 +58,6 @@ DOMAIN-SUFFIX,m1.ad.10010.com,REJECT,extended-matching,pre-matching
 ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.(popresource|screen) - reject
 ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.guide\.guess\.what\.you\.like - reject
 
-# 智家云盘 - woyunpan.10010sh.cn
-^https?:\/\/woyunpan\.10010sh\.cn\:8899\/rest\/activity\/SplashScreen\/randomSplashScreen - reject
-
 [Map Local]
 # 米家  - home.mi.com,app.zhoudamozi.com
 ^https:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(banner|carousel\/banners|myTab|openingBanner) data-type=text data="{}" status-code=200
@@ -110,6 +107,9 @@ DOMAIN-SUFFIX,m1.ad.10010.com,REJECT,extended-matching,pre-matching
 
 # > 慢慢买 - apapia-sqk.manmanbuy.com
 ^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx data-type=text data="{}" status-code=200
+
+# 智家云盘 - woyunpan.10010sh.cn
+^https?:\/\/woyunpan\.10010sh\.cn\:8899\/rest\/activity\/SplashScreen\/randomSplashScreen data-type=tiny-gif status-code=200
 
 [Script]
 # 大众点评 - *.dianping.com, img.meituan.net, p.meituan.com, rms.meituan.com, www.dpfile.com, awp-assets.meituan.net, s3plus.meituan.net, p*.meituan.net, ddplus.meituan.net, mars.meituan.com
