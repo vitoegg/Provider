@@ -11,20 +11,28 @@ sspasswd=$(cat /proc/sys/kernel/random/uuid)
 ssport=$(shuf -i 20000-40000 -n 1)  # Shadowsocks port range: 20000-40000
 tls_password=$(cat /proc/sys/kernel/random/uuid)
 
+# Function to print progress
+print_progress() {
+    echo -e "\n>>> $1"
+}
+
 # Function to get user input for ShadowTLS listen port
 get_user_port() {
+    echo -e "\n=== ShadowTLS Port Configuration ==="
+    echo "Please select how to set the ShadowTLS listen port:"
+    echo "1. Input manually (Port range: 50000-60000)"
+    echo "2. Generate randomly"
+    echo -e "----------------------------------------\n"
+    
     while true; do
-        echo
-        echo "Please select how to set the ShadowTLS listen port:"
-        echo "1. Input manually"
-        echo "2. Generate randomly"
-        read -p "Please enter your choice (1/2): " choice
+        read -p "Your choice (1/2): " choice
         case $choice in
             1)
                 while true; do
                     read -p "Please enter the listen port (50000-60000): " port
                     if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 50000 ] && [ "$port" -le 60000 ]; then
                         listen_port=$port
+                        echo -e "\n>>> Selected port: $listen_port"
                         break
                     else
                         echo "Error: Please enter a valid port number (50000-60000)"
@@ -33,8 +41,8 @@ get_user_port() {
                 break
                 ;;
             2)
-                listen_port=$(shuf -i 50000-60000 -n 1)  # ShadowTLS port range: 50000-60000
-                echo "Randomly generated listen port: $listen_port"
+                listen_port=$(shuf -i 50000-60000 -n 1)
+                echo -e "\n>>> Randomly generated port: $listen_port"
                 break
                 ;;
             *)
@@ -46,7 +54,7 @@ get_user_port() {
 
 # Install necessary packages
 install_packages() {
-    echo "Installing required packages..."
+    print_progress "Installing required packages..."
     if command -v apt-get >/dev/null 2>&1; then
         apt-get update
         apt-get install -y gzip wget curl unzip xz-utils jq
@@ -58,10 +66,12 @@ install_packages() {
         echo "Error: Unsupported package manager" 1>&2
         exit 1
     fi
+    echo "✓ Packages installed successfully"
 }
 
 # Detect system architecture
 detect_arch() {
+    print_progress "Detecting system architecture..."
     case $(uname -m) in
         i686|i386)
             ss_arch="i686"
@@ -82,14 +92,16 @@ detect_arch() {
             exit 1
             ;;
     esac
+    echo "✓ Detected architecture: $ss_arch"
 }
 
 # Install Shadowsocks
 install_shadowsocks() {
-    echo "Installing Shadowsocks-rust..."
+    print_progress "Installing Shadowsocks-rust..."
     local new_ver=$(wget -qO- https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases | 
                     jq -r '[.[] | select(.prerelease == false) | select(.draft == false) | .tag_name] | .[0]')
     
+    echo ">>> Downloading version: $new_ver"
     local archive_name="shadowsocks-${new_ver}.${ss_arch}-unknown-linux-gnu.tar.xz"
     wget --no-check-certificate -N "https://github.com/shadowsocks/shadowsocks-rust/releases/download/${new_ver}/${archive_name}"
     
@@ -98,6 +110,7 @@ install_shadowsocks() {
         exit 1
     fi
     
+    echo ">>> Extracting files..."
     tar -xf "$archive_name"
     if [[ ! -f "ssserver" ]]; then
         echo "Error: Failed to extract Shadowsocks Rust!" 1>&2
@@ -108,11 +121,12 @@ install_shadowsocks() {
     mv -f ssserver /usr/local/bin/
     rm -f sslocal ssmanager ssservice ssurl "$archive_name"
     
-    echo "Shadowsocks-rust installation completed!"
+    echo "✓ Shadowsocks-rust installation completed"
 }
 
 # Configure Shadowsocks
 configure_shadowsocks() {
+    print_progress "Configuring Shadowsocks..."
     mkdir -p /etc/shadowsocks
     
     cat > /etc/shadowsocks/config.json << EOF
@@ -142,6 +156,7 @@ WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
+    echo ">>> Starting Shadowsocks service..."
     systemctl enable shadowsocks.service
     systemctl start shadowsocks.service
     
@@ -149,18 +164,19 @@ EOF
         echo "Error: Shadowsocks service failed to start!" 1>&2
         exit 1
     fi
+    echo "✓ Shadowsocks configured and started successfully"
 }
 
 # Install ShadowTLS
 install_shadowtls() {
-    echo "Installing ShadowTLS..."
+    print_progress "Installing ShadowTLS..."
     local latest_version=$(curl -s https://api.github.com/repos/ihciah/shadow-tls/releases/latest | jq -r .tag_name)
     if [[ -z "$latest_version" ]]; then
         echo "Error: Failed to get latest ShadowTLS version!" 1>&2
         exit 1
     fi
 
-    echo "Installing ShadowTLS version: ${latest_version}"
+    echo ">>> Installing version: ${latest_version}"
     
     wget -q --show-progress "https://github.com/ihciah/shadow-tls/releases/download/${latest_version}/shadow-tls-${tls_arch_suffix}" -O /usr/local/bin/shadow-tls
     
@@ -170,11 +186,12 @@ install_shadowtls() {
     fi
 
     chmod +x /usr/local/bin/shadow-tls
-    echo "ShadowTLS binary installed successfully!"
+    echo "✓ ShadowTLS binary installed successfully"
 }
 
 # Configure ShadowTLS
 configure_shadowtls() {
+    print_progress "Configuring ShadowTLS..."
     cat > /etc/systemd/system/shadowtls.service << EOF
 [Unit]
 Description=ShadowTLS Service
@@ -192,6 +209,7 @@ WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
+    echo ">>> Starting ShadowTLS service..."
     systemctl enable shadowtls.service
     systemctl start shadowtls.service
 
@@ -200,50 +218,46 @@ EOF
         echo "Please check the logs with: journalctl -u shadowtls.service" 1>&2
         exit 1
     fi
+    echo "✓ ShadowTLS configured and started successfully"
 }
 
 # Show final configuration
 show_configuration() {
-    echo
-    echo "Installation completed successfully!"
-    echo
-    echo "==========Shadowsocks Configuration==========="
+    print_progress "Installation completed successfully!"
+    
+    echo -e "\n==========Shadowsocks Configuration==========="
     echo "Internal Port: ${ssport}"
     echo "Password: ${sspasswd}"
     echo "Method: aes-128-gcm"
-    echo
-    echo "===========ShadowTLS Configuration==========="
+    
+    echo -e "\n===========ShadowTLS Configuration==========="
     echo "Listen Port: ${listen_port}"
     echo "Password: ${tls_password}"
     echo "TLS Server: m.hypai.org"
-    echo "==========================================="
-    echo
+    echo -e "===========================================\n"
+    
     echo "Service status:"
     echo "----- Shadowsocks Service -----"
     systemctl status shadowsocks.service --no-pager
     echo
     echo "----- ShadowTLS Service -----"
     systemctl status shadowtls.service --no-pager
-    echo
 }
 
 # Main execution
 main() {
-    echo "Starting installation..."
+    clear
+    echo "=== ShadowTLS Installation Script ==="
+    echo "This script will install and configure Shadowsocks and ShadowTLS."
+    echo -e "=====================================\n"
+    
     install_packages
     detect_arch
-    
-    # Install and configure Shadowsocks
     install_shadowsocks
     configure_shadowsocks
-    
-    # Get user input for ShadowTLS listen port
     get_user_port
-    
-    # Install and configure ShadowTLS
     install_shadowtls
     configure_shadowtls
-    
     show_configuration
     
     # Clean up the installation script
