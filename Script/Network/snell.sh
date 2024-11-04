@@ -131,6 +131,7 @@ EOF
     systemctl daemon-reload
     systemctl enable snell
     systemctl start snell
+    systemctl status snell
 
     # 输出配置信息
     echo "==========================================="
