@@ -5,7 +5,7 @@ PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
 export PATH
 
 # 定义常量
-CONF="/etc/snell/snell-server.conf"
+CONF="/etc/snell.conf"
 SYSTEMD="/etc/systemd/system/snell.service"
 VERSION="v4.1.1"
 DOWNLOAD_BASE="https://dl.nssurge.com/snell"
