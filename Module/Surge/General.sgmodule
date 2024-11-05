@@ -2,7 +2,7 @@
 #!desc=去除公共过滤器没有覆盖的个人需求
 #!homepage=https://surge.qingr.moe
 #!reffer=https://github.com/zirawell/R-Store
-#!date=2024-11-05 10:25:22
+#!date=2024-11-05 10:30:22
 
 [Rule]
 # 通用广告
@@ -60,7 +60,7 @@ DOMAIN-SUFFIX,m1.ad.10010.com,REJECT,extended-matching,pre-matching
 
 [Body Rewrite]
 # 慢慢买 - apapia-sqk.manmanbuy.com
-http-response ^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx splashAD ADkey1 topActiveAD ADkey2 homeAlert ADkey3 slideAD ADkey4 floorAD ADkey5
+http-response ^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx homeFloat ADkey0 splashAD ADkey1 topActiveAD ADkey2 homeAlert ADkey3 slideAD ADkey4 floorAD ADkey5
 
 [Map Local]
 # 米家  - home.mi.com,app.zhoudamozi.com
