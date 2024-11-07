@@ -119,17 +119,9 @@ http-response-jq ^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx '. | w
 # 智家云盘 - woyunpan.10010sh.cn
 ^https?:\/\/woyunpan\.10010sh\.cn\:8899\/rest\/activity\/SplashScreen\/randomSplashScreen data-type=tiny-gif status-code=200
 
-# 掌上生活 - mbasecc.bas.cmbchina.com,mbasecc.bcs.cmbchina.com,intellicc.bcs.cmbchina.com
-# > 开屏广告
-^https?:\/\/mbasecc\.(bas|bcs)\.cmbchina\.com\/Edge\/api\/mlife\.clientface\.clientservice\.api\.advertiseService\/preCacheAdvertiseSec data-type=tiny-gif status-code=200
-# > 设置栏目内广告
-^https?:\/\/intellicc\.bas\.cmbchina\.com\/Edge\/api\/mlife\.intelli\.render\.api\.render\/getDynamicDataSec data-type=text data="{}" status-code=200
-# > 首页随机弹窗
-^https?:\/\/intellicc\.bcs\.cmbchina\.com\/Edge\/api\/mlife\.intelli\.adrender\.api\.AdWork\/getAdsBySlotId data-type=text data="{}" status-code=200
-
 [Script]
 # 大众点评 - *.dianping.com, img.meituan.net, p.meituan.com, rms.meituan.com, www.dpfile.com, awp-assets.meituan.net, s3plus.meituan.net, p*.meituan.net, ddplus.meituan.net, mars.meituan.com
 点评去广告 = type=http-response,pattern=^https?:\/\/img\.meituan\.net\/dpmobile\/,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/dianping.js,script-update-interval=0
 
 [MITM]
-hostname = %APPEND% elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com, img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,*.dianping.com,www.dpfile.com,p.meituan.com,rms.meituan.com,awp-assets.meituan.net,ddplus.meituan.net,mars.meituan.com, webappcfg.paas.cmbchina.com,s3gw.cmbimg.com, mbasecc.bas.cmbchina.com,mbasecc.bcs.cmbchina.com,intellicc.bcs.cmbchina.com, acs.m.taobao.com, home.mi.com,app.zhoudamozi.com, app.dewu.com,cdn.poizon.com, m.360buyimg.com,ms.jr.jd.com, cdn.133.cn,jp.rsscc.com,jt.rsscc.com, apapia-sqk.manmanbuy.com,zhekou-background.manmanbuy.com, woyunpan.10010sh.cn:8899
+hostname = %APPEND% elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com, img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,*.dianping.com,www.dpfile.com,p.meituan.com,rms.meituan.com,awp-assets.meituan.net,ddplus.meituan.net,mars.meituan.com, webappcfg.paas.cmbchina.com,s3gw.cmbimg.com, acs.m.taobao.com, home.mi.com,app.zhoudamozi.com, app.dewu.com,cdn.poizon.com, m.360buyimg.com,ms.jr.jd.com, cdn.133.cn,jp.rsscc.com,jt.rsscc.com, apapia-sqk.manmanbuy.com,zhekou-background.manmanbuy.com, woyunpan.10010sh.cn:8899
