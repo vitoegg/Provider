@@ -2,7 +2,7 @@
 #!desc=去除公共过滤器没有覆盖的个人需求
 #!homepage=https://surge.qingr.moe
 #!reffer=https://github.com/zirawell/R-Store
-#!date=2024-11-06 09:56:22
+#!date=2024-11-07 08:10:01
 
 [Rule]
 # 通用广告
@@ -61,9 +61,12 @@ DOMAIN-SUFFIX,sentry.manmanbuy.com,REJECT,extended-matching,pre-matching
 ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.(popresource|screen) - reject
 ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.guide\.guess\.what\.you\.like - reject
 
+# 慢慢买 - zhekou-background.manmanbuy.com
+^https?:\/\/zhekou-background\.manmanbuy\.com\/image\/zhekou/\d{8}/.*\.gif - reject
+
 [Body Rewrite]
 # 慢慢买 - apapia-sqk.manmanbuy.com
-http-response ^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx homeFloat ADkey0 splashAD ADkey1 topActiveAD ADkey2 homeAlert ADkey3 slideAD ADkey4 floorAD ADkey5 homeAlert ADkey6
+http-response-jq ^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx '. | walk(if type == "object" then with_entries(select(.key | (contains("AD") or contains("homeFloat"))).key = "pass") else . end)'
 
 [Map Local]
 # 米家  - home.mi.com,app.zhoudamozi.com
@@ -114,9 +117,6 @@ http-response ^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx homeFloat
 
 # 智家云盘 - woyunpan.10010sh.cn
 ^https?:\/\/woyunpan\.10010sh\.cn\:8899\/rest\/activity\/SplashScreen\/randomSplashScreen data-type=tiny-gif status-code=200
-
-# 慢慢买 - zhekou-background.manmanbuy.com
-^https?:\/\/zhekou-background\.manmanbuy\.com\/image\/zhekou/\d{8}/.*\.gif data-type=tiny-gif status-code=200
 
 [Script]
 # 大众点评 - *.dianping.com, img.meituan.net, p.meituan.com, rms.meituan.com, www.dpfile.com, awp-assets.meituan.net, s3plus.meituan.net, p*.meituan.net, ddplus.meituan.net, mars.meituan.com
