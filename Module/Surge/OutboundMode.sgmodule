@@ -1,5 +1,6 @@
 #!name=Auto OutboundMode
 #!desc=根据连接的网络自动切换出站模式
+#!category=Hub
 
 [Script]
 Outbound Mode = type=event,event-name=network-changed,script-path=https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network-Changed.js
