@@ -49,19 +49,6 @@ DOMAIN-SUFFIX,sentry.manmanbuy.com,REJECT,extended-matching,pre-matching
 # > 美团外卖
 ^https?:\/\/img\.meituan\.net\/(bizad|brandCpt)\/\w+\.(png|jpg|webp|gif) - reject
 ^https?:\/\/s3plus\.meituan\.net\/.*\/brandcpt-vedio\/.*\?time - reject
-# > 大众点评
-#^https?:\/\/mapi\.dianping\.com\/mapi\/operating\/(indexopsmodules|loadsplashconfig) - reject
-#^https?:\/\/mapi\.dianping\.com\/wdrpreload\/userprediction - reject
-#^https?:\/\/mapi\.dianping\.com\/adshopping - reject
-#^https?:\/\/p\.meituan\.com\/api\/privacy\/config - reject
-#^https?:\/\/www\.dpfile\.com\/app\/fecommonservice-lottie\/ugc-write-done\/media - reject
-#^https?:\/\/www\.dpfile\.com\/picasso\/picasso-qa\/src\/AnswerList\/AnswerList-bundle - reject
-#^https?:\/\/www\.dpfile\.com\/sc\/indexpromotion - reject
-#^https?:\/\/catfront\.dianping\.com\/api\/metric\?v=\d&p=rn_gcbu_mrn-joy-poidetail - reject
-#^https?:\/\/awp-assets\.meituan\.net\/hfe\/fep\/\w+\.json - reject
-#^https?:\/\/s3plus\.meituan\.net\/ocean-blk-index\/index\/blk_conf - reject
-#^https?:\/\/ddplus\.meituan\.net\/v\d\/mss_\w+\/(ehc|titansx|ddblue)\/ - reject
-#^https?:\/\/mars\.meituan\.com\/locate\/v\d\/sdk\/loc - reject
 
 # 招商银行 - webappcfg.paas.cmbchina.com,s3gw.cmbimg.com
 ^https:\/\/s3gw\.cmbimg\.com\/mbappinitads\/ - reject
@@ -100,12 +87,6 @@ http-response-jq ^https?:\/\/apapia-common\.manmanbuy\.com\/v1\/config '. | walk
 ^https?:\/\/img\.meituan\.net\/bizad\/.*.jpg data-type=text data="{}" status-code=200
 ^https:\/\/s3plus\.meituan\.net\/ocean-blk-index\/index\/blk_conf_\d+\.json data-type=text data="{}" status-code=200
 ^https:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(?:brandcpt-vedio|waimai-alita)\/\w+\.zip$ data-type=text data="{}" status-code=200
-# > 大众点评
-#^https?:\/\/mapi\.dianping\.com\/mapi\/intelliindex data-type=text data="{}" status-code=200
-^https?:\/\/img\.meituan\.net\/goodsawardpic data-type=tiny-gif status-code=200
-^https?:\/\/rms\.meituan\.com\/api\/v\d\/rmsmina\/c\/queryWechatAdvertisement data-type=text data="{}" status-code=200
-^https?:\/\/p\d\.meituan\.net\/nrpresourcevenus\/\w+\.gif data-type=tiny-gif status-code=200
-^https?:\/\/p\d\.meituan\.net\/travelcube\/(?!c129a661)\w+\.gif data-type=tiny-gif status-code=200
 
 # 招商银行 - webappcfg.paas.cmbchina.com,s3gw.cmbimg.com
 ^https?:\/\/webappcfg\.paas\.cmbchina\.com\/v\d\/func\/getmarketconfig data-type=text data="{}" status-code=200
@@ -127,7 +108,7 @@ http-response-jq ^https?:\/\/apapia-common\.manmanbuy\.com\/v1\/config '. | walk
 
 [Script]
 # 大众点评 - *.dianping.com, img.meituan.net, p.meituan.com, rms.meituan.com, www.dpfile.com, awp-assets.meituan.net, s3plus.meituan.net, p*.meituan.net, ddplus.meituan.net, mars.meituan.com
-#点评去广告 = type=http-response,pattern=^https?:\/\/img\.meituan\.net\/dpmobile\/,script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/dianping.js,requires-body=true,max-size=-1,timeout=60
+点评去广告 = type=http-response,pattern=^https?:\/\/img\.meituan\.net\/dpmobile\/,script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/dianping.js,requires-body=true,max-size=-1,timeout=60
 
 [MITM]
 hostname = %APPEND% elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com, img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,*.dianping.com,www.dpfile.com,p.meituan.com,rms.meituan.com,awp-assets.meituan.net,ddplus.meituan.net,mars.meituan.com, webappcfg.paas.cmbchina.com,s3gw.cmbimg.com, acs.m.taobao.com, home.mi.com,app.zhoudamozi.com, app.dewu.com,cdn.poizon.com, m.360buyimg.com,ms.jr.jd.com, cdn.133.cn,jp.rsscc.com,jt.rsscc.com, apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com, woyunpan.10010sh.cn:8899
