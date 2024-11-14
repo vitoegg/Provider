@@ -101,7 +101,7 @@ http-response-jq ^https?:\/\/apapia-common\.manmanbuy\.com\/v1\/config '. | walk
 ^https:\/\/s3plus\.meituan\.net\/ocean-blk-index\/index\/blk_conf_\d+\.json data-type=text data="{}" status-code=200
 ^https:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(?:brandcpt-vedio|waimai-alita)\/\w+\.zip$ data-type=text data="{}" status-code=200
 # > 大众点评
-^https?:\/\/mapi\.dianping\.com\/mapi\/intelliindex data-type=text data="{}" status-code=200
+#^https?:\/\/mapi\.dianping\.com\/mapi\/intelliindex data-type=text data="{}" status-code=200
 ^https?:\/\/img\.meituan\.net\/goodsawardpic data-type=tiny-gif status-code=200
 ^https?:\/\/rms\.meituan\.com\/api\/v\d\/rmsmina\/c\/queryWechatAdvertisement data-type=text data="{}" status-code=200
 ^https?:\/\/p\d\.meituan\.net\/nrpresourcevenus\/\w+\.gif data-type=tiny-gif status-code=200
