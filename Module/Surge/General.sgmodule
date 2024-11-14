@@ -50,9 +50,9 @@ DOMAIN-SUFFIX,sentry.manmanbuy.com,REJECT,extended-matching,pre-matching
 ^https?:\/\/img\.meituan\.net\/(bizad|brandCpt)\/\w+\.(png|jpg|webp|gif) - reject
 ^https?:\/\/s3plus\.meituan\.net\/.*\/brandcpt-vedio\/.*\?time - reject
 # > 大众点评
-^https?:\/\/mapi\.dianping\.com\/mapi\/operating\/(indexopsmodules|loadsplashconfig) - reject
-^https?:\/\/mapi\.dianping\.com\/wdrpreload\/userprediction - reject
-^https?:\/\/mapi\.dianping\.com\/adshopping - reject
+#^https?:\/\/mapi\.dianping\.com\/mapi\/operating\/(indexopsmodules|loadsplashconfig) - reject
+#^https?:\/\/mapi\.dianping\.com\/wdrpreload\/userprediction - reject
+#^https?:\/\/mapi\.dianping\.com\/adshopping - reject
 ^https?:\/\/p\.meituan\.com\/api\/privacy\/config - reject
 ^https?:\/\/www\.dpfile\.com\/app\/fecommonservice-lottie\/ugc-write-done\/media - reject
 ^https?:\/\/www\.dpfile\.com\/picasso\/picasso-qa\/src\/AnswerList\/AnswerList-bundle - reject
