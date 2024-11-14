@@ -3,19 +3,27 @@
 #!category=Hub
 #!homepage=https://surge.qingr.moe
 #!reffer=https://github.com/zirawell/R-Store
-#!date=2024-11-14 08:50:11
+#!date=2024-11-14 21:30:11
 
 [Rule]
 # 通用广告
-DOMAIN-SUFFIX, doubleclick-cn.net,REJECT,extended-matching,pre-matching
-DOMAIN-SUFFIX, doubleclick.net,REJECT,extended-matching,pre-matching
+DOMAIN-SUFFIX,doubleclick-cn.net,REJECT,extended-matching,pre-matching
+DOMAIN-SUFFIX,doubleclick.net,REJECT,extended-matching,pre-matching
 
 # 米家
-DOMAIN, sdkconfig.ad.xiaomi.com,REJECT,extended-matching,pre-matching
+DOMAIN,sdkconfig.ad.xiaomi.com,REJECT,extended-matching,pre-matching
 DEST-PORT,5222,REJECT,pre-matching
 
 # 中国联通
 DOMAIN-SUFFIX,m1.ad.10010.com,REJECT,extended-matching,pre-matching
+
+#大众点评
+DOMAIN,dpmtpush.dianping.com,REJECT,extended-matching,pre-matching
+DOMAIN,dynamicf.sankuai.com,REJECT,extended-matching,pre-matching
+DOMAIN-SUFFIX,lx.meituan.net,REJECT,extended-matching,pre-matching
+DOMAIN,tte.meituan.com,REJECT,extended-matching,pre-matching
+IP-CIDR,101.32.16.204/32,REJECT,extended-matching,pre-matching,no-resolve
+IP-CIDR,119.29.126.137/32,REJECT,extended-matching,pre-matching,no-resolve
 
 # 慢慢买
 DOMAIN-SUFFIX,sentry.manmanbuy.com,REJECT,extended-matching,pre-matching
@@ -119,7 +127,7 @@ http-response-jq ^https?:\/\/apapia-common\.manmanbuy\.com\/v1\/config '. | walk
 
 [Script]
 # 大众点评 - *.dianping.com, img.meituan.net, p.meituan.com, rms.meituan.com, www.dpfile.com, awp-assets.meituan.net, s3plus.meituan.net, p*.meituan.net, ddplus.meituan.net, mars.meituan.com
-点评去广告 = type=http-response,pattern=^https?:\/\/img\.meituan\.net\/dpmobile\/,requires-body=1,max-size=0,script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/dianping.js,script-update-interval=0
+点评去广告 = type=http-response,pattern=^https?:\/\/img\.meituan\.net\/dpmobile\/,script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/dianping.js,requires-body=true,max-size=-1,timeout=60
 
 [MITM]
 hostname = %APPEND% elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com, img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,*.dianping.com,www.dpfile.com,p.meituan.com,rms.meituan.com,awp-assets.meituan.net,ddplus.meituan.net,mars.meituan.com, webappcfg.paas.cmbchina.com,s3gw.cmbimg.com, acs.m.taobao.com, home.mi.com,app.zhoudamozi.com, app.dewu.com,cdn.poizon.com, m.360buyimg.com,ms.jr.jd.com, cdn.133.cn,jp.rsscc.com,jt.rsscc.com, apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com, woyunpan.10010sh.cn:8899
