@@ -127,7 +127,7 @@ http-response-jq ^https?:\/\/apapia-common\.manmanbuy\.com\/v1\/config '. | walk
 
 [Script]
 # 大众点评 - *.dianping.com, img.meituan.net, p.meituan.com, rms.meituan.com, www.dpfile.com, awp-assets.meituan.net, s3plus.meituan.net, p*.meituan.net, ddplus.meituan.net, mars.meituan.com
-点评去广告 = type=http-response,pattern=^https?:\/\/img\.meituan\.net\/dpmobile\/,script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/dianping.js,requires-body=true,max-size=-1,timeout=60
+#点评去广告 = type=http-response,pattern=^https?:\/\/img\.meituan\.net\/dpmobile\/,script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/dianping.js,requires-body=true,max-size=-1,timeout=60
 
 [MITM]
 hostname = %APPEND% elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com, img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,*.dianping.com,www.dpfile.com,p.meituan.com,rms.meituan.com,awp-assets.meituan.net,ddplus.meituan.net,mars.meituan.com, webappcfg.paas.cmbchina.com,s3gw.cmbimg.com, acs.m.taobao.com, home.mi.com,app.zhoudamozi.com, app.dewu.com,cdn.poizon.com, m.360buyimg.com,ms.jr.jd.com, cdn.133.cn,jp.rsscc.com,jt.rsscc.com, apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com, woyunpan.10010sh.cn:8899
