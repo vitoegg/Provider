@@ -15,6 +15,3 @@ PROCESS-NAME,Folx
 PROCESS-NAME,NetTransport
 PROCESS-NAME,uTorrent
 PROCESS-NAME,WebTorrent
-# China直连
-DOMAIN-SUFFIX,cn
-DOMAIN-KEYWORD,diyibanzhu
