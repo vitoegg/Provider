@@ -27,6 +27,7 @@ payload:
   # > Claude
   - '+.anthropic.com'
   - '+.claude.ai'
+  - '+.claudeusercontent.com'
   - 'cdn.usefathom.com'
 
   # > Google Gemini
