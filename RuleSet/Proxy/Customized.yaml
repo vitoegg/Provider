@@ -14,9 +14,8 @@ payload:
   # >Comic 18+
   - '18comic.vip'
   - '+.18comic.vip'
-  - '+.msp-comic.xyz'
-  - '+.msp-comic1.xyz'
   - '+.18comic.org'
   - '+.18comic.art'
   - '+.18comic.compan'
-  - '+.18comic.*'
+  - '+.msp-comic.xyz'
+  - '+.msp-comic1.xyz'
