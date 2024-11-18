@@ -11,6 +11,8 @@ system_tune() {
     cat > /etc/sysctl.conf << EOF
 # 文件描述符限制
 fs.file-max=6815744
+# 物理内存剩余不足10%时使用Swap
+vm.swappiness=10
 # TCP congestion control
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
@@ -38,12 +40,8 @@ net.ipv4.tcp_window_scaling=1
 net.ipv4.tcp_adv_win_scale=1
 net.ipv4.tcp_moderate_rcvbuf=1
 # 网络缓存区调整
-net.core.rmem_max=33554432
-net.core.wmem_max=33554432
-net.ipv4.tcp_rmem=4096 87380 33554432
-net.ipv4.tcp_wmem=4096 16384 33554432
-net.ipv4.udp_rmem_min=8192
-net.ipv4.udp_wmem_min=8192
+net.ipv4.tcp_rmem=4096 87380 17500000
+net.ipv4.tcp_wmem=4096 16384 8750000
 # 允许流量转发
 net.ipv4.ip_forward=1
 net.ipv4.conf.all.route_localnet=1
