@@ -7,9 +7,9 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Set common variables
-sspasswd=$(cat /proc/sys/kernel/random/uuid)
+sspasswd=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 ssport=$(shuf -i 20000-40000 -n 1)  # Shadowsocks port range: 20000-40000
-tls_password=$(cat /proc/sys/kernel/random/uuid)
+tls_password=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 
 # Function to print progress
 print_progress() {
