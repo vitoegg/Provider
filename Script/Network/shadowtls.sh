@@ -304,9 +304,6 @@ main() {
             get_user_port
             configure_shadowtls
             show_configuration
-            
-            # 清理安装脚本
-            rm -f "$(readlink -f "$0")"
             ;;
         2)
             uninstall_service
