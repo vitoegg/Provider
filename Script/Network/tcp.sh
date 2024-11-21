@@ -55,6 +55,9 @@ EOF
     sysctl -p && sysctl --system
 }
 
+# 清理安装脚本
+rm -f "$(readlink -f "$0")"
+
 echo -e "${Info} 开始执行系统调优..."
 system_tune
 echo -e "${Info} 系统调优完成"
