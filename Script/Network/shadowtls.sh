@@ -252,24 +252,70 @@ show_configuration() {
     echo -e "===========================================\n"
 }
 
+# Uninstalling Shadowsocks and ShadowTLS
+uninstall_service() {
+    clear
+    echo "=== Uninstalling Shadowsocks and ShadowTLS ==="
+    
+    # 停止并禁用服务
+    systemctl stop shadowsocks.service 2>/dev/null
+    systemctl disable shadowsocks.service 2>/dev/null
+    
+    systemctl stop shadowtls.service 2>/dev/null
+    systemctl disable shadowtls.service 2>/dev/null
+    
+    # 删除服务文件
+    rm -f /lib/systemd/system/shadowsocks.service
+    rm -f /lib/systemd/system/shadowtls.service
+    
+    # 删除配置文件
+    rm -rf /etc/shadowsocks
+    rm -f /etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf
+    
+    # 删除二进制文件
+    rm -f /usr/local/bin/ssserver
+    rm -f /usr/local/bin/shadow-tls
+    
+    # 重新加载systemd
+    systemctl daemon-reload
+    systemctl reset-failed
+    
+    echo "=== Uninstallation Complete ==="
+}
+
 # Main execution
 main() {
     clear
     echo "=== ShadowTLS Installation Script ==="
-    echo "This script will install and configure Shadowsocks and ShadowTLS."
+    echo "1. Install Shadowsocks and ShadowTLS"
+    echo "2. Uninstall Shadowsocks and ShadowTLS"
     echo -e "=====================================\n"
     
-    install_packages
-    detect_arch
-    install_shadowsocks
-    configure_shadowsocks
-    install_shadowtls
-    get_user_port
-    configure_shadowtls
-    show_configuration
+    read -p "Please select an option (1/2): " choice
     
-    # Clean up the installation script
-    rm -f "$(readlink -f "$0")"
+    case $choice in
+        1)
+            # 原有的安装流程
+            install_packages
+            detect_arch
+            install_shadowsocks
+            configure_shadowsocks
+            install_shadowtls
+            get_user_port
+            configure_shadowtls
+            show_configuration
+            
+            # 清理安装脚本
+            rm -f "$(readlink -f "$0")"
+            ;;
+        2)
+            uninstall_service
+            ;;
+        *)
+            echo "Invalid option. Exiting."
+            exit 1
+            ;;
+    esac
 }
 
 main
