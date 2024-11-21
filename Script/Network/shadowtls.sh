@@ -107,46 +107,30 @@ EOF
     cat > /lib/systemd/system/shadowsocks.service << EOF
 [Unit]
 Description=Shadowsocks Server
-After=network-online.target
-Wants=network-online.target systemd-networkd-wait-online.service
+After=network.target
+Before=network-online.target
+StartLimitBurst=0
+StartLimitIntervalSec=60
 
 [Service]
 Type=simple
 LimitNOFILE=65536
 ExecStart=/usr/local/bin/ssserver -c /etc/shadowsocks/config.json
-Restart=on-failure
-RestartSec=5s
+Restart=always
+RestartSec=2
+TimeoutStopSec=15
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-    # 添加详细的系统诊断信息
-    echo ">>> Debugging systemd and network status..."
-    systemctl list-unit-files | grep -E "network|online"
-    systemctl status systemd-networkd-wait-online.service
-
     systemctl daemon-reload
-    
     echo ">>> Starting Shadowsocks service..."
     systemctl enable shadowsocks.service
-    
-    # 记录enable操作后的时间
-    local enable_time=$(date +%s)
-    local enable_duration=$((enable_time - start_time))
-    echo ">>> Time taken for systemctl enable: ${enable_duration} seconds"
-    
     systemctl start shadowsocks.service
-    
-    # 记录start操作后的时间
-    local start_time=$(date +%s)
-    local start_duration=$((start_time - enable_time))
-    echo ">>> Time taken for systemctl start: ${start_duration} seconds"
     
     if ! systemctl is-active --quiet shadowsocks.service; then
         echo "Error: Shadowsocks service failed to start!" 1>&2
-        systemctl status shadowsocks.service
-        journalctl -u shadowsocks.service
         exit 1
     fi
     echo "✓ Shadowsocks configured and started successfully"
@@ -174,8 +158,8 @@ install_shadowtls() {
     echo "✓ ShadowTLS binary installed successfully"
 }
 
-# Set ShadowTLS listen port
-set_user_port() {
+# Function to get user input for ShadowTLS listen port
+get_user_port() {
     echo -e "\n=== ShadowTLS Port Configuration ==="
     echo "Please select how to set the ShadowTLS listen port:"
     echo "1. Input manually (Port range: 50000-60000)"
@@ -216,14 +200,17 @@ configure_shadowtls() {
     cat > /lib/systemd/system/shadowtls.service << EOF
 [Unit]
 Description=ShadowTLS Service
-After=network-online.target
-Wants=network-online.target systemd-networkd-wait-online.service
+After=network.target
+Before=network-online.target
+StartLimitBurst=0
+StartLimitIntervalSec=60
 
 [Service]
 LimitNOFILE=65536
 ExecStart=/usr/local/bin/shadow-tls --fastopen --v3 server --listen ::0:${listen_port} --server 127.0.0.1:${ssport} --tls m.hypai.org --password ${tls_password}
-Restart=on-failure
-RestartSec=5s
+Restart=always
+RestartSec=2
+TimeoutStopSec=15
 
 [Install]
 WantedBy=multi-user.target
@@ -233,6 +220,12 @@ EOF
     echo ">>> Starting ShadowTLS service..."
     systemctl enable shadowtls.service
     systemctl start shadowtls.service
+
+    if ! systemctl is-active --quiet shadowtls.service; then
+        echo "Error: ShadowTLS service failed to start!" 1>&2
+        echo "Please check the logs with: journalctl -u shadowtls.service" 1>&2
+        exit 1
+    fi
     echo "✓ ShadowTLS configured and started successfully"
 }
 
@@ -265,13 +258,13 @@ main() {
     echo "=== ShadowTLS Installation Script ==="
     echo "This script will install and configure Shadowsocks and ShadowTLS."
     echo -e "=====================================\n"
-
+    
     install_packages
     detect_arch
     install_shadowsocks
     configure_shadowsocks
     install_shadowtls
-    set_user_port
+    get_user_port
     configure_shadowtls
     show_configuration
     
