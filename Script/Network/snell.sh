@@ -6,7 +6,7 @@ export PATH
 
 # 定义常量
 CONF="/etc/snell.conf"
-SYSTEMD="/etc/systemd/system/snell.service"
+SYSTEMD="/lib/systemd/system/snell.service"
 VERSION="v4.1.1"
 DOWNLOAD_BASE="https://dl.nssurge.com/snell"
 
