@@ -104,7 +104,7 @@ configure_shadowsocks() {
 }
 EOF
 
-    cat > /etc/systemd/system/shadowsocks.service << EOF
+    cat > /lib/systemd/system/shadowsocks.service << EOF
 [Unit]
 Description=Shadowsocks Server
 After=network-online.target
@@ -194,7 +194,7 @@ get_user_port() {
 # Configure ShadowTLS
 configure_shadowtls() {
     print_progress "Configuring ShadowTLS..."
-    cat > /etc/systemd/system/shadowtls.service << EOF
+    cat > /lib/systemd/system/shadowtls.service << EOF
 [Unit]
 Description=ShadowTLS Service
 After=network-online.target
