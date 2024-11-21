@@ -55,12 +55,18 @@ EOF
     sysctl -p && sysctl --system
 }
 
+clean_file() {
 # 清理安装脚本
 rm -f "$(readlink -f "$0")"
+}
 
 echo -e "${Info} 开始执行系统调优..."
 system_tune
 echo -e "${Info} 系统调优完成"
+
+echo -e "${Info} 开始清理脚本文件..."
+clean_file
+echo -e "${Info} 脚本文件清理完成"
 
 echo -e "${Tip} 部分设置可能需要重启系统才能生效"
 echo -e "${Tip} 已禁用IPv6，如果需要使用IPv6，请手动修改 /etc/sysctl.conf 文件"
