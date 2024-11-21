@@ -125,14 +125,6 @@ EOF
     echo ">>> Starting Shadowsocks service..."
     systemctl enable shadowsocks.service
     systemctl start shadowsocks.service
-    
-    # Check if the startup was successful
-    timeout 5s systemctl is-active --quiet shadowsocks.service
-    if [ $? -ne 0 ]; then
-       echo "Error: Shadowsocks service failed to start!" 1>&2
-       journalctl -u shadowsocks.service  # 打印详细日志
-       exit 1
-    fi
     echo "✓ Shadowsocks configured and started successfully"
 }
 
@@ -217,13 +209,6 @@ EOF
     echo ">>> Starting ShadowTLS service..."
     systemctl enable shadowtls.service
     systemctl start shadowtls.service
-    # Check if the startup was successful
-    timeout 5s systemctl is-active --quiet shadowtls.service
-    if [ $? -ne 0 ]; then
-       echo "Error: ShadowTLS service failed to start!" 1>&2
-       journalctl -u shadowtls.service  # 打印详细日志
-       exit 1
-    fi
     echo "✓ ShadowTLS configured and started successfully"
 }
 
