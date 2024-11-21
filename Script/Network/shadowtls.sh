@@ -11,42 +11,6 @@ sspasswd=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 ssport=$(shuf -i 20000-40000 -n 1)  # Shadowsocks port range: 20000-40000
 tls_password=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 
-# Set ShadowTLS listen port
-set_user_port() {
-    echo -e "\n=== ShadowTLS Port Configuration ==="
-    echo "Please select how to set the ShadowTLS listen port:"
-    echo "1. Input manually (Port range: 50000-60000)"
-    echo "2. Generate randomly"
-    echo -e "----------------------------------------\n"
-    
-    while true; do
-        read -p "Your choice (1/2): " choice
-        case $choice in
-            1)
-                while true; do
-                    read -p "Please enter the listen port (50000-60000): " port
-                    if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 50000 ] && [ "$port" -le 60000 ]; then
-                        listen_port=$port
-                        echo -e "\n>>> Selected port: $listen_port"
-                        break
-                    else
-                        echo "Error: Please enter a valid port number (50000-60000)"
-                    fi
-                done
-                break
-                ;;
-            2)
-                listen_port=$(shuf -i 50000-60000 -n 1)
-                echo -e "\n>>> Randomly generated port: $listen_port"
-                break
-                ;;
-            *)
-                echo "Invalid choice. Please enter 1 or 2."
-                ;;
-        esac
-    done
-}
-
 # Function to print progress
 print_progress() {
     echo -e "\n>>> $1"
@@ -162,9 +126,12 @@ EOF
     systemctl enable shadowsocks.service
     systemctl start shadowsocks.service
     
-    if ! systemctl is-active --quiet shadowsocks.service; then
-        echo "Error: Shadowsocks service failed to start!" 1>&2
-        exit 1
+    # Check if the startup was successful
+    timeout 5s systemctl is-active --quiet shadowsocks.service
+    if [ $? -ne 0 ]; then
+       echo "Error: Shadowsocks service failed to start!" 1>&2
+       journalctl -u shadowsocks.service  # 打印详细日志
+       exit 1
     fi
     echo "✓ Shadowsocks configured and started successfully"
 }
@@ -191,6 +158,42 @@ install_shadowtls() {
     echo "✓ ShadowTLS binary installed successfully"
 }
 
+# Set ShadowTLS listen port
+set_user_port() {
+    echo -e "\n=== ShadowTLS Port Configuration ==="
+    echo "Please select how to set the ShadowTLS listen port:"
+    echo "1. Input manually (Port range: 50000-60000)"
+    echo "2. Generate randomly"
+    echo -e "----------------------------------------\n"
+    
+    while true; do
+        read -p "Your choice (1/2): " choice
+        case $choice in
+            1)
+                while true; do
+                    read -p "Please enter the listen port (50000-60000): " port
+                    if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 50000 ] && [ "$port" -le 60000 ]; then
+                        listen_port=$port
+                        echo -e "\n>>> Selected port: $listen_port"
+                        break
+                    else
+                        echo "Error: Please enter a valid port number (50000-60000)"
+                    fi
+                done
+                break
+                ;;
+            2)
+                listen_port=$(shuf -i 50000-60000 -n 1)
+                echo -e "\n>>> Randomly generated port: $listen_port"
+                break
+                ;;
+            *)
+                echo "Invalid choice. Please enter 1 or 2."
+                ;;
+        esac
+    done
+}
+
 # Configure ShadowTLS
 configure_shadowtls() {
     print_progress "Configuring ShadowTLS..."
@@ -214,11 +217,12 @@ EOF
     echo ">>> Starting ShadowTLS service..."
     systemctl enable shadowtls.service
     systemctl start shadowtls.service
-
-    if ! systemctl is-active --quiet shadowtls.service; then
-        echo "Error: ShadowTLS service failed to start!" 1>&2
-        echo "Please check the logs with: journalctl -u shadowtls.service" 1>&2
-        exit 1
+    # Check if the startup was successful
+    timeout 5s systemctl is-active --quiet shadowtls.service
+    if [ $? -ne 0 ]; then
+       echo "Error: ShadowTLS service failed to start!" 1>&2
+       journalctl -u shadowtls.service  # 打印详细日志
+       exit 1
     fi
     echo "✓ ShadowTLS configured and started successfully"
 }
@@ -253,12 +257,12 @@ main() {
     echo "This script will install and configure Shadowsocks and ShadowTLS."
     echo -e "=====================================\n"
 
-    set_user_port
     install_packages
     detect_arch
     install_shadowsocks
     configure_shadowsocks
     install_shadowtls
+    set_user_port
     configure_shadowtls
     show_configuration
     
