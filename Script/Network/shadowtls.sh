@@ -11,6 +11,42 @@ sspasswd=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 ssport=$(shuf -i 20000-40000 -n 1)  # Shadowsocks port range: 20000-40000
 tls_password=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 
+# Set ShadowTLS listen port
+set_user_port() {
+    echo -e "\n=== ShadowTLS Port Configuration ==="
+    echo "Please select how to set the ShadowTLS listen port:"
+    echo "1. Input manually (Port range: 50000-60000)"
+    echo "2. Generate randomly"
+    echo -e "----------------------------------------\n"
+    
+    while true; do
+        read -p "Your choice (1/2): " choice
+        case $choice in
+            1)
+                while true; do
+                    read -p "Please enter the listen port (50000-60000): " port
+                    if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 50000 ] && [ "$port" -le 60000 ]; then
+                        listen_port=$port
+                        echo -e "\n>>> Selected port: $listen_port"
+                        break
+                    else
+                        echo "Error: Please enter a valid port number (50000-60000)"
+                    fi
+                done
+                break
+                ;;
+            2)
+                listen_port=$(shuf -i 50000-60000 -n 1)
+                echo -e "\n>>> Randomly generated port: $listen_port"
+                break
+                ;;
+            *)
+                echo "Invalid choice. Please enter 1 or 2."
+                ;;
+        esac
+    done
+}
+
 # Function to print progress
 print_progress() {
     echo -e "\n>>> $1"
@@ -57,42 +93,6 @@ detect_arch() {
             ;;
     esac
     echo "✓ Detected architecture: $ss_arch"
-}
-
-# Function to get user input for ShadowTLS listen port
-get_user_port() {
-    echo -e "\n=== ShadowTLS Port Configuration ==="
-    echo "Please select how to set the ShadowTLS listen port:"
-    echo "1. Input manually (Port range: 50000-60000)"
-    echo "2. Generate randomly"
-    echo -e "----------------------------------------\n"
-    
-    while true; do
-        read -p "Your choice (1/2): " choice
-        case $choice in
-            1)
-                while true; do
-                    read -p "Please enter the listen port (50000-60000): " port
-                    if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 50000 ] && [ "$port" -le 60000 ]; then
-                        listen_port=$port
-                        echo -e "\n>>> Selected port: $listen_port"
-                        break
-                    else
-                        echo "Error: Please enter a valid port number (50000-60000)"
-                    fi
-                done
-                break
-                ;;
-            2)
-                listen_port=$(shuf -i 50000-60000 -n 1)
-                echo -e "\n>>> Randomly generated port: $listen_port"
-                break
-                ;;
-            *)
-                echo "Invalid choice. Please enter 1 or 2."
-                ;;
-        esac
-    done
 }
 
 # Install Shadowsocks
@@ -252,10 +252,10 @@ main() {
     echo "=== ShadowTLS Installation Script ==="
     echo "This script will install and configure Shadowsocks and ShadowTLS."
     echo -e "=====================================\n"
-    
+
+    set_user_port
     install_packages
     detect_arch
-    get_user_port
     install_shadowsocks
     configure_shadowsocks
     install_shadowtls
