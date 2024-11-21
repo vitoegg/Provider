@@ -121,10 +121,34 @@ RestartSec=5s
 WantedBy=multi-user.target
 EOF
 
+    # 添加详细的系统诊断信息
+    echo ">>> Debugging systemd and network status..."
+    systemctl list-unit-files | grep -E "network|online"
+    systemctl status systemd-networkd-wait-online.service
+
     systemctl daemon-reload
+    
     echo ">>> Starting Shadowsocks service..."
     systemctl enable shadowsocks.service
+    
+    # 记录enable操作后的时间
+    local enable_time=$(date +%s)
+    local enable_duration=$((enable_time - start_time))
+    echo ">>> Time taken for systemctl enable: ${enable_duration} seconds"
+    
     systemctl start shadowsocks.service
+    
+    # 记录start操作后的时间
+    local start_time=$(date +%s)
+    local start_duration=$((start_time - enable_time))
+    echo ">>> Time taken for systemctl start: ${start_duration} seconds"
+    
+    if ! systemctl is-active --quiet shadowsocks.service; then
+        echo "Error: Shadowsocks service failed to start!" 1>&2
+        systemctl status shadowsocks.service
+        journalctl -u shadowsocks.service
+        exit 1
+    fi
     echo "✓ Shadowsocks configured and started successfully"
 }
 
