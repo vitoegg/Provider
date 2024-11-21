@@ -1,15 +1,65 @@
 #!/bin/bash
 
-if [[ $EUID -ne 0 ]]; then
-    clear
-    echo "Error: This script must be run as root!" 1>&2
-    exit 1
-fi
+# Set error handling
+set -euo pipefail
+
+# Default values
+DEFAULT_PORT_RANGE_START=50000
+DEFAULT_PORT_RANGE_END=60000
+DEFAULT_MODE="random"  # or "manual"
+DEFAULT_PORT=""
 
 # Set common variables
 sspasswd=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 ssport=$(shuf -i 20000-40000 -n 1)  # Shadowsocks port range: 20000-40000
 tls_password=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
+
+# Help function
+show_help() {
+    cat << EOF
+Usage: $0 [OPTIONS]
+
+Options:
+    -h, --help                 Show this help message
+    -p, --port PORT           Manually specify port (50000-60000)
+    -m, --mode MODE           Port selection mode: 'random' or 'manual' (default: random)
+    -n, --non-interactive     Run in non-interactive mode (uses random port)
+    
+Example:
+    $0 --mode manual --port 55000
+    $0 --mode random
+    $0 --non-interactive
+EOF
+}
+
+# Parse command line arguments
+parse_arguments() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            -p|--port)
+                DEFAULT_PORT="$2"
+                shift 2
+                ;;
+            -m|--mode)
+                DEFAULT_MODE="$2"
+                shift 2
+                ;;
+            -n|--non-interactive)
+                DEFAULT_MODE="random"
+                shift
+                ;;
+            *)
+                echo "Unknown option: $1"
+                show_help
+                exit 1
+                ;;
+        esac
+    done
+}
 
 # Function to print progress
 print_progress() {
@@ -155,40 +205,73 @@ install_shadowtls() {
     echo "✓ ShadowTLS binary installed successfully"
 }
 
-# Function to get user input for ShadowTLS listen port
+# Validate port number
+validate_port() {
+    local port=$1
+    if [[ ! "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt $DEFAULT_PORT_RANGE_START ] || [ "$port" -gt $DEFAULT_PORT_RANGE_END ]; then
+        echo "Error: Invalid port number. Must be between $DEFAULT_PORT_RANGE_START and $DEFAULT_PORT_RANGE_END" >&2
+        return 1
+    fi
+    return 0
+}
+
+# Modified get_user_port function
 get_user_port() {
-    echo -e "\n=== ShadowTLS Port Configuration ==="
-    echo "Please select how to set the ShadowTLS listen port:"
-    echo "1. Input manually (Port range: 50000-60000)"
-    echo "2. Generate randomly"
-    echo -e "----------------------------------------\n"
-    
-    while true; do
-        read -p "Your choice (1/2): " choice
-        case $choice in
-            1)
-                while true; do
-                    read -p "Please enter the listen port (50000-60000): " port
-                    if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 50000 ] && [ "$port" -le 60000 ]; then
-                        listen_port=$port
-                        echo -e "\n>>> Selected port: $listen_port"
-                        break
-                    else
-                        echo "Error: Please enter a valid port number (50000-60000)"
+    # Check if we're in a fully interactive terminal
+    if [ -t 0 ] && [ -t 1 ] && [ "$DEFAULT_MODE" != "random" ]; then
+        echo -e "\n=== ShadowTLS Port Configuration ==="
+        echo "Please select how to set the ShadowTLS listen port:"
+        echo "1. Input manually (Port range: $DEFAULT_PORT_RANGE_START-$DEFAULT_PORT_RANGE_END)"
+        echo "2. Generate randomly"
+        echo -e "----------------------------------------\n"
+        
+        # Try to read user input with timeout
+        if read -t 30 -p "Your choice (1/2) [default: 2]: " choice; then
+            case $choice in
+                1)
+                    if [ -n "$DEFAULT_PORT" ]; then
+                        if validate_port "$DEFAULT_PORT"; then
+                            listen_port=$DEFAULT_PORT
+                            echo -e "\n>>> Using specified port: $listen_port"
+                            return 0
+                        fi
                     fi
-                done
-                break
-                ;;
-            2)
-                listen_port=$(shuf -i 50000-60000 -n 1)
-                echo -e "\n>>> Randomly generated port: $listen_port"
-                break
-                ;;
-            *)
-                echo "Invalid choice. Please enter 1 or 2."
-                ;;
-        esac
-    done
+                    
+                    while true; do
+                        if read -t 30 -p "Please enter the listen port ($DEFAULT_PORT_RANGE_START-$DEFAULT_PORT_RANGE_END): " port; then
+                            if validate_port "$port"; then
+                                listen_port=$port
+                                echo -e "\n>>> Selected port: $listen_port"
+                                break
+                            fi
+                        else
+                            echo -e "\nTimeout waiting for input. Using random port."
+                            listen_port=$(shuf -i $DEFAULT_PORT_RANGE_START-$DEFAULT_PORT_RANGE_END -n 1)
+                            echo -e "\n>>> Randomly generated port: $listen_port"
+                            break
+                        fi
+                    done
+                    ;;
+                2|"")
+                    listen_port=$(shuf -i $DEFAULT_PORT_RANGE_START-$DEFAULT_PORT_RANGE_END -n 1)
+                    echo -e "\n>>> Randomly generated port: $listen_port"
+                    ;;
+                *)
+                    echo "Invalid choice. Using random port."
+                    listen_port=$(shuf -i $DEFAULT_PORT_RANGE_START-$DEFAULT_PORT_RANGE_END -n 1)
+                    echo -e "\n>>> Randomly generated port: $listen_port"
+                    ;;
+            esac
+        else
+            echo -e "\nTimeout waiting for input. Using random port."
+            listen_port=$(shuf -i $DEFAULT_PORT_RANGE_START-$DEFAULT_PORT_RANGE_END -n 1)
+            echo -e "\n>>> Randomly generated port: $listen_port"
+        fi
+    else
+        # Non-interactive or random mode
+        listen_port=$(shuf -i $DEFAULT_PORT_RANGE_START-$DEFAULT_PORT_RANGE_END -n 1)
+        echo -e "\n>>> Using random port: $listen_port"
+    fi
 }
 
 # Configure ShadowTLS
@@ -248,6 +331,15 @@ show_configuration() {
 
 # Main execution
 main() {
+    # Check root privileges
+    if [[ $EUID -ne 0 ]]; then
+        echo "Error: This script must be run as root!" >&2
+        exit 1
+    }
+
+    # Parse command line arguments
+    parse_arguments "$@"
+
     clear
     echo "=== ShadowTLS Installation Script ==="
     echo "This script will install and configure Shadowsocks and ShadowTLS."
@@ -266,4 +358,5 @@ main() {
     rm -f "$(readlink -f "$0")"
 }
 
-main
+# Call main function with all arguments
+main "$@"
