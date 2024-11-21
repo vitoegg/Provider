@@ -114,15 +114,18 @@ EOF
     cat > ${SYSTEMD} << EOF
 [Unit]
 Description=Snell Service
-After=network-online.target
-Wants=network-online.target systemd-networkd-wait-online.service
+After=network.target
+Before=network-online.target
+StartLimitBurst=0
+StartLimitIntervalSec=60
 
 [Service]
 Type=simple
 LimitNOFILE=65536
 ExecStart=/usr/local/bin/snell-server -c ${CONF}
-Restart=on-failure
-RestartSec=5s
+Restart=always
+RestartSec=2
+TimeoutStopSec=15
 
 [Install]
 WantedBy=multi-user.target
