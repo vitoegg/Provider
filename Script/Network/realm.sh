@@ -33,19 +33,83 @@ uninstall_service() {
     echo "=== Realm 卸载完成 ==="
 }
 
-# 用户输入函数（保持原脚本不变）
+# 用户输入函数
 get_user_input() {
-    # ... (原脚本中的函数内容保持不变)
+    # 输入监听端口
+    while true; do
+        read -p "请输入本地监听端口 (推荐范围 1024-65535): " LISTEN_PORT
+        if [[ "$LISTEN_PORT" =~ ^[0-9]+$ ]] && [ "$LISTEN_PORT" -ge 1024 ] && [ "$LISTEN_PORT" -le 65535 ]; then
+            break
+        else
+            echo "错误: 请输入1024-65535之间的有效端口号"
+        fi
+    done
+
+    # 输入远程地址
+    while true; do
+        read -p "请输入远程服务器地址 (IP或域名): " REMOTE_ADDRESS
+        if [[ -n "$REMOTE_ADDRESS" ]]; then
+            break
+        else
+            echo "错误: 远程地址不能为空"
+        fi
+    done
+
+    # 输入远程端口
+    while true; do
+        read -p "请输入远程服务器端口 (推荐范围 1024-65535): " REMOTE_PORT
+        if [[ "$REMOTE_PORT" =~ ^[0-9]+$ ]] && [ "$REMOTE_PORT" -ge 1024 ] && [ "$REMOTE_PORT" -le 65535 ]; then
+            break
+        else
+            echo "错误: 请输入1024-65535之间的有效端口号"
+        fi
+    done
+
+    # 确认配置
+    echo ""
+    echo "确认配置信息:"
+    echo "本地监听端口: $LISTEN_PORT"
+    echo "远程服务器地址: $REMOTE_ADDRESS"
+    echo "远程服务器端口: $REMOTE_PORT"
+    
+    read -p "是否确认这些配置? [y/n]: " confirm
+    if [[ "$confirm" != [yY] && "$confirm" != [yY][eE][sS] ]]; then
+        echo "已取消安装"
+        return 1
+    fi
+
+    return 0
 }
 
-# 检测系统架构（保持原脚本不变）
+# 检测系统架构
 detect_architecture() {
-    # ... (原脚本中的函数内容保持不变)
+    local arch=$(uname -m)
+    case "$arch" in
+        x86_64)
+            echo "x86_64"
+            ;;
+        i386|i686)
+            echo "i386"
+            ;;
+        aarch64)
+            echo "aarch64"
+            ;;
+        armv7l)
+            echo "armv7l"
+            ;;
+        *)
+            echo "不支持的系统架构: $arch"
+            exit 1
+            ;;
+    esac
 }
 
-# 检测Realm最新版本（保持原脚本不变）
+# 检测Realm最新版本
 get_latest_version() {
-    # ... (原脚本中的函数内容保持不变)
+    curl -s https://api.github.com/repos/zhboner/realm/releases/latest \
+        | grep tag_name \
+        | cut -d ":" -f2 \
+        | sed 's/\"//g;s/\,//g;s/\ //g;s/v//'
 }
 
 # 显示菜单
@@ -58,48 +122,33 @@ show_menu() {
     echo "======================="
 }
 
-# 主程序
-main() {
-    # 检查是否为root用户
-    if [[ $EUID -ne 0 ]]; then
-       echo "错误: 此脚本必须以root权限运行" 
-       exit 1
-    fi
+# 安装Realm
+install_realm() {
+    # 检测架构
+    ARCH=$(detect_architecture)
+    echo "检测到系统架构: $ARCH"
 
-    # 显示菜单并处理用户选择
-    while true; do
-        show_menu
-        read -p "请选择操作 [1-3]: " choice
-        case "$choice" in
-            1)
-                # 安装Realm
-                get_user_input
-                
-                # 检测架构
-                ARCH=$(detect_architecture)
-                echo "检测到系统架构: $ARCH"
+    # 检测版本
+    VERSION=$(get_latest_version)
+    echo "检测到最新版本: $VERSION"
+    
+    # 下载对应版本
+    DOWNLOAD_URL="https://github.com/zhboner/realm/releases/download/v${VERSION}/realm-${ARCH}-unknown-linux-gnu.tar.gz"
+    echo "正在下载Realm"
+    wget --no-check-certificate -O realm.tar.gz "$DOWNLOAD_URL"
 
-                # 检测版本
-                VERSION=$(get_latest_version)
-                echo "检测到最新版本: $VERSION"
-                
-                # 下载对应版本
-                DOWNLOAD_URL="https://github.com/zhboner/realm/releases/download/v${VERSION}/realm-${ARCH}-unknown-linux-gnu.tar.gz"
-                echo "正在下载Realm"
-                wget --no-check-certificate -O realm.tar.gz "$DOWNLOAD_URL"
+    # 解压和安装
+    tar -zxvf realm.tar.gz
+    chmod +x realm
+    mv -f realm /usr/local/bin/
+    rm -f realm.tar.gz
 
-                # 解压和安装
-                tar -zxvf realm.tar.gz
-                chmod +x realm
-                mv -f realm /usr/local/bin/
-                rm -f realm.tar.gz
+    # 创建配置文件目录
+    mkdir -p /etc/realm
 
-                # 创建配置文件目录
-                mkdir -p /etc/realm
-
-                # 生成配置文件
-                echo "正在生成配置文件..."
-                cat > ${CONF} << EOF
+    # 生成配置文件
+    echo "正在生成配置文件..."
+    cat > ${CONF} << EOF
 [log]
 level = "warn"
 output = "realm.log"
@@ -113,9 +162,9 @@ listen = "0.0.0.0:${LISTEN_PORT}"
 remote = "${REMOTE_ADDRESS}:${REMOTE_PORT}"
 EOF
 
-                # 创建systemd服务
-                echo "正在创建系统服务..."
-                cat > ${SYSTEMD} << EOF
+    # 创建systemd服务
+    echo "正在创建系统服务..."
+    cat > ${SYSTEMD} << EOF
 [Unit]
 Description=Realm Service
 After=network.target
@@ -135,20 +184,39 @@ TimeoutStopSec=15
 WantedBy=multi-user.target
 EOF
 
-                # 启动服务
-                systemctl daemon-reload
-                systemctl enable realm
-                systemctl start realm
-                systemctl status realm
+    # 启动服务
+    systemctl daemon-reload
+    systemctl enable realm
+    systemctl start realm
+    systemctl status realm
 
-                # 输出配置信息
-                echo "==========================================="
-                echo "Realm 安装完成！配置信息如下："
-                echo "监听端口: ${LISTEN_PORT}"
-                echo "远程地址: ${REMOTE_ADDRESS}"
-                echo "远程端口: ${REMOTE_PORT}"
-                echo "==========================================="
-                
+    # 输出配置信息
+    echo "==========================================="
+    echo "Realm 安装完成！配置信息如下："
+    echo "监听端口: ${LISTEN_PORT}"
+    echo "远程地址: ${REMOTE_ADDRESS}"
+    echo "远程端口: ${REMOTE_PORT}"
+    echo "==========================================="
+}
+
+# 主程序
+main() {
+    # 检查是否为root用户
+    if [[ $EUID -ne 0 ]]; then
+       echo "错误: 此脚本必须以root权限运行" 
+       exit 1
+    fi
+
+    # 显示菜单并处理用户选择
+    while true; do
+        show_menu
+        read -p "请选择操作 [1-3]: " choice
+        case "$choice" in
+            1)
+                # 安装Realm
+                if get_user_input; then
+                    install_realm
+                fi
                 read -p "按回车键返回主菜单" pause
                 ;;
             
