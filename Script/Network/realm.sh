@@ -59,7 +59,7 @@ detect_architecture() {
     local arch=$(uname -m)
     case "$arch" in
         x86_64)
-            echo "amd64"
+            echo "x86_64"
             ;;
         i386|i686)
             echo "i386"
