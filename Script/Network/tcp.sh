@@ -7,6 +7,43 @@ Info="${Green_font_prefix}[信息]${Font_color_suffix}"
 Error="${Red_font_prefix}[错误]${Font_color_suffix}"
 Tip="${Green_font_prefix}[注意]${Font_color_suffix}"
 
+# 服务器选择和内存参数设置
+server_selection() {
+    echo -e "${Info} 请选择服务器类型:"
+    echo "1. HK Server"
+    echo "2. JP Server"
+    echo "3. US Server"
+    echo "4. Customized"
+    
+    read -p "请输入数字选择 (1-4): " server_choice
+    
+    case $server_choice in
+        1)
+            Rmem=6875000
+            Wmem=6875000
+            ;;
+        2)
+            Rmem=6750000
+            Wmem=6750000
+            ;;
+        3)
+            Rmem=18750000
+            Wmem=18750000
+            ;;
+        4)
+            read -p "请输入 Rmem 值: " Rmem
+            read -p "请输入 Wmem 值: " Wmem
+            ;;
+        *)
+            echo -e "${Error} 无效的选择，默认使用 HK Server 配置"
+            Rmem=6875000
+            Wmem=6875000
+            ;;
+    esac
+    
+    echo -e "${Info} 已选择 Rmem: ${Rmem}, Wmem: ${Wmem}"
+}
+
 system_tune() {
     cat > /etc/sysctl.conf << EOF
 # 文件描述符限制
@@ -40,8 +77,8 @@ net.ipv4.tcp_window_scaling=1
 net.ipv4.tcp_adv_win_scale=1
 net.ipv4.tcp_moderate_rcvbuf=1
 # 网络缓存区调整
-net.ipv4.tcp_rmem=4096 87380 20500000
-net.ipv4.tcp_wmem=4096 16384 10250000
+net.ipv4.tcp_rmem=4096 87380 ${Rmem}
+net.ipv4.tcp_wmem=4096 16384 ${Wmem}
 # 允许流量转发
 net.ipv4.ip_forward=1
 net.ipv4.conf.all.route_localnet=1
@@ -56,11 +93,17 @@ EOF
 }
 
 clean_file() {
-# 清理安装脚本
-rm -f "$(readlink -f "$0")"
+    # 清理安装脚本
+    rm -f "$(readlink -f "$0")"
 }
 
-echo -e "${Info} 开始执行系统调优..."
+# 主执行流程
+echo -e "${Info} 开始系统调优..."
+
+# 先进行服务器选择
+server_selection
+
+# 执行系统调优
 system_tune
 echo -e "${Info} 系统调优完成"
 
