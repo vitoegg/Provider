@@ -23,6 +23,7 @@ VERSION="1.2024.06.12-2222"
 parse_args() {
     USE_AI_DNS=0
     AI_DNS_SERVER=""
+    UNINSTALL=0
     
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -35,16 +36,25 @@ parse_args() {
                 AI_DNS_SERVER="$2"
                 shift 2
                 ;;
+            -u|--uninstall)
+                UNINSTALL=1
+                shift
+                ;;
             *)
                 echo "未知参数: $1"
-                echo "用法: $0 [-v|--version <版本号>] [-a|--ai-dns <AI DNS服务器IP>]"
+                echo "用法: $0 [-v|--version <版本号>] [-a|--ai-dns <AI DNS服务器IP>] [-u|--uninstall]"
                 exit 1
                 ;;
         esac
     done
-    echo "使用 SmartDNS 版本: $VERSION"
-    if [ $USE_AI_DNS -eq 1 ]; then
-        echo "启用 AI DNS 解锁服务器: $AI_DNS_SERVER"
+
+    if [ $UNINSTALL -eq 1 ]; then
+        echo "准备卸载 SmartDNS..."
+    else
+        echo "使用 SmartDNS 版本: $VERSION"
+        if [ $USE_AI_DNS -eq 1 ]; then
+            echo "启用 AI DNS 解锁服务器: $AI_DNS_SERVER"
+        fi
     fi
 }
 
@@ -145,7 +155,7 @@ EOF
     echo "正在启动 SmartDNS 服务..."
     systemctl start smartdns
     
-    # 检��服务状态
+    # 检查服务状态
     if systemctl is-active smartdns &>/dev/null; then
         echo "SmartDNS 安装并启动成功！"
         
@@ -166,13 +176,51 @@ EOF
     fi
 }
 
+# 卸载 smartdns
+uninstall_smartdns() {
+    echo "开始卸载 SmartDNS..."
+    
+    # 停止服务
+    if systemctl is-active smartdns &>/dev/null; then
+        echo "停止 SmartDNS 服务..."
+        systemctl stop smartdns
+    fi
+    
+    # 禁用服务
+    if systemctl is-enabled smartdns &>/dev/null; then
+        echo "禁用 SmartDNS 服务..."
+        systemctl disable smartdns
+    fi
+    
+    # 恢复 DNS 配置
+    echo "恢复系统 DNS 配置..."
+    chattr -i /etc/resolv.conf 2>/dev/null
+    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+    echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+    
+    # 删除相关文件
+    echo "删除 SmartDNS 相关文件..."
+    rm -rf /etc/smartdns
+    rm -f /usr/sbin/smartdns
+    rm -f /usr/lib/systemd/system/smartdns.service
+    
+    # 重新加载 systemd
+    systemctl daemon-reload
+    
+    echo "SmartDNS 卸载完成！"
+}
+
 main() {
-    echo "开始安装 SmartDNS..."
     check_root
-    check_installed
     parse_args "$@"
-    install_smartdns
-    configure_smartdns
+    
+    if [ $UNINSTALL -eq 1 ]; then
+        uninstall_smartdns
+    else
+        check_installed
+        install_smartdns
+        configure_smartdns
+    fi
 }
 
 # 修改主函数调用，传入所有命令行参数
