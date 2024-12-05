@@ -6,7 +6,15 @@ export PATH
 
 # 定义常量
 CONF="/etc/realm/config.toml"
-SYSTEMD="/lib/systemd/system/realm.service"
+# 根据不同系统调整systemd路径
+if [ -d "/usr/lib/systemd/system" ]; then
+    SYSTEMD="/usr/lib/systemd/system/realm.service"
+elif [ -d "/lib/systemd/system" ]; then
+    SYSTEMD="/lib/systemd/system/realm.service"
+else
+    echo "错误: 未找到systemd目录"
+    exit 1
+fi
 
 # 卸载服务函数
 uninstall_service() {
@@ -14,11 +22,15 @@ uninstall_service() {
     echo "=== 正在卸载 Realm 服务 ==="
     
     # 停止并禁用服务
-    systemctl stop realm.service 2>/dev/null
-    systemctl disable realm.service 2>/dev/null
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl stop realm.service 2>/dev/null
+        systemctl disable realm.service 2>/dev/null
+    else
+        service realm stop 2>/dev/null
+    fi
     
     # 删除服务文件
-    rm -f /lib/systemd/system/realm.service
+    rm -f "$SYSTEMD"
     
     # 删除配置文件
     rm -rf /etc/realm
@@ -124,6 +136,14 @@ show_menu() {
 
 # 安装Realm
 install_realm() {
+    # 检查必要工具
+    for cmd in curl wget tar systemctl; do
+        if ! command -v $cmd >/dev/null 2>&1; then
+            echo "错误: 未安装 $cmd，请先安装必要工具"
+            exit 1
+        fi
+    done
+
     # 检测架构
     ARCH=$(detect_architecture)
     echo "检测到系统架构: $ARCH"
@@ -135,7 +155,13 @@ install_realm() {
     # 下载对应版本
     DOWNLOAD_URL="https://github.com/zhboner/realm/releases/download/v${VERSION}/realm-${ARCH}-unknown-linux-gnu.tar.gz"
     echo "正在下载Realm"
-    wget --no-check-certificate -O realm.tar.gz "$DOWNLOAD_URL"
+    if ! wget --no-check-certificate -O realm.tar.gz "$DOWNLOAD_URL"; then
+        echo "下载失败，尝试使用curl下载..."
+        if ! curl -L -o realm.tar.gz "$DOWNLOAD_URL"; then
+            echo "错误: 下载失败"
+            exit 1
+        fi
+    fi
 
     # 解压和安装
     tar -zxvf realm.tar.gz
@@ -164,7 +190,8 @@ EOF
 
     # 创建systemd服务
     echo "正在创建系统服务..."
-    cat > ${SYSTEMD} << EOF
+    mkdir -p "$(dirname "$SYSTEMD")"
+    cat > "${SYSTEMD}" << EOF
 [Unit]
 Description=Realm Service
 After=network.target
@@ -179,10 +206,20 @@ ExecStart=/usr/local/bin/realm -c ${CONF}
 Restart=always
 RestartSec=2
 TimeoutStopSec=15
+User=nobody
+Group=nogroup
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+    # 检查nobody用户和组是否存在，不存在则使用其他系统用户
+    if ! getent passwd nobody >/dev/null; then
+        sed -i 's/User=nobody/User=daemon/' "${SYSTEMD}"
+    fi
+    if ! getent group nogroup >/dev/null; then
+        sed -i 's/Group=nogroup/Group=daemon/' "${SYSTEMD}"
+    fi
 
     # 启动服务
     systemctl daemon-reload
