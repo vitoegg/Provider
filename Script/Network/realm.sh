@@ -19,30 +19,42 @@ fi
 # 卸载服务函数
 uninstall_service() {
     clear
-    echo "=== 正在卸载 Realm 服务 ==="
+    echo "=== 开始卸载 Realm 服务 ==="
     
     # 停止并禁用服务
     if command -v systemctl >/dev/null 2>&1; then
+        echo "正在停止 Realm 服务..."
         systemctl stop realm.service 2>/dev/null
+        echo "正在禁用 Realm 服务..."
         systemctl disable realm.service 2>/dev/null
     else
+        echo "正在停止 Realm 服务..."
         service realm stop 2>/dev/null
     fi
     
     # 删除服务文件
+    echo "正在删除服务文件: $SYSTEMD"
     rm -f "$SYSTEMD"
     
     # 删除配置文件
+    echo "正在删除配置目录: /etc/realm"
     rm -rf /etc/realm
     
     # 删除二进制文件
+    echo "正在删除程序文件: /usr/local/bin/realm"
     rm -f /usr/local/bin/realm
     
+    # 删除日志文件
+    echo "正在删除日志文件: /var/log/realm.log"
+    rm -f /var/log/realm.log
+    
     # 重新加载systemd
+    echo "正在重新加载 systemd 配置..."
     systemctl daemon-reload
     systemctl reset-failed
     
     echo "=== Realm 卸载完成 ==="
+    exit 0
 }
 
 # 安装必要工具
@@ -70,13 +82,13 @@ install_required_tools() {
         elif command -v dnf >/dev/null 2>&1; then
             dnf install -y "${missing_tools[@]}"
         else
-            echo "错误: 无法识别的包管理器，请手动安装所需工具"
+            echo "错误: 无法识别��包管理器，请手动安装所需工具"
             exit 1
         fi
     fi
 }
 
-# 用户输入函数
+# 用户输入函数 (移除确认环节)
 get_user_input() {
     # 输入监听端口
     while true; do
@@ -152,7 +164,30 @@ show_menu() {
     echo "======================="
 }
 
-# 安装Realm
+# 解压和安装
+install_binary() {
+    local temp_dir=$(mktemp -d)
+    echo "正在解压和安装二进制文件..."
+    
+    # 解压到临时目录
+    tar -xzf realm.tar.gz -C "$temp_dir"
+    
+    # 设置权限并移动文件
+    chmod 755 "$temp_dir/realm"
+    mv -f "$temp_dir/realm" /usr/local/bin/
+    
+    # 清理临时文件
+    rm -f realm.tar.gz
+    rm -rf "$temp_dir"
+    
+    # 验证安装
+    if [ ! -x "/usr/local/bin/realm" ]; then
+        echo "错误: 安装失败，请检查权限和磁盘空间"
+        exit 1
+    fi
+}
+
+# 安装Realm (修改检查工具部分)
 install_realm() {
     # 安装必要工具
     install_required_tools
@@ -176,12 +211,9 @@ install_realm() {
         fi
     fi
 
-    # 解压和安装
-    tar -zxvf realm.tar.gz
-    chmod +x realm
-    mv -f realm /usr/local/bin/
-    rm -f realm.tar.gz
-
+    # 下载完成后调用安装函数
+    install_binary
+    
     # 创建配置文件目录
     mkdir -p /etc/realm
 
@@ -219,26 +251,23 @@ ExecStart=/usr/local/bin/realm -c ${CONF}
 Restart=always
 RestartSec=2
 TimeoutStopSec=15
-User=nobody
-Group=nogroup
+WorkingDirectory=/etc/realm
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-    # 检查nobody用户和组是否存在，不存在则使用其他系统用户
-    if ! getent passwd nobody >/dev/null; then
-        sed -i 's/User=nobody/User=daemon/' "${SYSTEMD}"
-    fi
-    if ! getent group nogroup >/dev/null; then
-        sed -i 's/Group=nogroup/Group=daemon/' "${SYSTEMD}"
-    fi
-
     # 启动服务
     systemctl daemon-reload
     systemctl enable realm
     systemctl start realm
-    systemctl status realm
+
+    # 检查服务状态
+    if systemctl is-active --quiet realm; then
+        echo "Realm 服务已成功启动"
+    else
+        echo "错误: Realm 服务启动失败，请检查日志"
+    fi
 
     # 输出配置信息
     echo "==========================================="
@@ -247,9 +276,12 @@ EOF
     echo "远程地址: ${REMOTE_ADDRESS}"
     echo "远程端口: ${REMOTE_PORT}"
     echo "==========================================="
+    
+    # 直接退出
+    exit 0
 }
 
-# 主程序
+# 主程序 (移除确认环节)
 main() {
     # 检查是否为root用户
     if [[ $EUID -ne 0 ]]; then
@@ -266,13 +298,13 @@ main() {
                 # 安装Realm
                 get_user_input
                 install_realm
-                read -p "按回车键返回主菜单" pause
+                # install_realm 函数会自行退出
                 ;;
             
             2)
                 # 卸载Realm
                 uninstall_service
-                read -p "按回车键返回主菜单" pause
+                # uninstall_service 函数会自行退出
                 ;;
             
             3)
@@ -282,7 +314,7 @@ main() {
             
             *)
                 echo "无效的选择，请重新输入"
-                read -p "按回车键返回主菜单" pause
+                sleep 2
                 ;;
         esac
     done
