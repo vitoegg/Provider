@@ -16,6 +16,25 @@ check_installed() {
     fi
 }
 
+# 检查系统架构
+check_arch() {
+    ARCH=$(uname -m)
+    case $ARCH in
+        x86_64)
+            ARCH_TYPE="x86_64"
+            ;;
+        aarch64)
+            ARCH_TYPE="aarch64"
+            ;;
+        *)
+            echo "错误: 不支持的系统架构 $ARCH"
+            echo "本脚本仅支持 x86_64 和 aarch64 架构"
+            exit 1
+            ;;
+    esac
+    echo "检测到系统架构: $ARCH_TYPE"
+}
+
 # 设置默认版本
 VERSION="1.2024.06.12-2222"
 
@@ -66,7 +85,7 @@ install_smartdns() {
     
     # 下载指定版本的 smartdns
     echo "正在下载 SmartDNS..."
-    DOWNLOAD_URL="https://github.com/pymumu/smartdns/releases/download/Release46/smartdns.${VERSION}.x86_64-linux-all.tar.gz"
+    DOWNLOAD_URL="https://github.com/pymumu/smartdns/releases/download/Release46/smartdns.${VERSION}.${ARCH_TYPE}-linux-all.tar.gz"
     if ! wget --no-check-certificate -qO smartdns.tar.gz "$DOWNLOAD_URL"; then
         echo "下载失败，请检查版本号是否正确"
         cd / && rm -rf "$TMP_DIR"
@@ -195,8 +214,8 @@ uninstall_smartdns() {
     # 恢复 DNS 配置
     echo "恢复系统 DNS 配置..."
     chattr -i /etc/resolv.conf 2>/dev/null
-    echo "nameserver 1.1.1.1" > /etc/resolv.conf
-    echo "nameserver 8.8.8.8" >> /etc/resolv.conf
+    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+    echo "nameserver 1.1.1.1" >> /etc/resolv.conf
     
     # 删除相关文件
     echo "删除 SmartDNS 相关文件..."
@@ -212,6 +231,7 @@ uninstall_smartdns() {
 
 main() {
     check_root
+    check_arch
     parse_args "$@"
     
     if [ $UNINSTALL -eq 1 ]; then
