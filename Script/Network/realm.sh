@@ -45,7 +45,38 @@ uninstall_service() {
     echo "=== Realm 卸载完成 ==="
 }
 
-# 用户输入函数
+# 安装必要工具
+install_required_tools() {
+    local tools=("curl" "wget" "tar")
+    local missing_tools=()
+    
+    # 检查哪些工具缺失
+    for tool in "${tools[@]}"; do
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            missing_tools+=("$tool")
+        fi
+    done
+    
+    # 如果有缺失的工具，尝试安装
+    if [ ${#missing_tools[@]} -ne 0 ]; then
+        echo "正在安装必要工具: ${missing_tools[*]}"
+        
+        # 检测包管理器并安装
+        if command -v apt >/dev/null 2>&1; then
+            apt update -y
+            apt install -y "${missing_tools[@]}"
+        elif command -v yum >/dev/null 2>&1; then
+            yum install -y "${missing_tools[@]}"
+        elif command -v dnf >/dev/null 2>&1; then
+            dnf install -y "${missing_tools[@]}"
+        else
+            echo "错误: 无法识别的包管理器，请手动安装所需工具"
+            exit 1
+        fi
+    fi
+}
+
+# 用户输入函数 (移除确认环节)
 get_user_input() {
     # 输入监听端口
     while true; do
@@ -76,19 +107,6 @@ get_user_input() {
             echo "错误: 请输入1024-65535之间的有效端口号"
         fi
     done
-
-    # 确认配置
-    echo ""
-    echo "确认配置信息:"
-    echo "本地监听端口: $LISTEN_PORT"
-    echo "远程服务器地址: $REMOTE_ADDRESS"
-    echo "远程服务器端口: $REMOTE_PORT"
-    
-    read -p "是否确认这些配置? [y/n]: " confirm
-    if [[ "$confirm" != [yY] && "$confirm" != [yY][eE][sS] ]]; then
-        echo "已取消安装"
-        return 1
-    fi
 
     return 0
 }
@@ -134,15 +152,10 @@ show_menu() {
     echo "======================="
 }
 
-# 安装Realm
+# 安装Realm (修改检查工具部分)
 install_realm() {
-    # 检查必要工具
-    for cmd in curl wget tar systemctl; do
-        if ! command -v $cmd >/dev/null 2>&1; then
-            echo "错误: 未安装 $cmd，请先安装必要工具"
-            exit 1
-        fi
-    done
+    # 安装必要工具
+    install_required_tools
 
     # 检测架构
     ARCH=$(detect_architecture)
@@ -236,7 +249,7 @@ EOF
     echo "==========================================="
 }
 
-# 主程序
+# 主程序 (移除确认环节)
 main() {
     # 检查是否为root用户
     if [[ $EUID -ne 0 ]]; then
@@ -251,9 +264,8 @@ main() {
         case "$choice" in
             1)
                 # 安装Realm
-                if get_user_input; then
-                    install_realm
-                fi
+                get_user_input
+                install_realm
                 read -p "按回车键返回主菜单" pause
                 ;;
             
