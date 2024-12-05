@@ -195,8 +195,8 @@ uninstall_smartdns() {
     # 恢复 DNS 配置
     echo "恢复系统 DNS 配置..."
     chattr -i /etc/resolv.conf 2>/dev/null
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf
-    echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+    echo "nameserver 1.1.1.1" > /etc/resolv.conf
+    echo "nameserver 8.8.8.8" >> /etc/resolv.conf
     
     # 删除相关文件
     echo "删除 SmartDNS 相关文件..."
