@@ -76,7 +76,7 @@ install_required_tools() {
     fi
 }
 
-# 用户输入函数 (移除确认环节)
+# 用户输入函数
 get_user_input() {
     # 输入监听端口
     while true; do
@@ -152,7 +152,7 @@ show_menu() {
     echo "======================="
 }
 
-# 安装Realm (修改检查工具部分)
+# 安装Realm
 install_realm() {
     # 安装必要工具
     install_required_tools
