@@ -4,6 +4,7 @@
 1、Surge模块主要引用以下仓库
 
 - https://surge.qingr.moe
+- https://github.com/zirawell/R-Store
 
 2、Loon模块主要引用以下仓库
 
