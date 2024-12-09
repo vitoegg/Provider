@@ -199,8 +199,8 @@ PRESET_DOMAINS=(
     "updates.cdn-apple.com"
     "weather-data.apple.com"
     "cdn-dynmedia-1.microsoft.com"
-    "www.amd.com"
-    "www.mysql.com"
+    "software.download.prss.microsoft.com"
+    "blog.skk.moe"
     "sns-video-hw.xhscdn.com"
 )
 
@@ -295,9 +295,24 @@ EOF
     echo "✓ ShadowTLS configured and started successfully"
 }
 
+# 添加新函数来获取本机的 IPv4 地址
+get_ipv4_address() {
+    # 使用 ip 命令获取本机的 IPv4 地址
+    local ip=$(ip -4 addr show scope global | grep inet | awk '{print $2}' | cut -d/ -f1 | head -n 1)
+    
+    if [[ -z "$ip" ]]; then
+        echo "无法获取 IP 地址"
+    else
+        echo "$ip"
+    fi
+}
+
 # Show final configuration
 show_configuration() {
     print_progress "Installation completed successfully!"
+    
+    # 获取 IPv4 地址
+    local server_ip=$(get_ipv4_address)
 
     echo "Service status:"
     echo "----- Shadowsocks Service -----"
@@ -306,15 +321,13 @@ show_configuration() {
     echo "----- ShadowTLS Service -----"
     systemctl status shadowtls.service --no-pager
     
-    echo -e "\n==========Shadowsocks Configuration==========="
-    echo "Internal Port: ${ssport}"
-    echo "Password: ${sspasswd}"
-    echo "Method: aes-128-gcm"
-    
-    echo -e "\n===========ShadowTLS Configuration==========="
-    echo "Listen Port: ${listen_port}"
-    echo "Password: ${tls_password}"
-    echo "TLS Server: ${domain}"
+    echo -e "\n==========ShadowTLS Configuration==========="
+    echo "Server IP: ${server_ip}"
+    echo "Shadowsocks Port: ${ssport}"
+    echo "ShadowsocksPassword: ${sspasswd}"
+    echo "ShadowTLS Port: ${listen_port}"
+    echo "ShadowTLS Password: ${tls_password}"
+    echo "ShadowTLS SNI: ${domain}"
     echo -e "===========================================\n"
 }
 
@@ -324,27 +337,39 @@ uninstall_service() {
     echo "=== Uninstalling Shadowsocks and ShadowTLS ==="
     
     # 停止并禁用服务
+    echo ">>> Stopping and disabling Shadowsocks service..."
     systemctl stop shadowsocks.service 2>/dev/null
     systemctl disable shadowsocks.service 2>/dev/null
+    echo "✓ Shadowsocks service stopped and disabled"
     
+    echo ">>> Stopping and disabling ShadowTLS service..."
     systemctl stop shadowtls.service 2>/dev/null
     systemctl disable shadowtls.service 2>/dev/null
+    echo "✓ ShadowTLS service stopped and disabled"
     
     # 删除服务文件
+    echo ">>> Removing service files..."
     rm -f /lib/systemd/system/shadowsocks.service
     rm -f /lib/systemd/system/shadowtls.service
+    echo "✓ Service files removed"
     
     # 删除配置文件
+    echo ">>> Removing configuration files..."
     rm -rf /etc/shadowsocks
     rm -f /etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf
+    echo "✓ Configuration files removed"
     
     # 删除二进制文件
+    echo ">>> Removing binary files..."
     rm -f /usr/local/bin/ssserver
     rm -f /usr/local/bin/shadow-tls
+    echo "✓ Binary files removed"
     
     # 重新加载systemd
+    echo ">>> Reloading systemd daemon..."
     systemctl daemon-reload
     systemctl reset-failed
+    echo "✓ Systemd daemon reloaded"
     
     echo "=== Uninstallation Complete ==="
 }
