@@ -194,6 +194,72 @@ get_user_port() {
     done
 }
 
+# 新增预设域名数组
+PRESET_DOMAINS=(
+    "updates.cdn-apple.com"
+    "weather-data.apple.com"
+    "cdn-dynmedia-1.microsoft.com"
+    "www.amd.com"
+    "www.mysql.com"
+    "sns-video-hw.xhscdn.com"
+)
+
+# 获取用户域名选择
+get_user_domain() {
+    echo -e "\n=== TLS Domain Configuration ==="
+    echo "请选择 TLS 域名设置方式："
+    echo "1. 随机使用预设域名"
+    echo "2. 使用指定域名"
+    echo "3. 手动输入域名"
+    echo -e "----------------------------------------\n"
+    
+    while true; do
+        read -p "请选择 (1/2/3): " domain_choice
+        case $domain_choice in
+            1)
+                # 随机选择一个预设域名
+                random_index=$((RANDOM % ${#PRESET_DOMAINS[@]}))
+                domain="${PRESET_DOMAINS[$random_index]}"
+                echo -e "\n>>> 随机选择域名: $domain"
+                break
+                ;;
+            2)
+                echo -e "\n可用的预设域名："
+                for i in "${!PRESET_DOMAINS[@]}"; do
+                    echo "$((i+1)). ${PRESET_DOMAINS[$i]}"
+                done
+                while true; do
+                    read -p "请选择域名编号 (1-${#PRESET_DOMAINS[@]}): " domain_index
+                    if [[ "$domain_index" =~ ^[0-9]+$ ]] && [ "$domain_index" -ge 1 ] && [ "$domain_index" -le "${#PRESET_DOMAINS[@]}" ]; then
+                        domain="${PRESET_DOMAINS[$((domain_index-1))]}"
+                        echo -e "\n>>> 使用指定域名: $domain"
+                        break
+                    else
+                        echo "错误：请输入有效的编号 (1-${#PRESET_DOMAINS[@]})"
+                    fi
+                done
+                break
+                ;;
+            3)
+                while true; do
+                    read -p "请输入域名: " custom_domain
+                    if [[ $custom_domain =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+                        domain=$custom_domain
+                        echo -e "\n>>> 使用自定义域名: $domain"
+                        break
+                    else
+                        echo "错误：请输入有效的域名格式"
+                    fi
+                done
+                break
+                ;;
+            *)
+                echo "无效选择。请输入 1、2 或 3。"
+                ;;
+        esac
+    done
+}
+
 # Configure ShadowTLS
 configure_shadowtls() {
     print_progress "Configuring ShadowTLS..."
@@ -207,7 +273,7 @@ StartLimitIntervalSec=60
 
 [Service]
 LimitNOFILE=65536
-ExecStart=/usr/local/bin/shadow-tls --fastopen --v3 server --listen ::0:${listen_port} --server 127.0.0.1:${ssport} --tls m.hypai.org --password ${tls_password}
+ExecStart=/usr/local/bin/shadow-tls --fastopen --v3 server --listen ::0:${listen_port} --server 127.0.0.1:${ssport} --tls ${domain} --password ${tls_password}
 Restart=always
 RestartSec=2
 TimeoutStopSec=15
@@ -302,6 +368,7 @@ main() {
             configure_shadowsocks
             install_shadowtls
             get_user_port
+            get_user_domain
             configure_shadowtls
             show_configuration
             ;;
