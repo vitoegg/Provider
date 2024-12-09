@@ -314,7 +314,7 @@ show_configuration() {
     echo -e "\n===========ShadowTLS Configuration==========="
     echo "Listen Port: ${listen_port}"
     echo "Password: ${tls_password}"
-    echo "TLS Server: m.hypai.org"
+    echo "TLS Server: ${domain}"
     echo -e "===========================================\n"
 }
 
