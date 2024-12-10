@@ -19,6 +19,8 @@ payload:
   - 'openai-api.arkoselabs.com'
   - 'openaicom.imgix.net'
   - 'browser-intake-datadoghq.com'
+  # > Sora
+  - 'sora.com'
 
   # > Siri
   - '+.apple-relay.apple.com'
