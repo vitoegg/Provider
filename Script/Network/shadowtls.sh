@@ -200,7 +200,6 @@ PRESET_DOMAINS=(
     "weather-data.apple.com"
     "cdn-dynmedia-1.microsoft.com"
     "software.download.prss.microsoft.com"
-    "blog.skk.moe"
     "sns-video-hw.xhscdn.com"
 )
 
