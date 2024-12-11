@@ -34,8 +34,7 @@ DOMAINS=(
     "updates.cdn-apple.com"
     "weather-data.apple.com"
     "cdn-dynmedia-1.microsoft.com"
-    "www.amd.com"
-    "www.mysql.com"
+    "software.download.prss.microsoft.com"
     "sns-video-hw.xhscdn.com"
 )
 
