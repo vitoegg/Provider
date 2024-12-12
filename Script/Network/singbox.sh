@@ -26,7 +26,14 @@ generate_password() {
 
 # 生成随机端口
 generate_port() {
-    shuf -i 50000-60000 -n 1
+    local port
+    while true; do
+        port=$(shuf -i 50000-60000 -n 1)
+        if [[ ! $port =~ 4 ]]; then
+            echo "$port"
+            break
+        fi
+    done
 }
 
 # 预定义域名列表
@@ -34,7 +41,8 @@ DOMAINS=(
     "updates.cdn-apple.com"
     "weather-data.apple.com"
     "cdn-dynmedia-1.microsoft.com"
-    "software.download.prss.microsoft.com"
+    "www.amd.com"
+    "www.mysql.com"
     "sns-video-hw.xhscdn.com"
 )
 
