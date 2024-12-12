@@ -7,8 +7,18 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # Set common variables
+generate_port() {
+    while true; do
+        port=$(shuf -i $1-$2 -n 1)
+        if [[ ! "$port" =~ "4" ]]; then
+            echo "$port"
+            break
+        fi
+    done
+}
+
 sspasswd=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
-ssport=$(shuf -i 20000-40000 -n 1)  # Shadowsocks port range: 20000-40000
+ssport=$(generate_port 20000 40000)  # Shadowsocks port range: 20000-40000
 tls_password=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
 
 # Function to print progress
@@ -161,34 +171,34 @@ install_shadowtls() {
 # Function to get user input for ShadowTLS listen port
 get_user_port() {
     echo -e "\n=== ShadowTLS Port Configuration ==="
-    echo "Please select how to set the ShadowTLS listen port:"
-    echo "1. Input manually (Port range: 50000-60000)"
-    echo "2. Generate randomly"
+    echo "请选择如何设置 ShadowTLS 监听端口："
+    echo "1. 手动输入 (端口范围: 50000-60000)"
+    echo "2. 随机生成"
     echo -e "----------------------------------------\n"
     
     while true; do
-        read -p "Your choice (1/2): " choice
+        read -p "请选择 (1/2): " choice
         case $choice in
             1)
                 while true; do
-                    read -p "Please enter the listen port (50000-60000): " port
-                    if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 50000 ] && [ "$port" -le 60000 ]; then
+                    read -p "请输入监听端口 (50000-60000): " port
+                    if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 50000 ] && [ "$port" -le 60000 ] && [[ ! "$port" =~ "4" ]]; then
                         listen_port=$port
-                        echo -e "\n>>> Selected port: $listen_port"
+                        echo -e "\n>>> 选择的端口: $listen_port"
                         break
                     else
-                        echo "Error: Please enter a valid port number (50000-60000)"
+                        echo "错误：请输入一个有效的端口号 (50000-60000，且不包含数字4)"
                     fi
                 done
                 break
                 ;;
             2)
-                listen_port=$(shuf -i 50000-60000 -n 1)
-                echo -e "\n>>> Randomly generated port: $listen_port"
+                listen_port=$(generate_port 50000 60000)
+                echo -e "\n>>> 随机生成端口: $listen_port"
                 break
                 ;;
             *)
-                echo "Invalid choice. Please enter 1 or 2."
+                echo "无效选择。请输入 1 或 2。"
                 ;;
         esac
     done
@@ -200,6 +210,7 @@ PRESET_DOMAINS=(
     "weather-data.apple.com"
     "cdn-dynmedia-1.microsoft.com"
     "software.download.prss.microsoft.com"
+    "blog.skk.moe"
     "sns-video-hw.xhscdn.com"
 )
 
