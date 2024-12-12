@@ -3,7 +3,7 @@
 #!category=Adguard
 #!source=https://raw.githubusercontent.com/zirawell/R-Store/main/Rule/QuanX/Adblock/App/D/%E5%A4%A7%E4%BC%97%E7%82%B9%E8%AF%84/rewrite/dianPing.conf
 #!reffer=https://github.com/zirawell/R-Store
-#!date=2024-12-08 16:25:16
+#!date=2024-12-12 10:55:16
 
 [URL Rewrite]
 ^https?:\/\/103\.37\.155\.60\/fetch - reject
@@ -31,4 +31,4 @@
 dianping = type=http-response, pattern=^https?:\/\/img\.meituan\.net\/dpmobile\/, script-path=https://raw.githubusercontent.com/zirawell/R-Store/main/Res/Scripts/AntiAd/dianping.js, requires-body=true, max-size=-1, timeout=60
 
 [MITM]
-hostname = %APPEND% 103.37.155.60, *.dianping.com, img.meituan.net, p.meituan.com, rms.meituan.com, www.dpfile.com, awp-assets.meituan.net, s3plus.meituan.net, p*.meituan.net, ddplus.meituan.net, mars.meituan.com
+hostname = %APPEND% 103.37.155.60,mapi.dianping.com,p.meituan.com,www.dpfile.com,catfront.dianping.com,awp-assets.meituan.net,s3plus.meituan.net,ddplus.meituan.net,mars.meituan.com,img.meituan.net,rms.meituan.com,p*.meituan.net 
