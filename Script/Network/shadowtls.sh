@@ -17,9 +17,9 @@ generate_port() {
     done
 }
 
-sspasswd=$(tr -dc 'A-Za-z0-9!@#$%^&*' < /dev/urandom | head -c 16)
+sspasswd=$(tr -dc 'A-Za-z0-9!@#$%' < /dev/urandom | head -c 16)
 ssport=$(generate_port 20000 40000)  # Shadowsocks port range: 20000-40000
-tls_password=$(tr -dc 'A-Za-z0-9!@#$%^&*' < /dev/urandom | head -c 16)
+tls_password=$(tr -dc 'A-Za-z0-9!@#$%' < /dev/urandom | head -c 16)
 
 # Function to print progress
 print_progress() {
