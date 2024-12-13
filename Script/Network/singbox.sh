@@ -21,7 +21,7 @@ check_dependencies() {
 
 # 生成随机密码
 generate_password() {
-    tr -dc 'A-Za-z0-9!@#$%^&*' < /dev/urandom | head -c 16
+    tr -dc 'A-Za-z0-9!@#$%' < /dev/urandom | head -c 16
 }
 
 # 生成随机端口
