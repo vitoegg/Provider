@@ -34,8 +34,9 @@ server_selection() {
     echo -e "${Info} 请选择服务器类型:"
     echo "1. HK Server"
     echo "2. JP Server"
-    echo "3. US Server"
-    echo "4. Customized"
+    echo "3. MY Server"
+    echo "4. US Server"
+    echo "5. Customized"
     
     read -p "请输入数字选择 (1-4): " server_choice
     
@@ -49,10 +50,14 @@ server_selection() {
             Wmem=6750000
             ;;
         3)
+            Rmem=10500000
+            Wmem=10500000
+            ;;
+        4)
             Rmem=18750000
             Wmem=18750000
             ;;
-        4)
+        5)
             read -p "请输入 Rmem 值: " Rmem
             read -p "请输入 Wmem 值: " Wmem
             ;;
