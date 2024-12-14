@@ -130,14 +130,8 @@ detect_architecture() {
         x86_64)
             echo "x86_64"
             ;;
-        i386|i686)
-            echo "i386"
-            ;;
         aarch64)
             echo "aarch64"
-            ;;
-        armv7l)
-            echo "armv7l"
             ;;
         *)
             echo "不支持的系统架构: $arch"
