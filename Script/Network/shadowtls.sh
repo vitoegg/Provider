@@ -207,10 +207,13 @@ get_user_port() {
 # 新增预设域名数组
 PRESET_DOMAINS=(
     "updates.cdn-apple.com"
-    "weather-data.apple.com"
+    "osxapps.itunes.apple.com"
+    "publicassets.cdn-apple.com"
     "cdn-dynmedia-1.microsoft.com"
     "software.download.prss.microsoft.com"
-    "sns-video-hw.xhscdn.com"
+    "s0.awsstatic.com"
+    "m.media-amazon.com"
+    "player.live-video.net"
 )
 
 # 获取用户域名选择
