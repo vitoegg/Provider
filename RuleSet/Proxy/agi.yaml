@@ -20,7 +20,8 @@ payload:
   - 'openaicom.imgix.net'
   - 'browser-intake-datadoghq.com'
   # > Sora
-  - 'sora.com'
+  - '+.sora.com'
+  - 'sora-cdn.oaistatic.com'
 
   # > Siri
   - '+.apple-relay.apple.com'
