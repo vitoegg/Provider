@@ -5,24 +5,51 @@ PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
 export PATH
 
 # 定义常量
-CONF="/etc/snell.conf"
+CONF="/etc/snell/snell.conf"
 SYSTEMD="/lib/systemd/system/snell.service"
-VERSION="v4.1.1"
 DOWNLOAD_BASE="https://dl.nssurge.com/snell"
 
-# 检测包管理器并安装unzip
-install_dependencies() {
-    if command -v apt-get >/dev/null 2>&1; then
-        apt-get update && apt-get install unzip wget -y
-    elif command -v yum >/dev/null 2>&1; then
-        yum install unzip wget -y
-    elif command -v dnf >/dev/null 2>&1; then
-        dnf install unzip wget -y
-    elif command -v pacman >/dev/null 2>&1; then
-        pacman -Sy unzip wget --noconfirm
-    else
-        echo "未能找到支持的包管理器，请手动安装unzip和wget"
+# 检查是否为root用户
+check_root() {
+    if [[ $EUID -ne 0 ]]; then
+        echo "错误：此脚本必须以root权限运行。请使用sudo执行。"
         exit 1
+    fi
+}
+
+# 检测依赖包是否已安装
+check_dependencies() {
+    local deps=("unzip" "wget")
+    local missing_deps=()
+
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" >/dev/null 2>&1; then
+            missing_deps+=("$dep")
+        fi
+    done
+
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        echo "缺少以下依赖包: ${missing_deps[*]}"
+        return 1
+    fi
+    return 0
+}
+
+# 安装依赖
+install_dependencies() {
+    if ! check_dependencies; then
+        if command -v apt-get >/dev/null 2>&1; then
+            apt-get update && apt-get install unzip wget -y
+        elif command -v yum >/dev/null 2>&1; then
+            yum install unzip wget -y
+        elif command -v dnf >/dev/null 2>&1; then
+            dnf install unzip wget -y
+        elif command -v pacman >/dev/null 2>&1; then
+            pacman -Sy unzip wget --noconfirm
+        else
+            echo "未能找到支持的包管理器，请手动安装unzip和wget"
+            exit 1
+        fi
     fi
 }
 
@@ -71,10 +98,56 @@ generate_psk() {
     fi
 }
 
+# 卸载脚本
+uninstall() {
+    echo "正在卸载Snell服务..."
+    
+    # 停止并禁用服务
+    systemctl stop snell
+    systemctl disable snell
+
+    # 删除服务文件
+    rm -f "${SYSTEMD}"
+    rm -f "${CONF}"
+    rm -f /usr/local/bin/snell-server
+
+    # 重新加载systemd
+    systemctl daemon-reload
+
+    echo "Snell服务已成功卸载。"
+    exit 0
+}
+
 # 主程序
 main() {
+    # 检查root权限
+    check_root
+
+    # 解析命令行参数
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -v|--version)
+                VERSION="$2"
+                shift 2
+                ;;
+            -u|--uninstall)
+                uninstall
+                ;;
+            *)
+                echo "未知参数: $1"
+                exit 1
+                ;;
+        esac
+    done
+
+    # 检查版本是否传入
+    if [ -z "$VERSION" ]; then
+        echo "错误：请使用 -v 或 --version 指定Snell版本"
+        exit 1
+    fi
+
     # 安装依赖
-    echo "正在安装依赖..."
+    echo "正在检查和安装依赖..."
     install_dependencies
 
     # 检测架构
@@ -82,8 +155,8 @@ main() {
     echo "检测到系统架构: $ARCH"
 
     # 下载对应版本
-    cd ~/
-    DOWNLOAD_URL="${DOWNLOAD_BASE}/snell-server-${VERSION}-linux-${ARCH}.zip"
+    cd ~/ || exit
+    DOWNLOAD_URL="${DOWNLOAD_BASE}/snell-server-v${VERSION}-linux-${ARCH}.zip"
     echo "正在下载: $DOWNLOAD_URL"
     wget --no-check-certificate -O snell.zip "$DOWNLOAD_URL"
 
@@ -99,10 +172,12 @@ main() {
     # 生成PSK
     generate_psk
 
-    # 创建配置文件
+    # 创建配置目录
     mkdir -p /etc/snell
+
+    # 创建配置文件
     echo "正在生成配置文件..."
-    cat > ${CONF} << EOF
+    cat > "${CONF}" << EOF
 [snell-server]
 listen = 0.0.0.0:${PORT}
 psk = ${PSK}
@@ -111,7 +186,7 @@ EOF
 
     # 创建systemd服务
     echo "正在创建系统服务..."
-    cat > ${SYSTEMD} << EOF
+    cat > "${SYSTEMD}" << EOF
 [Unit]
 Description=Snell Service
 After=network.target
@@ -131,19 +206,29 @@ TimeoutStopSec=15
 WantedBy=multi-user.target
 EOF
 
-    # 启动服务
-    systemctl daemon-reload
-    systemctl enable snell
-    systemctl start snell
-    systemctl status snell
+# 启动服务并检查状态
+systemctl daemon-reload
+systemctl enable snell
+systemctl start snell
 
-    # 输出配置信息
-    echo "==========================================="
-    echo "Snell 安装完成！配置信息如下："
-    echo "端口: ${PORT}"
-    echo "PSK: ${PSK}"
-    echo "==========================================="
+# 检查服务是否成功启动
+if systemctl is-active snell &> /dev/null; then
+    echo "Snell 服务启动成功！"
+else
+    echo "错误：Snell 服务启动失败，请检查日志："
+    systemctl status snell
+    exit 1
+fi
+
+# 输出配置信息
+echo "===========================================" 
+echo "Snell 安装完成！配置信息如下："
+echo "版本: ${VERSION}"
+echo "端口: ${PORT}"
+echo "PSK: ${PSK}"
+echo "===========================================" 
+
 }
 
 # 执行主程序
-main
+main "$@"
