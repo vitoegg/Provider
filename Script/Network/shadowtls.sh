@@ -206,14 +206,16 @@ get_user_port() {
 
 # 新增预设域名数组
 PRESET_DOMAINS=(
-    "updates.cdn-apple.com"
     "osxapps.itunes.apple.com"
     "publicassets.cdn-apple.com"
     "cdn-dynmedia-1.microsoft.com"
     "software.download.prss.microsoft.com"
     "s0.awsstatic.com"
-    "m.media-amazon.com"
     "player.live-video.net"
+    "alps.cdn.nintendo.net"
+    "steammobile.akamaized.net"
+    "steambroadcastchat.akamaized.net"
+    "m.hypai.org"
 )
 
 # 获取用户域名选择
