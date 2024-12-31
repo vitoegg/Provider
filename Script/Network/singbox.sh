@@ -38,14 +38,16 @@ generate_port() {
 
 # 预定义域名列表
 DOMAINS=(
-    "updates.cdn-apple.com"
     "osxapps.itunes.apple.com"
     "publicassets.cdn-apple.com"
     "cdn-dynmedia-1.microsoft.com"
     "software.download.prss.microsoft.com"
     "s0.awsstatic.com"
-    "m.media-amazon.com"
     "player.live-video.net"
+    "alps.cdn.nintendo.net"
+    "steammobile.akamaized.net"
+    "steambroadcastchat.akamaized.net"
+    "m.hypai.org"
 )
 
 # 选择域名
