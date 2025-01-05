@@ -213,7 +213,7 @@ PRESET_DOMAINS=(
     "s0.awsstatic.com"
     "player.live-video.net"
     "alps.cdn.nintendo.net"
-    "steammobile.akamaized.net"
+    "game.hiroba.dpoint.docomo.ne.jp"
     "steambroadcastchat.akamaized.net"
     "m.hypai.org"
 )
