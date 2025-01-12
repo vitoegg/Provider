@@ -3,19 +3,12 @@
 #!category=Hub
 #!homepage=https://surge.qingr.moe
 #!reffer=https://github.com/zirawell/R-Store
-#!date=2025-01-02 12:25:01
+#!date=2025-01-12 16:55:01
 
 [Rule]
-# 通用广告
-DOMAIN-SUFFIX,doubleclick-cn.net,REJECT,extended-matching,pre-matching
-DOMAIN-SUFFIX,doubleclick.net,REJECT,extended-matching,pre-matching
-
 # 米家
 DOMAIN,sdkconfig.ad.xiaomi.com,REJECT,extended-matching,pre-matching
 DEST-PORT,5222,REJECT,pre-matching
-
-# 中国联通
-DOMAIN-SUFFIX,m1.ad.10010.com,REJECT,extended-matching,pre-matching
 
 # 慢慢买
 DOMAIN-SUFFIX,sentry.manmanbuy.com,REJECT,extended-matching,pre-matching
@@ -27,15 +20,6 @@ DOMAIN,wxsmsdy.video.qq.com,REJECT,extended-matching,pre-matching
 DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT,extended-matching,pre-matching
 
 [URL Rewrite]
-# 饿了么 - elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com
-^https:\/\/elemecdn.com\/.+\/sitemap - reject
-^https?:\/\/fuss10\.elemecdn\.com\/.+\/w\/(640|750)\/h\/\d{3,4} - reject
-^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_1\d{3},h_2\d{3}\/format,webp\/ - reject
-^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_6\d{2},h_8\d{2}\/format,webp\/ - reject
-^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_\d{3},h_\d{4}\/format,webp\/ - reject
-^https:\/\/(nr-op|cube)\.elemecdn\.com\/.+\.jpeg\?x-oss-process=image\/resize,m_fill,w_\d{4,},h_\d{4,}\/($|format,webp\/$) - reject
-^https:\/\/www1.elecfans.com\/www\/delivery - reject
-
 # 招商银行 - webappcfg.paas.cmbchina.com,s3gw.cmbimg.com
 ^https:\/\/s3gw\.cmbimg\.com\/mbappinitads\/ - reject
 
@@ -50,27 +34,8 @@ http-response-jq ^https?:\/\/apapia-common\.manmanbuy\.com\/v1\/config '. | walk
 ^https:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(banner|myTab)\? data-type=text data="{}" status-code=200
 ^http:\/\/app\.zhoudamozi\.com\/ad\/.+ data-type=text data="{}" status-code=200
 
-# 饿了么 - elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com
-^https:\/\/fuss10.elemecdn.com\/.+\.mp4 data-type=tiny-gif status-code=200
-^https?:\/\/cube\.elemecdn\.com\/\w\/\w{2}\/\w+mp4\.mp4\? data-type=tiny-gif status-code=200
-
 # 招商银行 - webappcfg.paas.cmbchina.com,s3gw.cmbimg.com
 ^https?:\/\/webappcfg\.paas\.cmbchina\.com\/v\d\/func\/getmarketconfig data-type=text data="{}" status-code=200
-
-# 得物开屏广告 - app.dewu.com,cdn.poizon.com
-^https:\/\/app\.dewu\.com\/api\/v1\/app\/advertisement\/ data-type=text data="{}" status-code=200
-^https?:\/\/cdn\.poizon\.com\/node-common\/.*.jpg data-type=tiny-gif status-code=200
-
-# 京东金融 - m.360buyimg.com,ms.jr.jd.com
-^https:\/\/m.360buyimg.com\/mobilecms\/s1125x2436_jfs\/ data-type=text data="{}" status-code=200
-^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture data-type=text data="{}" status-code=200
-
-# 高铁管家 - cdn.133.cn,jp.rsscc.com,jt.rsscc.com
-^http:\/\/cdn\.133\.cn\/md\/gtgj\/.+\/.+720x1280 data-type=tiny-gif status-code=200
-^https?:\/\/[a-z]*\.rsscc\.com\/[a-z]*\/adver data-type=text data="{}" status-code=200
-
-# 中国联通 - m.client.10010.com
-^https?:\/\/m\.client\.10010\.com\/mobileService\/customer\/accountListData\.htm data-type=text data="{"imgIndex":"0","adv":{"startup_adv":{"advCntList":[],"buttonList":[]}},"respCode":"0000"}" header="Content-Type:text/json"
 
 # 携程小程序 - m.ctrip.com
 ^https:\/\/m\.ctrip\.com\/restapi\/soa2\/13916\/tripAds data-type=text data="{}" status-code=200
@@ -81,4 +46,4 @@ http-response-jq ^https?:\/\/apapia-common\.manmanbuy\.com\/v1\/config '. | walk
 ^https:\/\/ucmp\.sf-express\.com\/proxy\/esgcempcore\/memberGoods\/pointMallService\/goodsList data-type=text data="{}" status-code=200
 
 [MITM]
-hostname = %APPEND% elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com, webappcfg.paas.cmbchina.com,s3gw.cmbimg.com, home.mi.com,app.zhoudamozi.com, app.dewu.com,cdn.poizon.com, m.360buyimg.com,ms.jr.jd.com, cdn.133.cn,jp.rsscc.com,jt.rsscc.com, apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com, m.client.10010.com, m.ctrip.com, ucmp.sf-express.com
+hostname = %APPEND% webappcfg.paas.cmbchina.com,s3gw.cmbimg.com, home.mi.com,app.zhoudamozi.com, apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com, m.ctrip.com, ucmp.sf-express.com
