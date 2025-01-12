@@ -1,0 +1,8 @@
+#########################################
+# ReferURL: https://ruleset.skk.moe/List/non_ip/reject-no-drop.conf
+# Last Updated: 2025-01-12
+#########################################
+DOMAIN-SUFFIX,szbdyd.com
+DOMAIN-SUFFIX,mcdn.bilivideo.cn
+DOMAIN-SUFFIX,p2p.huya.com
+AND,((PROTOCOL,UDP), (DOMAIN-SUFFIX,googlevideo.com))
