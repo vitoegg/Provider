@@ -213,7 +213,6 @@ PRESET_DOMAINS=(
     "s0.awsstatic.com"
     "player.live-video.net"
     "alps.cdn.nintendo.net"
-    "m.hypai.org"
 )
 
 # 获取用户域名选择
