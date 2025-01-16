@@ -79,11 +79,11 @@ detect_architecture() {
 # 获取用户输入的端口号
 get_valid_port() {
     while true; do
-        read -p "请输入端口号 (50000-60000): " PORT
-        if [[ "$PORT" =~ ^[0-9]+$ && "$PORT" -ge 50000 && "$PORT" -le 60000 ]]; then
+        read -p "请输入端口号 (10000-60000): " PORT
+        if [[ "$PORT" =~ ^[0-9]+$ && "$PORT" -ge 10000 && "$PORT" -le 60000 ]]; then
             break
         else
-            echo "错误：端口号必须在50000-60000之间"
+            echo "错误：端口号必须在10000-60000之间"
         fi
     done
 }
