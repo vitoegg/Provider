@@ -212,7 +212,7 @@ PRESET_DOMAINS=(
     "software.download.prss.microsoft.com"
     "s0.awsstatic.com"
     "player.live-video.net"
-    "alps.cdn.nintendo.net"
+    "cmsassets.rgpub.io"
 )
 
 # 获取用户域名选择
