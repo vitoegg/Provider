@@ -46,8 +46,8 @@ server_selection() {
             Wmem=6875000
             ;;
         2)
-            Rmem=6750000
-            Wmem=6750000
+            Rmem=7786000
+            Wmem=7786000
             ;;
         3)
             Rmem=10500000
