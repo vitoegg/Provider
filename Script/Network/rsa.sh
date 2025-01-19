@@ -29,7 +29,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 # 设置变量
-SSH_DIR="/root/.ssh"
+SSH_DIR="~/.ssh"
 AUTH_KEYS_FILE="${SSH_DIR}/authorized_keys"
 SSHD_CONFIG="/etc/ssh/sshd_config"
 
@@ -59,11 +59,19 @@ CONFIG_CHANGES=(
 # 为每个配置项检查是否存在，如果不存在则添加
 for config in "${CONFIG_CHANGES[@]}"; do
     key=$(echo "$config" | cut -d' ' -f1)
-    if ! grep -q "^${key}" "$SSHD_CONFIG"; then
+    # 使用grep检查非注释的配置行
+    if ! grep -E "^[[:space:]]*${key}[[:space:]]+" "$SSHD_CONFIG" > /dev/null; then
         echo "添加配置: $config"
         echo "$config" >> "$SSHD_CONFIG"
     else
-        echo "配置 ${key} 已存在，跳过"
+        # 检查现有配置是否被注释
+        if grep -E "^[[:space:]]*#.*${key}[[:space:]]+" "$SSHD_CONFIG" > /dev/null && \
+           ! grep -E "^[[:space:]]*${key}[[:space:]]+" "$SSHD_CONFIG" > /dev/null; then
+            echo "配置 ${key} 已存在但被注释，添加新的配置"
+            echo "$config" >> "$SSHD_CONFIG"
+        else
+            echo "配置 ${key} 已存在且未被注释，跳过"
+        fi
     fi
 done
 
