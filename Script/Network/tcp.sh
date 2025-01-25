@@ -34,9 +34,8 @@ server_selection() {
     echo -e "${Info} 请选择服务器类型:"
     echo "1. HK Server"
     echo "2. JP Server"
-    echo "3. MY Server"
-    echo "4. US Server"
-    echo "5. Customized"
+    echo "3. US Server"
+    echo "4. Customized"
     
     read -p "请输入数字选择 (1-4): " server_choice
     
@@ -50,14 +49,10 @@ server_selection() {
             Wmem=7786000
             ;;
         3)
-            Rmem=10500000
-            Wmem=10500000
-            ;;
-        4)
             Rmem=18750000
             Wmem=18750000
             ;;
-        5)
+        4)
             read -p "请输入 Rmem 值: " Rmem
             read -p "请输入 Wmem 值: " Wmem
             ;;
@@ -85,7 +80,7 @@ net.ipv4.tcp_congestion_control = bbr
 net.ipv4.tcp_fin_timeout = 15
 net.ipv4.tcp_keepalive_probes = 3
 net.ipv4.tcp_keepalive_intvl = 30
-# 禁用显式拥塞通��� (ECN)
+# 禁用显式拥塞 (ECN)
 net.ipv4.tcp_ecn=0
 # 禁用TCP快速重传优化
 net.ipv4.tcp_frto=0
@@ -134,8 +129,8 @@ echo "root     soft   nofile    1000000
 root     hard   nofile    1000000
 root     soft   nproc     1000000
 root     hard   nproc     1000000
-root     soft   core      1000000
-root     hard   core      1000000
+root     soft   core      unlimited
+root     hard   core      unlimited
 root     hard   memlock   unlimited
 root     soft   memlock   unlimited
 
@@ -143,8 +138,8 @@ root     soft   memlock   unlimited
 *     hard   nofile    1000000
 *     soft   nproc     1000000
 *     hard   nproc     1000000
-*     soft   core      1000000
-*     hard   core      1000000
+*     soft   core      unlimited
+*     hard   core      unlimited
 *     hard   memlock   unlimited
 *     soft   memlock   unlimited
 ">/etc/security/limits.conf
