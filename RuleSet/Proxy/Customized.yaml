@@ -9,5 +9,5 @@ payload:
   - '18comic.vip'
   - '+.18comic.vip'
   # >Image Host
-  - '+.imgur.com'
-  - '+.ax1x.com'
+  #- '+.imgur.com'
+  #- '+.ax1x.com'
