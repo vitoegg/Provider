@@ -308,8 +308,8 @@ EOF
 
 # 添加新函数来获取本机的 IPv4 地址
 get_ipv4_address() {
-    # 使用 ip 命令获取本机的 IPv4 地址
-    local ip=$(ip -4 addr show scope global | grep inet | awk '{print $2}' | cut -d/ -f1 | head -n 1)
+    # 使用 ipify 获取本机的公网 IPv4 地址
+    local ip=$(curl -s https://api.ipify.org)
     
     if [[ -z "$ip" ]]; then
         echo "无法获取 IP 地址"
