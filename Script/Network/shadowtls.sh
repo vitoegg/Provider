@@ -105,7 +105,7 @@ configure_shadowsocks() {
     
     cat > /etc/shadowsocks/config.json << EOF
 {
-    "server":"127.0.0.1",
+    "server":"0.0.0.0",
     "server_port":$ssport,
     "password":"$sspasswd",
     "timeout":600,
