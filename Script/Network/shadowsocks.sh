@@ -240,7 +240,7 @@ get_current_version() {
     if [ ! -f "/usr/local/bin/ssserver" ]; then
         echo "not_installed"
         return
-    }
+    fi
     
     local version=$(/usr/local/bin/ssserver -V 2>&1)
     if [[ $version =~ ([0-9]+\.[0-9]+\.[0-9]+) ]]; then
