@@ -235,6 +235,99 @@ show_configuration() {
     systemctl status shadowsocks.service --no-pager
 }
 
+# Check current version
+get_current_version() {
+    if [ ! -f "/usr/local/bin/ssserver" ]; then
+        echo "not_installed"
+        return
+    }
+    
+    local version=$(/usr/local/bin/ssserver -V 2>&1)
+    if [[ $version =~ ([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+        echo "${BASH_REMATCH[1]}"
+    else
+        echo "unknown"
+    fi
+}
+
+# Get latest version from GitHub
+get_latest_version() {
+    local latest_ver=$(wget -qO- https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases | 
+                       jq -r '[.[] | select(.prerelease == false) | select(.draft == false) | .tag_name] | .[0]')
+    echo "${latest_ver#v}"  # Remove 'v' prefix if present
+}
+
+# Update Shadowsocks
+update_shadowsocks() {
+    print_progress "Checking current version"
+    local current_ver=$(get_current_version)
+    
+    if [ "$current_ver" = "not_installed" ]; then
+        end_progress "Shadowsocks is not installed"
+        error "Please install Shadowsocks first"
+    fi
+    
+    if [ "$current_ver" = "unknown" ]; then
+        warning "Unable to determine current version"
+        info "Proceeding with update anyway..."
+    else
+        info "Current version: $current_ver"
+    fi
+    
+    print_progress "Checking latest version"
+    local latest_ver=$(get_latest_version)
+    if [ -z "$latest_ver" ]; then
+        error "Failed to get latest version information"
+    fi
+    end_progress "Latest version: $latest_ver"
+    
+    if [ "$current_ver" = "$latest_ver" ]; then
+        echo -e "\n${GREEN}You are already running the latest version ($current_ver)${NC}\n"
+        return
+    fi
+    
+    info "New version available, updating..."
+    
+    # Stop the service before updating
+    print_progress "Stopping Shadowsocks service"
+    systemctl stop shadowsocks.service
+    end_progress "Service stopped"
+    
+    # Download and install new version
+    local archive_name="shadowsocks-v${latest_ver}.${ss_arch}-unknown-linux-gnu.tar.xz"
+    print_progress "Downloading version $latest_ver"
+    wget --no-check-certificate -N "https://github.com/shadowsocks/shadowsocks-rust/releases/download/v${latest_ver}/${archive_name}" >/dev/null 2>&1
+    
+    if [[ ! -f "$archive_name" ]]; then
+        error "Failed to download new version!"
+    fi
+    end_progress "Download completed"
+    
+    print_progress "Installing new version"
+    tar -xf "$archive_name" >/dev/null 2>&1
+    if [[ ! -f "ssserver" ]]; then
+        error "Failed to extract new version!"
+    fi
+    
+    chmod +x ssserver
+    mv -f ssserver /usr/local/bin/
+    rm -f sslocal ssmanager ssservice ssurl "$archive_name"
+    end_progress "Installation completed"
+    
+    # Start the service
+    print_progress "Starting Shadowsocks service"
+    systemctl start shadowsocks.service
+    
+    if ! systemctl is-active --quiet shadowsocks.service; then
+        error "Failed to start Shadowsocks service after update!"
+    fi
+    end_progress "Service started"
+    
+    echo -e "\n${GREEN}Successfully updated Shadowsocks to version $latest_ver${NC}"
+    echo -e "\n${BLUE}=== Service Status ===${NC}"
+    systemctl status shadowsocks.service --no-pager
+}
+
 # Uninstall Shadowsocks
 uninstall_service() {
     echo -e "\n${BLUE}=== Uninstalling Shadowsocks ===${NC}"
@@ -270,10 +363,11 @@ main() {
     clear
     echo -e "${BLUE}=== Shadowsocks Installation Script ===${NC}"
     echo "1. Install Shadowsocks"
-    echo "2. Uninstall Shadowsocks"
+    echo "2. Update Shadowsocks"
+    echo "3. Uninstall Shadowsocks"
     echo -e "${BLUE}=====================================${NC}\n"
     
-    read -p "Please select an option (1/2): " choice
+    read -p "Please select an option (1/2/3): " choice
     
     case $choice in
         1)
@@ -284,6 +378,11 @@ main() {
             show_configuration
             ;;
         2)
+            install_packages
+            detect_arch
+            update_shadowsocks
+            ;;
+        3)
             uninstall_service
             ;;
         *)
