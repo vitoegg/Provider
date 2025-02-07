@@ -29,6 +29,45 @@ print_header() {
     echo -e "\n${BOLD}=== $1 ===${NC}"
 }
 
+# Parse command-line arguments for custom parameters
+# Options:
+#   --ss-port      : Shadowsocks server port
+#   --ss-pass      : Shadowsocks password
+#   --tls-port     : TLS port for ShadowTLS
+#   --tls-pass     : TLS password for ShadowTLS
+#   --tls-domain   : TLS domain for ShadowTLS
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        key="$1"
+        case $key in
+            --ss-port)
+                ssport="$2"
+                shift 2
+                ;;
+            --ss-pass)
+                sspasswd="$2"
+                shift 2
+                ;;
+            --tls-port)
+                listen_port="$2"
+                shift 2
+                ;;
+            --tls-pass)
+                tls_password="$2"
+                shift 2
+                ;;
+            --tls-domain)
+                domain="$2"
+                shift 2
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                exit 1
+                ;;
+        esac
+    done
+}
+
 # Check root privileges
 if [[ $EUID -ne 0 ]]; then
     print_error "This script must be run as root!"
@@ -46,9 +85,18 @@ generate_port() {
     done
 }
 
-sspasswd=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
-ssport=$(generate_port 20000 40000)
-tls_password=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
+# If custom parameters were not provided, generate defaults
+if [[ -z "$ssport" ]]; then
+    ssport=$(generate_port 20000 40000)
+fi
+
+if [[ -z "$sspasswd" ]]; then
+    sspasswd=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
+fi
+
+if [[ -z "$tls_password" ]]; then
+    tls_password=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
+fi
 
 # Preset domains array
 PRESET_DOMAINS=(
@@ -240,6 +288,12 @@ install_shadowtls() {
 
 # Function to get user input for ShadowTLS listen port
 get_user_port() {
+    # Skip interactive prompt if tls port is already set via arguments
+    if [[ -n "$listen_port" ]]; then
+        print_info "Using specified TLS port: $listen_port"
+        return 0
+    fi
+    
     print_header "ShadowTLS Port Configuration"
     echo "Please set the ShadowTLS listening port："
     echo "1. Random generation"
@@ -276,6 +330,12 @@ get_user_port() {
 
 # Get user domain selection
 get_user_domain() {
+    # Skip interactive prompt if domain is already set via arguments
+    if [[ -n "$domain" ]]; then
+        print_info "Using specified TLS domain: $domain"
+        return 0
+    fi
+    
     print_header "TLS Domain Configuration"
     echo "Please set the TLS domain: "
     echo "1. Randomly use preset domain"
