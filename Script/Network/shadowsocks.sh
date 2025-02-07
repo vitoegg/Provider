@@ -42,6 +42,17 @@ warning() {
     echo -e "${YELLOW}Warning:${NC} $1"
 }
 
+# Function to print progress with spinner
+print_progress() {
+    local message="$1"
+    echo -ne "${BLUE}>>>${NC} $message... "
+}
+
+# Function to end progress with success
+end_progress() {
+    echo -e "\r${GREEN}✓${NC} $1"
+}
+
 # Check root privileges
 if [[ $EUID -ne 0 ]]; then
     error "This script must be run as root!"
@@ -57,7 +68,7 @@ while getopts "s:p:h" opt; do
     esac
 done
 
-# Generate random port avoiding number 4
+# Generate random port avoiding digit 4
 generate_port() {
     while true; do
         port=$(shuf -i $1-$2 -n 1)
@@ -84,23 +95,11 @@ else
     info "Using specified password"
 fi
 
-# Function to print progress with spinner
-print_progress() {
-    local message="$1"
-    echo -ne "${BLUE}>>>${NC} $message... "
-}
-
-# Function to end progress with success
-end_progress() {
-    echo -e "\r${GREEN}✓${NC} $1"
-}
-
 # Install necessary packages
 install_packages() {
     print_progress "Installing required packages"
     if command -v apt-get >/dev/null 2>&1; then
         apt-get update >/dev/null 2>&1
-        # 只安装必需的包：wget (下载), jq (JSON解析), xz-utils (解压)
         apt-get install -y wget jq xz-utils >/dev/null 2>&1
     elif command -v yum >/dev/null 2>&1; then
         yum update -y >/dev/null 2>&1
@@ -135,18 +134,58 @@ detect_arch() {
     end_progress "Detected architecture: $ss_arch"
 }
 
+# Uninstall Shadowsocks
+uninstall_service() {
+    echo -e "\n${BLUE}=== Uninstalling Shadowsocks ===${NC}"
+    
+    print_progress "Stopping and disabling Shadowsocks service"
+    systemctl stop shadowsocks.service 2>/dev/null
+    systemctl disable shadowsocks.service 2>/dev/null
+    end_progress "Shadowsocks service stopped and disabled"
+    
+    print_progress "Removing service files"
+    rm -f /lib/systemd/system/shadowsocks.service
+    end_progress "Service files removed"
+    
+    print_progress "Removing configuration files"
+    rm -rf /etc/shadowsocks
+    rm -f /etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf
+    end_progress "Configuration files removed"
+    
+    print_progress "Removing binary files"
+    rm -f /usr/local/bin/ssserver
+    end_progress "Binary files removed"
+    
+    print_progress "Reloading systemd daemon"
+    systemctl daemon-reload
+    systemctl reset-failed
+    end_progress "Systemd daemon reloaded"
+    
+    echo -e "\n${GREEN}Uninstallation completed successfully${NC}\n"
+}
+
 # Install Shadowsocks
 install_shadowsocks() {
     print_progress "Installing Shadowsocks-rust"
-    local new_ver=$(wget -qO- https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases | 
+    local new_ver=$(wget -qO- https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases | \
                     jq -r '[.[] | select(.prerelease == false) | select(.draft == false) | .tag_name] | .[0]')
     
     info "Downloading version: $new_ver"
     local archive_name="shadowsocks-${new_ver}.${ss_arch}-unknown-linux-gnu.tar.xz"
-    wget --no-check-certificate -N "https://github.com/shadowsocks/shadowsocks-rust/releases/download/${new_ver}/${archive_name}" >/dev/null 2>&1
     
-    if [[ ! -f "$archive_name" ]]; then
+    # Delete old files
+    if [[ -f "/usr/local/bin/ssserver" ]]; then
+        print_progress "Removing old Shadowsocks binary..."
+        rm -f /usr/local/bin/ssserver
+        if [[ $? -ne 0 ]]; then
+            error "Failed to remove old Shadowsocks binary!"
+            exit 1
+        fi
+    fi
+    
+    if ! wget --no-check-certificate -N "https://github.com/shadowsocks/shadowsocks-rust/releases/download/${new_ver}/${archive_name}"; then
         error "Failed to download Shadowsocks Rust!"
+        exit 1
     fi
     
     print_progress "Extracting files"
@@ -252,7 +291,7 @@ get_current_version() {
 
 # Get latest version from GitHub
 get_latest_version() {
-    local latest_ver=$(wget -qO- https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases | 
+    local latest_ver=$(wget -qO- https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases | \
                        jq -r '[.[] | select(.prerelease == false) | select(.draft == false) | .tag_name] | .[0]')
     echo "${latest_ver#v}"  # Remove 'v' prefix if present
 }
@@ -288,36 +327,17 @@ update_shadowsocks() {
     
     info "New version available, updating..."
     
-    # Stop the service before updating
+    # Stop the running service before updating
     print_progress "Stopping Shadowsocks service"
     systemctl stop shadowsocks.service
     end_progress "Service stopped"
     
-    # Download and install new version
-    local archive_name="shadowsocks-v${latest_ver}.${ss_arch}-unknown-linux-gnu.tar.xz"
-    print_progress "Downloading version $latest_ver"
-    wget --no-check-certificate -N "https://github.com/shadowsocks/shadowsocks-rust/releases/download/v${latest_ver}/${archive_name}" >/dev/null 2>&1
+    # For update, directly call install_shadowsocks() to update the binary
+    install_shadowsocks
     
-    if [[ ! -f "$archive_name" ]]; then
-        error "Failed to download new version!"
-    fi
-    end_progress "Download completed"
-    
-    print_progress "Installing new version"
-    tar -xf "$archive_name" >/dev/null 2>&1
-    if [[ ! -f "ssserver" ]]; then
-        error "Failed to extract new version!"
-    fi
-    
-    chmod +x ssserver
-    mv -f ssserver /usr/local/bin/
-    rm -f sslocal ssmanager ssservice ssurl "$archive_name"
-    end_progress "Installation completed"
-    
-    # Start the service
+    # Starting the service
     print_progress "Starting Shadowsocks service"
     systemctl start shadowsocks.service
-    
     if ! systemctl is-active --quiet shadowsocks.service; then
         error "Failed to start Shadowsocks service after update!"
     fi
@@ -326,36 +346,6 @@ update_shadowsocks() {
     echo -e "\n${GREEN}Successfully updated Shadowsocks to version $latest_ver${NC}"
     echo -e "\n${BLUE}=== Service Status ===${NC}"
     systemctl status shadowsocks.service --no-pager
-}
-
-# Uninstall Shadowsocks
-uninstall_service() {
-    echo -e "\n${BLUE}=== Uninstalling Shadowsocks ===${NC}"
-    
-    print_progress "Stopping and disabling Shadowsocks service"
-    systemctl stop shadowsocks.service 2>/dev/null
-    systemctl disable shadowsocks.service 2>/dev/null
-    end_progress "Shadowsocks service stopped and disabled"
-    
-    print_progress "Removing service files"
-    rm -f /lib/systemd/system/shadowsocks.service
-    end_progress "Service files removed"
-    
-    print_progress "Removing configuration files"
-    rm -rf /etc/shadowsocks
-    rm -f /etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf
-    end_progress "Configuration files removed"
-    
-    print_progress "Removing binary files"
-    rm -f /usr/local/bin/ssserver
-    end_progress "Binary files removed"
-    
-    print_progress "Reloading systemd daemon"
-    systemctl daemon-reload
-    systemctl reset-failed
-    end_progress "Systemd daemon reloaded"
-    
-    echo -e "\n${GREEN}Uninstallation completed successfully${NC}\n"
 }
 
 # Main execution
