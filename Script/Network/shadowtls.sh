@@ -608,5 +608,8 @@ main_menu() {
     done
 }
 
+# Execute parameter parsing if arguments are provided
+parse_args "$@"
+
 # Start script execution
 main_menu
