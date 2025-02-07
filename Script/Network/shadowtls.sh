@@ -594,6 +594,8 @@ main_menu() {
                 exit 0
                 ;;
             2)
+                install_packages
+                detect_arch
                 update_services
                 # The update_services function already contains exit internally
                 ;;
