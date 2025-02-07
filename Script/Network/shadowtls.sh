@@ -58,40 +58,6 @@ PRESET_DOMAINS=(
     "cmsassets.rgpub.io"
 )
 
-# Get current versions
-get_current_versions() {
-    if [[ -f "/usr/local/bin/ssserver" ]]; then
-        SS_CURRENT_VERSION=$(/usr/local/bin/ssserver --version 2>&1 | awk '{print $2}')
-    fi
-    
-    if [[ -f "/usr/local/bin/shadow-tls" ]]; then
-        STLS_CURRENT_VERSION=$(/usr/local/bin/shadow-tls --version 2>&1 | awk '{print $2}')
-    fi
-}
-
-# Check for updates
-check_updates() {
-    print_header "Checking for Updates"
-    
-    # Check Shadowsocks updates
-    local ss_latest_ver=$(wget -qO- https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases | 
-                         jq -r '[.[] | select(.prerelease == false) | select(.draft == false) | .tag_name] | .[0]')
-    
-    print_info "Shadowsocks-rust:"
-    print_info "Current version: ${SS_CURRENT_VERSION:-Not installed}"
-    print_info "Latest version: $ss_latest_ver"
-    
-    # Check ShadowTLS updates
-    local stls_latest_ver=$(curl -s https://api.github.com/repos/ihciah/shadow-tls/releases/latest | jq -r .tag_name)
-    
-    print_info "\nShadowTLS:"
-    print_info "Current version: ${STLS_CURRENT_VERSION:-Not installed}"
-    print_info "Latest version: $stls_latest_ver"
-    
-    # Return values for update decision
-    echo "$ss_latest_ver:$stls_latest_ver"
-}
-
 # Install necessary packages
 install_packages() {
     print_header "Installing Required Packages"
@@ -276,14 +242,19 @@ install_shadowtls() {
 get_user_port() {
     print_header "ShadowTLS Port Configuration"
     echo "Please set the ShadowTLS listening port："
-    echo "1. Manual input (Port range: 50000-60000)"
-    echo "2. Random generation"
+    echo "1. Random generation"
+    echo "2. Manual input (Port range: 50000-60000)"
     echo -e "----------------------------------------\n"
     
     while true; do
         read -p "Please select (1/2): " choice
         case $choice in
             1)
+                listen_port=$(generate_port 50000 60000)
+                print_info "Randomly generated port: $listen_port"
+                break
+                ;;
+            2)
                 while true; do
                     read -p "Please enter the listening port (50000-60000): " port
                     if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 50000 ] && [ "$port" -le 60000 ] && [[ ! "$port" =~ "4" ]]; then
@@ -294,11 +265,6 @@ get_user_port() {
                         print_error "Please enter a valid port number (50000-60000)"
                     fi
                 done
-                break
-                ;;
-            2)
-                listen_port=$(generate_port 50000 60000)
-                print_info "Randomly generated port: $listen_port"
                 break
                 ;;
             *)
@@ -422,65 +388,86 @@ show_configuration() {
 
 # Update services
 update_services() {
-    get_current_versions
-    
-    local versions=$(check_updates)
-    local ss_latest_ver=$(echo $versions | cut -d: -f1)
-    local stls_latest_ver=$(echo $versions | cut -d: -f2)
-    
-    print_header "Update Process"
-    
-    local need_update=0
-    
-    # Check Shadowsocks version
-    if [[ -z "$SS_CURRENT_VERSION" ]]; then
-        print_warning "Shadowsocks is not installed"
-        need_update=0
-    elif [[ "$ss_latest_ver" == "$SS_CURRENT_VERSION" ]]; then
-        print_success "Shadowsocks is already at the latest version ($SS_CURRENT_VERSION)"
-    else
-        print_info "Shadowsocks needs update from $SS_CURRENT_VERSION to $ss_latest_ver"
-        need_update=1
+    print_header "Starting Version Check for Updates"
+
+    # Check if Shadowsocks is installed
+    if [[ ! -x "/usr/local/bin/ssserver" ]]; then
+        print_error "Shadowsocks is not installed. Aborting update."
+        exit 1
     fi
-    
-    # Check ShadowTLS version
-    if [[ -z "$STLS_CURRENT_VERSION" ]]; then
-        print_warning "ShadowTLS is not installed"
-        need_update=0
-    elif [[ "$stls_latest_ver" == "$STLS_CURRENT_VERSION" ]]; then
-        print_success "ShadowTLS is already at the latest version ($STLS_CURRENT_VERSION)"
-    else
-        print_info "ShadowTLS needs update from $STLS_CURRENT_VERSION to $stls_latest_ver"
-        need_update=1
+
+    # Get the local version
+    local local_ss_ver_raw=$(/usr/local/bin/ssserver --version 2>&1 | awk '{print $2}')
+    if [[ -z "$local_ss_ver_raw" ]]; then
+        print_error "Unable to retrieve local Shadowsocks version."
+        exit 1
     fi
-    
-    # If no updates needed, exit
-    if [[ $need_update -eq 0 ]]; then
-        print_success "All services are up to date or not installed"
-        exit 0
+    # Remove letters (only keep digits and dots)
+    local local_ss_ver=$(echo "$local_ss_ver_raw" | sed 's/[A-Za-z]//g')
+    print_info "Local Shadowsocks version: $local_ss_ver"
+
+    # Get the latest version from GitHub
+    local ss_latest_ver_raw=$(wget -qO- https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases | \
+                                jq -r '[.[] | select(.prerelease == false) | select(.draft == false) | .tag_name] | .[0]')
+    if [[ -z "$ss_latest_ver_raw" ]]; then
+        print_error "Failed to retrieve the latest Shadowsocks version."
+        exit 1
     fi
-    
-    read -p "Do you want to proceed with the updates? (y/n): " confirm
-    if [[ "$confirm" != "y" ]]; then
-        print_info "Update cancelled"
-        exit 0
-    fi
-    
-    # Update Shadowsocks if needed
-    if [[ -z "$SS_CURRENT_VERSION" ]] || [[ "$ss_latest_ver" != "$SS_CURRENT_VERSION" ]]; then
+    local ss_latest_ver=$(echo "$ss_latest_ver_raw" | sed 's/[A-Za-z]//g')
+    print_info "Latest Shadowsocks version: $ss_latest_ver"
+
+    # Compare versions using sort -V for natural version sorting
+    if [[ "$local_ss_ver" == "$ss_latest_ver" ]]; then
+        print_success "Shadowsocks is already at the latest version ($local_ss_ver)"
+    elif [[ "$local_ss_ver" == "$(printf '%s\n' "$local_ss_ver" "$ss_latest_ver" | sort -V | head -n1)" ]]; then
+        print_info "Shadowsocks needs to be updated from $local_ss_ver to $ss_latest_ver"
         systemctl stop shadowsocks.service 2>/dev/null
         install_shadowsocks
         systemctl start shadowsocks.service
+    else
+        print_error "Local Shadowsocks version ($local_ss_ver) is greater than the GitHub version ($ss_latest_ver). The installed version might not be official."
+        exit 1
     fi
-    
-    # Update ShadowTLS if needed
-    if [[ -z "$STLS_CURRENT_VERSION" ]] || [[ "$stls_latest_ver" != "$STLS_CURRENT_VERSION" ]]; then
+
+    # Check if ShadowTLS is installed
+    if [[ ! -x "/usr/local/bin/shadow-tls" ]]; then
+        print_error "ShadowTLS is not installed. Aborting update."
+        exit 1
+    fi
+
+    # Get the local version
+    local local_stls_ver_raw=$(/usr/local/bin/shadow-tls --version 2>&1 | awk '{print $2}')
+    if [[ -z "$local_stls_ver_raw" ]]; then
+        print_error "Unable to retrieve local ShadowTLS version."
+        exit 1
+    fi
+    # Remove letters (only keep digits and dots)
+    local local_stls_ver=$(echo "$local_stls_ver_raw" | sed 's/[A-Za-z]//g')
+    print_info "Local ShadowTLS version: $local_stls_ver"
+
+    # Get the latest version from GitHub
+    local stls_latest_ver_raw=$(curl -s https://api.github.com/repos/ihciah/shadow-tls/releases/latest | jq -r .tag_name)
+    if [[ -z "$stls_latest_ver_raw" ]]; then
+        print_error "Failed to retrieve the latest ShadowTLS version."
+        exit 1
+    fi
+    local stls_latest_ver=$(echo "$stls_latest_ver_raw" | sed 's/[A-Za-z]//g')
+    print_info "Latest ShadowTLS version: $stls_latest_ver"
+
+    # Compare versions
+    if [[ "$local_stls_ver" == "$stls_latest_ver" ]]; then
+        print_success "ShadowTLS is already at the latest version ($local_stls_ver)"
+    elif [[ "$local_stls_ver" == "$(printf '%s\n' "$local_stls_ver" "$stls_latest_ver" | sort -V | head -n1)" ]]; then
+        print_info "ShadowTLS needs to be updated from $local_stls_ver to $stls_latest_ver"
         systemctl stop shadowtls.service 2>/dev/null
         install_shadowtls
         systemctl start shadowtls.service
+    else
+        print_error "Local ShadowTLS version ($local_stls_ver) is greater than the GitHub version ($stls_latest_ver). The installed version might not be official."
+        exit 1
     fi
-    
-    print_success "All services updated successfully"
+
+    print_success "All services have been updated successfully"
     exit 0
 }
 
