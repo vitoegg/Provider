@@ -518,7 +518,7 @@ main_menu() {
         echo "3. Uninstall Services"
         echo -e "=====================================\n"
         
-        read -p "Please select an option (1-5): " choice
+        read -p "Please select an option (1-3): " choice
         
         case $choice in
             1)
