@@ -71,10 +71,7 @@ get_server_version() {
     echo "0.0.0"
 }
 
-prompt_version() {
-    local current_version=$(get_server_version)
-    print_message "info" "Current version: ${current_version}"
-    
+prompt_version() {  
     local new_version
     while true; do
         read -p "Enter the version number (e.g., 4.1.1): " new_version
@@ -158,9 +155,6 @@ get_valid_port() {
 generate_psk() {
     if [ -z "${PSK}" ]; then
         PSK=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
-        print_message "success" "Generated PSK: ${PSK}"
-    else
-        print_message "info" "Using predefined PSK: ${PSK}"
     fi
     echo "$PSK"
 }
