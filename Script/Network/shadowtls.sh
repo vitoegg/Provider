@@ -113,12 +113,12 @@ install_packages() {
     if command -v apt-get >/dev/null 2>&1; then
         print_info "Using apt package manager..."
         apt-get update
-        apt-get install -y wget curl xz-utils jq
+        apt-get install -y wget xz-utils jq
     elif command -v yum >/dev/null 2>&1; then
         print_info "Using yum package manager..."
         yum update -y
         yum install -y epel-release
-        yum install -y wget curl xz jq
+        yum install -y wget xz jq
     else
         print_error "Unsupported package manager"
         exit 1
@@ -424,11 +424,21 @@ EOF
     print_success "ShadowTLS configured and started successfully"
 }
 
+# Get IPv4 address
+get_ipv4_address() {
+    local ip=$(wget -qO- -t1 -T2 https://api.ipify.org)
+    if [[ -z "$ip" ]]; then
+        echo "Unable to get IP address"
+    else
+        echo "$ip"
+    fi
+}
+
 # Show configuration
 show_configuration() {
     print_header "Installation Status"
     
-    local server_ip=$(curl -s https://api.ipify.org)
+    local server_ip=$(get_ipv4_address)
     
     echo -e "${BOLD}Service Status:${NC}"
     echo -e "\n${BOLD}Shadowsocks Service:${NC}"
