@@ -148,6 +148,16 @@ install_shadowsocks() {
     print_info "Installing version: $new_ver"
     local archive_name="shadowsocks-${new_ver}.${ss_arch}-unknown-linux-gnu.tar.xz"
     
+    # Delete old files
+    if [[ -f "/usr/local/bin/ssserver" ]]; then
+        print_info "Removing old Shadowsocks binary..."
+        rm -f /usr/local/bin/ssserver
+        if [[ $? -ne 0 ]]; then
+            print_error "Failed to remove old Shadowsocks binary!"
+            exit 1
+        fi
+    fi
+    
     if ! wget --no-check-certificate -N "https://github.com/shadowsocks/shadowsocks-rust/releases/download/${new_ver}/${archive_name}"; then
         print_error "Failed to download Shadowsocks Rust!"
         exit 1
@@ -162,9 +172,13 @@ install_shadowsocks() {
     fi
     
     chmod +x ssserver
-    mv -f ssserver /usr/local/bin/
-    rm -f sslocal ssmanager ssservice ssurl "$archive_name"
+    mv ssserver /usr/local/bin/
+    if [[ $? -ne 0 ]]; then
+        print_error "Failed to install Shadowsocks binary!"
+        exit 1
+    fi
     
+    rm -f sslocal ssmanager ssservice ssurl "$archive_name"
     print_success "Shadowsocks-rust installation completed"
 }
 
@@ -223,46 +237,72 @@ install_shadowtls() {
     
     print_info "Installing version: ${latest_version}"
     
-    if ! wget -q --show-progress "https://github.com/ihciah/shadow-tls/releases/download/${latest_version}/shadow-tls-${tls_arch_suffix}" -O /usr/local/bin/shadow-tls; then
+    # Delete old files
+    if [[ -f "/usr/local/bin/shadow-tls" ]]; then
+        print_info "Removing old ShadowTLS binary..."
+        rm -f /usr/local/bin/shadow-tls
+        if [[ $? -ne 0 ]]; then
+            print_error "Failed to remove old ShadowTLS binary!"
+            exit 1
+        fi
+    fi
+    
+    # Download to temporary file
+    local temp_file="/tmp/shadow-tls.tmp"
+    if ! wget -q --show-progress "https://github.com/ihciah/shadow-tls/releases/download/${latest_version}/shadow-tls-${tls_arch_suffix}" -O "${temp_file}"; then
         print_error "Failed to download ShadowTLS!"
+        rm -f "${temp_file}"
         exit 1
     fi
-
+    
+    # Move to the target position
+    mv "${temp_file}" /usr/local/bin/shadow-tls
+    if [[ $? -ne 0 ]]; then
+        print_error "Failed to install ShadowTLS binary!"
+        rm -f "${temp_file}"
+        exit 1
+    fi
+    
     chmod +x /usr/local/bin/shadow-tls
+    if [[ $? -ne 0 ]]; then
+        print_error "Failed to set executable permission for ShadowTLS!"
+        exit 1
+    fi
+    
     print_success "ShadowTLS binary installed successfully"
 }
 
 # Function to get user input for ShadowTLS listen port
 get_user_port() {
     print_header "ShadowTLS Port Configuration"
-    echo "请选择如何设置 ShadowTLS 监听端口："
-    echo "1. 手动输入 (端口范围: 50000-60000)"
-    echo "2. 随机生成"
+    echo "Please set the ShadowTLS listening port："
+    echo "1. Manual input (Port range: 50000-60000)"
+    echo "2. Random generation"
     echo -e "----------------------------------------\n"
     
     while true; do
-        read -p "请选择 (1/2): " choice
+        read -p "Please select (1/2): " choice
         case $choice in
             1)
                 while true; do
-                    read -p "请输入监听端口 (50000-60000): " port
+                    read -p "Please enter the listening port (50000-60000): " port
                     if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 50000 ] && [ "$port" -le 60000 ] && [[ ! "$port" =~ "4" ]]; then
                         listen_port=$port
-                        print_info "选择的端口: $listen_port"
+                        print_info "Selected port: $listen_port"
                         break
                     else
-                        print_error "请输入一个有效的端口号 (50000-60000，且不包含数字4)"
+                        print_error "Please enter a valid port number (50000-60000)"
                     fi
                 done
                 break
                 ;;
             2)
                 listen_port=$(generate_port 50000 60000)
-                print_info "随机生成端口: $listen_port"
+                print_info "Randomly generated port: $listen_port"
                 break
                 ;;
             *)
-                print_error "无效选择。请输入 1 或 2。"
+                print_error "Invalid selection. Please enter 1 or 2."
                 ;;
         esac
     done
@@ -271,53 +311,53 @@ get_user_port() {
 # Get user domain selection
 get_user_domain() {
     print_header "TLS Domain Configuration"
-    echo "请选择 TLS 域名设置方式："
-    echo "1. 随机使用预设域名"
-    echo "2. 使用指定域名"
-    echo "3. 手动输入域名"
+    echo "Please set the TLS domain: "
+    echo "1. Randomly use preset domain"
+    echo "2. Use the specified domain"
+    echo "3. Manually enter the domain"
     echo -e "----------------------------------------\n"
     
     while true; do
-        read -p "请选择 (1/2/3): " domain_choice
+        read -p "Please select (1/2/3): " domain_choice
         case $domain_choice in
             1)
                 random_index=$((RANDOM % ${#PRESET_DOMAINS[@]}))
                 domain="${PRESET_DOMAINS[$random_index]}"
-                print_info "随机选择域名: $domain"
+                print_info "Used domain: $domain"
                 break
                 ;;
             2)
-                echo -e "\n可用的预设域名："
+                echo -e "\nAvailable preset domains: "
                 for i in "${!PRESET_DOMAINS[@]}"; do
                     echo "$((i+1)). ${PRESET_DOMAINS[$i]}"
                 done
                 while true; do
-                    read -p "请选择域名编号 (1-${#PRESET_DOMAINS[@]}): " domain_index
+                    read -p "Please select the domain number (1-${#PRESET_DOMAINS[@]}): " domain_index
                     if [[ "$domain_index" =~ ^[0-9]+$ ]] && [ "$domain_index" -ge 1 ] && [ "$domain_index" -le "${#PRESET_DOMAINS[@]}" ]; then
                         domain="${PRESET_DOMAINS[$((domain_index-1))]}"
-                        print_info "使用指定域名: $domain"
+                        print_info "Selected domain: $domain"
                         break
                     else
-                        print_error "请输入有效的编号 (1-${#PRESET_DOMAINS[@]})"
+                        print_error "Please enter a valid number (1-${#PRESET_DOMAINS[@]})"
                     fi
                 done
                 break
                 ;;
             3)
                 while true; do
-                    read -p "请输入域名: " custom_domain
+                    read -p "Please enter the domain: " custom_domain
                     if [[ $custom_domain =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
                         domain=$custom_domain
-                        print_info "使用自定义域名: $domain"
+                        print_info "Used domain: $domain"
                         break
                     else
-                        print_error "请输入有效的域名格式"
+                        print_error "Please enter a valid domain format"
                     fi
                 done
                 break
                 ;;
             *)
-                print_error "无效选择。请输入 1、2 或 3。"
+                print_error "Invalid selection. Please enter 1、2 or 3。"
                 ;;
         esac
     done
@@ -390,27 +430,58 @@ update_services() {
     
     print_header "Update Process"
     
+    local need_update=0
+    
+    # Check Shadowsocks version
+    if [[ -z "$SS_CURRENT_VERSION" ]]; then
+        print_warning "Shadowsocks is not installed"
+        need_update=0
+    elif [[ "$ss_latest_ver" == "$SS_CURRENT_VERSION" ]]; then
+        print_success "Shadowsocks is already at the latest version ($SS_CURRENT_VERSION)"
+    else
+        print_info "Shadowsocks needs update from $SS_CURRENT_VERSION to $ss_latest_ver"
+        need_update=1
+    fi
+    
+    # Check ShadowTLS version
+    if [[ -z "$STLS_CURRENT_VERSION" ]]; then
+        print_warning "ShadowTLS is not installed"
+        need_update=0
+    elif [[ "$stls_latest_ver" == "$STLS_CURRENT_VERSION" ]]; then
+        print_success "ShadowTLS is already at the latest version ($STLS_CURRENT_VERSION)"
+    else
+        print_info "ShadowTLS needs update from $STLS_CURRENT_VERSION to $stls_latest_ver"
+        need_update=1
+    fi
+    
+    # If no updates needed, exit
+    if [[ $need_update -eq 0 ]]; then
+        print_success "All services are up to date or not installed"
+        exit 0
+    fi
+    
     read -p "Do you want to proceed with the updates? (y/n): " confirm
     if [[ "$confirm" != "y" ]]; then
         print_info "Update cancelled"
-        return
+        exit 0
     fi
     
     # Update Shadowsocks if needed
-    if [[ "$ss_latest_ver" != "$SS_CURRENT_VERSION" ]]; then
+    if [[ -z "$SS_CURRENT_VERSION" ]] || [[ "$ss_latest_ver" != "$SS_CURRENT_VERSION" ]]; then
         systemctl stop shadowsocks.service 2>/dev/null
         install_shadowsocks
         systemctl start shadowsocks.service
     fi
     
     # Update ShadowTLS if needed
-    if [[ "$stls_latest_ver" != "$STLS_CURRENT_VERSION" ]]; then
+    if [[ -z "$STLS_CURRENT_VERSION" ]] || [[ "$stls_latest_ver" != "$STLS_CURRENT_VERSION" ]]; then
         systemctl stop shadowtls.service 2>/dev/null
         install_shadowtls
         systemctl start shadowtls.service
     fi
     
     print_success "All services updated successfully"
+    exit 0
 }
 
 # Uninstall services
@@ -475,15 +546,19 @@ main_menu() {
                 get_user_domain
                 configure_shadowtls
                 show_configuration
+                exit 0
                 ;;
             2)
                 update_services
+                # The update_services function already contains exit internally
                 ;;
             3)
                 uninstall_service
+                exit 0
                 ;;
             4)
                 show_configuration
+                exit 0
                 ;;
             5)
                 print_info "Exiting..."
@@ -493,9 +568,6 @@ main_menu() {
                 print_error "Invalid option. Please try again."
                 ;;
         esac
-        
-        echo
-        read -p "Press Enter to continue..."
     done
 }
 
