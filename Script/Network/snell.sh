@@ -49,24 +49,45 @@ get_ipv4_address() {
 ###################
 # Version Management
 ###################
+validate_version_format() {
+    local version=$1
+    if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        print_message "error" "Invalid version format. Please use format: X.Y.Z (e.g., 4.1.1)"
+        return 1
+    fi
+    return 0
+}
+
 get_server_version() {
     if [[ -f "$SERVER_BIN" ]]; then
-        local version=$("$SERVER_BIN" -v 2>&1 | grep -oP 'snell-server version \K[0-9]+\.[0-9]+\.[0-9]+' || echo "0.0.0")
-        echo "$version"
+        # Try to get version from server binary
+        local raw_version
+        raw_version=$("$SERVER_BIN" -v 2>&1) || true
+        if [[ $raw_version =~ [0-9]+\.[0-9]+\.[0-9]+ ]]; then
+            echo "${BASH_REMATCH[0]}"
+        else
+            echo "0.0.0"
+        fi
     else
         echo "0.0.0"
     fi
 }
 
-version_gt() {
-    test "$(echo "$@" | tr " " "\n" | sort -V | head -n 1)" != "$1"
-}
-
 prompt_version() {
     local current_version=$(get_server_version)
     print_message "info" "Current version: ${current_version}"
-    read -p "Enter the version number (e.g., 4.0.1): " new_version
+    
+    while true; do
+        read -p "Enter the version number (e.g., 4.1.1): " new_version
+        if validate_version_format "$new_version"; then
+            break
+        fi
+    done
     echo "$new_version"
+}
+
+version_gt() {
+    test "$(echo "$@" | tr " " "\n" | sort -V | head -n 1)" != "$1"
 }
 
 ###################
@@ -280,7 +301,15 @@ show_configuration() {
 ###################
 do_install() {
     local version=$1
-    [ -z "$version" ] && version=$(prompt_version)
+    
+    # Handle version input
+    if [ -z "$version" ]; then
+        version=$(prompt_version)
+    else
+        if ! validate_version_format "$version"; then
+            exit 1
+        fi
+    fi
     
     print_message "info" "Starting installation process..."
     setup_dependencies
@@ -299,7 +328,15 @@ do_install() {
 do_update() {
     local current_version=$(get_server_version)
     local new_version=$1
-    [ -z "$new_version" ] && new_version=$(prompt_version)
+    
+    # Handle version input
+    if [ -z "$new_version" ]; then
+        new_version=$(prompt_version)
+    else
+        if ! validate_version_format "$new_version"; then
+            exit 1
+        fi
+    fi
     
     if version_gt "$new_version" "$current_version"; then
         print_message "info" "Update available: ${current_version} -> ${new_version}"
@@ -353,11 +390,23 @@ main() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -i|--install)
-                do_install "$2"
+                shift
+                if [ -z "$1" ] || [[ "$1" == -* ]]; then
+                    do_install
+                else
+                    do_install "$1"
+                    shift
+                fi
                 exit 0
                 ;;
             -u|--update)
-                do_update "$2"
+                shift
+                if [ -z "$1" ] || [[ "$1" == -* ]]; then
+                    do_update
+                else
+                    do_update "$1"
+                    shift
+                fi
                 exit 0
                 ;;
             --uninstall)
@@ -365,7 +414,8 @@ main() {
                 exit 0
                 ;;
             -h|--help)
-                echo "Usage: $0 [-i|--install VERSION] [-u|--update VERSION] [--uninstall] [-h|--help]"
+                echo "Usage: $0 [-i|--install [VERSION]] [-u|--update [VERSION]] [--uninstall] [-h|--help]"
+                echo "VERSION format: X.Y.Z (e.g., 4.1.1)"
                 exit 0
                 ;;
             *)
