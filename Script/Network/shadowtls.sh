@@ -537,7 +537,7 @@ update_services() {
         exit 1
     fi
 
-    print_success "All services have been updated successfully"
+    print_success "All services are already the latest version"
     exit 0
 }
 
