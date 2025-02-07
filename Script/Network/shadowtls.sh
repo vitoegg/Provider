@@ -529,8 +529,6 @@ main_menu() {
         echo "1. Install Shadowsocks and ShadowTLS"
         echo "2. Update Services"
         echo "3. Uninstall Services"
-        echo "4. Show Current Configuration"
-        echo "5. Exit"
         echo -e "=====================================\n"
         
         read -p "Please select an option (1-5): " choice
@@ -554,14 +552,6 @@ main_menu() {
                 ;;
             3)
                 uninstall_service
-                exit 0
-                ;;
-            4)
-                show_configuration
-                exit 0
-                ;;
-            5)
-                print_info "Exiting..."
                 exit 0
                 ;;
             *)
