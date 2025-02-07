@@ -65,25 +65,24 @@ get_server_version() {
         raw_version=$("$SERVER_BIN" -v 2>&1) || true
         if [[ $raw_version =~ [0-9]+\.[0-9]+\.[0-9]+ ]]; then
             echo "${BASH_REMATCH[0]}"
-        else
-            echo "0.0.0"
+            return 0
         fi
-    else
-        echo "0.0.0"
     fi
+    echo "0.0.0"
 }
 
 prompt_version() {
     local current_version=$(get_server_version)
     print_message "info" "Current version: ${current_version}"
     
+    local new_version
     while true; do
         read -p "Enter the version number (e.g., 4.1.1): " new_version
         if validate_version_format "$new_version"; then
-            break
+            echo "$new_version"
+            return 0
         fi
     done
-    echo "$new_version"
 }
 
 version_gt() {
