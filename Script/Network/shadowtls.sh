@@ -206,12 +206,9 @@ get_user_port() {
 
 # 新增预设域名数组
 PRESET_DOMAINS=(
-    "osxapps.itunes.apple.com"
     "publicassets.cdn-apple.com"
-    "cdn-dynmedia-1.microsoft.com"
-    "software.download.prss.microsoft.com"
     "s0.awsstatic.com"
-    "player.live-video.net"
+    "p11.douyinpic.com"
     "cmsassets.rgpub.io"
 )
 
@@ -284,7 +281,7 @@ StartLimitIntervalSec=60
 
 [Service]
 LimitNOFILE=65536
-ExecStart=/usr/local/bin/shadow-tls --fastopen --v3 server --listen ::0:${listen_port} --server 127.0.0.1:${ssport} --tls ${domain} --password ${tls_password}
+ExecStart=/usr/local/bin/shadow-tls --fastopen --v3 --strict server --listen ::0:${listen_port} --server 127.0.0.1:${ssport} --tls ${domain} --password ${tls_password}
 Restart=always
 RestartSec=2
 TimeoutStopSec=15
