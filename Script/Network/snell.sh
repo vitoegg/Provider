@@ -104,6 +104,25 @@ detect_architecture() {
 }
 
 ###################
+# Service Management
+###################
+stop_service() {
+    if systemctl is-active snell &>/dev/null; then
+        print_message "info" "Stopping Snell service..."
+        systemctl stop snell
+        sleep 2  # Give some time for the service to stop
+    fi
+}
+
+remove_existing_server() {
+    if [[ -f "$SERVER_BIN" ]]; then
+        print_message "info" "Removing existing Snell server..."
+        stop_service
+        rm -f "$SERVER_BIN"
+    fi
+}
+
+###################
 # Dependencies
 ###################
 setup_dependencies() {
@@ -207,6 +226,9 @@ download_and_install() {
     local version=$1
     local arch=$(detect_architecture)
     
+    # Remove existing server if present
+    remove_existing_server
+    
     print_message "info" "Downloading Snell version ${version} for ${arch}..."
     cd ~/ || exit
     local download_url="${DOWNLOAD_BASE}/snell-server-v${version}-linux-${arch}.zip"
@@ -234,11 +256,7 @@ update_server() {
     local version=$1
     print_message "info" "Updating Snell server to version ${version}..."
     
-    # Stop service before update
-    print_message "info" "Stopping Snell service..."
-    systemctl stop snell
-    
-    # Update only the server binary
+    # Download and install new version (which includes stopping service and removing old binary)
     download_and_install "$version"
     
     # Start service
@@ -369,7 +387,6 @@ show_menu() {
     echo "1. Install Snell Server"
     echo "2. Update Snell Server"
     echo "3. Uninstall Snell Server"
-    echo "4. Exit"
     echo -e "${BLUE}=============================${NC}"
 }
 
@@ -390,9 +407,9 @@ main() {
                     do_install "$1"
                     shift
                 fi
-                exit 0
+                exit
                 ;;
-            -u|--update)
+            -n|--update)
                 shift
                 if [ -z "$1" ] || [[ "$1" == -* ]]; then
                     do_update
@@ -400,16 +417,16 @@ main() {
                     do_update "$1"
                     shift
                 fi
-                exit 0
+                exit
                 ;;
-            --uninstall)
+            -u|--uninstall)
                 do_uninstall
-                exit 0
+                exit
                 ;;
             -h|--help)
-                echo "Usage: $0 [-i|--install [VERSION]] [-u|--update [VERSION]] [--uninstall] [-h|--help]"
+                echo "Usage: $0 [-i|--install [VERSION]] [-n|--update [VERSION]] [-u|--uninstall] [-h|--help]"
                 echo "VERSION format: X.Y.Z (e.g., 4.1.1)"
-                exit 0
+                exit
                 ;;
             *)
                 print_message "error" "Unknown parameter: $1"
@@ -417,19 +434,26 @@ main() {
                 ;;
         esac
     done
-    
+        
     # Interactive menu
-    while true; do
-        show_menu
-        read -p "Please select an option (1-4): " choice
-        case $choice in
-            1) do_install ;;
-            2) do_update ;;
-            3) do_uninstall ;;
-            4) exit 0 ;;
-            *) print_message "error" "Invalid option. Please try again." ;;
-        esac
-    done
+    show_menu
+    read -p "Please select an option (1-3): " choice
+    case $choice in
+        1) 
+            do_install
+            ;;
+        2) 
+            do_update
+            ;;
+        3) 
+            do_uninstall
+            ;;
+        *) 
+            print_message "error" "Invalid option. Please choose 1-3."
+            exit 1
+            ;;
+    esac
+    exit
 }
 
 # Execute main program
