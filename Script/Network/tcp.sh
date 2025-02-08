@@ -29,18 +29,14 @@ fi
 # Function: Tuning type selection (interactive; no logging prefix in the prompt)
 tune_selection() {
     echo "Please select tuning type:"
-    echo "1. Only BBR"
-    echo "2. TCP+BBR"
-    echo "3. TCP+BBR+File"
-    read -p "Enter your choice (1-3): " tune_choice
+    echo "1. TCP+BBR"
+    echo "2. TCP+BBR+File"
+    read -p "Enter your choice (1-2): " tune_choice
     case $tune_choice in
         1)
-            mode="only_bbr"
-            ;;
-        2)
             mode="tcp_bbr"
             ;;
-        3)
+        2)
             mode="tcp_bbr_file"
             ;;
         *)
@@ -87,19 +83,6 @@ server_selection() {
 ################################################################################
 # Linux optimization main code
 ################################################################################
-# Function: Simple BBR tuning (Only BBR mode)
-simple_bbr_tune() {
-    cat > /etc/sysctl.conf << EOF
-# TCP congestion control
-net.core.default_qdisc = fq
-net.ipv4.tcp_congestion_control = bbr
-# Disable IPv6
-net.ipv6.conf.all.disable_ipv6 = 1
-net.ipv6.conf.default.disable_ipv6 = 1
-net.ipv6.conf.lo.disable_ipv6 = 1
-EOF
-}
-
 # Function: Full TCP and BBR tuning (for TCP+BBR and TCP+BBR+File)
 system_tune() {
     cat > /etc/sysctl.conf << EOF
@@ -236,10 +219,7 @@ timestamped_echo "${Info} Starting system tuning..."
 # Tuning type selection
 tune_selection
 
-if [ "$mode" = "only_bbr" ]; then
-    timestamped_echo "${Info} Applying Only BBR tuning..."
-    simple_bbr_tune
-elif [ "$mode" = "tcp_bbr" ]; then
+if [ "$mode" = "tcp_bbr" ]; then
     # For TCP+BBR, prompt for server selection and then apply full TCP tuning
     server_selection
     timestamped_echo "${Info} Applying TCP+BBR tuning..."
