@@ -437,7 +437,6 @@ StartLimitIntervalSec=60
 
 [Service]
 LimitNOFILE=65536
-Environment=MONOIO_FORCE_LEGACY_DRIVER=1
 ExecStart=/usr/local/bin/shadow-tls --fastopen --v3 --strict server --listen ::0:${listen_port} --server 127.0.0.1:${ssport} --tls ${domain} --password ${tls_password}
 Restart=always
 RestartSec=2
