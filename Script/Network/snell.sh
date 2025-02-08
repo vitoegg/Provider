@@ -447,35 +447,33 @@ show_menu() {
 ###################
 main() {
     check_root
-    
+
     local VERSION=""
     local PORT=""
     local PSK=""
-    
-    # Handle command line arguments
+    local OP=""
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -i|--install)
+                OP="install"
                 shift
                 if [ -n "$1" ] && [[ "$1" != -* ]]; then
                     VERSION="$1"
                     shift
                 fi
-                do_install "$VERSION" "$PORT" "$PSK"
-                exit
                 ;;
             -n|--update)
+                OP="update"
                 shift
                 if [ -n "$1" ] && [[ "$1" != -* ]]; then
                     VERSION="$1"
                     shift
                 fi
-                do_update "$VERSION"
-                exit
                 ;;
             -u|--uninstall)
-                do_uninstall
-                exit
+                OP="uninstall"
+                shift
                 ;;
             -p|--port)
                 shift
@@ -510,25 +508,40 @@ main() {
                 ;;
         esac
     done
-    
-    # Interactive menu
-    show_menu
-    read -p "Please select an option (1-3): " choice
-    case $choice in
-        1) 
-            do_install "" "$PORT" "$PSK"
-            ;;
-        2) 
-            do_update
-            ;;
-        3) 
-            do_uninstall
-            ;;
-        *) 
-            print_message "error" "Invalid option. Please choose 1-3."
-            exit 1
-            ;;
-    esac
+
+    if [ -n "$OP" ]; then
+        case $OP in
+            install)
+                do_install "$VERSION" "$PORT" "$PSK"
+                ;;
+            update)
+                do_update "$VERSION"
+                ;;
+            uninstall)
+                do_uninstall
+                ;;
+        esac
+    else
+        # If no action parameter is passed, go to the interaction menu
+        show_menu
+        read -p "Please select an option (1-3): " choice
+        case $choice in
+            1)
+                do_install "" "$PORT" "$PSK"
+                ;;
+            2)
+                do_update
+                ;;
+            3)
+                do_uninstall
+                ;;
+            *)
+                print_message "error" "Invalid option. Please choose 1-3."
+                exit 1
+                ;;
+        esac
+    fi
+
     exit
 }
 
