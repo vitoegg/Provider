@@ -91,7 +91,7 @@ server_selection() {
 simple_bbr_tune() {
     cat > /etc/sysctl.conf << EOF
 # TCP congestion control
-net.core.default_qdisc = fq
+net.core.default_qdisc = cake
 net.ipv4.tcp_congestion_control = bbr
 # Network buffer tuning
 net.ipv4.tcp_rmem=4096 87380 ${Rmem}
