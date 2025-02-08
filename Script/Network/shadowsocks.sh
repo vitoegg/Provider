@@ -187,7 +187,6 @@ get_latest_version() {
     local latest_ver
     latest_ver=$(wget -qO- https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases |
                  jq -r '[.[] | select(.prerelease == false) | select(.draft == false) | .tag_name] | .[0]')
-    log info "The latest version available is: $latest_ver"
     echo "$latest_ver"
 }
 
