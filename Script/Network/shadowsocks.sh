@@ -11,7 +11,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Log function with timestamp and category tag (timestamp is at the beginning)
+################################################################################
+# Log function with timestamp and category tag
+################################################################################
 log() {
     local type="$1"
     local message="$2"
@@ -42,23 +44,70 @@ log() {
     esac
 }
 
+################################################################################
+# Usage function for script help
+################################################################################
+usage() {
+    echo -e "Usage: $0 [-s password] [-p port] [-m method] [-h]\\n"
+    echo "Options:"
+    echo "  -s    Specify Shadowsocks password"
+    echo "  -p    Specify Shadowsocks port"
+    echo "  -m    Specify Shadowsocks encryption method (default: aes-128-gcm)"
+    echo "  -h    Show this help message"
+    exit 1
+}
+
+################################################################################
+# Parse command line arguments
+################################################################################
+while getopts "s:p:m:h" opt; do
+    case $opt in
+        s) sspasswd="$OPTARG" ;;
+        p) ssport="$OPTARG" ;;
+        m) ss_method="$OPTARG" ;;
+        h) usage ;;
+        \?) log error "Invalid option: -$OPTARG"; usage ;;
+    esac
+done
+
+################################################################################
 # Check for root privileges
+################################################################################
 if [[ $EUID -ne 0 ]]; then
     log error "This script must be run as root!"
     exit 1
 fi
 
-# Usage function for script help
-usage() {
-    echo -e "Usage: $0 [-s password] [-p port] [-h]\n"
-    echo "Options:"
-    echo "  -s    Specify Shadowsocks password"
-    echo "  -p    Specify Shadowsocks port"
-    echo "  -h    Show this help message"
-    exit 1
+################################################################################
+# Detect system architecture
+################################################################################
+detect_arch() {
+    log progress "Detecting system architecture"
+    case $(uname -m) in
+        i686|i386)
+            ss_arch="i686"
+            ;;
+        armv7*|armv6l)
+            ss_arch="arm"
+            ;;
+        armv8*|aarch64)
+            ss_arch="aarch64"
+            ;;
+        x86_64)
+            ss_arch="x86_64"
+            ;;
+        *)
+            log error "Unsupported architecture: $(uname -m)"
+            exit 1
+            ;;
+    esac
+    log progress_end "Architecture detected: $ss_arch"
 }
 
-# Function to check if a command exists
+################################################################################
+# Function to install a dependency
+################################################################################
+# Check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
@@ -97,6 +146,9 @@ install_packages() {
     log progress_end "Required packages are ready"
 }
 
+################################################################################
+# Public method
+################################################################################
 # Function to generate a random port (skip ports containing digit 4)
 generate_port() {
     local start="$1"
@@ -110,85 +162,44 @@ generate_port() {
     done
 }
 
-# Parse command line arguments
-while getopts "s:p:h" opt; do
-    case $opt in
-        s) sspasswd="$OPTARG" ;;
-        p) ssport="$OPTARG" ;;
-        h) usage ;;
-        \?) log error "Invalid option: -$OPTARG"; usage ;;
-    esac
-done
+# Get current installed version
+get_current_version() {
+    if [ ! -f "/usr/local/bin/ssserver" ]; then
+        echo "not_installed"
+        return
+    fi
 
-# Set or generate port and password
-if [ -z "$ssport" ]; then
-    ssport=$(generate_port "$DEFAULT_PORT_RANGE_START" "$DEFAULT_PORT_RANGE_END")
-    log info "Generated random port: $ssport"
-else
-    log info "Using specified port: $ssport"
-fi
-
-if [ -z "$sspasswd" ]; then
-    sspasswd=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)
-    log info "Generated random password"
-else
-    log info "Using specified password"
-fi
-
-# Detect system architecture
-detect_arch() {
-    log progress "Detecting system architecture"
-    case $(uname -m) in
-        i686|i386)
-            ss_arch="i686"
-            ;;
-        armv7*|armv6l)
-            ss_arch="arm"
-            ;;
-        armv8*|aarch64)
-            ss_arch="aarch64"
-            ;;
-        x86_64)
-            ss_arch="x86_64"
-            ;;
-        *)
-            log error "Unsupported architecture: $(uname -m)"
-            exit 1
-            ;;
-    esac
-    log progress_end "Architecture detected: $ss_arch"
+    local version
+    version=$(/usr/local/bin/ssserver -V 2>&1)
+    if [[ $version =~ ([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+        echo "${BASH_REMATCH[1]}"
+    else
+        echo "unknown"
+    fi
 }
 
-# Uninstall Shadowsocks
-uninstall_service() {
-    echo -e "\n=== Uninstalling Shadowsocks ===\n"
-    log progress "Stopping and disabling Shadowsocks service"
-    systemctl stop shadowsocks.service 2>/dev/null
-    systemctl disable shadowsocks.service 2>/dev/null
-    log progress_end "Service stopped and disabled"
-
-    log progress "Removing service files"
-    rm -f /lib/systemd/system/shadowsocks.service
-    log progress_end "Service files removed"
-
-    log progress "Removing configuration files"
-    rm -rf /etc/shadowsocks
-    rm -f /etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf
-    log progress_end "Configuration files removed"
-
-    log progress "Removing binary files"
-    rm -f /usr/local/bin/ssserver
-    log progress_end "Binary files removed"
-
-    log progress "Reloading systemd daemon"
-    systemctl daemon-reload
-    systemctl reset-failed
-    log progress_end "Systemd daemon reloaded"
-
-    echo -e "\n=== Uninstallation completed successfully ===\n"
+# Get the latest version from GitHub
+get_latest_version() {
+    local latest_ver
+    latest_ver=$(wget -qO- https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases |
+                 jq -r '[.[] | select(.prerelease == false) | select(.draft == false) | .tag_name] | .[0]')
+    echo "${latest_ver#v}"  # Remove "v" prefix if exists
 }
 
+# Get server's IPv4 address
+get_ipv4_address() {
+    local ip
+    ip=$(wget -qO- -t1 -T2 https://api.ipify.org)
+    if [[ -z "$ip" ]]; then
+        echo "Unable to get IP address"
+    else
+        echo "$ip"
+    fi
+}
+
+################################################################################
 # Install Shadowsocks-rust
+################################################################################
 install_shadowsocks() {
     log progress "Installing Shadowsocks-rust"
     local new_ver
@@ -225,7 +236,38 @@ install_shadowsocks() {
     log progress_end "Shadowsocks-rust installation completed"
 }
 
+################################################################################
+# Prepare for Configuration
+################################################################################
+prepare_configuration() {
+    # Set default encryption method if not provided
+    if [ -z "$ss_method" ]; then
+        ss_method="aes-128-gcm"
+        log info "Using default method: $ss_method"
+    else
+        log info "Using specified method: $ss_method"
+    fi
+
+    # Set or generate port
+    if [ -z "$ssport" ]; then
+        ssport=$(generate_port "$DEFAULT_PORT_RANGE_START" "$DEFAULT_PORT_RANGE_END")
+        log info "Generated random port: $ssport"
+    else
+        log info "Using specified port: $ssport"
+    fi
+
+    # Set or generate password
+    if [ -z "$sspasswd" ]; then
+        sspasswd=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)
+        log info "Generated random password"
+    else
+        log info "Using specified password"
+    fi
+}
+
+################################################################################
 # Configure Shadowsocks
+################################################################################
 configure_shadowsocks() {
     log progress "Configuring Shadowsocks"
     mkdir -p /etc/shadowsocks
@@ -237,7 +279,7 @@ configure_shadowsocks() {
     "password": "$sspasswd",
     "timeout": 600,
     "mode": "tcp_and_udp",
-    "method": "aes-128-gcm"
+    "method": "$ss_method"
 }
 EOF
 
@@ -273,21 +315,9 @@ EOF
     log progress_end "Shadowsocks configured and started successfully"
 }
 
-# Get server's IPv4 address
-get_ipv4_address() {
-    local ip
-    ip=$(wget -qO- -t1 -T2 https://api.ipify.org)
-    if [[ -z "$ip" ]]; then
-        echo "Unable to get IP address"
-    else
-        echo "$ip"
-    fi
-}
-
-# Display final configuration:
-# 1. First output service status.
-# 2. Then a separator.
-# 3. Then the configuration details.
+################################################################################
+# Display final configuration
+################################################################################
 show_configuration() {
     echo -e "\nService status:"
     systemctl status shadowsocks.service --no-pager
@@ -300,36 +330,14 @@ show_configuration() {
     echo "Server IP:      $server_ip"
     echo "Port:           $ssport"
     echo "Password:       $sspasswd"
-    echo "Encryption:     aes-128-gcm"
+    echo "Encryption:     $ss_method"
     echo "=================================="
     echo ""
 }
 
-# Get current installed version
-get_current_version() {
-    if [ ! -f "/usr/local/bin/ssserver" ]; then
-        echo "not_installed"
-        return
-    fi
-
-    local version
-    version=$(/usr/local/bin/ssserver -V 2>&1)
-    if [[ $version =~ ([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-        echo "${BASH_REMATCH[1]}"
-    else
-        echo "unknown"
-    fi
-}
-
-# Get the latest version from GitHub
-get_latest_version() {
-    local latest_ver
-    latest_ver=$(wget -qO- https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases |
-                 jq -r '[.[] | select(.prerelease == false) | select(.draft == false) | .tag_name] | .[0]')
-    echo "${latest_ver#v}"  # Remove "v" prefix if exists
-}
-
+################################################################################
 # Update Shadowsocks
+################################################################################
 update_shadowsocks() {
     log progress "Checking current version"
     local current_ver
@@ -382,14 +390,48 @@ update_shadowsocks() {
     systemctl status shadowsocks.service --no-pager
 }
 
+################################################################################
+# Uninstall Shadowsocks
+################################################################################
+uninstall_service() {
+    echo -e "\n=== Uninstalling Shadowsocks ===\n"
+    log progress "Stopping and disabling Shadowsocks service"
+    systemctl stop shadowsocks.service 2>/dev/null
+    systemctl disable shadowsocks.service 2>/dev/null
+    log progress_end "Service stopped and disabled"
+
+    log progress "Removing service files"
+    rm -f /lib/systemd/system/shadowsocks.service
+    log progress_end "Service files removed"
+
+    log progress "Removing configuration files"
+    rm -rf /etc/shadowsocks
+    rm -f /etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf
+    log progress_end "Configuration files removed"
+
+    log progress "Removing binary files"
+    rm -f /usr/local/bin/ssserver
+    log progress_end "Binary files removed"
+
+    log progress "Reloading systemd daemon"
+    systemctl daemon-reload
+    systemctl reset-failed
+    log progress_end "Systemd daemon reloaded"
+
+    echo -e "\n=== Uninstallation completed successfully ===\n"
+}
+
+################################################################################
 # Main execution:
 # 1. If parameters were provided, directly run installation mode.
 # 2. Otherwise, show interactive menu.
+################################################################################
 main() {
     # If additional parameters are passed (not counting the script name), skip interactive menu
     if [ "$#" -gt 0 ]; then
         install_packages
         detect_arch
+        prepare_configuration
         install_shadowsocks
         configure_shadowsocks
         show_configuration
@@ -410,6 +452,7 @@ main() {
         1)
             install_packages
             detect_arch
+            prepare_configuration
             install_shadowsocks
             configure_shadowsocks
             show_configuration
