@@ -171,8 +171,7 @@ setup_dependencies() {
 # Configuration
 ###################
 validate_port() {
-    local port=$1
-    if [[ ! "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 10000 ] || [ "$port" -gt 60000 ]; then
+    if [[ ! "$1" =~ ^[0-9]+$ ]] || [ "$1" -lt 10000 ] || [ "$1" -gt 60000 ]; then
         print_message "error" "Invalid port. Must be between 10000 and 60000"
         return 1
     fi
@@ -180,8 +179,7 @@ validate_port() {
 }
 
 validate_psk() {
-    local psk=$1
-    if [[ ! "$psk" =~ ^[A-Za-z0-9]{16}$ ]]; then
+    if [[ ! "$1" =~ ^[A-Za-z0-9]{16}$ ]]; then
         print_message "error" "Invalid PSK. Must be exactly 16 alphanumeric characters"
         return 1
     fi
@@ -190,30 +188,34 @@ validate_psk() {
 
 get_valid_port() {
     local port=$1
-    if [ -z "$port" ]; then
-        while true; do
-            read -p "Enter port number (10000-60000): " port
-            if validate_port "$port"; then
-                break
-            fi
-        done
-    else
-        if ! validate_port "$port"; then
-            exit 1
+    if [ -n "$port" ]; then
+        if validate_port "$port"; then
+            echo "$port"
+            return 0
         fi
+        exit 1
     fi
-    echo "$port"
+    
+    while true; do
+        read -p "Enter port number (10000-60000): " port
+        if validate_port "$port"; then
+            echo "$port"
+            return 0
+        fi
+    done
 }
 
 generate_psk() {
     local psk=$1
-    if [ -z "$psk" ]; then
-        psk=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
-    else
-        if ! validate_psk "$psk"; then
-            exit 1
+    if [ -n "$psk" ]; then
+        if validate_psk "$psk"; then
+            echo "$psk"
+            return 0
         fi
+        exit 1
     fi
+    
+    psk=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
     echo "$psk"
 }
 
