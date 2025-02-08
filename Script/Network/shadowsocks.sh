@@ -48,11 +48,11 @@ log() {
 # Usage function for script help
 ################################################################################
 usage() {
-    echo -e "Usage: $0 [-s password] [-p port] [-m method] [-h]\\n"
+    echo -e "Usage: $0 [-s password] [-p port] [-a] [-h]\n"
     echo "Options:"
     echo "  -s    Specify Shadowsocks password"
     echo "  -p    Specify Shadowsocks port"
-    echo "  -m    Specify Shadowsocks encryption method (default: aes-128-gcm)"
+    echo "  -a    Use 2022-blake3-aes-128-gcm encryption method"
     echo "  -h    Show this help message"
     exit 1
 }
@@ -60,11 +60,11 @@ usage() {
 ################################################################################
 # Parse command line arguments
 ################################################################################
-while getopts "s:p:m:h" opt; do
+while getopts "s:p:ah" opt; do
     case $opt in
         s) sspasswd="$OPTARG" ;;
         p) ssport="$OPTARG" ;;
-        m) ss_method="$OPTARG" ;;
+        a) use_blake3="yes" ;;
         h) usage ;;
         \?) log error "Invalid option: -$OPTARG"; usage ;;
     esac
@@ -105,14 +105,15 @@ detect_arch() {
 }
 
 ################################################################################
-# Function to install a dependency
+# Helper function: Check if a command exists
 ################################################################################
-# Check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+################################################################################
 # Function to install a dependency if it does not exist
+################################################################################
 install_dependency() {
     local cmd="$1"
     local package="$2"
@@ -132,7 +133,9 @@ install_dependency() {
     fi
 }
 
-# Function to install required packages if missing
+################################################################################
+# Install required packages if missing
+################################################################################
 install_packages() {
     log progress "Checking and installing required packages"
     install_dependency "wget" "wget"
@@ -143,13 +146,13 @@ install_packages() {
     else
         install_dependency "tar" "xz"
     fi
+    install_dependency "openssl" "openssl"
     log progress_end "Required packages are ready"
 }
 
 ################################################################################
-# Public method
-################################################################################
 # Function to generate a random port (skip ports containing digit 4)
+################################################################################
 generate_port() {
     local start="$1"
     local end="$2"
@@ -162,7 +165,9 @@ generate_port() {
     done
 }
 
-# Get current installed version
+################################################################################
+# Get current installed version of Shadowsocks
+################################################################################
 get_current_version() {
     if [ ! -f "/usr/local/bin/ssserver" ]; then
         echo "not_installed"
@@ -178,15 +183,39 @@ get_current_version() {
     fi
 }
 
+################################################################################
 # Get the latest version from GitHub
+################################################################################
 get_latest_version() {
     local latest_ver
     latest_ver=$(wget -qO- https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases |
                  jq -r '[.[] | select(.prerelease == false) | select(.draft == false) | .tag_name] | .[0]')
-    echo "${latest_ver#v}"  # Remove "v" prefix if exists
+    # Remove "v" prefix if exists
+    latest_ver="${latest_ver#v}"
+    log info "The latest version available is: $latest_ver"
+    echo "$latest_ver"
 }
 
+################################################################################
+# Download Shadowsocks package for a given version and architecture.
+# Outputs useful log messages regarding download status.
+################################################################################
+download_shadowsocks_package() {
+    local version="$1"
+    local archive_name="shadowsocks-${version}.${ss_arch}-unknown-linux-gnu.tar.xz"
+    log progress "Downloading Shadowsocks package ${archive_name}"
+    if wget --no-check-certificate -N "https://github.com/shadowsocks/shadowsocks-rust/releases/download/v${version}/${archive_name}"; then
+        log success "Successfully downloaded ${archive_name}"
+        return 0
+    else
+        log error "Failed to download Shadowsocks package ${archive_name}"
+        return 1
+    fi
+}
+
+################################################################################
 # Get server's IPv4 address
+################################################################################
 get_ipv4_address() {
     local ip
     ip=$(wget -qO- -t1 -T2 https://api.ipify.org)
@@ -199,14 +228,23 @@ get_ipv4_address() {
 
 ################################################################################
 # Install Shadowsocks-rust
+#
+# Retrieves the latest version using get_latest_version, downloads the package via 
+# download_shadowsocks_package, and extracts the binary.
 ################################################################################
 install_shadowsocks() {
     log progress "Installing Shadowsocks-rust"
-    local new_ver
-    new_ver=$(wget -qO- https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases |
-              jq -r '[.[] | select(.prerelease == false) | select(.draft == false) | .tag_name] | .[0]')
-    log info "Downloading version: ${new_ver}"
-    local archive_name="shadowsocks-${new_ver}.${ss_arch}-unknown-linux-gnu.tar.xz"
+    local latest_ver
+    latest_ver=$(get_latest_version)
+    if [ -z "$latest_ver" ]; then
+        log error "Could not determine the latest version."
+        exit 1
+    fi
+
+    log info "Preparing to download version: $latest_ver"
+    if ! download_shadowsocks_package "$latest_ver"; then
+        exit 1
+    fi
 
     # Remove old binary if exists
     if [[ -f "/usr/local/bin/ssserver" ]]; then
@@ -218,15 +256,11 @@ install_shadowsocks() {
         fi
     fi
 
-    if ! wget --no-check-certificate -N "https://github.com/shadowsocks/shadowsocks-rust/releases/download/${new_ver}/${archive_name}"; then
-        log error "Failed to download Shadowsocks Rust!"
-        exit 1
-    fi
-
     log progress "Extracting package"
+    local archive_name="shadowsocks-${latest_ver}.${ss_arch}-unknown-linux-gnu.tar.xz"
     tar -xf "$archive_name" >/dev/null 2>&1
     if [[ ! -f "ssserver" ]]; then
-        log error "Failed to extract Shadowsocks Rust!"
+        log error "Failed to extract Shadowsocks package!"
         exit 1
     fi
 
@@ -240,12 +274,15 @@ install_shadowsocks() {
 # Prepare for Configuration
 ################################################################################
 prepare_configuration() {
-    # Set default encryption method if not provided
-    if [ -z "$ss_method" ]; then
-        ss_method="aes-128-gcm"
-        log info "Using default method: $ss_method"
+    # Determine encryption method:
+    # - If -a option is passed use 2022-blake3-aes-128-gcm
+    # - Otherwise default to aes-128-gcm
+    if [ "$use_blake3" = "yes" ]; then
+        ss_method="2022-blake3-aes-128-gcm"
+        log info "Using encryption method: $ss_method (from -a flag)"
     else
-        log info "Using specified method: $ss_method"
+        ss_method="aes-128-gcm"
+        log info "Using default encryption method: $ss_method"
     fi
 
     # Set or generate port
@@ -256,10 +293,10 @@ prepare_configuration() {
         log info "Using specified port: $ssport"
     fi
 
-    # Set or generate password
+    # Set or generate password using openssl
     if [ -z "$sspasswd" ]; then
-        sspasswd=$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 16)
-        log info "Generated random password"
+        sspasswd=$(openssl rand -base64 16)
+        log info "Generated random password using openssl"
     else
         log info "Using specified password"
     fi
@@ -422,19 +459,28 @@ uninstall_service() {
 }
 
 ################################################################################
+# Unified Installation Function
+#
+# This function encapsulates all steps needed for a successful installation.
+################################################################################
+run_installation() {
+    install_packages
+    detect_arch
+    prepare_configuration
+    install_shadowsocks
+    configure_shadowsocks
+    show_configuration
+}
+
+################################################################################
 # Main execution:
-# 1. If parameters were provided, directly run installation mode.
-# 2. Otherwise, show interactive menu.
+# 1. If additional parameters are provided, skip interactive menu.
+# 2. Otherwise, show the interactive menu.
 ################################################################################
 main() {
-    # If additional parameters are passed (not counting the script name), skip interactive menu
+    # If parameters are provided (beyond script name) then execute non-interactive mode.
     if [ "$#" -gt 0 ]; then
-        install_packages
-        detect_arch
-        prepare_configuration
-        install_shadowsocks
-        configure_shadowsocks
-        show_configuration
+        run_installation
         exit 0
     fi
 
@@ -450,12 +496,7 @@ main() {
 
     case $choice in
         1)
-            install_packages
-            detect_arch
-            prepare_configuration
-            install_shadowsocks
-            configure_shadowsocks
-            show_configuration
+            run_installation
             ;;
         2)
             install_packages
