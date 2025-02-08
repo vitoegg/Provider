@@ -170,23 +170,51 @@ setup_dependencies() {
 ###################
 # Configuration
 ###################
+validate_port() {
+    local port=$1
+    if [[ ! "$port" =~ ^[0-9]+$ ]] || [ "$port" -lt 10000 ] || [ "$port" -gt 60000 ]; then
+        print_message "error" "Invalid port. Must be between 10000 and 60000"
+        return 1
+    fi
+    return 0
+}
+
+validate_psk() {
+    local psk=$1
+    if [[ ! "$psk" =~ ^[A-Za-z0-9]{16}$ ]]; then
+        print_message "error" "Invalid PSK. Must be exactly 16 alphanumeric characters"
+        return 1
+    fi
+    return 0
+}
+
 get_valid_port() {
-    while true; do
-        read -p "Enter port number (10000-60000): " PORT
-        if [[ "$PORT" =~ ^[0-9]+$ && "$PORT" -ge 10000 && "$PORT" -le 60000 ]]; then
-            break
-        else
-            print_message "error" "Port must be between 10000 and 60000"
+    local port=$1
+    if [ -z "$port" ]; then
+        while true; do
+            read -p "Enter port number (10000-60000): " port
+            if validate_port "$port"; then
+                break
+            fi
+        done
+    else
+        if ! validate_port "$port"; then
+            exit 1
         fi
-    done
-    echo "$PORT"
+    fi
+    echo "$port"
 }
 
 generate_psk() {
-    if [ -z "${PSK}" ]; then
-        PSK=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
+    local psk=$1
+    if [ -z "$psk" ]; then
+        psk=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
+    else
+        if ! validate_psk "$psk"; then
+            exit 1
+        fi
     fi
-    echo "$PSK"
+    echo "$psk"
 }
 
 create_config() {
@@ -325,6 +353,8 @@ show_configuration() {
 ###################
 do_install() {
     local version=$1
+    local port=$2
+    local psk=$3
     
     # Handle version input
     if [ -z "$version" ]; then
@@ -337,8 +367,10 @@ do_install() {
     
     print_message "info" "Starting installation process..."
     setup_dependencies
-    local port=$(get_valid_port)
-    local psk=$(generate_psk)
+    
+    # Get port and PSK
+    port=$(get_valid_port "$port")
+    psk=$(generate_psk "$psk")
     
     download_and_install "$version"
     create_config "$port" "$psk"
@@ -414,36 +446,60 @@ show_menu() {
 main() {
     check_root
     
+    local VERSION=""
+    local PORT=""
+    local PSK=""
+    
     # Handle command line arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -i|--install)
                 shift
-                if [ -z "$1" ] || [[ "$1" == -* ]]; then
-                    do_install
-                else
-                    do_install "$1"
+                if [ -n "$1" ] && [[ "$1" != -* ]]; then
+                    VERSION="$1"
                     shift
                 fi
+                do_install "$VERSION" "$PORT" "$PSK"
                 exit
                 ;;
             -n|--update)
                 shift
-                if [ -z "$1" ] || [[ "$1" == -* ]]; then
-                    do_update
-                else
-                    do_update "$1"
+                if [ -n "$1" ] && [[ "$1" != -* ]]; then
+                    VERSION="$1"
                     shift
                 fi
+                do_update "$VERSION"
                 exit
                 ;;
             -u|--uninstall)
                 do_uninstall
                 exit
                 ;;
+            -p|--port)
+                shift
+                if [ -n "$1" ] && [[ "$1" != -* ]]; then
+                    PORT="$1"
+                    shift
+                else
+                    print_message "error" "Port number is required after -p|--port"
+                    exit 1
+                fi
+                ;;
+            -k|--psk)
+                shift
+                if [ -n "$1" ] && [[ "$1" != -* ]]; then
+                    PSK="$1"
+                    shift
+                else
+                    print_message "error" "PSK is required after -k|--psk"
+                    exit 1
+                fi
+                ;;
             -h|--help)
-                echo "Usage: $0 [-i|--install [VERSION]] [-n|--update [VERSION]] [-u|--uninstall] [-h|--help]"
+                echo "Usage: $0 [-i|--install [VERSION]] [-n|--update [VERSION]] [-u|--uninstall] [-p|--port PORT] [-k|--psk PSK] [-h|--help]"
                 echo "VERSION format: X.Y.Z (e.g., 4.1.1)"
+                echo "PORT: Port number between 10000-60000"
+                echo "PSK: 16-character alphanumeric password"
                 exit
                 ;;
             *)
@@ -452,13 +508,13 @@ main() {
                 ;;
         esac
     done
-        
+    
     # Interactive menu
     show_menu
     read -p "Please select an option (1-3): " choice
     case $choice in
         1) 
-            do_install
+            do_install "" "$PORT" "$PSK"
             ;;
         2) 
             do_update
