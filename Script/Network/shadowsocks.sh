@@ -198,7 +198,7 @@ download_shadowsocks_package() {
     local version="$1"
     local archive_name="shadowsocks-${version}.${ss_arch}-unknown-linux-gnu.tar.xz"
     log progress "Downloading Shadowsocks package ${archive_name}"
-    if wget --no-check-certificate -N "https://github.com/shadowsocks/shadowsocks-rust/releases/download/${version}/${archive_name}"; then
+    if wget -q --no-check-certificate -N "https://github.com/shadowsocks/shadowsocks-rust/releases/download/${version}/${archive_name}"; then
         log success "Successfully downloaded ${archive_name}"
         return 0
     else
