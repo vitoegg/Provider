@@ -66,9 +66,13 @@ get_server_version() {
         if [[ $raw_version =~ [0-9]+\.[0-9]+\.[0-9]+ ]]; then
             echo "${BASH_REMATCH[0]}"
             return 0
+        else
+            print_message "error" "Unable to get current version from server binary"
+            return 1
         fi
     fi
-    echo "0.0.0"
+    print_message "error" "Snell server binary not found"
+    return 1
 }
 
 prompt_version() {  
@@ -106,6 +110,13 @@ detect_architecture() {
 ###################
 # Service Management
 ###################
+show_service_status() {
+    print_message "info" "Current service status:"
+    echo "----------------------------------------"
+    systemctl status snell --no-pager
+    echo "----------------------------------------"
+}
+
 stop_service() {
     if systemctl is-active snell &>/dev/null; then
         print_message "info" "Stopping Snell service..."
@@ -265,10 +276,11 @@ update_server() {
     
     if systemctl is-active snell &> /dev/null; then
         print_message "success" "Snell service updated and started successfully"
+        show_service_status
         return 0
     else
         print_message "error" "Failed to start Snell service after update. Checking logs:"
-        systemctl status snell --no-pager
+        show_service_status
         return 1
     fi
 }
@@ -285,10 +297,11 @@ start_service() {
 
     if systemctl is-active snell &> /dev/null; then
         print_message "success" "Snell service started successfully!"
+        show_service_status
         return 0
     else
         print_message "error" "Snell service failed to start. Checking logs:"
-        systemctl status snell --no-pager
+        show_service_status
         return 1
     fi
 }
@@ -337,7 +350,12 @@ do_install() {
 }
 
 do_update() {
-    local current_version=$(get_server_version)
+    local current_version
+    if ! current_version=$(get_server_version); then
+        print_message "error" "Snell may not be installed locally"
+        exit 1
+    fi
+    
     local new_version=$1
     
     # Handle version input
