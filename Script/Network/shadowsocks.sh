@@ -167,6 +167,7 @@ generate_port() {
 
 ################################################################################
 # Get current installed version of Shadowsocks
+# This returns the version string exactly as output by ssserver -V.
 ################################################################################
 get_current_version() {
     if [ ! -f "/usr/local/bin/ssserver" ]; then
@@ -174,24 +175,18 @@ get_current_version() {
         return
     fi
 
-    local version
-    version=$(/usr/local/bin/ssserver -V 2>&1)
-    if [[ $version =~ ([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-        echo "${BASH_REMATCH[1]}"
-    else
-        echo "unknown"
-    fi
+    # Return the complete output from ssserver -V without modification
+    /usr/local/bin/ssserver -V 2>&1
 }
 
 ################################################################################
 # Get the latest version from GitHub
+# This function returns the version string exactly as obtained from the API.
 ################################################################################
 get_latest_version() {
     local latest_ver
     latest_ver=$(wget -qO- https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases |
                  jq -r '[.[] | select(.prerelease == false) | select(.draft == false) | .tag_name] | .[0]')
-    # Remove "v" prefix if exists
-    latest_ver="${latest_ver#v}"
     log info "The latest version available is: $latest_ver"
     echo "$latest_ver"
 }
@@ -204,7 +199,7 @@ download_shadowsocks_package() {
     local version="$1"
     local archive_name="shadowsocks-${version}.${ss_arch}-unknown-linux-gnu.tar.xz"
     log progress "Downloading Shadowsocks package ${archive_name}"
-    if wget --no-check-certificate -N "https://github.com/shadowsocks/shadowsocks-rust/releases/download/v${version}/${archive_name}"; then
+    if wget --no-check-certificate -N "https://github.com/shadowsocks/shadowsocks-rust/releases/download/${version}/${archive_name}"; then
         log success "Successfully downloaded ${archive_name}"
         return 0
     else
@@ -246,7 +241,7 @@ install_shadowsocks() {
         exit 1
     fi
 
-    # Remove old binary if exists
+    # Remove old binary if it exists
     if [[ -f "/usr/local/bin/ssserver" ]]; then
         log progress "Removing old Shadowsocks binary"
         rm -f /usr/local/bin/ssserver
@@ -347,6 +342,8 @@ EOF
 
     if ! systemctl is-active --quiet shadowsocks.service; then
         log error "Shadowsocks service failed to start!"
+        echo "Service status:"
+        systemctl status shadowsocks.service --no-pager
         exit 1
     fi
     log progress_end "Shadowsocks configured and started successfully"
@@ -386,13 +383,7 @@ update_shadowsocks() {
         exit 1
     fi
 
-    if [ "$current_ver" = "unknown" ]; then
-        log warn "Unable to determine current version"
-        log info "Proceeding with update anyway..."
-    else
-        log info "Current version: $current_ver"
-    fi
-
+    log info "Current version as reported: $current_ver"
     log progress "Checking latest version"
     local latest_ver
     latest_ver=$(get_latest_version)
@@ -402,7 +393,13 @@ update_shadowsocks() {
     fi
     log progress_end "Latest version: $latest_ver"
 
-    if [ "$current_ver" = "$latest_ver" ]; then
+    # For comparing versions, remove non-digits and dots from both strings.
+    local compare_current compare_latest
+    compare_current=$(echo "$current_ver" | tr -dc '0-9.')
+    compare_latest=$(echo "$latest_ver" | tr -dc '0-9.')
+    log info "Comparing versions (numeric): current = $compare_current, latest = $compare_latest"
+
+    if [ "$compare_current" = "$compare_latest" ]; then
         echo -e "\nYou are already running the latest version ($current_ver)\n"
         return
     fi
@@ -418,6 +415,8 @@ update_shadowsocks() {
     systemctl start shadowsocks.service
     if ! systemctl is-active --quiet shadowsocks.service; then
         log error "Failed to start Shadowsocks service after update!"
+        echo "Service status:"
+        systemctl status shadowsocks.service --no-pager
         exit 1
     fi
     log progress_end "Service started"
