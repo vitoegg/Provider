@@ -1,163 +1,203 @@
 #!/bin/bash
 
-# 检查是否以root用户运行
+# Logging functions with color-coded types
+log_info() {
+    local timestamp
+    timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    echo -e "[${timestamp}] [\033[32mINFO\033[0m] $1"
+}
+
+log_error() {
+    local timestamp
+    timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    echo -e "[${timestamp}] [\033[31mERROR\033[0m] $1"
+}
+
+log_warn() {
+    local timestamp
+    timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    echo -e "[${timestamp}] [\033[33mWARNING\033[0m] $1"
+}
+
+
+################################################################################
+# Check root privileges
+################################################################################
 if [ "$EUID" -ne 0 ]; then
-  echo "请以root用户运行此脚本"
+  log_error "Please run this script as root."
   exit 1
 fi
 
-# 检查系统和安装依赖的函数
+################################################################################
+# Check system type and install dependencies
+################################################################################
 check_system_and_install() {
-    # 检查系统类型
+    # Check system type
     if [ -f /etc/os-release ]; then
         . /etc/os-release
         if [[ "$ID" != "debian" && "$ID" != "ubuntu" ]]; then
-            echo "此脚本仅支持 Debian 和 Ubuntu 系统"
+            log_error "This script only supports Debian and Ubuntu systems."
             return 1
         fi
     else
-        echo "无法确定系统类型，脚本退出"
+        log_error "Unable to determine system type. Exiting script."
         return 1
     fi
 
-    # 检查并安装必要的依赖
-    echo "检查并安装必要的依赖..."
+    local missing_packages=()
+
+    # Check for iptables
     if ! command -v iptables >/dev/null 2>&1; then
-        apt-get update
-        apt-get install -y iptables
+        missing_packages+=(iptables)
+    else
+        log_info "Dependency already installed: iptables"
     fi
 
-    if ! command -v iptables-persistent >/dev/null 2>&1; then
-        apt-get update
-        DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent
+    # Check for iptables-persistent by verifying existence of netfilter-persistent
+    if [ ! -x /usr/sbin/netfilter-persistent ]; then
+        missing_packages+=(iptables-persistent)
+    else
+        log_info "Dependency already installed: iptables-persistent"
+    fi
+
+    # Check for wget
+    if ! command -v wget >/dev/null 2>&1; then
+        missing_packages+=(wget)
+    else
+        log_info "Dependency already installed: wget"
+    fi
+
+    if [ ${#missing_packages[@]} -gt 0 ]; then
+        log_info "Installing missing dependencies: ${missing_packages[*]}"
+        apt-get update -qq
+        apt-get install -qq -y "${missing_packages[@]}" >/dev/null 2>&1
+        for pkg in "${missing_packages[@]}"; do
+            log_info "Installed dependency: ${pkg}"
+        done
     fi
 
     return 0
 }
 
-# 函数：添加转发规则
-add_forward_rule() {
-    local local_port=$1
-    local target_ip=$2
-    local target_port=$3
-
-    iptables -t nat -A PREROUTING -p tcp --dport $local_port -j DNAT --to-destination $target_ip:$target_port
-    iptables -t nat -A PREROUTING -p udp --dport $local_port -j DNAT --to-destination $target_ip:$target_port
-    iptables -t nat -A POSTROUTING -p tcp -d $target_ip --dport $target_port -j SNAT --to-source $LOCAL_IP
-    iptables -t nat -A POSTROUTING -p udp -d $target_ip --dport $target_port -j SNAT --to-source $LOCAL_IP
-
-    echo "已添加转发规则：本机端口 $local_port -> $target_ip:$target_port"
+################################################################################
+# Common Function
+################################################################################
+# Function: Display current forwarding rules
+show_forwarding_rules() {
+    echo -e "\n-----------------------------"
+    echo "Current forwarding rules:"
+    log_info "PREROUTING rules:"
+    iptables -t nat -L PREROUTING -n --line-numbers
+    echo ""
+    log_info "POSTROUTING rules:"
+    iptables -t nat -L POSTROUTING -n --line-numbers
 }
 
-# 清除规则的函数
-clean_rules() {
-    echo "正在清除所有转发规则..."
-    iptables -t nat -F PREROUTING
-    iptables -t nat -F POSTROUTING
+# Function: Add a forwarding rule for both TCP and UDP
+add_forward_rule() {
+    local local_port="$1"
+    local target_ip="$2"
+    local target_port="$3"
+
+    iptables -t nat -A PREROUTING -p tcp --dport "$local_port" -j DNAT --to-destination "$target_ip:$target_port"
+    iptables -t nat -A PREROUTING -p udp --dport "$local_port" -j DNAT --to-destination "$target_ip:$target_port"
+    iptables -t nat -A POSTROUTING -p tcp -d "$target_ip" --dport "$target_port" -j SNAT --to-source "$LOCAL_IP"
+    iptables -t nat -A POSTROUTING -p udp -d "$target_ip" --dport "$target_port" -j SNAT --to-source "$LOCAL_IP"
+
+    log_info "Added forwarding rule: local port $local_port -> $target_ip:$target_port"
+}
+
+# Function: Save and reload iptables rules
+save_and_reload_rules() {
     netfilter-persistent save
     netfilter-persistent reload
-    echo "所有转发规则已清除"
 }
 
-# 主菜单
+# Function: Clear all forwarding rules and exit the script
+clean_rules() {
+    log_info "Clearing all forwarding rules..."
+    iptables -t nat -F PREROUTING
+    iptables -t nat -F POSTROUTING
+    save_and_reload_rules
+    log_info "All forwarding rules have been cleared. Exiting."
+    exit 0
+}
+
+################################################################################
+# Core Process
+################################################################################
+# Function: Process adding new forwarding rules
+process_forward_rules() {
+    # Check system and install dependencies first
+    if ! check_system_and_install; then
+        return
+    fi
+
+    # Automatically get the public IP using wget
+    LOCAL_IP=$(wget -qO- https://api.ipify.org)
+    if [ -z "$LOCAL_IP" ]; then
+        log_warn "Unable to auto-detect local IP. Please enter manually."
+        read -p "Please input local IP: " LOCAL_IP
+    else
+        log_info "Detected local IP: $LOCAL_IP"
+    fi
+
+    while true; do
+        show_forwarding_rules
+        echo -e "-----------------------------"
+        echo "Enter a new forwarding rule (or press Ctrl+C to exit):"
+        read -p "Enter local port: " LOCAL_PORT
+        read -p "Enter target IP: " TARGET_IP
+        read -p "Enter target port: " TARGET_PORT
+
+        if [[ ! "$LOCAL_PORT" =~ ^[0-9]+$ ]] || \
+           [[ ! "$TARGET_PORT" =~ ^[0-9]+$ ]] || \
+           [[ ! "$TARGET_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            log_error "Input format error, please re-enter!"
+            continue
+        fi
+
+        add_forward_rule "$LOCAL_PORT" "$TARGET_IP" "$TARGET_PORT"
+
+        read -p "Do you want to continue adding forwarding rules? [Y/n]: " continue_add
+        if [[ "$continue_add" =~ ^[Nn]$ ]]; then
+            log_info "Saving all rules and exiting..."
+            save_and_reload_rules
+            show_forwarding_rules
+            exit 0
+        fi
+    done
+}
+
+################################################################################
+# Main menu loop
+################################################################################
 while true; do
-    echo -e "\n请选择操作："
-    echo "1. 添加新的转发规则"
-    echo "2. 查看当前转发规则"
-    echo "3. 清除所有转发规则"
-    echo "4. 退出"
-    read -p "请输入选项 [1-4]: " choice
+    echo -e "\n==== IPTABLES SCRIPT ===="
+    echo "Please select an operation:"
+    echo "1. Add a new forwarding rule"
+    echo "2. View current forwarding rules"
+    echo "3. Clear all forwarding rules"
+    echo "4. Exit"
+    echo "-----------------------------"
+    read -p "Enter option [1-4]: " choice
 
     case $choice in
         1)
-            # 只在添加规则时检查系统和依赖
-            if ! check_system_and_install; then
-                continue
-            fi
-
-            # 自动获取本机IP
-            LOCAL_IP=$(ip -4 addr show | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '127.0.0.1' | head -n 1)
-            if [ -z "$LOCAL_IP" ]; then
-                echo "无法自动获取本机IP，请手动输入："
-                read -p "请输入本机IP: " LOCAL_IP
-            else
-                echo "检测到本机IP: $LOCAL_IP"
-                read -p "是否使用此IP? [Y/n] " use_detected_ip
-                if [[ "$use_detected_ip" =~ ^[Nn]$ ]]; then
-                    read -p "请输入本机IP: " LOCAL_IP
-                fi
-            fi
-
-            while true; do
-                echo -e "\n当前转发规则："
-                iptables -t nat -L PREROUTING -n --line-numbers
-                echo -e "\n请输入新的转发规则（或按 Ctrl+C 退出）："
-                read -p "请输入本机端口: " LOCAL_PORT
-                read -p "请输入目标IP: " TARGET_IP
-                read -p "请输入目标端口: " TARGET_PORT
-
-                if [[ ! "$LOCAL_PORT" =~ ^[0-9]+$ ]] || \
-                   [[ ! "$TARGET_PORT" =~ ^[0-9]+$ ]] || \
-                   [[ ! "$TARGET_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                    echo "输入格式错误，请重新输入！"
-                    continue
-                fi
-
-                add_forward_rule "$LOCAL_PORT" "$TARGET_IP" "$TARGET_PORT"
-
-                read -p "是否继续添加转发规则？[Y/n] " continue_add
-                if [[ "$continue_add" =~ ^[Nn]$ ]]; then
-                    echo "保存所有规则并退出..."
-                    netfilter-persistent save
-                    netfilter-persistent reload
-                    echo -e "\n当前转发规则："
-                    iptables -t nat -L PREROUTING -n --line-numbers
-                    exit 0
-                fi
-            done
+            process_forward_rules
             ;;
         2)
-            echo -e "\n当前转发规则："
-            echo "PREROUTING 规则："
-            iptables -t nat -L PREROUTING -n --line-numbers
-            echo -e "\nPOSTROUTING 规则："
-            iptables -t nat -L POSTROUTING -n --line-numbers
+            show_forwarding_rules
             ;;
         3)
-            read -p "确定要清除所有转发规则吗？[y/N] " confirm
-            if [[ "$confirm" =~ ^[Yy]$ ]]; then
-                clean_rules
-            fi
+            clean_rules
             ;;
         4)
-            echo -e "\n请选择退出方式："
-            echo "1. 直接退出"
-            echo "2. 保存规则并退出"
-            read -p "请选择 [1-2]: " exit_choice
-            case $exit_choice in
-                1)
-                    echo "直接退出程序..."
-                    exit 0
-                    ;;
-                2)
-                    echo "保存规则并退出..."
-                    if ! command -v netfilter-persistent >/dev/null 2>&1; then
-                        echo "正在安装 netfilter-persistent..."
-                        apt-get update
-                        DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent
-                    fi
-                    netfilter-persistent save
-                    netfilter-persistent reload
-                    echo "规则已保存，退出程序..."
-                    exit 0
-                    ;;
-                *)
-                    echo "无效的选项，返回主菜单"
-                    ;;
-            esac
+            log_info "Exiting the program..."
+            exit 0
             ;;
         *)
-            echo "无效的选项，请重新选择"
+            log_error "Invalid option, please try again."
             ;;
     esac
 done
