@@ -173,7 +173,7 @@ process_forward_rules() {
 # Main menu loop
 ################################################################################
 while true; do
-    echo -e "\n==== IPTABLES SCRIPT ===="
+    echo -e "\n===== IPTABLES SCRIPT ====="
     echo "Please select an operation:"
     echo "1. Add a new forwarding rule"
     echo "2. View current forwarding rules"
