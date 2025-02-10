@@ -96,6 +96,11 @@ net.ipv4.tcp_congestion_control = bbr
 # Network buffer tuning
 net.ipv4.tcp_rmem=4096 87380 ${Rmem}
 net.ipv4.tcp_wmem=4096 16384 ${Wmem}
+# Enable packet forwarding
+net.ipv4.ip_forward=1
+net.ipv4.conf.all.route_localnet=1
+net.ipv4.conf.all.forwarding=1
+net.ipv4.conf.default.forwarding=1
 # Disable IPv6
 net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
