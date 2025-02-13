@@ -47,58 +47,35 @@
 .wootric.com
 .wowanalytics.co.uk
 .zoomanalytics.co
-
 .ads.linkedin.com
 analytics.slashdotmedia.com
 zgsdk.zhugeio.com
-
-# > 51.LA
 js.users.51.la
 mc.51.la
 wc.51.la
-# > 58
 track.58.com
 tracklog.58.com
-# > Baidu
 hm.baidu.com
 hmma.baidu.com
-# > Daum
 track.tiara.daum.net
 track.tiara.kakao.com
-# > Google
 .googletagmanager.com
 .google-analytics.com
 safebrowsing.googleapis.com
-# > GozenData
-# https://www.v2ex.com/t/772523
 .gozendata.com
 .gzads.com
 .gz-data.com
-# > GrowingIO
 .giocdn.com
 .growingio.com
-# > MI
 .tracking.miui.com
 api.miwifi.com
 data.mistat.xiaomi.com
 tracking.intl.miui.com
-# > TalkingData
 .cpatrk.net
 .talkingdata.com
 .talkingdata.net
 .udrig.com
-# > Tencent
 safebrowsing.urlsec.qq.com
-# > Tenjin
 track.tenjin.com
 track.tenjin.io
-# > Safari 防跳转
 app-site-association.cdn-apple.com
-
-# > 中国联通 去开屏
-.m1.ad.10010.com
-# > 中国电信 去开屏
-ad.21cn.com
-ad.k.21cn.com
-admarket.21cn.com
-adshows.21cn.com
