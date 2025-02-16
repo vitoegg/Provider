@@ -120,7 +120,7 @@ fs.file-max=6815744
 # Use Swap when physical memory is below 20%
 vm.swappiness=20
 # TCP congestion control
-net.core.default_qdisc = fq
+net.core.default_qdisc = cake
 net.ipv4.tcp_congestion_control = bbr
 # TCP connection keepalive settings
 net.ipv4.tcp_fin_timeout = 15
