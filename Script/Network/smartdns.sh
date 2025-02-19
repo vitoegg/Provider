@@ -1,22 +1,46 @@
 #!/bin/bash
 
-# 检查是否为 root 用户
+# Define color codes for different log categories
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Global variables for versions
+RELEASE_NUMBER=""
+PACKAGE_VERSION=""
+ARCH_TYPE=""
+
+# Logging functions
+log_info() {
+    echo -e "${GREEN}[$(date '+%Y-%m-%d %H:%M:%S')][INFO] $1${NC}"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')][WARN] $1${NC}"
+}
+
+log_error() {
+    echo -e "${RED}[$(date '+%Y-%m-%d %H:%M:%S')][ERROR] $1${NC}"
+}
+
+# Check if running as root
 check_root() {
     if [ "$(id -u)" != "0" ]; then
-        echo "错误: 必须使用 root 用户运行此脚本"
+        log_error "This script must be run as root"
         exit 1
     fi
 }
 
-# 检查 smartdns 是否已安装
+# Check if SmartDNS is already installed
 check_installed() {
     if systemctl is-active smartdns &>/dev/null; then
-        echo "SmartDNS 已经安装并正在运行"
+        log_error "SmartDNS is already installed and running"
         exit 1
     fi
 }
 
-# 检查系统架构
+# Check system architecture
 check_arch() {
     ARCH=$(uname -m)
     case $ARCH in
@@ -27,221 +51,309 @@ check_arch() {
             ARCH_TYPE="aarch64"
             ;;
         *)
-            echo "错误: 不支持的系统架构 $ARCH"
-            echo "本脚本仅支持 x86_64 和 aarch64 架构"
+            log_error "Unsupported architecture: $ARCH"
+            log_error "This script only supports x86_64 and aarch64 architectures"
             exit 1
             ;;
     esac
-    echo "检测到系统架构: $ARCH_TYPE"
+    log_info "Detected architecture: $ARCH_TYPE"
 }
 
-# 设置默认版本
-VERSION="1.2024.06.12-2222"
+# Install jq if not present
+install_jq() {
+    if command -v jq &>/dev/null; then
+        log_info "jq is already installed"
+        return 0
+    fi
+    
+    log_info "Installing jq..."
+    if [ -f /etc/debian_version ]; then
+        apt-get update -qq && apt-get install -y jq >/dev/null 2>&1
+    elif [ -f /etc/redhat-release ]; then
+        yum install -y jq >/dev/null 2>&1
+    else
+        log_error "Unsupported distribution for automatic jq installation"
+        exit 1
+    fi
+    
+    if command -v jq &>/dev/null; then
+        log_info "jq installed successfully"
+    else
+        log_error "Failed to install jq"
+        exit 1
+    fi
+}
 
-# 解析命令行参数
+# Get the latest SmartDNS versions from GitHub
+get_latest_version() {
+    install_jq
+    
+    # Get the latest release page content
+    local release_page
+    release_page=$(wget -qO- https://api.github.com/repos/pymumu/smartdns/releases/latest)
+    
+    if [ -z "$release_page" ]; then
+        log_error "Failed to fetch release information"
+        exit 1
+    fi
+    
+    # Extract Release number
+    RELEASE_NUMBER=$(echo "$release_page" | jq -r '.tag_name' | sed 's/Release//')
+    if [ -z "$RELEASE_NUMBER" ]; then
+        log_error "Failed to extract Release number"
+        exit 1
+    fi
+    
+    # Extract package version from assets
+    PACKAGE_VERSION=$(echo "$release_page" | jq -r '.assets[0].name' | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+-[0-9]\+')
+    if [ -z "$PACKAGE_VERSION" ]; then
+        log_error "Failed to extract package version"
+        exit 1
+    fi
+    
+    log_info "Latest versions - Release: ${RELEASE_NUMBER}, Package: ${PACKAGE_VERSION}"
+    return 0
+}
+
+# Domain list configuration
+DOMAIN_LISTS=(
+    "https://mirror.1991991.xyz/RuleSet/DNS/AGI.conf"
+    "https://mirror.1991991.xyz/RuleSet/DNS/Common.conf"
+    "https://mirror.1991991.xyz/RuleSet/DNS/Media.conf"
+)
+
+# Download selected domain lists
+download_domain_lists() {
+    local selection=$1
+    local group_name=$2
+    local merged_file="/etc/smartdns/${group_name}.conf"
+    
+    log_info "Downloading selected domain lists..."
+    mkdir -p "/etc/smartdns"
+    > "$merged_file"
+    
+    IFS=',' read -ra SELECTED <<< "$selection"
+    for num in "${SELECTED[@]}"; do
+        if [ "$num" -ge 1 ] && [ "$num" -le "${#DOMAIN_LISTS[@]}" ]; then
+            local index=$((num-1))
+            local url="${DOMAIN_LISTS[$index]}"
+            wget -qO- "$url" >> "$merged_file" || {
+                log_error "Failed to download domain list: $url"
+                return 1
+            }
+        else
+            log_error "Invalid selection number: $num"
+            return 1
+        fi
+    done
+    log_info "Domain lists downloaded and merged successfully"
+    return 0
+}
+
+# Parse command line arguments
 parse_args() {
-    USE_AI_DNS=0
-    AI_DNS_SERVER=""
+    USE_CUSTOM_DNS=0
+    CUSTOM_DNS_SERVER=""
+    DOMAIN_SELECTION=""
     UNINSTALL=0
+    
+    # If no arguments provided, use default installation
+    if [ $# -eq 0 ]; then
+        log_info "No parameters specified, proceeding with default installation"
+        return 0
+    fi
     
     while [[ $# -gt 0 ]]; do
         case $1 in
-            -v|--version)
-                VERSION="$2"
+            -d|--dns)
+                if [ -z "$2" ]; then
+                    log_error "DNS server IP is required with -d option"
+                    echo "Usage: $0 [-d|--dns <Custom DNS Server IP>] [-u|--uninstall]"
+                    echo "       $0 (no parameters for default installation)"
+                    exit 1
+                fi
+                USE_CUSTOM_DNS=1
+                CUSTOM_DNS_SERVER="$2"
                 shift 2
-                ;;
-            -a|--ai-dns)
-                USE_AI_DNS=1
-                AI_DNS_SERVER="$2"
-                shift 2
+                
+                log_info "Available domain lists:"
+                for i in "${!DOMAIN_LISTS[@]}"; do
+                    echo "$(($i+1)). ${DOMAIN_LISTS[$i]}"
+                done
+                
+                read -p "Enter the numbers of domain lists to use (comma-separated, e.g., 1,2): " DOMAIN_SELECTION
+                if [ -z "$DOMAIN_SELECTION" ]; then
+                    log_error "Domain list selection is required when using custom DNS"
+                    exit 1
+                fi
                 ;;
             -u|--uninstall)
                 UNINSTALL=1
                 shift
                 ;;
             *)
-                echo "未知参数: $1"
-                echo "用法: $0 [-v|--version <版本号>] [-a|--ai-dns <AI DNS服务器IP>] [-u|--uninstall]"
+                log_error "Unknown parameter: $1"
+                echo "Usage: $0 [-d|--dns <Custom DNS Server IP>] [-u|--uninstall]"
+                echo "       $0 (no parameters for default installation)"
                 exit 1
                 ;;
         esac
     done
 
     if [ $UNINSTALL -eq 1 ]; then
-        echo "准备卸载 SmartDNS..."
+        log_info "Preparing to uninstall SmartDNS..."
+    elif [ $USE_CUSTOM_DNS -eq 1 ]; then
+        log_info "Custom DNS server enabled: $CUSTOM_DNS_SERVER"
+        log_info "Selected domain lists: $DOMAIN_SELECTION"
     else
-        echo "使用 SmartDNS 版本: $VERSION"
-        if [ $USE_AI_DNS -eq 1 ]; then
-            echo "启用 AI DNS 解锁服务器: $AI_DNS_SERVER"
-        fi
+        log_info "Proceeding with default installation"
     fi
 }
 
-# 下载并安装 smartdns
+# Download and install SmartDNS
 install_smartdns() {
-    # 创建临时目录
-    TMP_DIR=$(mktemp -d)
-    cd "$TMP_DIR" || exit 1
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    cd "$tmp_dir" || exit 1
     
-    # 下载指定版本的 smartdns
-    echo "正在下载 SmartDNS..."
-    DOWNLOAD_URL="https://github.com/pymumu/smartdns/releases/download/Release46/smartdns.${VERSION}.${ARCH_TYPE}-linux-all.tar.gz"
-    if ! wget --no-check-certificate -qO smartdns.tar.gz "$DOWNLOAD_URL"; then
-        echo "下载失败，请检查版本号是否正确"
-        cd / && rm -rf "$TMP_DIR"
+    log_info "Downloading SmartDNS..."
+    local download_url="https://github.com/pymumu/smartdns/releases/download/Release${RELEASE_NUMBER}/smartdns.${PACKAGE_VERSION}.${ARCH_TYPE}-linux-all.tar.gz"
+    
+    wget --no-check-certificate -q "$download_url" -O smartdns.tar.gz || {
+        log_error "Download failed"
+        cd / && rm -rf "$tmp_dir"
         exit 1
-    fi
+    }
     
-    # 解压和安装
-    echo "正在解压并安装 SmartDNS..."
-    if tar zxf smartdns.tar.gz && cd smartdns && chmod +x ./install && ./install -i; then
-        echo "SmartDNS 安装成功"
-    else
-        echo "SmartDNS 安装失败"
-        cd / && rm -rf "$TMP_DIR"
+    log_info "Installing SmartDNS..."
+    tar zxf smartdns.tar.gz >/dev/null 2>&1 || {
+        log_error "Failed to extract archive"
+        cd / && rm -rf "$tmp_dir"
         exit 1
-    fi
+    }
     
-    # 清理临时文件
-    cd / && rm -rf "$TMP_DIR"
+    cd smartdns && chmod +x ./install
+    ./install -i >/dev/null 2>&1 || {
+        log_error "SmartDNS installation failed"
+        cd / && rm -rf "$tmp_dir"
+        exit 1
+    }
+    
+    log_info "SmartDNS installed successfully"
+    cd / && rm -rf "$tmp_dir"
 }
 
-# 配置 smartdns
+# Configure SmartDNS
 configure_smartdns() {
-    # 如果启用 AI DNS，先下载域名文件
-    if [ $USE_AI_DNS -eq 1 ]; then
-        echo "正在下载 AI 域名配置文件..."
-        if ! wget https://raw.githubusercontent.com/vitoegg/Unlock/main/proxy-domains.txt -O /etc/smartdns/agi.conf; then
-            echo "下载 AI 域名配置文件失败"
+    mkdir -p /etc/smartdns
+    
+    if [ $USE_CUSTOM_DNS -eq 1 ]; then
+        if ! download_domain_lists "$DOMAIN_SELECTION" "custom_domains"; then
+            log_error "Failed to configure domain lists"
             exit 1
         fi
     fi
 
-    # 创建配置文件
     cat > /etc/smartdns/smartdns.conf << EOF
-# 服务名称
 server-name smartdns
-# 日志等级配置
 log-level error
-# 监听端口
 bind :53
-# DNS服务器
 server 1.1.1.1
 server 8.8.8.8
 server 208.67.220.220
 EOF
 
-    # 如果启用 AI DNS，添加相关配置
-    if [ $USE_AI_DNS -eq 1 ]; then
+    if [ $USE_CUSTOM_DNS -eq 1 ]; then
         cat >> /etc/smartdns/smartdns.conf << EOF
-server ${AI_DNS_SERVER} -group ai -exclude-default-group
-# 设置AGI域名集合
-domain-set -name agi -file /etc/smartdns/agi.conf
-# 指定AGI单独DNS
-domain-rules /domain-set:agi/ -nameserver ai
+server ${CUSTOM_DNS_SERVER} -group custom -exclude-default-group
+domain-set -name custom -file /etc/smartdns/custom_domains.conf
+domain-rules /domain-set:custom/ -nameserver custom
 EOF
     fi
 
-    # 继续添加其他通用配置
     cat >> /etc/smartdns/smartdns.conf << EOF
-# 测速模式
 speed-check-mode ping,tcp:80,tcp:443
-# 缓存大小
 cache-size 32768
-# 开启过期缓存
 serve-expired yes
-# 过期缓存响应TTL
 serve-expired-reply-ttl 5
-# 过期缓存超时时间
 serve-expired-ttl 259200
-# 过期缓存预获取
 prefetch-domain yes
 serve-expired-prefetch-time 21600
-# 缓存持久化
 cache-persist yes
 cache-file /etc/smartdns/smartdns.cache
 cache-checkpoint-time 86400
-# 禁用IPV6
 force-AAAA-SOA yes
-# 禁用HTTPS
 force-qtype-SOA 65
 EOF
 
-    # 设置开机自启
-    systemctl enable smartdns
-    
-    # 启动服务
-    echo "正在启动 SmartDNS 服务..."
+    systemctl enable smartdns >/dev/null 2>&1
+    log_info "Starting SmartDNS service..."
     systemctl start smartdns
     
-    # 检查服务状态
     if systemctl is-active smartdns &>/dev/null; then
-        echo "SmartDNS 安装并启动成功！"
+        log_info "SmartDNS installed and started successfully!"
         
-        # 配置系统 DNS
-        echo "正在配置系统 DNS..."
-        # 解锁 resolv.conf 的编辑权限
+        log_info "Configuring system DNS..."
         chattr -i /etc/resolv.conf 2>/dev/null
-        # 配置 DNS 为本地
         rm -f /etc/resolv.conf
         echo "nameserver 127.0.0.1" > /etc/resolv.conf
-        # 锁定 resolv.conf 的编辑权限
         chattr +i /etc/resolv.conf
         
-        echo "系统 DNS 配置完成！"
+        log_info "System DNS configuration completed!"
+        
+        echo "----------------------------------------"
+        systemctl status smartdns
+        echo "----------------------------------------"
     else
-        echo "SmartDNS 启动失败，请检查日志"
+        log_error "SmartDNS failed to start. Please check logs"
         exit 1
     fi
 }
 
-# 卸载 smartdns
+# Uninstall SmartDNS
 uninstall_smartdns() {
-    echo "开始卸载 SmartDNS..."
+    log_info "Starting SmartDNS uninstallation..."
     
-    # 停止服务
     if systemctl is-active smartdns &>/dev/null; then
-        echo "停止 SmartDNS 服务..."
+        log_info "Stopping SmartDNS service..."
         systemctl stop smartdns
     fi
     
-    # 禁用服务
     if systemctl is-enabled smartdns &>/dev/null; then
-        echo "禁用 SmartDNS 服务..."
-        systemctl disable smartdns
+        log_info "Disabling SmartDNS service..."
+        systemctl disable smartdns >/dev/null 2>&1
     fi
     
-    # 恢复 DNS 配置
-    echo "恢复系统 DNS 配置..."
+    log_info "Restoring system DNS configuration..."
     chattr -i /etc/resolv.conf 2>/dev/null
     echo "nameserver 8.8.8.8" > /etc/resolv.conf
     echo "nameserver 1.1.1.1" >> /etc/resolv.conf
     
-    # 删除相关文件
-    echo "删除 SmartDNS 相关文件..."
+    log_info "Removing SmartDNS files..."
     rm -rf /etc/smartdns
     rm -f /usr/sbin/smartdns
     rm -f /usr/lib/systemd/system/smartdns.service
     
-    # 重新加载 systemd
-    systemctl daemon-reload
+    systemctl daemon-reload >/dev/null 2>&1
     
-    echo "SmartDNS 卸载完成！"
+    log_info "SmartDNS uninstallation completed!"
 }
 
+# Main function
 main() {
     check_root
-    check_arch
     parse_args "$@"
     
     if [ $UNINSTALL -eq 1 ]; then
         uninstall_smartdns
     else
         check_installed
+        check_arch
+        get_latest_version
         install_smartdns
         configure_smartdns
     fi
 }
 
-# 修改主函数调用，传入所有命令行参数
+# Execute main function with all command line arguments
 main "$@"
