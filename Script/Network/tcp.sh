@@ -64,8 +64,8 @@ server_selection() {
             Wmem=6875000
             ;;
         2)
-            Rmem=7786000
-            Wmem=7786000
+            Rmem=6875000
+            Wmem=6875000
             ;;
         3)
             Rmem=18750000
@@ -91,7 +91,7 @@ server_selection() {
 simple_bbr_tune() {
     cat > /etc/sysctl.conf << EOF
 # TCP congestion control
-net.core.default_qdisc = cake
+net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
 # Network buffer tuning
 net.core.rmem_max=33554432
@@ -120,7 +120,7 @@ fs.file-max=6815744
 # Use Swap when physical memory is below 20%
 vm.swappiness=20
 # TCP congestion control
-net.core.default_qdisc = cake
+net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
 # TCP connection keepalive settings
 net.ipv4.tcp_fin_timeout = 15
