@@ -75,6 +75,7 @@ net.core.netdev_max_backlog = 4000
 net.core.somaxconn = 4096
 # Enable window expansion
 net.ipv4.tcp_window_scaling=1
+net.ipv4.tcp_adv_win_scale=1
 net.ipv4.tcp_moderate_rcvbuf=1
 # Enable packet forwarding
 net.ipv4.ip_forward=1
