@@ -71,7 +71,6 @@ net.ipv4.tcp_congestion_control = bbr
 net.ipv4.tcp_rmem=4096 87380 ${Rmem}
 net.ipv4.tcp_wmem=4096 16384 ${Wmem}
 # Increase queue length
-net.core.netdev_max_backlog = 4000
 net.core.somaxconn = 4096
 # Enable window expansion
 net.ipv4.tcp_window_scaling=1
