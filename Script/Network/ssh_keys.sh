@@ -44,7 +44,7 @@ SSHD_CONFIG="/etc/ssh/sshd_config"
 
 # Create function to log steps
 log() {
-    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
+    echo -e "${GREEN}[$(date '+%Y-%m-%d %H:%M:%S')][INFO] $1${NC}"
 }
 
 # Step 1: Create SSH directory
@@ -78,5 +78,8 @@ else
     service ssh restart
 fi
 
+# Step 6: Delete script file
+log "Deleting script file..."
+rm -f "$(readlink -f "$0")"
+
 log "SSH configuration completed successfully!"
-log "Please test the SSH key login in a new session before closing this one."
