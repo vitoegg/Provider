@@ -73,13 +73,8 @@ net.ipv4.tcp_wmem=4096 212992 ${Wmem}
 # Increase queue length
 net.core.netdev_max_backlog = 4000
 net.core.somaxconn = 4096
-# TCP connection keepalive settings
-net.ipv4.tcp_fin_timeout = 15
-net.ipv4.tcp_keepalive_probes = 3
-net.ipv4.tcp_keepalive_intvl = 30
 # Enable window expansion
 net.ipv4.tcp_window_scaling=1
-net.ipv4.tcp_adv_win_scale=1
 net.ipv4.tcp_moderate_rcvbuf=1
 # Enable packet forwarding
 net.ipv4.ip_forward=1
