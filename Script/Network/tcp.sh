@@ -39,8 +39,8 @@ server_selection() {
             Wmem=6875000
             ;;
         2)
-            Rmem=7375000
-            Wmem=7375000
+            Rmem=7471104
+            Wmem=7471104
             ;;
         3)
             Rmem=18750000
@@ -68,8 +68,8 @@ bbr_tcp_tune() {
 net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
 # Network buffer tuning
-net.ipv4.tcp_rmem=4096 87380 ${Rmem}
-net.ipv4.tcp_wmem=4096 16384 ${Wmem}
+net.ipv4.tcp_rmem=8192 87380 ${Rmem}
+net.ipv4.tcp_wmem=8192 65536 ${Wmem}
 # Increase queue length
 net.core.somaxconn = 4096
 # Enable window expansion
