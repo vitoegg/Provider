@@ -3,7 +3,7 @@
 #!category=Hub
 #!homepage=https://surge.qingr.moe
 #!reffer=https://github.com/zirawell/R-Store
-#!date=2025-02-24 11:22:01
+#!date=2025-02-24 11:27:01
 
 [Rule]
 # 米家
@@ -29,7 +29,7 @@ http-response-jq ^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx '. | w
 http-response-jq ^https?:\/\/apapia-common\.manmanbuy\.com\/v1\/config '. | walk(if type == "object" then with_entries(select(.key | (contains("ad"))).key = "pass") else . end)'
 
 # 小宇宙FM - api.xiaoyuzhoufm.com
-http-response-jq ^https?:\/\/api\.xiaoyuzhoufm\.com\/v1\/flash-screen\/list .data[] |= (.displayCount = 10)
+http-response-jq ^https?:\/\/api\.xiaoyuzhoufm\.com\/v1\/flash-screen\/list '.data |= map(.displayCount = 10)'
 
 [Map Local]
 # 米家  - home.mi.com,app.zhoudamozi.com
