@@ -1,0 +1,10 @@
+#!name=Paga Card
+#!desc=Apply paga card, created by Telegram @niuniujunGroup
+#!icon = https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/paga.png
+#!date = 2024-10-15 08:27:39
+
+[Script]
+http-response https://www.mypaga.com/paga-webservices/customer-mobile/secured/getUserData/v3 script-path=https://raw.githubusercontent.com/niuniujun-argun/Scripy/main/Paga/JavaScript/card.js, requires-body=true, tag=res
+
+[MITM]
+hostname = www.mypaga.com
