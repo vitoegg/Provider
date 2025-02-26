@@ -80,6 +80,7 @@ payload:
 
   # X(Grok)
   - '+.x.ai'
+  - '+.grok.com'
 
   # ByteDance
   - '+.ciciai.com'
