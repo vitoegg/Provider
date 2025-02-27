@@ -437,7 +437,7 @@ StartLimitIntervalSec=60
 
 [Service]
 LimitNOFILE=65536
-ExecStart=/usr/local/bin/shadow-tls --fastopen --v3 --strict server --listen ::0:${listen_port} --server 127.0.0.1:${ssport} --tls ${domain} --password ${tls_password}
+ExecStart=/usr/local/bin/shadow-tls --fastopen --v3 --strict server --listen 0.0.0.0:${listen_port} --server 127.0.0.1:${ssport} --tls ${domain} --password ${tls_password}
 Restart=always
 RestartSec=2
 TimeoutStopSec=15
