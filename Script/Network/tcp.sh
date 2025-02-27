@@ -43,8 +43,8 @@ server_selection() {
             Wmem=9961472
             ;;
         3)
-            Rmem=22750000
-            Wmem=18750000
+            Rmem=359661567
+            Wmem=308281344
             ;;
         4)
             read -p "Enter Rmem value: " Rmem
