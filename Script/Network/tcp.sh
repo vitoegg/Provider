@@ -36,24 +36,24 @@ server_selection() {
     case $server_choice in
         1)
             Rmem=9699328
-            Wmem=6875000
+            Wmem=9699328
             ;;
         2)
-            Rmem=19922944
-            Wmem=9961472
+            Rmem=12722722
+            Wmem=12722722
             ;;
         3)
-            Rmem=359661567
-            Wmem=308281344
+            Rmem=35966156
+            Wmem=35966156
             ;;
         4)
             read -p "Enter Rmem value: " Rmem
             read -p "Enter Wmem value: " Wmem
             ;;
         *)
-            timestamped_echo "${Error} Invalid selection, defaulting to HK Server configuration"
-            Rmem=6875000
-            Wmem=6875000
+            timestamped_echo "${Error} Invalid selection, defaulting to JP Server configuration"
+            Rmem=12722722
+            Wmem=12722722
             ;;
     esac
     timestamped_echo "${Info} Selected Rmem: ${Rmem}, Wmem: ${Wmem}"
