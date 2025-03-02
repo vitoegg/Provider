@@ -73,8 +73,8 @@ net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
 
 # Network buffer tuning
-net.ipv4.tcp_rmem=16384 131072 ${Rmem}
-net.ipv4.tcp_wmem=16384 98304 ${Wmem}
+net.ipv4.tcp_rmem=4096 87380 ${Rmem}
+net.ipv4.tcp_wmem=4096 16384 ${Wmem}
 
 # Increase queue length
 net.core.netdev_max_backlog = 4000
@@ -84,16 +84,6 @@ net.core.somaxconn = 1024
 net.ipv4.tcp_window_scaling=1
 net.ipv4.tcp_adv_win_scale=2
 net.ipv4.tcp_moderate_rcvbuf=1
-
-# ARP and Neighbor Configuration
-net.ipv4.neigh.default.gc_stale_time = 120
-net.ipv4.neigh.default.gc_thresh1 = 1024
-net.ipv4.neigh.default.gc_thresh2 = 4096
-net.ipv4.neigh.default.gc_thresh3 = 8192
-net.ipv4.conf.all.arp_announce = 2
-net.ipv4.conf.default.arp_announce = 2
-net.ipv4.conf.all.arp_ignore = 1
-net.ipv4.conf.default.arp_ignore = 1
 
 # Enable packet forwarding
 net.ipv4.ip_forward=1
