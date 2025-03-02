@@ -260,7 +260,6 @@ log-level error
 bind :53
 server 1.1.1.1
 server 8.8.8.8
-server 208.67.220.220
 EOF
 
     if [ $USE_CUSTOM_DNS -eq 1 ]; then
