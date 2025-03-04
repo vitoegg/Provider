@@ -1,0 +1,94 @@
+name: Update Rules
+
+on:
+  schedule:
+    - cron: '0 */3 * * *'  # 每3小时执行一次
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  update-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Update China.list
+        run: |
+          # 下载文件
+          echo "Downloading ChinaMax_Domain.list..."
+          curl -s "https://github.com/blackmatrix7/ios_rule_script/blob/master/rule/Surge/ChinaMax/ChinaMax_Domain.list?raw=true" > chinamax_domain.txt
+          
+          echo "Downloading direct.txt..."
+          curl -s "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/direct.txt" > direct.txt
+          
+          # 处理和合并文件
+          cat chinamax_domain.txt direct.txt | grep -v "^#" | grep -v "^$" | sort | uniq > merged_china.txt
+          
+          # 添加头部注释
+          echo "# 更新时间: $(date '+%Y-%m-%d %H:%M:%S')" > RuleSet/Direct/China.list
+          echo "# 合并自:" >> RuleSet/Direct/China.list
+          echo "# - https://github.com/blackmatrix7/ios_rule_script/blob/master/rule/Surge/ChinaMax/ChinaMax_Domain.list" >> RuleSet/Direct/China.list
+          echo "# - https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/direct.txt" >> RuleSet/Direct/China.list
+          echo "" >> RuleSet/Direct/China.list
+          
+          # 添加合并后的内容
+          cat merged_china.txt >> RuleSet/Direct/China.list
+          
+          # 清理临时文件
+          rm chinamax_domain.txt direct.txt merged_china.txt
+          
+          echo "China.list has been updated."
+
+      - name: Update Apple.list
+        run: |
+          # 创建目录（如果不存在）
+          mkdir -p provider/direct
+          
+          # 下载文件
+          echo "Downloading apple_cdn.conf..."
+          curl -s "https://ruleset.skk.moe/List/non_ip/apple_cdn.conf" > apple_cdn.txt
+          
+          echo "Downloading apple_cn.conf..."
+          curl -s "https://ruleset.skk.moe/List/non_ip/apple_cn.conf" > apple_cn.txt
+          
+          echo "Downloading apple_services.conf..."
+          curl -s "https://ruleset.skk.moe/List/non_ip/apple_services.conf" > apple_services.txt
+          
+          # 处理和合并文件
+          cat apple_cdn.txt apple_cn.txt apple_services.txt | grep -v "^#" | grep -v "^$" | sort | uniq > merged_apple.txt
+          
+          # 添加头部注释
+          echo "# 更新时间: $(date '+%Y-%m-%d %H:%M:%S')" > RuleSet/Apple/Service.list
+          echo "# 合并自:" >> RuleSet/Apple/Service.list
+          echo "# - https://ruleset.skk.moe/List/non_ip/apple_cdn.conf" >> RuleSet/Apple/Service.list
+          echo "# - https://ruleset.skk.moe/List/non_ip/apple_cn.conf" >> RuleSet/Apple/Service.list
+          echo "# - https://ruleset.skk.moe/List/non_ip/apple_services.conf" >> RuleSet/Apple/Service.list
+          echo "" >> RuleSet/Apple/Service.list
+          
+          # 添加合并后的内容
+          cat merged_apple.txt >> RuleSet/Apple/Service.list
+          
+          # 清理临时文件
+          rm apple_cdn.txt apple_cn.txt apple_services.txt merged_apple.txt
+          
+          echo "Apple.list has been updated."
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          git add RuleSet/Direct/China.list RuleSet/Apple/Service.list
+          
+          # 检查是否有变更需要提交
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "自动更新规则列表 $(date '+%Y-%m-%d %H:%M:%S')"
+            git push
+          fi
