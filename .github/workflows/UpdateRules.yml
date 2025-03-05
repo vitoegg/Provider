@@ -68,8 +68,8 @@ jobs:
           # Add header comment
           echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')" > RuleSet/Apple/Service.list
           echo "# Merged from:" >> RuleSet/Apple/Service.list
-          echo "# - https://github.com/blackmatrix7/ios_rule_script/tree/master/rule/Surge/Apple" >> RuleSet/Direct/China.list
-          echo "# - https://github.com/Loyalsoldier/surge-rules" >> RuleSet/Direct/China.list
+          echo "# - https://github.com/blackmatrix7/ios_rule_script/tree/master/rule/Surge/Apple" >> RuleSet/Apple/Service.list
+          echo "# - https://github.com/Loyalsoldier/surge-rules" >> RuleSet/Apple/Service.list
           echo "" >> RuleSet/Apple/Service.list
           
           # Add the merged content
