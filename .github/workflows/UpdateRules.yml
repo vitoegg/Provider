@@ -12,6 +12,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Setup Timezone
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo -E timedatectl set-timezone "Asia/Shanghai"
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -89,3 +95,12 @@ jobs:
             git commit -m "Automatically update rules $(date '+%Y-%m-%d %H:%M:%S')"
             git push
           fi
+          
+      - name: Delete workflows runs
+        uses: ophub/delete-releases-workflows@main
+        with:
+          delete_releases: false
+          releases_keep_latest: 0
+          delete_workflows: true
+          workflows_keep_day: 0
+          gh_token: ${{ secrets.GIT_USER_TOKEN }}
