@@ -35,11 +35,6 @@ jobs:
             IFS=';' read -r output_path urls <<< "${rule_configs[$rule]}"
             echo "Updating $rule rules to $output_path..."
             
-            # 保存原文件的备份（如果存在）
-            if [ -f "$output_path" ]; then
-              cp "$output_path" "${output_path}.bak"
-            fi
-            
             # 创建临时文件数组
             temp_files=()
             for url in $urls; do
@@ -56,9 +51,9 @@ jobs:
             # 确保输出目录存在
             mkdir -p "$(dirname "$output_path")"
             
-            # 写入最终文件
+            # 为了比较，创建一个不包含时间戳的临时文件
+            temp_new_content=$(mktemp)
             {
-              echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')"
               echo "# Merged from:"
               for url in $urls; do
                 repo_url=$(echo "$url" | sed -E 's|raw.githubusercontent.com/([^/]+/[^/]+).*|github.com/\1|')
@@ -66,35 +61,57 @@ jobs:
               done
               echo ""
               cat "$merged_file"
-            } > "$output_path"
+            } > "$temp_new_content"
+            
+            # 如果原文件存在，创建一个不包含时间戳的版本用于比较
+            temp_old_content=$(mktemp)
+            if [ -f "$output_path" ]; then
+              cat "$output_path" | grep -v "^# Update time:" > "$temp_old_content"
+            else
+              touch "$temp_old_content"
+            fi
+            
+            # 比较文件内容（忽略时间戳）
+            if ! cmp -s "$temp_old_content" "$temp_new_content"; then
+              # 如果内容有实质性变化，则写入新文件（包含新的时间戳）
+              {
+                echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')"
+                cat "$temp_new_content"
+              } > "$output_path"
+              echo "Changes detected in $rule rules."
+            else
+              echo "No changes detected in $rule rules."
+            fi
             
             # 清理临时文件
-            rm "${temp_files[@]}" "$merged_file"
-            echo "$rule rules have been updated."
+            rm "${temp_files[@]}" "$merged_file" "$temp_new_content" "$temp_old_content"
           done
 
       - name: Check for changes
         id: check_changes
         run: |
-          git add RuleSet/Direct/China.list RuleSet/Apple/Service.list
+          # 对每个文件进行实质性变更检查
+          declare -a files=("RuleSet/Direct/China.list" "RuleSet/Apple/Service.list")
+          changes_detected=false
           
-          if git diff --staged | grep -v "Update time:" | grep -q '^[+-]'; then
+          git add "${files[@]}"
+          
+          for file in "${files[@]}"; do
+            # 获取git diff，排除时间戳行
+            if git diff --cached --no-color "$file" | grep -v '^[+-]# Update time:' | grep -q '^[+-]'; then
+              changes_detected=true
+              break
+            fi
+          done
+          
+          if [ "$changes_detected" = true ]; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
             echo "Changes detected in rules files"
           else
             echo "has_changes=false" >> $GITHUB_OUTPUT
             echo "No changes detected in rules files"
-            # 如果没有变化，恢复原始文件（避免更新时间戳）
-            for file in RuleSet/Direct/China.list RuleSet/Apple/Service.list; do
-              if [ -f "${file}.bak" ]; then
-                mv "${file}.bak" "$file"
-              fi
-            done
-            git reset HEAD RuleSet/Direct/China.list RuleSet/Apple/Service.list
+            git restore --staged "${files[@]}"
           fi
-          
-          # 清理备份文件
-          rm -f RuleSet/Direct/China.list.bak RuleSet/Apple/Service.list.bak
 
       - name: Commit and push changes
         if: steps.check_changes.outputs.has_changes == 'true'
