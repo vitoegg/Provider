@@ -8,81 +8,101 @@ on:
 jobs:
   update-rules:
     runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.check_changes.outputs.has_changes }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Timezone
-        env:
-          DEBIAN_FRONTEND: noninteractive
-        run: |
-          sudo -E timedatectl set-timezone "Asia/Shanghai"
+        run: sudo timedatectl set-timezone "Asia/Shanghai"
 
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
-      - name: Update China.list
+      - name: Update RuleSets
+        id: update_rules
         run: |
-          echo "Downloading ChinaMax_Domain.list..."
-          curl -s "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list" > chinamax_domain.txt
+          # 定义规则配置：规则名称 => [输出路径, URL数组]
+          declare -A rule_configs=(
+            ["China"]="RuleSet/Direct/China.list;https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/direct.txt"
+            ["Apple"]="RuleSet/Apple/Service.list;https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple_Domain.list https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt"
+          )
           
-          echo "Downloading direct.txt..."
-          curl -s "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/direct.txt" > direct.txt
-          
-          cat chinamax_domain.txt direct.txt | grep -v "^#" | grep -v "^$" | sort | uniq > merged_china.txt
-          
-          echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')" > RuleSet/Direct/China.list
-          echo "# Merged from:" >> RuleSet/Direct/China.list
-          echo "# - https://github.com/blackmatrix7/ios_rule_script/tree/master/rule/Surge/ChinaMax" >> RuleSet/Direct/China.list
-          echo "# - https://github.com/Loyalsoldier/surge-rules" >> RuleSet/Direct/China.list
-          echo "" >> RuleSet/Direct/China.list
-          
-          cat merged_china.txt >> RuleSet/Direct/China.list
-          
-          rm chinamax_domain.txt direct.txt merged_china.txt
-          
-          echo "China.list has been updated."
+          for rule in "${!rule_configs[@]}"; do
+            IFS=';' read -r output_path urls <<< "${rule_configs[$rule]}"
+            echo "Updating $rule rules to $output_path..."
+            
+            # 保存原文件的备份（如果存在）
+            if [ -f "$output_path" ]; then
+              cp "$output_path" "${output_path}.bak"
+            fi
+            
+            # 创建临时文件数组
+            temp_files=()
+            for url in $urls; do
+              temp_file=$(mktemp)
+              echo "Downloading from $url..."
+              curl -s "$url" > "$temp_file"
+              temp_files+=("$temp_file")
+            done
+            
+            # 合并并处理文件
+            merged_file=$(mktemp)
+            cat "${temp_files[@]}" | grep -v "^#" | grep -v "^$" | sort | uniq > "$merged_file"
+            
+            # 确保输出目录存在
+            mkdir -p "$(dirname "$output_path")"
+            
+            # 写入最终文件
+            {
+              echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')"
+              echo "# Merged from:"
+              for url in $urls; do
+                repo_url=$(echo "$url" | sed -E 's|raw.githubusercontent.com/([^/]+/[^/]+).*|github.com/\1|')
+                echo "# - https://$repo_url"
+              done
+              echo ""
+              cat "$merged_file"
+            } > "$output_path"
+            
+            # 清理临时文件
+            rm "${temp_files[@]}" "$merged_file"
+            echo "$rule rules have been updated."
+          done
 
-      - name: Update Apple.list
+      - name: Check for changes
+        id: check_changes
         run: |
-          echo "Downloading apple_domain.conf..."
-          curl -s "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple_Domain.list" > apple_domain.txt
-          
-          echo "Downloading apple_cn.conf..."
-          curl -s "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt" > apple_cn.txt
-          
-          echo "Downloading apple_icloud.conf..."
-          curl -s "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt" > apple_icloud.txt
-          
-          cat apple_domain.txt apple_cn.txt apple_icloud.txt | grep -v "^#" | grep -v "^$" | sort | uniq > merged_apple.txt
-          
-          echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')" > RuleSet/Apple/Service.list
-          echo "# Merged from:" >> RuleSet/Apple/Service.list
-          echo "# - https://github.com/blackmatrix7/ios_rule_script/tree/master/rule/Surge/Apple" >> RuleSet/Apple/Service.list
-          echo "# - https://github.com/Loyalsoldier/surge-rules" >> RuleSet/Apple/Service.list
-          echo "" >> RuleSet/Apple/Service.list
-          
-          cat merged_apple.txt >> RuleSet/Apple/Service.list
-          
-          rm apple_domain.txt apple_cn.txt apple_icloud.txt merged_apple.txt
-          
-          echo "Apple.list has been updated."
-
-      - name: Commit and push changes
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          
           git add RuleSet/Direct/China.list RuleSet/Apple/Service.list
           
           if git diff --staged | grep -v "Update time:" | grep -q '^[+-]'; then
-            git commit -m "Auto update rules by action bot"
-            git push
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected in rules files"
           else
-            echo "No changes to commit"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes detected in rules files"
+            # 如果没有变化，恢复原始文件（避免更新时间戳）
+            for file in RuleSet/Direct/China.list RuleSet/Apple/Service.list; do
+              if [ -f "${file}.bak" ]; then
+                mv "${file}.bak" "$file"
+              fi
+            done
+            git reset HEAD RuleSet/Direct/China.list RuleSet/Apple/Service.list
           fi
+          
+          # 清理备份文件
+          rm -f RuleSet/Direct/China.list.bak RuleSet/Apple/Service.list.bak
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git commit -m "Auto update rules by action bot"
+          git push
         env:
           GITHUB_TOKEN: ${{ secrets.GIT_USER_TOKEN }}
 
