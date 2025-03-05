@@ -2,7 +2,7 @@ name: Update Rules
 
 on:
   schedule:
-    - cron: '0 */12 * * *'  # Execute every 12 hours
+    - cron: '0 */12 * * *'  # 每12小时执行一次
   workflow_dispatch:
 
 jobs:
@@ -25,34 +25,28 @@ jobs:
 
       - name: Update China.list
         run: |
-          # Download file
           echo "Downloading ChinaMax_Domain.list..."
           curl -s "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list" > chinamax_domain.txt
           
           echo "Downloading direct.txt..."
           curl -s "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/direct.txt" > direct.txt
           
-          # Processing and merging files
           cat chinamax_domain.txt direct.txt | grep -v "^#" | grep -v "^$" | sort | uniq > merged_china.txt
           
-          # Add header comment
           echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')" > RuleSet/Direct/China.list
           echo "# Merged from:" >> RuleSet/Direct/China.list
           echo "# - https://github.com/blackmatrix7/ios_rule_script/tree/master/rule/Surge/ChinaMax" >> RuleSet/Direct/China.list
           echo "# - https://github.com/Loyalsoldier/surge-rules" >> RuleSet/Direct/China.list
           echo "" >> RuleSet/Direct/China.list
           
-          # Add the merged content
           cat merged_china.txt >> RuleSet/Direct/China.list
           
-          # Clean up temporary files
           rm chinamax_domain.txt direct.txt merged_china.txt
           
           echo "China.list has been updated."
 
       - name: Update Apple.list
         run: |
-          # Download file
           echo "Downloading apple_domain.conf..."
           curl -s "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple_Domain.list" > apple_domain.txt
           
@@ -62,20 +56,16 @@ jobs:
           echo "Downloading apple_icloud.conf..."
           curl -s "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt" > apple_icloud.txt
           
-          # Processing and merging files
           cat apple_domain.txt apple_cn.txt apple_icloud.txt | grep -v "^#" | grep -v "^$" | sort | uniq > merged_apple.txt
           
-          # Add header comment
           echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')" > RuleSet/Apple/Service.list
           echo "# Merged from:" >> RuleSet/Apple/Service.list
           echo "# - https://github.com/blackmatrix7/ios_rule_script/tree/master/rule/Surge/Apple" >> RuleSet/Apple/Service.list
           echo "# - https://github.com/Loyalsoldier/surge-rules" >> RuleSet/Apple/Service.list
           echo "" >> RuleSet/Apple/Service.list
           
-          # Add the merged content
           cat merged_apple.txt >> RuleSet/Apple/Service.list
           
-          # Clean up temporary files
           rm apple_domain.txt apple_cn.txt apple_icloud.txt merged_apple.txt
           
           echo "Apple.list has been updated."
@@ -87,14 +77,15 @@ jobs:
           
           git add RuleSet/Direct/China.list RuleSet/Apple/Service.list
           
-          # Check if there are any changes that need to be committed
           if git diff --staged | grep -v "Update time:" | grep -q '^[+-]'; then
             git commit -m "Auto update rules by action bot"
             git push
           else
             echo "No changes to commit"
           fi
-          
+        env:
+          GITHUB_TOKEN: ${{ secrets.GIT_USER_TOKEN }}
+
       - name: Delete workflows runs
         uses: ophub/delete-releases-workflows@main
         with:
