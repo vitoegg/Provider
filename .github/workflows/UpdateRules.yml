@@ -2,7 +2,7 @@ name: Update Rules
 
 on:
   schedule:
-    - cron: '0 */3 * * *'  # Execute every 3 hours
+    - cron: '0 */12 * * *'  # Execute every 12 hours
   workflow_dispatch:
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
         run: |
           # Download file
           echo "Downloading ChinaMax_Domain.list..."
-          curl -s "https://github.com/blackmatrix7/ios_rule_script/blob/master/rule/Surge/ChinaMax/ChinaMax_Domain.list?raw=true" > chinamax_domain.txt
+          curl -s "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list" > chinamax_domain.txt
           
           echo "Downloading direct.txt..."
           curl -s "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/direct.txt" > direct.txt
@@ -38,8 +38,8 @@ jobs:
           # Add header comment
           echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')" > RuleSet/Direct/China.list
           echo "# Merged from:" >> RuleSet/Direct/China.list
-          echo "# - https://github.com/blackmatrix7/ios_rule_script/blob/master/rule/Surge/ChinaMax/ChinaMax_Domain.list" >> RuleSet/Direct/China.list
-          echo "# - https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/direct.txt" >> RuleSet/Direct/China.list
+          echo "# - https://github.com/blackmatrix7/ios_rule_script/tree/master/rule/Surge/ChinaMax" >> RuleSet/Direct/China.list
+          echo "# - https://github.com/Loyalsoldier/surge-rules" >> RuleSet/Direct/China.list
           echo "" >> RuleSet/Direct/China.list
           
           # Add the merged content
@@ -53,31 +53,30 @@ jobs:
       - name: Update Apple.list
         run: |
           # Download file
-          echo "Downloading apple_cdn.conf..."
-          curl -s "https://ruleset.skk.moe/List/non_ip/apple_cdn.conf" > apple_cdn.txt
+          echo "Downloading apple_domain.conf..."
+          curl -s "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple_Domain.list" > apple_domain.txt
           
           echo "Downloading apple_cn.conf..."
-          curl -s "https://ruleset.skk.moe/List/non_ip/apple_cn.conf" > apple_cn.txt
+          curl -s "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt" > apple_cn.txt
           
-          echo "Downloading apple_services.conf..."
-          curl -s "https://ruleset.skk.moe/List/non_ip/apple_services.conf" > apple_services.txt
+          echo "Downloading apple_icloud.conf..."
+          curl -s "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt" > apple_icloud.txt
           
           # Processing and merging files
-          cat apple_cdn.txt apple_cn.txt apple_services.txt | grep -v "^#" | grep -v "^$" | sort | uniq > merged_apple.txt
+          cat apple_domain.txt apple_cn.txt apple_icloud.txt | grep -v "^#" | grep -v "^$" | sort | uniq > merged_apple.txt
           
           # Add header comment
           echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')" > RuleSet/Apple/Service.list
           echo "# Merged from:" >> RuleSet/Apple/Service.list
-          echo "# - https://ruleset.skk.moe/List/non_ip/apple_cdn.conf" >> RuleSet/Apple/Service.list
-          echo "# - https://ruleset.skk.moe/List/non_ip/apple_cn.conf" >> RuleSet/Apple/Service.list
-          echo "# - https://ruleset.skk.moe/List/non_ip/apple_services.conf" >> RuleSet/Apple/Service.list
+          echo "# - https://github.com/blackmatrix7/ios_rule_script/tree/master/rule/Surge/Apple" >> RuleSet/Direct/China.list
+          echo "# - https://github.com/Loyalsoldier/surge-rules" >> RuleSet/Direct/China.list
           echo "" >> RuleSet/Apple/Service.list
           
           # Add the merged content
           cat merged_apple.txt >> RuleSet/Apple/Service.list
           
           # Clean up temporary files
-          rm apple_cdn.txt apple_cn.txt apple_services.txt merged_apple.txt
+          rm apple_domain.txt apple_cn.txt apple_icloud.txt merged_apple.txt
           
           echo "Apple.list has been updated."
 
@@ -92,7 +91,7 @@ jobs:
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Automatically update rules $(date '+%Y-%m-%d %H:%M:%S')"
+            git commit -m "Auto update rules @action"
             git push
           fi
           
