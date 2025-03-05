@@ -88,12 +88,11 @@ jobs:
           git add RuleSet/Direct/China.list RuleSet/Apple/Service.list
           
           # Check if there are any changes that need to be committed
-          
-          if [ -z "$(git diff --staged | grep -v '^+++' | grep -v '^---' | grep -v '^@@ ' | grep -v '^#' | grep -v '^\s*$')" ]; then
-            echo "No changes to commit"
-          else
-            git commit -m "Auto update rules by action"
+          if git diff --staged | grep -v "Update time:" | grep -q '^[+-]'; then
+            git commit -m "Auto update rules by action bot"
             git push
+          else
+            echo "No changes to commit"
           fi
           
       - name: Delete workflows runs
