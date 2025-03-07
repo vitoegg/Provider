@@ -2,7 +2,7 @@
 #!desc = 屏蔽自用的非常规应用广告
 #!author = Vitoegg
 #!icon = https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/General.png
-#!date = 2025-03-07 10:12:05
+#!date = 2025-03-07 10:40:00
 
 [Rule]
 # 米家
@@ -19,23 +19,23 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 [Rewrite]
 # 招商银行 - webappcfg.paas.cmbchina.com,s3gw.cmbimg.com
 ^https:\/\/s3gw\.cmbimg\.com\/mbappinitads\/ - reject
-^https?:\/\/webappcfg\.paas\.cmbchina\.com\/v\d\/func\/getmarketconfig mock-response-body data-type=text data="{}" status-code=200
+^https?:\/\/webappcfg\.paas\.cmbchina\.com\/v\d\/func\/getmarketconfig - reject-dict
 
 # 米家  - home.mi.com,app.zhoudamozi.com
-^https:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(?:banner|carousel\/banners|myTab|openingBanner) mock-response-body data-type=text data="{}" status-code=200
-^http:\/\/app\.zhoudamozi\.com\/ad\/.+ mock-response-body data-type=text data="{}" status-code=200
+^https:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(?:banner|carousel\/banners|myTab|openingBanner) - reject-dict
+^http:\/\/app\.zhoudamozi\.com\/ad\/.+ - reject-dict
 
 # 携程小程序 - m.ctrip.com
-^https:\/\/m\.ctrip\.com\/restapi\/soa2\/13916\/tripAds mock-response-body data-type=text data="{}" status-code=200
-^https:\/\/m\.ctrip\.com\/restapi\/soa2\/12673\/queryWeChatHotEvent mock-response-body data-type=text data="{}" status-code=200
+^https:\/\/m\.ctrip\.com\/restapi\/soa2\/13916\/tripAds - reject-dict
+^https:\/\/m\.ctrip\.com\/restapi\/soa2\/12673\/queryWeChatHotEvent - reject-dict
 
 # 顺丰小程序 - ucmp.sf-express.com
-^https:\/\/ucmp\.sf-express\.com\/proxy\/operation-platform\/info-flow-adver\/query mock-response-body data-type=text data="{}" status-code=200
-^https:\/\/ucmp\.sf-express\.com\/proxy\/esgcempcore\/memberGoods\/pointMallService\/goodsList mock-response-body data-type=text data="{}" status-code=200
+^https:\/\/ucmp\.sf-express\.com\/proxy\/operation-platform\/info-flow-adver\/query - reject-dict
+^https:\/\/ucmp\.sf-express\.com\/proxy\/esgcempcore\/memberGoods\/pointMallService\/goodsList - reject-dict
 
 # 京东金融 - m.360buyimg.com,ms.jr.jd.com
-^https:\/\/m.360buyimg.com\/mobilecms\/s1125x2436_jfs\/ mock-response-body data-type=text data="{}" status-code=200
-^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture mock-response-body data-type=text data="{}" status-code=200
+^https:\/\/m.360buyimg.com\/mobilecms\/s1125x2436_jfs\/ - reject-dict
+^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture - reject-dict
 
 # 慢慢买 - apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com
 ^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx response-body-json-jq '. | walk(if type == "object" then with_entries(select(.key | (contains("AD") or contains("homeFloat") or contains("homeAlert") or contains("ad"))).key = "pass") else . end)'
