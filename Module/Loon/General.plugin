@@ -2,7 +2,7 @@
 #!desc = 屏蔽自用的非常规应用广告
 #!author = Vitoegg
 #!icon = https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/General.png
-#!date = 2025-03-07 10:05:05
+#!date = 2025-03-07 10:12:05
 
 [Rule]
 # 米家
@@ -37,13 +37,12 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 ^https:\/\/m.360buyimg.com\/mobilecms\/s1125x2436_jfs\/ mock-response-body data-type=text data="{}" status-code=200
 ^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture mock-response-body data-type=text data="{}" status-code=200
 
-[Body Rewrite]
 # 慢慢买 - apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com
-http-response-jq ^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx '. | walk(if type == "object" then with_entries(select(.key | (contains("AD") or contains("homeFloat") or contains("homeAlert") or contains("ad"))).key = "pass") else . end)'
-http-response-jq ^https?:\/\/apapia-common\.manmanbuy\.com\/v1\/config '. | walk(if type == "object" then with_entries(select(.key | (contains("ad"))).key = "pass") else . end)'
+^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx response-body-json-jq '. | walk(if type == "object" then with_entries(select(.key | (contains("AD") or contains("homeFloat") or contains("homeAlert") or contains("ad"))).key = "pass") else . end)'
+^https?:\/\/apapia-common\.manmanbuy\.com\/v1\/config response-body-json-jq '. | walk(if type == "object" then with_entries(select(.key | (contains("ad"))).key = "pass") else . end)'
 
 # 小宇宙 - api.xiaoyuzhoufm.com
-http-response-jq ^https?:\/\/api\.xiaoyuzhoufm\.com\/v1\/flash-screen\/list '.data |= map(.displayCount = 0)'
+^https?:\/\/api\.xiaoyuzhoufm\.com\/v1\/flash-screen\/list response-body-json-jq '.data |= map(.displayCount = 0)'
 
 [Mitm]
 hostname = webappcfg.paas.cmbchina.com, s3gw.cmbimg.com, home.mi.com,app.zhoudamozi.com, apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com, m.ctrip.com, ucmp.sf-express.com, m.360buyimg.com,ms.jr.jd.com, api.xiaoyuzhoufm.com
