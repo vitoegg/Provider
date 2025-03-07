@@ -3,128 +3,48 @@
 #!openUrl = 
 #!author = Vitoegg
 #!icon = https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/General.png
-#!date = 2024-10-15 08:27:39
+#!date = 2025-03-07 10:05:05
 
 [Rule]
-# 通用广告
-DOMAIN-SUFFIX, doubleclick-cn.net, REJECT
-DOMAIN-SUFFIX, doubleclick.net, REJECT
-
 # 米家
-DOMAIN, sdkconfig.ad.xiaomi.com, REJECT
-
-# Apple
-DOMAIN, ca.iadsdk.apple.com, DIRECT
-DOMAIN-SUFFIX, advp.apple.com, REJECT
-DOMAIN-SUFFIX, iad-apple.com, REJECT
-DOMAIN-SUFFIX, iadsdk.apple.com, REJECT
-DOMAIN, advertising.apple.com, REJECT
-DOMAIN, api-adservices.apple.com, REJECT
-DOMAIN, apple.comscoreresearch.com, REJECT
-DOMAIN, banners.itunes.apple.com, REJECT
-DOMAIN, iad.apple.com, REJECT
-DOMAIN, iadcontent.apple.com, REJECT
-DOMAIN, iadctest.qwapi.com, REJECT
-DOMAIN, iadmoo.apple.com, REJECT
-DOMAIN, iadworkbench.apple.com, REJECT
-DOMAIN, launch.apple.com, REJECT
-DOMAIN, qwapi.apple.com, REJECT
+DOMAIN,sdkconfig.ad.xiaomi.com,REJECT
+DEST-PORT,5222,REJECT
+# 慢慢买
+DOMAIN-SUFFIX,sentry.manmanbuy.com,REJECT
+# 微信
+DOMAIN-SUFFIX,wxs.qq.com,REJECT
+DOMAIN,wxsnsdy.wxs.qq.com,REJECT
+DOMAIN,wxsmsdy.video.qq.com,REJECT
+DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 
 [Rewrite]
-# 饿了么 - elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com
-^https:\/\/elemecdn.com\/.+\/sitemap reject
-^https?:\/\/fuss10\.elemecdn\.com\/.+\/w\/(640|750)\/h\/\d{3,4} reject
-^https:\/\/fuss10.elemecdn.com\/.+\.mp4 reject-img
-^https?:\/\/cube\.elemecdn\.com\/\w\/\w{2}\/\w+mp4\.mp4\? reject
-^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_1\d{3},h_2\d{3}\/format,webp\/ reject
-^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_6\d{2},h_8\d{2}\/format,webp\/ reject
-^https?:\/\/cube\.elemecdn\.com\/[\w\/]+\.jpeg\?x-oss-process=image\/resize,m_fill,w_\d{3},h_\d{4}\/format,webp\/ reject
-^https:\/\/(nr-op|cube)\.elemecdn\.com\/.+\.jpeg\?x-oss-process=image\/resize,m_fill,w_\d{4,},h_\d{4,}\/($|format,webp\/$) reject
-^https:\/\/www1.elecfans.com\/www\/delivery reject
-
-# 美团 - img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com
-# > 美团
-^https?:\/\/img\.meituan\.net\/(?>adunion|display|midas)\/.+?\.(gif|jpg|jpg\.webp)$ reject-200
-^https?:\/\/p\d\.meituan\.net\/wmbanner\/[A-Za-z0-9]+?\.jpg reject-drop
-^https?:\/\/p\d\.meituan\.net\/movie\/[A-Za-z0-9]+?\.jpg\?may_covertWebp reject-200
-^https?:\/\/s3plus\.meituan\.net\/.+?\/linglong\/ reject
-^https?:\/\/s3plus\.meituan\.net\/v1\/mss_a002 reject-img
-^https?:\/\/www\.meituan\.com\/api\/v\d\/appstatus\? reject
-^https?:\/\/wmapi\.meituan\.com\/api\/v\d+\/loadInfo\? reject
-^https?:\/\/wmapi\.meituan\.com\/api\/v\d\/startpicture reject
-^https?:\/\/flowplus\.meituan\.net\/v\d\/\w+\/linglong\/\d+\.(gif|jpg|mp4) reject-dict
-^https?:\/\/(s3plus|flowplus)\.meituan\.net\/v\d\/\w+\/linglong\/\w+\.(gif|jpg|mp4) reject-dict
-^https?:\/\/apimobile\.meituan\.com\/appupdate\/mach\/checkUpdate? reject
-^https?:\/\/img\.meituan\.net\/(adunion|display|midas)\/\w+\.(gif|jpg|jpg\.webp)$ reject-dict
-^https?:\/\/p\d.meituan.net\/movie\/.*?\?may_covertWebp reject-img
-^https?:\/\/p\d{1}\.meituan\.net\/(adunion|display|mmc|wmbanner)\/ reject
-# > 美团外卖
-^https?:\/\/wmapi\.meituan\.com\/api\/v7\/(loadInfo|openscreen|startpicture) reject-dict
-^https?:\/\/img\.meituan\.net\/bizad\/.*.jpg reject-200
-^https?:\/\/img\.meituan\.net\/(bizad|brandCpt)\/\w+\.(png|jpg) reject
-^https?:\/\/s3plus\.meituan\.net\/.*\/brandcpt-vedio\/.*\?time reject
-^https:\/\/s3plus\.meituan\.net\/ocean-blk-index\/index\/blk_conf_\d+\.json reject-dict
-^https:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(?:brandcpt-vedio|waimai-alita)\/\w+\.zip$ reject-dict
-
 # 招商银行 - webappcfg.paas.cmbchina.com,s3gw.cmbimg.com
-^https?:\/\/webappcfg\.paas\.cmbchina\.com\/v\d\/func\/getmarketconfig reject-200
-^https:\/\/s3gw\.cmbimg\.com\/mbappinitads\/ reject
+^https:\/\/s3gw\.cmbimg\.com\/mbappinitads\/ - reject
+^https?:\/\/webappcfg\.paas\.cmbchina\.com\/v\d\/func\/getmarketconfig mock-response-body data-type=text data="{}" status-code=200
 
-# 米家 - home.mi.com
-^https?:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(banner|myTab)\? reject-dict
+# 米家  - home.mi.com,app.zhoudamozi.com
+^https:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(?:banner|carousel\/banners|myTab|openingBanner) mock-response-body data-type=text data="{}" status-code=200
+^http:\/\/app\.zhoudamozi\.com\/ad\/.+ mock-response-body data-type=text data="{}" status-code=200
 
-# 阿里巴巴 - acs.m.taobao.com
-# > 飞猪
-^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.(popresource|screen) reject
-^https:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.crm\.screen\.(allresource|predict) reject-dict
-^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.guide\.guess\.what\.you\.like reject
-^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.trip\.activity\.querytmsresources\/1\.0\?type=originaljson reject-img
+# 携程小程序 - m.ctrip.com
+^https:\/\/m\.ctrip\.com\/restapi\/soa2\/13916\/tripAds mock-response-body data-type=text data="{}" status-code=200
+^https:\/\/m\.ctrip\.com\/restapi\/soa2\/12673\/queryWeChatHotEvent mock-response-body data-type=text data="{}" status-code=200
 
-# > 同程旅行开屏广告 - wx.17u.cn
-^https?:\/\/wx\.17u\.cn\/xcxhomeapi\/((aggregator\/index)|(home\/(screen|banner|converge)))$ reject
-^https?:\/\/wx\.17u\.cn\/crapi\/query\/getAdImgUrlByCode reject-dict
-
-# 得物开屏广告 - app.dewu.com,cdn.poizon.com
-^https:\/\/app\.dewu\.com\/api\/v1\/app\/advertisement\/ reject
-^https?:\/\/cdn\.poizon\.com\/node-common\/.*.jpg reject-200
+# 顺丰小程序 - ucmp.sf-express.com
+^https:\/\/ucmp\.sf-express\.com\/proxy\/operation-platform\/info-flow-adver\/query mock-response-body data-type=text data="{}" status-code=200
+^https:\/\/ucmp\.sf-express\.com\/proxy\/esgcempcore\/memberGoods\/pointMallService\/goodsList mock-response-body data-type=text data="{}" status-code=200
 
 # 京东金融 - m.360buyimg.com,ms.jr.jd.com
-^https:\/\/m.360buyimg.com\/mobilecms\/s1125x2436_jfs\/ reject-200
-^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture reject
+^https:\/\/m.360buyimg.com\/mobilecms\/s1125x2436_jfs\/ mock-response-body data-type=text data="{}" status-code=200
+^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture mock-response-body data-type=text data="{}" status-code=200
 
-# 顺丰小程序 - mcs-mimp-web.sf-express.com,ucmp-static.sf-express.com,ucmp.sf-express.com
-^https:\/\/mcs-mimp-web\.sf-express\.com\/mcs-mimp\/integralPlanet\/getCxAdvertiseList reject-dict
-^https:\/\/ucmp-static\.sf-express\.com\/proxy\/wxbase\/wxTicket\/wxLiveStreamInfo\?pageNo reject-dict
-^https:\/\/ucmp\.sf-express\.com\/proxy\/operation-platform\/info-flow-adver\/query reject-dict
-^https:\/\/ucmp\.sf-express\.com\/proxy\/esgcempcore\/member(Goods\/pointMallService\/goodsList|Manage\/memberEquity\/queryRecommendEquity|ActLengthy\/fullGiveActivityService\/fullGiveInfo) reject-dict
+[Body Rewrite]
+# 慢慢买 - apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com
+http-response-jq ^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx '. | walk(if type == "object" then with_entries(select(.key | (contains("AD") or contains("homeFloat") or contains("homeAlert") or contains("ad"))).key = "pass") else . end)'
+http-response-jq ^https?:\/\/apapia-common\.manmanbuy\.com\/v1\/config '. | walk(if type == "object" then with_entries(select(.key | (contains("ad"))).key = "pass") else . end)'
 
-# 高铁管家 - cdn.133.cn,jp.rsscc.com,jt.rsscc.com
-^http:\/\/cdn\.133\.cn\/md\/gtgj\/.+\/.+720x1280 reject-dict
-^https?:\/\/[a-z]*\.rsscc\.com\/[a-z]*\/adver reject
-
-# 中国联通 - m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn
-^https?:\/\/m\.client\.10010\.com\/uniAdmsInterface\/getWelcomeAd reject-200
-^https?:\/\/m\.client\.10010\.com\/mobileService\/(activity|customer)\/(accountListData|get_client_adv|get_startadv) reject-img
-^https?:\/\/m\.client\.10010\.com\/mobileService\/customer\/getclientconfig\.htm reject-dict
-^https?:\/\/m\.client\.10010\.com\/uniAdmsInterface\/(getHomePageAd|getWelcomeAd) reject-img
-^https?:\/\/[^(apple|10010)]+\.(com|cn)\/(a|A)d(s|v)?(\/|\.js) reject-img
-^https?:\/\/m1\.ad\.10010\.com\/noticeMag\/images\/imageUpload\/2\d{3} reject-img
-^https?:\/\/res\.mall\.10010\.cn\/mall\/common\/js\/fa\.js?referer= reject-img
-# > 智家云盘 - woyunpan.10010sh.cn
-^https?:\/\/woyunpan\.10010sh\.cn\:8899\/rest\/activity\/SplashScreen\/randomSplashScreen reject
-
-# 航旅纵横 - umerp.umetrip.com,umerp.umetrip.com.cn,home.umetrip.com,bkclient.umetrip.com.cn,discardrp.umetrip.com,startup.umetrip.com,oss.umetrip.com
-^https?:\/\/(discardrp|startup)\.umetrip\.com\/gateway\/api\/umetrip\/native reject
-^https?:\/\/bkclient\.umetrip\.com\.cn\/gateway\/api\/umetrip\/native reject
-^https?:\/\/oss\.umetrip\.com\/fs\/advert\/polite reject-dict
-^https?:\/\/home\.umetrip\.com\/gateway\/api\/umetrip\/native reject
-
-[Script]
-# 飞猪
-http-response ^https?:\/\/acs\.m\.taobao\.com\/gw\/mtop\.fliggy\.ssif\.pattern\.home requires-body=1,script-path=https://raw.githubusercontent.com/zirawell/Ad-Cleaner/main/Collection/js/fliggy.js,tag=飞猪去广告
-
-# 航旅纵横
-http-response ^https?:\/\/umerp\.umetrip\.com\/gateway\/api\/umetrip\/native script-path = https://raw.githubusercontent.com/linuszlx/JS/refs/heads/main/Hanglvzongheng/Um.JS, tag=移除航旅首页广告
+# 小宇宙 - api.xiaoyuzhoufm.com
+http-response-jq ^https?:\/\/api\.xiaoyuzhoufm\.com\/v1\/flash-screen\/list '.data |= map(.displayCount = 0)'
 
 [Mitm]
-hostname = elemecdn.com,fuss10.elemecdn.com,cube.elemecdn.com,nr-op.elemecdn.com,www1.elecfans.com,img.meituan.net,p*.meituan.net,flowplus.meituan.net,s3plus.meituan.net,www.meituan.com,wmapi.meituan.com,apimobile.meituan.com,peisongapi.meituan.com,webappcfg.paas.cmbchina.com,s3gw.cmbimg.com,home.mi.com,acs.m.taobao.com,wx.17u.cn,app.dewu.com,cdn.poizon.com,m.360buyimg.com,ms.jr.jd.com,mcs-mimp-web.sf-express.com,ucmp-static.sf-express.com,ucmp.sf-express.com,cdn.133.cn,jp.rsscc.com,jt.rsscc.com,m.client.10010.com,m1.ad.10010.com,res.mall.10010.cn,woyunpan.10010sh.cn,umerp.umetrip.com,umerp.umetrip.com.cn,home.umetrip.com,bkclient.umetrip.com.cn,discardrp.umetrip.com,startup.umetrip.com,oss.umetrip.com
+hostname = webappcfg.paas.cmbchina.com, s3gw.cmbimg.com, home.mi.com,app.zhoudamozi.com, apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com, m.ctrip.com, ucmp.sf-express.com, m.360buyimg.com,ms.jr.jd.com, api.xiaoyuzhoufm.com
