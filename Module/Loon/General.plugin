@@ -2,7 +2,7 @@
 #!desc = 屏蔽自用的非常规应用广告
 #!author = Vitoegg
 #!icon = https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/General.png
-#!date = 2025-03-08 10:37:00
+#!date = 2025-03-09 00:07:30
 
 [Rule]
 # 米家
@@ -42,7 +42,7 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 ^https?:\/\/apapia-common\.manmanbuy\.com\/v1\/config response-body-json-jq '. | walk(if type == "object" then with_entries(select(.key | (contains("ad"))).key = "pass") else . end)'
 
 # 小宇宙 - api.xiaoyuzhoufm.com
-^https?:\/\/api\.xiaoyuzhoufm\.com\/v1\/flash-screen\/list response-body-json-jq '.data |= map(.start |= sub("^([0-9]{4})-"; "2024-") | .end |= sub("^([0-9]{4})-"; "2024-"))'
+^https?:\/\/api\.xiaoyuzhoufm\.com\/v1\/flash-screen\/list response-body-json-jq '.data[].start, .data[].end |= sub("^\\d{4}"; "2024")'
 
 [Mitm]
 hostname = webappcfg.paas.cmbchina.com, s3gw.cmbimg.com, home.mi.com,app.zhoudamozi.com, apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com, m.ctrip.com, ucmp.sf-express.com, m.360buyimg.com,ms.jr.jd.com, api.xiaoyuzhoufm.com
