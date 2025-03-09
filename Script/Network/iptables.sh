@@ -69,10 +69,26 @@ check_system_and_install() {
 
     if [ ${#missing_packages[@]} -gt 0 ]; then
         log_info "Installing missing dependencies: ${missing_packages[*]}"
-        apt-get update -qq
-        apt-get install -qq -y "${missing_packages[@]}" >/dev/null 2>&1
+        
+        # Pre-configure iptables-persistent to avoid interactive prompts
+        if [[ " ${missing_packages[*]} " == *" iptables-persistent "* ]]; then
+            log_info "Pre-configuring iptables-persistent to avoid prompts..."
+            echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
+            echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
+        fi
+        
+        # Use -y flag to ensure non-interactive installation and DEBIAN_FRONTEND=noninteractive to prevent any prompts
+        DEBIAN_FRONTEND=noninteractive apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -qq -y "${missing_packages[@]}"
+        
+        # Verify if installation was successful
         for pkg in "${missing_packages[@]}"; do
-            log_info "Installed dependency: ${pkg}"
+            if dpkg -l "$pkg" | grep -q ^ii; then
+                log_info "Successfully installed dependency: ${pkg}"
+            else
+                log_error "Failed to install dependency: ${pkg}"
+                return 1
+            fi
         done
     fi
 
@@ -109,8 +125,9 @@ add_forward_rule() {
 
 # Function: Save and reload iptables rules
 save_and_reload_rules() {
-    netfilter-persistent save
-    netfilter-persistent reload
+    netfilter-persistent save >/dev/null 2>&1
+    netfilter-persistent reload >/dev/null 2>&1
+    log_info "Rules saved and reloaded successfully"
 }
 
 # Function: Clear all forwarding rules and exit the script
@@ -130,14 +147,20 @@ clean_rules() {
 process_forward_rules() {
     # Check system and install dependencies first
     if ! check_system_and_install; then
-        return
+        log_error "Failed to set up dependencies. Please check the error messages above."
+        return 1
     fi
 
     # Automatically get the public IP using wget
-    LOCAL_IP=$(wget -qO- https://api.ipify.org)
+    log_info "Detecting local IP address..."
+    LOCAL_IP=$(wget -qO- https://api.ipify.org 2>/dev/null)
     if [ -z "$LOCAL_IP" ]; then
         log_warn "Unable to auto-detect local IP. Please enter manually."
         read -p "Please input local IP: " LOCAL_IP
+        if [ -z "$LOCAL_IP" ]; then
+            log_error "No IP address provided. Exiting."
+            return 1
+        fi
     else
         log_info "Detected local IP: $LOCAL_IP"
     fi
