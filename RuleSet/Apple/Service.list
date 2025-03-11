@@ -1,4 +1,4 @@
-# Update time: 2025-03-05 16:44:47
+# Update time: 2025-03-11 08:51:34
 # Merged from:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/Loyalsoldier/surge-rules
@@ -71,9 +71,6 @@
 .annstores.net
 .aokwholesale.net
 .ap0le.com
-.api-p-ap-c.smoot.apple.com
-.api-p-ap-d.smoot.apple.com
-.api-p-ap-e.smoot.apple.com
 .aple.com
 .aplestore.com
 .aplleipods.com
@@ -1031,7 +1028,6 @@
 .gspe19-cn.ls-apple.com.akadns.net
 .gspe19-cn.ls.apple.com
 .gspe21-ssl.ls.apple.com
-.gspe21.ls.apple.com
 .gspe35-ssl.ls.apple.com
 .gspe79-cn-ssl.ls.apple.com
 .guzzoni-apple-com.v.aaplimg.com
@@ -1144,8 +1140,6 @@
 .imacapple.com
 .imacapplecomputer.com
 .imacsources.com
-.images.apple.com
-.images.apple.com.akadns.net
 .images.apple.com.edgekey.net.globalredir.akadns.net
 .imessage.tv
 .imonsterbeats.com
