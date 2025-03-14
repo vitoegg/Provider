@@ -72,16 +72,17 @@ check_system_and_install() {
         
         # Pre-configure iptables-persistent to avoid interactive prompts
         if [[ " ${missing_packages[*]} " == *" iptables-persistent "* ]]; then
-            log_info "Pre-configuring iptables-persistent to avoid prompts..."
-            echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
-            echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
+            log_info "Pre-configuring iptables-persistent to avoid interrupt..."
+            echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections >/dev/null 2>&1
+            echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections >/dev/null 2>&1
         fi
         
-        # Use -y flag to ensure non-interactive installation and DEBIAN_FRONTEND=noninteractive to prevent any prompts
-        DEBIAN_FRONTEND=noninteractive apt-get update -qq
-        DEBIAN_FRONTEND=noninteractive apt-get install -qq -y "${missing_packages[@]}"
+        # Redirect all output to /dev/null to suppress installation logs
+        log_info "Starting installation, please wait..."
+        DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1
+        DEBIAN_FRONTEND=noninteractive apt-get install -qq -y "${missing_packages[@]}" >/dev/null 2>&1
         
-        # Verify if installation was successful
+        # Check installation success/failure for each package individually
         for pkg in "${missing_packages[@]}"; do
             if dpkg -l "$pkg" | grep -q ^ii; then
                 log_info "Successfully installed dependency: ${pkg}"
