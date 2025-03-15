@@ -2,7 +2,7 @@
 #!desc = 屏蔽自用的非常规应用广告
 #!author = Vitoegg
 #!icon = https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/General.png
-#!date = 2025-03-15 15:50:30
+#!date = 2025-03-15 15:56:30
 
 [Rule]
 # 米家
@@ -45,6 +45,12 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 ^https:\/\/m.360buyimg.com\/mobilecms\/s1125x2436_jfs\/ - reject-dict
 ^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture - reject-dict
 
+# 雪球 - api.xueqiu.com,xqimg.imedao.com
+^https?:\/\/api\.xueqiu\.com\/brand\/search\/v1\.json\? reject
+^https?:\/\/xqimg\.imedao\.com\/[a-z0-9]{24}\.jpg$ reject-200
+^https?:\/\/api\.xueqiu\.com\/snowpard\/launch_strategy\/query\.json\? reject-dict
+^https?:\/\/api.xueqiu.com\/ucprofile\/api\/user\/batchGetUserBasicInfo.json reject-dict
+
 # 慢慢买 - apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com
 ^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx response-body-json-jq '. | walk(if type == "object" then with_entries(select(.key | (contains("AD") or contains("homeFloat") or contains("homeAlert") or contains("ad"))).key = "pass") else . end)'
 ^https?:\/\/apapia-common\.manmanbuy\.com\/v1\/config response-body-json-jq '. | walk(if type == "object" then with_entries(select(.key | (contains("ad"))).key = "pass") else . end)'
@@ -53,4 +59,4 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 ^https?:\/\/api\.xiaoyuzhoufm\.com\/v1\/flash-screen\/list response-body-json-jq '.data[].start, .data[].end |= sub("^\\d{4}"; "2024")'
 
 [Mitm]
-hostname = webappcfg.paas.cmbchina.com, s3gw.cmbimg.com, home.mi.com,app.zhoudamozi.com, apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com, m.ctrip.com, ucmp.sf-express.com, img.meituan.net,s3plus.meituan.net,flowplus.meituan.net,apimobile.meituan.com, m.360buyimg.com,ms.jr.jd.com, api.xiaoyuzhoufm.com
+hostname = webappcfg.paas.cmbchina.com, s3gw.cmbimg.com, home.mi.com,app.zhoudamozi.com, apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com, m.ctrip.com, ucmp.sf-express.com, img.meituan.net,s3plus.meituan.net,flowplus.meituan.net,apimobile.meituan.com, m.360buyimg.com,ms.jr.jd.com, api.xueqiu.com,xqimg.imedao.com, api.xiaoyuzhoufm.com
