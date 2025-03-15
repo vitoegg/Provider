@@ -2,7 +2,7 @@
 #!desc = 屏蔽自用的非常规应用广告
 #!author = Vitoegg
 #!icon = https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/General.png
-#!date = 2025-03-09 00:07:30
+#!date = 2025-03-15 15:50:30
 
 [Rule]
 # 米家
@@ -33,6 +33,14 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 ^https:\/\/ucmp\.sf-express\.com\/proxy\/operation-platform\/info-flow-adver\/query - reject-dict
 ^https:\/\/ucmp\.sf-express\.com\/proxy\/esgcempcore\/memberGoods\/pointMallService\/goodsList - reject-dict
 
+# 美团 - img.meituan.net,s3plus.meituan.net,flowplus.meituan.net,apimobile.meituan.com
+^https?:\/\/wmapi\.meituan\.com\/api\/v7\/(loadInfo|openscreen|startpicture)\? reject-dict
+^https?:\/\/(s3plus|flowplus)\.meituan\.net\/v\d\/\w+\/linglong\/\w+\.(gif|jpg|mp4) reject-dict
+^https?:\/\/img\.meituan\.net\/bizad\/bizad_brandCpt_\d+\.jpg reject-dict
+^https?:\/\/s3plus\.meituan\.net\/ocean-blk-index\/index\/blk_conf_73\.json reject-dict
+^https?:\/\/s3plus\.meituan\.net\/v1\/mss_\w+\/(brandcpt-vedio|waimai-alita)\/\w+\.zip$ reject-dict
+^https?:\/\/apimobile\.meituan\.com\/group\/v1\/recommend\/unity\/recommends reject-dict
+
 # 京东金融 - m.360buyimg.com,ms.jr.jd.com
 ^https:\/\/m.360buyimg.com\/mobilecms\/s1125x2436_jfs\/ - reject-dict
 ^https?:\/\/ms\.jr\.jd\.com\/gw\/generic\/aladdin\/(new)?na\/m\/getLoadingPicture - reject-dict
@@ -45,4 +53,4 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 ^https?:\/\/api\.xiaoyuzhoufm\.com\/v1\/flash-screen\/list response-body-json-jq '.data[].start, .data[].end |= sub("^\\d{4}"; "2024")'
 
 [Mitm]
-hostname = webappcfg.paas.cmbchina.com, s3gw.cmbimg.com, home.mi.com,app.zhoudamozi.com, apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com, m.ctrip.com, ucmp.sf-express.com, m.360buyimg.com,ms.jr.jd.com, api.xiaoyuzhoufm.com
+hostname = webappcfg.paas.cmbchina.com, s3gw.cmbimg.com, home.mi.com,app.zhoudamozi.com, apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com, m.ctrip.com, ucmp.sf-express.com, img.meituan.net,s3plus.meituan.net,flowplus.meituan.net,apimobile.meituan.com, m.360buyimg.com,ms.jr.jd.com, api.xiaoyuzhoufm.com
