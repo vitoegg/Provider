@@ -118,6 +118,7 @@ get_latest_version() {
 # Domain list configuration
 DOMAIN_LISTS=(
     "https://mirror.1991991.xyz/RuleSet/DNS/AGI.conf"
+    "https://mirror.1991991.xyz/RuleSet/DNS/OpenAI.conf"
     "https://mirror.1991991.xyz/RuleSet/DNS/Common.conf"
     "https://mirror.1991991.xyz/RuleSet/DNS/Media.conf"
 )
