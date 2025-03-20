@@ -3,6 +3,6 @@ payload:
   - AND,((SRC-IP-CIDR,192.168.10.5/32),(DST-PORT,22/5022/5168/10001-65535))
   # Emby
   - DOMAIN-SUFFIX,micu.hk
-  - DOMAIN-SUFFIX,nanflix.net
   # VPS
   - DOMAIN-SUFFIX,greencloudvps.com
+  - DOMAIN-SUFFIX,hosthatch.com
