@@ -140,13 +140,22 @@ install_packages() {
     log progress "Checking and installing required packages"
     install_dependency "wget" "wget"
     install_dependency "jq" "jq"
-    # For systems with apt-get, use xz-utils; otherwise, use xz
+    # 确保安装解压工具
     if command_exists apt-get; then
-        install_dependency "tar" "xz-utils"
+        install_dependency "tar" "tar"
+        install_dependency "xz" "xz-utils"
+    elif command_exists yum; then
+        install_dependency "tar" "tar"
+        install_dependency "xz" "xz"
     else
-        install_dependency "tar" "xz"
+        log warn "未知的包管理器，请确保系统已安装 tar 和 xz 工具"
     fi
     install_dependency "openssl" "openssl"
+    
+    # 检查mktemp是否可用
+    if ! command_exists mktemp; then
+        log warn "mktemp 命令不可用，这可能会影响临时目录创建"
+    fi
     log progress_end "Required packages are ready"
 }
 
@@ -197,12 +206,25 @@ get_latest_version() {
 download_shadowsocks_package() {
     local version="$1"
     local archive_name="shadowsocks-${version}.${ss_arch}-unknown-linux-gnu.tar.xz"
+    local download_url="https://github.com/shadowsocks/shadowsocks-rust/releases/download/${version}/${archive_name}"
+    
     log progress "Downloading Shadowsocks package ${archive_name}"
-    if wget -q --no-check-certificate -N "https://github.com/shadowsocks/shadowsocks-rust/releases/download/${version}/${archive_name}"; then
-        log success "Successfully downloaded ${archive_name}"
-        return 0
+    log info "Download URL: ${download_url}"
+    
+    # 使用临时文件记录下载错误
+    if wget -q --no-check-certificate -N "${download_url}" 2>/tmp/wget_error.log; then
+        if [[ -f "${archive_name}" ]]; then
+            local file_size=$(stat -c %s "${archive_name}" 2>/dev/null || stat -f %z "${archive_name}" 2>/dev/null)
+            log success "Successfully downloaded ${archive_name} (Size: ${file_size} bytes)"
+            return 0
+        else
+            log error "Download completed but file ${archive_name} not found!"
+            return 1
+        fi
     else
         log error "Failed to download Shadowsocks package ${archive_name}"
+        log error "Download error: $(cat /tmp/wget_error.log)"
+        rm -f /tmp/wget_error.log
         return 1
     fi
 }
@@ -252,15 +274,43 @@ install_shadowsocks() {
 
     log progress "Extracting package"
     local archive_name="shadowsocks-${latest_ver}.${ss_arch}-unknown-linux-gnu.tar.xz"
-    tar -xf "$archive_name" >/dev/null 2>&1
-    if [[ ! -f "ssserver" ]]; then
-        log error "Failed to extract Shadowsocks package!"
+    local current_dir="$(pwd)"
+    
+    # 检查下载的文件是否存在
+    if [[ ! -f "$current_dir/$archive_name" ]]; then
+        log error "Downloaded file $archive_name not found in $current_dir!"
         exit 1
     fi
-
-    chmod +x ssserver
-    mv -f ssserver /usr/local/bin/
-    rm -f sslocal ssmanager ssservice ssurl "$archive_name"
+    
+    # 创建临时目录用于解压
+    local temp_dir=$(mktemp -d)
+    log info "Created temporary directory for extraction: $temp_dir"
+    
+    # 使用详细的错误检查进行解压
+    if ! tar -xf "$current_dir/$archive_name" -C "$temp_dir" 2>/tmp/tar_error.log; then
+        log error "Failed to extract Shadowsocks package! Error code: $?"
+        log error "Tar error log: $(cat /tmp/tar_error.log)"
+        log error "Please check if xz-utils is properly installed"
+        rm -rf "$temp_dir" /tmp/tar_error.log
+        exit 1
+    fi
+    
+    # 检查解压后的文件是否存在
+    if [[ ! -f "$temp_dir/ssserver" ]]; then
+        log error "Extraction completed but ssserver binary not found in extracted files!"
+        log info "Listing extracted files: $(ls -la $temp_dir)"
+        rm -rf "$temp_dir"
+        exit 1
+    fi
+    
+    # 设置权限并移动文件
+    chmod +x "$temp_dir/ssserver"
+    mv -f "$temp_dir/ssserver" /usr/local/bin/
+    
+    # 清理其他文件
+    rm -f "$temp_dir/sslocal" "$temp_dir/ssmanager" "$temp_dir/ssservice" "$temp_dir/ssurl" 2>/dev/null
+    rm -rf "$temp_dir"
+    rm -f "$current_dir/$archive_name"
     log progress_end "Shadowsocks-rust installation completed"
 }
 
@@ -476,6 +526,17 @@ run_installation() {
 # 2. Otherwise, show the interactive menu.
 ################################################################################
 main() {
+    # 检查是否以root权限运行
+    if [[ $EUID -ne 0 ]]; then
+        log error "此脚本必须以root权限运行！请使用sudo执行。"
+        exit 1
+    fi
+    
+    # 显示脚本版本和执行环境信息
+    log info "Shadowsocks安装脚本 v1.1 (修复版)"
+    log info "操作系统: $(uname -s) $(uname -r)"
+    log info "架构: $(uname -m)"
+    
     # If parameters are provided (beyond script name) then execute non-interactive mode.
     if [ "$#" -gt 0 ]; then
         run_installation
