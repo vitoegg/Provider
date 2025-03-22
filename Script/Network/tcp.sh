@@ -28,9 +28,9 @@ fi
 ################################################################################
 server_selection() {
     echo "Please select server type:"
-    echo "1. HK Server"
-    echo "2. JP Server"
-    echo "3. US Server"
+    echo "1. HK Frenzy"
+    echo "2. JP Frenzy"
+    echo "3. US Frenzy"
     echo "4. Customized"
     read -p "Enter your choice (1-4): " server_choice
     case $server_choice in
@@ -51,9 +51,9 @@ server_selection() {
             read -p "Enter Wmem value: " Wmem
             ;;
         *)
-            timestamped_echo "${Error} Invalid selection, defaulting to JP Server configuration"
-            Rmem=12722722
-            Wmem=12722722
+            timestamped_echo "${Error} Invalid selection, defaulting to General Mode"
+            Rmem=6735000
+            Wmem=6735000
             ;;
     esac
     timestamped_echo "${Info} Selected Rmem: ${Rmem}, Wmem: ${Wmem}"
