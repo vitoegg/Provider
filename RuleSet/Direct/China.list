@@ -1,4 +1,4 @@
-# Update time: 2025-03-23 08:55:48
+# Update time: 2025-03-24 05:08:51
 # Merged from:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/Loyalsoldier/surge-rules
@@ -100904,7 +100904,6 @@ astro1.rastream.com
 auth.music.apple.com
 avail.googleflights.net
 b.c2r.ts.cdn.office.net
-b.ds.ch.dingtoo.com
 bag.itunes.apple.com
 bbs.ztedevices.com
 bbstv.clouducs.com
@@ -100951,7 +100950,6 @@ certs-lb.apple.com.akadns.net
 certs.apple.com
 cgntv-glive.ofsdelivery.net
 channellive.leshantv.net
-chaoan.chaoantv.com
 checkin.gstatic.com
 cl1-cdn.origin-apple.com.akadns.net
 cl1.apple.com
@@ -101180,14 +101178,12 @@ lb.streaming.sk
 learn.microsoft.com
 live-350k.streamingfast.net
 live-echotv.cdnvideo.ru
-live.0793.tv
 live.hnzzzzzdst.com
 live.lxzc.net
 live.ntdimg.com
 live.qinyangtv.com
 live.sccxtv.com
 live.streamingfast.net
-live.todaydunhuang.com
 live.ugratv.cdnvideo.ru
 live.zhihuizq.com
 live02.rfi.fr
@@ -101212,7 +101208,6 @@ manga.bilibili.com
 maps.apple.com
 media.fantv.hk
 media.joycorp.co.kr
-media.trrtv.com
 mediaprima.rastream.com
 menu-static.gog-statics.com
 mesu-cdn.apple.com.akadns.net
@@ -101294,7 +101289,6 @@ pki-goog.l.google.com
 play.1ucrs.com
 play.itunes.apple.com
 play.jinnantv.top
-play.kankanlive.com
 play.music.apple.com
 play.scrstv.com
 play.sngdxsn.com
@@ -101307,7 +101301,6 @@ prod.databe.floonet.goog
 productcard.gog-statics.com
 proxyconfig.corp.google.com
 publicassets.cdn-apple.com
-pull.hnedutv.com
 qagpublic.qatp1.net
 qagpublic.qcpp1.net
 qagpublic.qpdp1.net
@@ -101413,7 +101406,6 @@ stream.houstonpublicmedia.org
 stream.nbbltv.com
 stream.rcs.revma.com
 stream.superfm99-1.com.tw
-stream.sxsztv.com
 stream.wbez.org
 stream.xctv.news
 stream.ysbtv.net
