@@ -54,7 +54,15 @@ jobs:
               echo "Processing YAML file..."
               {
                 echo "payload:"
-                cat "${temp_files[@]}" | grep -v "^#" | grep -v "^$" | grep -v "^payload:" | sort | uniq
+                cat "${temp_files[@]}" | 
+                  grep -v "^#" |                # 移除以#开头的注释行
+                  grep -v "^ *#" |              # 移除以空格+#开头的注释行
+                  sed 's/[[:space:]]*#.*$//' |  # 移除行尾注释
+                  sed 's/^[[:space:]]*//g' |    # 移除行首空格
+                  sed 's/[[:space:]]*$//g' |    # 移除行尾空格
+                  grep -v "^$" |                # 移除空行
+                  grep -v "^payload:" |         # 移除原有的payload行
+                  sort | uniq
               } > "$merged_file"
             else
               # 普通列表文件处理
