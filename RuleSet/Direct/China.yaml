@@ -1,4 +1,4 @@
-# Update time: 2025-03-27 13:29:38
+# Update time: 2025-03-27 14:42:08
 # Merged from:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/Loyalsoldier/clash-rules
@@ -12542,6 +12542,7 @@ payload:
 - '+.arestech-sz.com'
 - '+.areweloongyet.com'
 - '+.arextecn.com'
+- '+.argotunnel.com'
 - '+.arhoo.com'
 - '+.ariacraft.net'
 - '+.ariaideh.com'
@@ -82185,6 +82186,7 @@ payload:
 - '+.tangchendoor.com'
 - '+.tangdaoya.com'
 - '+.tangdou.com'
+- '+.tangdoucdn.com'
 - '+.tangdouddn.com'
 - '+.tangdouedn.com'
 - '+.tangdoufdn.com'
