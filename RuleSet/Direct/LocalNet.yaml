@@ -110,12 +110,13 @@ payload:
  - '+.wechatlegal.net
  - '+.wechatpay.com'
  - '+.weixin.qq.com'
+ - '+.weixin.qq.com.cn'
  - '+.weixinbridge.com'
  - '+.weixinsxy.com'
  - '+.wxapp.tc.qq.com'
  - '+.qidian.com'
  - 'file-igamecj.akamaized.net'
-
+ 
  # > 新浪
  - '+.wbimg.cn'
  - '+.wbimg.com'
@@ -291,3 +292,11 @@ payload:
  - '+.sandai.net'
  - '+.thundercdn.com'
  - '+.xunlei.com'
+
+ # > Emby
+ - '+.micu.hk'
+ - '+.nanflix.net'
+
+ # > China
+ - '+.shssdc.com'
+ - '+.cn'
