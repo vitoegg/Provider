@@ -47,7 +47,19 @@ jobs:
             
             # 合并并处理文件
             merged_file=$(mktemp)
-            cat "${temp_files[@]}" | grep -v "^#" | grep -v "^$" | sort | uniq > "$merged_file"
+            
+            # 根据文件扩展名决定不同的处理方式
+            if [[ "$output_path" == *.yaml ]]; then
+              # YAML文件处理
+              echo "Processing YAML file..."
+              {
+                echo "payload:"
+                cat "${temp_files[@]}" | grep -v "^#" | grep -v "^$" | grep -v "^payload:" | sort | uniq
+              } > "$merged_file"
+            else
+              # 普通列表文件处理
+              cat "${temp_files[@]}" | grep -v "^#" | grep -v "^$" | sort | uniq > "$merged_file"
+            fi
             
             # 确保输出目录存在
             mkdir -p "$(dirname "$output_path")"
