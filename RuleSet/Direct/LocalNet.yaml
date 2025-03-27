@@ -293,6 +293,15 @@ payload:
  - '+.thundercdn.com'
  - '+.xunlei.com'
 
+ # > 糖豆
+ - '+.tangdou.com'
+ - '+.tangdoucdn.com'
+ - '+.tangdouddn.com'
+ - '+.tangdouedn.com'
+
+ # > Cloudflare Tunnel
+ - '+.argotunnel.com'
+
  # > Emby
  - '+.micu.hk'
  - '+.nanflix.net'
