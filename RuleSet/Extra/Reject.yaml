@@ -1,0 +1,9 @@
+payload:
+  # > WeChat Input
+  - DOMAIN-SUFFIX,wetype.weixin.qq.com
+  # > Bilibili PCDN
+  - DOMAIN-SUFFIX,szbdyd.com
+  - DOMAIN-SUFFIX,mcdn.bilivideo.cn
+  - DOMAIN-SUFFIX,p2p.huya.com
+  # > Telegram Pics
+  - IP-CIDR,95.161.76.100/31,no-resolve
