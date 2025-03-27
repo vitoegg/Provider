@@ -92,7 +92,7 @@ jobs:
         id: check_changes
         run: |
           # 对每个文件进行实质性变更检查
-          declare -a files=("RuleSet/Direct/China.list" "RuleSet/Apple/Service.list")
+          declare -a files=("RuleSet/Direct/China.list" "RuleSet/Direct/China.yaml" "RuleSet/Apple/Service.list")
           changes_detected=false
           
           git add "${files[@]}"
