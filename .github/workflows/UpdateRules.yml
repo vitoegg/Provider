@@ -30,6 +30,7 @@ jobs:
             ["China"]="RuleSet/Direct/China.list;https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/direct.txt https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/LocalNet.list"
             ["ChinaClash"]="RuleSet/Direct/China.yaml;https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/ChinaMax/ChinaMax_Domain.yaml https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/direct.txt https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/LocalNet.yaml https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Apple/Apple_Domain.yaml https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/apple.txt https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/icloud.txt"
             ["Apple"]="RuleSet/Apple/Service.list;https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple_Domain.list https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt"
+            ["Reject"]="RuleSet/Extra/Reject.txt;https://ruleset.skk.moe/Clash/domainset/reject.txt https://ruleset.skk.moe/Clash/domainset/reject_extra.txt https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Privacy.txt"
           )
           
           for rule in "${!rule_configs[@]}"; do
@@ -112,7 +113,7 @@ jobs:
         id: check_changes
         run: |
           # 对每个文件进行实质性变更检查
-          declare -a files=("RuleSet/Direct/China.list" "RuleSet/Direct/China.yaml" "RuleSet/Apple/Service.list")
+          declare -a files=("RuleSet/Direct/China.list" "RuleSet/Direct/China.yaml" "RuleSet/Apple/Service.list" "RuleSet/Extra/Reject.txt")
           changes_detected=false
           
           git add "${files[@]}"
