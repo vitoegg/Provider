@@ -1,20 +1,293 @@
 payload:
-  # Special
-  - DOMAIN-SUFFIX,lan
-  - DOMAIN-SUFFIX,local
-  - DOMAIN-SUFFIX,cn
-  - DOMAIN-SUFFIX,miwifi.com
-  - DOMAIN-SUFFIX,zte.home
-  - DOMAIN-SUFFIX,tplogin.cn
-  - DOMAIN-KEYWORD,diyibanzhu
-  # Lan IP
-  - IP-CIDR,0.0.0.0/8,no-resolve
-  - IP-CIDR,10.0.0.0/8,no-resolve
-  - IP-CIDR,100.64.0.0/10,no-resolve
-  - IP-CIDR,127.0.0.0/8,no-resolve
-  - IP-CIDR,172.16.0.0/12,no-resolve
-  - IP-CIDR,192.168.0.0/16,no-resolve
-  - IP-CIDR,198.18.0.0/16,no-resolve
-  - IP-CIDR,224.0.0.0/4,no-resolve
-  #Download
-  - DST-PORT,10001-65535,DIRECT
+ # > DNS
+ - '+.doh.pub'
+ - '+.dns.alidns.com'
+ - '+.doh.360.cn'
+ 
+ # > 阿里巴巴
+ - '+.alibaba.com'
+ - '+.aliapp.org'
+ - '+.alibabacloud.com'
+ - '+.alibabausercontent.com'
+ - '+.alicdn.com'
+ - '+.alicloudccp.com'
+ - '+.aliexpress.com'
+ - '+.aliimg.com'
+ - '+.alikunlun.com'
+ - '+.autonavi.com'
+ - '+.taobao.com'
+ - '+.taobaocdn.com'
+ - '+.tbcache.com'
+ - '+.tbcdn.com'
+ - '+.tmall.com'
+ - '+.tmall.hk'
+ - '+.alipay.com'
+ - '+.alipayobjects.com'
+ - '+.aliyun.com'
+ - '+.aliyuncdn.com'
+ - '+.aliyuncs.com'
+ - '+.aliyundrive.com'
+ - '+.amap.com'
+ - '+.dingtalk.com'
+ - '+.ykimg.com'
+ 
+ # > 百度
+ - '+.baidu.com'
+ - '+.baidubcr.com'
+ - '+.baidupan.com'
+ - '+.baidupcs.com'
+ - '+.bdimg.com'
+ - '+.bdstatic.com'
+ - '+.yunjiasu-cdn.net'
+
+ # ByteDance
+ - '+.amemv.com'
+ - '+.bdxiguaimg.com'
+ - '+.bdxiguastatic.com'
+ - '+.byted-static.com'
+ - '+.bytedance.com'
+ - '+.bytedance.net'
+ - '+.bytedns.net'
+ - '+.bytednsdoc.com'
+ - '+.bytegoofy.com'
+ - '+.byteimg.com'
+ - '+.bytescm.com'
+ - '+.bytetos.com'
+ - '+.bytexservice.com'
+ - '+.douyin.com'
+ - '+.douyincdn.com'
+ - '+.douyinpic.com'
+ - '+.douyinstatic.com'
+ - '+.douyinvod.com'
+ - '+.feelgood.cn'
+ - '+.feiliao.com'
+ - '+.gifshow.com'
+ - '+.huoshan.com'
+ - '+.huoshanzhibo.com'
+ - '+.ibytedapm.com'
+ - '+.iesdouyin.com'
+ - '+.ixigua.com'
+ - '+.kspkg.com'
+ - '+.pstatp.com'
+ - '+.snssdk.com'
+ - '+.toutiao.com'
+ - '+.toutiao13.com'
+ - '+.toutiaoapi.com'
+ - '+.toutiaocdn.com'
+ - '+.toutiaocdn.net'
+ - '+.toutiaocloud.com'
+ - '+.toutiaohao.com'
+ - '+.toutiaohao.net'
+ - '+.toutiaoimg.com'
+ - '+.toutiaopage.com'
+ - '+.wukong.com'
+ - '+.zijieapi.com'
+ - '+.zijieimg.com'
+ - '+.zjbyte.com'
+ - '+.zjcdn.com'
+
+ # > 腾讯
+ - '+.qq.com'
+ - '+.qqmail.com'
+ - '+.qlogo.cn'
+ - '+.qpic.cn'
+ - '+.qqurl.com'
+ - '+.servicewechat.com'
+ - '+.gtimg.com'
+ - '+.idqqimg.com'
+ - '+.igamecj.com'
+ - '+.smtcdns.com'
+ - '+.smtcdns.net
+ - '+.myapp.com'
+ - '+.myqcloud.com'
+ - '+.soso.com'
+ - '+.tencent.com'
+ - '+.tencentmind.com'
+ - '+.tencent-cloud.net
+ - '+.tenpay.com'
+ - '+.wechat.com'
+ - '+.weixin.com'
+ - '+.wechatlegal.net
+ - '+.wechatpay.com'
+ - '+.weixin.qq.com'
+ - '+.weixinbridge.com'
+ - '+.weixinsxy.com'
+ - '+.wxapp.tc.qq.com'
+ - '+.qidian.com'
+ - 'file-igamecj.akamaized.net'
+
+ # > 新浪
+ - '+.wbimg.cn'
+ - '+.wbimg.com'
+ - '+.wbimg.com'.cn
+ - '+.wcdn.cn'
+ - '+.weibo.cn'
+ - '+.weibo.com'
+ - '+.weibo.com'.cn
+ - '+.weibo.tv'
+ - '+.weibocdn.com'
+ - '+.weiboums.com'
+ - '+.xiaoka.tv'
+ - '+.t.cn'
+ - '+.sinaurl.cn'
+ - '+.sina.cn'
+ - '+.sina.com'
+ - '+.sina.com'.cn
+ - '+.sina.net'
+ - '+.sinaapp.com'
+ - '+.sinacdn.com'
+ - '+.sinacloud.cn'
+ - '+.sinacloud.com'
+ - '+.sinacloud.com'.cn
+ - '+.sinacloud.net'
+
+ # > 豆瓣
+ - '+.douban.com'
+ - '+.doubanio.com'
+
+ # > 小红书
+ - '+.xiaohongshu.com'
+ - '+.xhscdn.com'
+ - '+.xhscdn.net'
+ 
+ # > 京东
+ - '+.jd.com'
+ - '+.jd.hk'
+ - '+.jdpay.com'
+ - '+.jdcloud.com'
+ - '+.isvjcloud.com'
+ - '+.jcloudcs.com'
+ - '+.360buy.com'
+ - '+.360buyimg.com'
+ - '+.paipai.com'
+ - '+.yihaodianimg.com'
+
+ # O2O服务
+ # > Meituan
+ - '+.dianping.com'
+ - '+.maoyan.com'
+ - '+.meituan.com'
+ - '+.meituan.net'
+ - '+.mtyun.com'
+ - '+.neixin.cn'
+ - '+.sankuai.com'
+ # > ele
+ - '+.ele.me'
+ - '+.eleme.cn'
+ - '+.eleme.io'
+ - '+.elemecdn.cn'
+ - '+.elemecdn.com'
+ - '+.fengniaopaotui.cn'
+ - '+.fengniaozhongbao.cn'
+ - '+.xingxuanwaimai.com'
+ # > DiDi
+ - '+.didialift.com'
+ - '+.didiapp.net.cn'
+ - '+.didichuxing.com'
+ - '+.didiglobal.com'
+ - '+.didistatic.com'
+ - '+.diditaxi.com'
+ - '+.diditaxi.com.cn'
+ - '+.didiwuxian.com'
+ - '+.didiyun.com'
+ - '+.didiyun.org'
+ - '+.didiyunapi.com'
+ - '+.juyanwenjuan.com'
+ - '+.udache.com'
+ - '+.xiaojuchefu.cn'
+ - '+.xiaojukeji.com'
+
+ # 流媒体
+ # > Bilibili
+ - '+.biliapi.net'
+ - '+.bilibili.com'
+ - '+.bilivideo.com'
+ - '+.hdslb.com'
+ # > Tencent Video
+ - '+.video.qq.com'
+ - '+.i.qq.com'
+ - '+.v.qq.com'
+ # > iQiyi
+ - '+.71.am'
+ - '+.71edge.com'
+ - '+.iqiyi.com'
+ - '+.iqiyipic.com'
+ - '+.ppsimg.com'
+ - '+.qiyi.com'
+ - '+.qiyipic.com'
+ - '+.qy.net'
+ # > Youku
+ - '+.soku.com'
+ - '+.youku.com'
+ - '+.ykimg.com'
+ # > XiGua
+ - '+.ixigua.com'
+ - '+.snssdk.com'
+ # > HunanTV
+ - '+.hitv.com'
+ - '+.hunantv.com'
+ - '+.mgtv.com'
+ # > QQ Music
+ - '+.music.qq.com'
+ - '+.music.tc.qq.com'
+ - '+.qqmusic.qq.com'
+ - '+.tencentmusic.com'
+ - '+.y.qq.com'
+ - 'aqqmusic.tc.qq.com'
+ - 'moo.qq.com'
+ # > Ximalaya
+ - '+.ximalaya.com'
+ - '+.xmcdn.com'
+ # > Lizhi
+ - '+.lizhi.fm
+ - '+.lizhi.io
+ - '+.lizhifm.com'
+ # > Xiaoyuzhou
+ - '+.xiaoyuzhoufm.com'
+ - '+.xyzcdn.net'
+
+ # > 新闻
+ - '+.sspai.com'
+ - '+.36kr.com'
+ - '+.ifanr.com'
+ - '+.app.so'
+ - '+.coolbuy.com'
+ - '+.ithome.com'
+ - '+.qdaily.com'
+ - '+.sohu.com'
+ - '+.soku.com'
+ - '+.soso.com'
+
+ # > 小米
+ - '+.mi.com'
+ - '+.mi-img.com'
+ - '+.xiaomi.com'
+ - '+.xiaomi.net'
+ - '+.xiaomicp.com'
+ - '+.miui.com'
+ - '+.miwifi.com'
+ - '+.duokan.com'
+
+ # > 知乎
+ - '+.zhihu.com'
+ - '+.zhimg.com'
+
+ # > 网易
+ - '+.netease.com'
+ - '+.netease.im'
+ - '+.lofter.com'
+ - '+.126.com'
+ - '+.126.net'
+ - '+.127.net'
+ - '+.163.com'
+ - '+.youdao.com'
+
+ # > 迅雷
+ - '+.00cdn.com'
+ - '+.88cdn.com'
+ - '+.kanimg.com'
+ - '+.kankan.com'
+ - '+.p2cdn.com'
+ - '+.sandai.net'
+ - '+.thundercdn.com'
+ - '+.xunlei.com'
