@@ -1,4 +1,4 @@
-# Update time: 2025-03-28 05:10:15
+# Update time: 2025-03-28 08:52:09
 # Merged from:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/Loyalsoldier/surge-rules
@@ -103563,6 +103563,7 @@ cpro.baidustatic.com
 crashlyticsreports-pa.googleapis.com
 crl-lb.apple.com.akadns.net
 crl.apple.com
+crl.globalsign.net
 crl.pki.goog
 crls.pki.goog
 csi.gstatic.com
@@ -104091,6 +104092,7 @@ www.apple.com.edgekey.net
 www.apple.com.edgekey.net.globalredir.akadns.net
 www.cbsnews.com
 www.destinationurl.com
+www.entrust.cn
 www.filmon.com
 www.googleadapis.com
 www.gstatic.com

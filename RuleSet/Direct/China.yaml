@@ -1,4 +1,4 @@
-# Update time: 2025-03-28 05:10:13
+# Update time: 2025-03-28 08:52:08
 # Merged from:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/Loyalsoldier/clash-rules
@@ -105322,6 +105322,7 @@ payload:
 - 'crashlyticsreports-pa.googleapis.com'
 - 'crl-lb.apple.com.akadns.net'
 - 'crl.apple.com'
+- 'crl.globalsign.net'
 - 'crl.pki.goog'
 - 'crls.pki.goog'
 - 'csi.gstatic.com'
@@ -105855,6 +105856,7 @@ payload:
 - 'www.apple.com.edgekey.net.globalredir.akadns.net'
 - 'www.cbsnews.com'
 - 'www.destinationurl.com'
+- 'www.entrust.cn'
 - 'www.filmon.com'
 - 'www.googleadapis.com'
 - 'www.gstatic.com'
