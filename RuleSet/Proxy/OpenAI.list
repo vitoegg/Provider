@@ -2,11 +2,18 @@
 .ai.com
 .openai.com
 .chatgpt.com
+# > Sora
+.sora.com
+# > Advanced Voice
+.chatgpt.livekit.cloud
+.host.livekit.cloud
+.turn.livekit.cloud
+# > Siri
+.apple-relay.apple.com
+guzzoni.smoot.apple.com
 # > Chat GPT API & CDN
-.cdn.oaistatic.com
 .oaistatic.com
 .oaiusercontent.com
-.o33249.ingest.sentry.io
 chat.openai.com.cdn.cloudflare.net
 openaiapi-site.azureedge.net
 openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net
@@ -14,11 +21,7 @@ openaicomproductionae4b.blob.core.windows.net
 production-openaicom-storage.azureedge.net
 client-api.arkoselabs.com
 openai-api.arkoselabs.com
+# > Tracking
+o33249.ingest.sentry.io
 openaicom.imgix.net
 browser-intake-datadoghq.com
-# > Sora
-.sora.com
-sora-cdn.oaistatic.com
-# > Siri
-.apple-relay.apple.com
-guzzoni.smoot.apple.com
