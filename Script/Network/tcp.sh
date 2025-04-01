@@ -69,7 +69,7 @@ vm.swappiness = 10
 vm.min_free_kbytes = 153600
 
 # TCP congestion control
-net.core.default_qdisc = cake
+net.core.default_qdisc = fq
 net.ipv4.tcp_congestion_control = bbr
 
 # Network buffer tuning
