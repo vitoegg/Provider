@@ -54,6 +54,22 @@ fi
 #   --tls-domain   : TLS domain for ShadowTLS
 #   -a             : Use 2022-blake3-aes-128-gcm encryption method for Shadowsocks
 ################################################################################
+# Default encryption methods
+DEFAULT_METHOD="aes-128-gcm"
+ADVANCED_METHOD="2022-blake3-aes-128-gcm"
+
+################################################################################
+# Get the Shadowsocks encryption method based on command line arguments
+################################################################################
+get_ss_encryption_method() {
+    # Simply use command line arguments to determine encryption method
+    if [[ "$use_2022_method" = true ]]; then
+        echo "$ADVANCED_METHOD"
+    else
+        echo "$DEFAULT_METHOD"
+    fi
+}
+
 parse_args() {
     # Initialize the encryption method flag
     use_2022_method=false
@@ -82,7 +98,7 @@ parse_args() {
                 shift 2
                 ;;
             -a)
-                # Flag to use 2022-blake3-aes-128-gcm encryption method
+                # Flag to use advanced encryption method
                 use_2022_method=true
                 shift
                 ;;
@@ -310,34 +326,22 @@ configure_shadowsocks() {
     print_header "Configuring Shadowsocks"
     mkdir -p /etc/shadowsocks
 
-    # Determine which encryption method to use based on the -a flag
-    if [[ "$use_2022_method" = true ]]; then
-        # Use 2022-blake3-aes-128-gcm method when -a flag is provided
-        cat > /etc/shadowsocks/config.json << EOF
+    # Get the encryption method based on command line arguments
+    local ss_method
+    ss_method=$(get_ss_encryption_method)
+    
+    # Create the Shadowsocks configuration file
+    cat > /etc/shadowsocks/config.json << EOF
 {
     "server": "0.0.0.0",
     "server_port": $ssport,
     "password": "$sspass",
     "timeout": 600,
     "mode": "tcp_and_udp",
-    "method": "2022-blake3-aes-128-gcm"
+    "method": "$ss_method"
 }
 EOF
-        log_info "Using 2022-blake3-aes-128-gcm encryption method"
-    else
-        # Use default aes-128-gcm method
-        cat > /etc/shadowsocks/config.json << EOF
-{
-    "server": "0.0.0.0",
-    "server_port": $ssport,
-    "password": "$sspass",
-    "timeout": 600,
-    "mode": "tcp_and_udp",
-    "method": "aes-128-gcm"
-}
-EOF
-        log_info "Using default aes-128-gcm encryption method"
-    fi
+    log_info "Using $ss_method encryption method"
 
     cat > /lib/systemd/system/shadowsocks.service << EOF
 [Unit]
@@ -506,7 +510,7 @@ show_configuration() {
     printf "%-25s %s\n" "Server IP:" "$server_ip"
     printf "%-25s %s\n" "Shadowsocks Port:" "$ssport"
     printf "%-25s %s\n" "Shadowsocks Password:" "$sspass"
-    printf "%-25s %s\n" "Shadowsocks Encryption:" "aes-128-gcm"
+    printf "%-25s %s\n" "Shadowsocks Encryption:" "$ss_method"
     printf "%-25s %s\n" "ShadowTLS Port:" "$listen_port"
     printf "%-25s %s\n" "ShadowTLS Password:" "$tls_password"
     printf "%-25s %s\n" "ShadowTLS SNI:" "$domain"
