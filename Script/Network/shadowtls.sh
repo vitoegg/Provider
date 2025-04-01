@@ -52,8 +52,12 @@ fi
 #   --tls-port     : TLS port for ShadowTLS
 #   --tls-pass     : TLS password for ShadowTLS
 #   --tls-domain   : TLS domain for ShadowTLS
+#   -a             : Use 2022-blake3-aes-128-gcm encryption method for Shadowsocks
 ################################################################################
 parse_args() {
+    # Initialize the encryption method flag
+    use_2022_method=false
+    
     while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
@@ -76,6 +80,11 @@ parse_args() {
             --tls-domain)
                 domain="$2"
                 shift 2
+                ;;
+            -a)
+                # Flag to use 2022-blake3-aes-128-gcm encryption method
+                use_2022_method=true
+                shift
                 ;;
             *)
                 log_error "Unknown option: $1"
@@ -115,11 +124,11 @@ detect_arch() {
 
 ################################################################################
 # Install required packages only if they are missing.
-# Dependencies: wget, xz-utils, and jq.
+# Dependencies: wget, xz-utils, jq, and openssl.
 ################################################################################
 install_packages() {
     print_header "Installing Required Packages"
-    local packages_needed=(wget xz-utils jq)
+    local packages_needed=(wget xz-utils jq openssl)
     if command -v apt-get >/dev/null 2>&1; then
         log_info "Using apt package manager..."
         apt-get update
@@ -286,7 +295,8 @@ get_shadowsocks_config() {
     fi
 
     if [[ -z "$sspass" ]]; then
-        sspass=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
+        # Generate password using openssl for better randomness
+        sspass=$(openssl rand -base64 16)
         log_info "No Shadowsocks password provided. Generated password: $sspass"
     else
         log_info "Using specified Shadowsocks password."
@@ -300,7 +310,23 @@ configure_shadowsocks() {
     print_header "Configuring Shadowsocks"
     mkdir -p /etc/shadowsocks
 
-    cat > /etc/shadowsocks/config.json << EOF
+    # Determine which encryption method to use based on the -a flag
+    if [[ "$use_2022_method" = true ]]; then
+        # Use 2022-blake3-aes-128-gcm method when -a flag is provided
+        cat > /etc/shadowsocks/config.json << EOF
+{
+    "server": "0.0.0.0",
+    "server_port": $ssport,
+    "password": "$sspass",
+    "timeout": 600,
+    "mode": "tcp_and_udp",
+    "method": "2022-blake3-aes-128-gcm"
+}
+EOF
+        log_info "Using 2022-blake3-aes-128-gcm encryption method"
+    else
+        # Use default aes-128-gcm method
+        cat > /etc/shadowsocks/config.json << EOF
 {
     "server": "0.0.0.0",
     "server_port": $ssport,
@@ -310,6 +336,8 @@ configure_shadowsocks() {
     "method": "aes-128-gcm"
 }
 EOF
+        log_info "Using default aes-128-gcm encryption method"
+    fi
 
     cat > /lib/systemd/system/shadowsocks.service << EOF
 [Unit]
