@@ -327,7 +327,6 @@ configure_shadowsocks() {
     mkdir -p /etc/shadowsocks
 
     # Get the encryption method based on command line arguments
-    local ss_method
     ss_method=$(get_ss_encryption_method)
     
     # Create the Shadowsocks configuration file
