@@ -10,7 +10,7 @@ DOMAIN,sdkconfig.ad.xiaomi.com,REJECT
 DEST-PORT,5222,REJECT
 # 慢慢买
 DOMAIN-SUFFIX,sentry.manmanbuy.com,REJECT
-# 微信
+# 微信小程序
 DOMAIN-SUFFIX,wxs.qq.com,REJECT
 DOMAIN,wxsnsdy.wxs.qq.com,REJECT
 DOMAIN,wxsmsdy.video.qq.com,REJECT
