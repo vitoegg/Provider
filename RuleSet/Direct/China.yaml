@@ -1,4 +1,4 @@
-# Update time: 2025-04-06 05:10:17
+# Update time: 2025-04-06 08:56:19
 # Merged from:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/Loyalsoldier/clash-rules
@@ -34623,6 +34623,7 @@ payload:
 - '+.forestfood.com'
 - '+.forestmusicnanjing.com'
 - '+.forestpolice.org'
+- '+.forevernine.com'
 - '+.foreveross.com'
 - '+.foreweld.com'
 - '+.forface3d.com'
@@ -38220,6 +38221,8 @@ payload:
 - '+.golenpower.com'
 - '+.golfvv.com'
 - '+.golink.com'
+- '+.golinkapi.com'
+- '+.golinkcn.com'
 - '+.golinksworld.com'
 - '+.golive-tv.com'
 - '+.golivetv.tv'
@@ -50576,6 +50579,7 @@ payload:
 - '+.imlianai.com'
 - '+.imliuyi.com'
 - '+.immeee.com'
+- '+.immersivetranslate.com'
 - '+.immfast.com'
 - '+.immi520.com'
 - '+.immiexpo.com'
@@ -77557,6 +77561,7 @@ payload:
 - '+.rm.run'
 - '+.rmb.sh'
 - '+.rmbbk.com'
+- '+.rmbgame.net'
 - '+.rmbrate.net'
 - '+.rmburl.com'
 - '+.rmcaribbean.com'
@@ -84387,6 +84392,7 @@ payload:
 - '+.stdout.pub'
 - '+.stdwp.com'
 - '+.ste56.com'
+- '+.steam302.xyz'
 - '+.steambang.com'
 - '+.steambig.com'
 - '+.steamboxs.com'
@@ -110961,6 +110967,7 @@ payload:
 - 'ai.ytimg.com'
 - 'ai.zhaomi.cn'
 - 'aka-amd-njpwworld-hls-enlive.akamaized.net'
+- 'alibaba.cdn.steampipe.steamcontent.com'
 - 'aljazeera-eng-hd-live.hls.adaptive.level3.net'
 - 'amdlive-ch01.ctnd.com.edgesuite.net'
 - 'amdlive-ch03-ctnd-com.akamaized.net'
@@ -111299,6 +111306,7 @@ payload:
 - 'logger.corp.google.com'
 - 'login.corp.google.com'
 - 'lookup-api.apple.com.edgekey.net'
+- 'lv.queniujq.cn'
 - 'm.567it.com'
 - 'm3u8.channel.luzhoubs.com'
 - 'm3u8.channel.yatv.tv'
