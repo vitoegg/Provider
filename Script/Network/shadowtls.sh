@@ -52,28 +52,19 @@ fi
 #   --tls-port     : TLS port for ShadowTLS
 #   --tls-pass     : TLS password for ShadowTLS
 #   --tls-domain   : TLS domain for ShadowTLS
-#   -a             : Use 2022-blake3-aes-128-gcm encryption method for Shadowsocks
 ################################################################################
-# Default encryption methods
-DEFAULT_METHOD="aes-128-gcm"
-ADVANCED_METHOD="2022-blake3-aes-128-gcm"
+# Default encryption method
+DEFAULT_METHOD="2022-blake3-aes-128-gcm"
 
 ################################################################################
-# Get the Shadowsocks encryption method based on command line arguments
+# Get the Shadowsocks encryption method
 ################################################################################
 get_ss_encryption_method() {
-    # Simply use command line arguments to determine encryption method
-    if [[ "$use_2022_method" = true ]]; then
-        echo "$ADVANCED_METHOD"
-    else
-        echo "$DEFAULT_METHOD"
-    fi
+    # Always use the default method
+    echo "$DEFAULT_METHOD"
 }
 
 parse_args() {
-    # Initialize the encryption method flag
-    use_2022_method=false
-    
     while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
@@ -96,11 +87,6 @@ parse_args() {
             --tls-domain)
                 domain="$2"
                 shift 2
-                ;;
-            -a)
-                # Flag to use advanced encryption method
-                use_2022_method=true
-                shift
                 ;;
             *)
                 log_error "Unknown option: $1"
@@ -253,6 +239,13 @@ get_ipv4_address() {
 install_shadowsocks() {
     print_header "Installing Shadowsocks-rust"
     
+    # Check if Shadowsocks service is already installed and running
+    if systemctl is-active --quiet shadowsocks.service; then
+        log_warning "Shadowsocks service is already installed and running."
+        log_warning "If you want to reinstall, please uninstall first."
+        exit 1
+    fi
+    
     local new_ver
     new_ver=$(fetch_content "https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases" | \
               jq -r '[.[] | select(.prerelease == false and .draft == false) | .tag_name] | .[0]')
@@ -379,6 +372,13 @@ EOF
 ################################################################################
 install_shadowtls() {
     print_header "Installing ShadowTLS"
+    
+    # Check if ShadowTLS service is already installed and running
+    if systemctl is-active --quiet shadowtls.service; then
+        log_warning "ShadowTLS service is already installed and running."
+        log_warning "If you want to reinstall, please uninstall first."
+        exit 1
+    fi
     
     local latest_version
     latest_version=$(fetch_content "https://api.github.com/repos/ihciah/shadow-tls/releases/latest" | jq -r .tag_name)

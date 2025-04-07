@@ -48,11 +48,10 @@ log() {
 # Usage function for script help
 ################################################################################
 usage() {
-    echo -e "Usage: $0 [-s password] [-p port] [-a] [-h]\n"
+    echo -e "Usage: $0 [-s password] [-p port] [-h]\n"
     echo "Options:"
     echo "  -s    Specify Shadowsocks password"
     echo "  -p    Specify Shadowsocks port"
-    echo "  -a    Use 2022-blake3-aes-128-gcm encryption method"
     echo "  -h    Show this help message"
     exit 1
 }
@@ -60,11 +59,10 @@ usage() {
 ################################################################################
 # Parse command line arguments
 ################################################################################
-while getopts "s:p:ah" opt; do
+while getopts "s:p:h" opt; do
     case $opt in
         s) sspasswd="$OPTARG" ;;
         p) ssport="$OPTARG" ;;
-        a) use_blake3="yes" ;;
         h) usage ;;
         \?) log error "Invalid option: -$OPTARG"; usage ;;
     esac
@@ -140,7 +138,7 @@ install_packages() {
     log progress "Checking and installing required packages"
     install_dependency "wget" "wget"
     install_dependency "jq" "jq"
-    # 确保安装解压工具
+    # Ensure extraction tools
     if command_exists apt-get; then
         install_dependency "tar" "tar"
         install_dependency "xz" "xz-utils"
@@ -148,13 +146,13 @@ install_packages() {
         install_dependency "tar" "tar"
         install_dependency "xz" "xz"
     else
-        log warn "未知的包管理器，请确保系统已安装 tar 和 xz 工具"
+        log warn "Unknown package manager, please ensure tar and xz are installed"
     fi
     install_dependency "openssl" "openssl"
     
-    # 检查mktemp是否可用
+    # Check mktemp availability
     if ! command_exists mktemp; then
-        log warn "mktemp 命令不可用，这可能会影响临时目录创建"
+        log warn "mktemp command is not available, this may affect temporary directory creation"
     fi
     log progress_end "Required packages are ready"
 }
@@ -211,7 +209,7 @@ download_shadowsocks_package() {
     log progress "Downloading Shadowsocks package ${archive_name}"
     log info "Download URL: ${download_url}"
     
-    # 使用临时文件记录下载错误
+    # Use temporary file to record download errors
     if wget -q --no-check-certificate -N "${download_url}" 2>/tmp/wget_error.log; then
         if [[ -f "${archive_name}" ]]; then
             local file_size=$(stat -c %s "${archive_name}" 2>/dev/null || stat -f %z "${archive_name}" 2>/dev/null)
@@ -276,17 +274,17 @@ install_shadowsocks() {
     local archive_name="shadowsocks-${latest_ver}.${ss_arch}-unknown-linux-gnu.tar.xz"
     local current_dir="$(pwd)"
     
-    # 检查下载的文件是否存在
+    # Check if the downloaded file exists
     if [[ ! -f "$current_dir/$archive_name" ]]; then
         log error "Downloaded file $archive_name not found in $current_dir!"
         exit 1
     fi
     
-    # 创建临时目录用于解压
+    # Create temporary directory for extraction
     local temp_dir=$(mktemp -d)
     log info "Created temporary directory for extraction: $temp_dir"
     
-    # 使用详细的错误检查进行解压
+    # Use detailed error checking for extraction
     if ! tar -xf "$current_dir/$archive_name" -C "$temp_dir" 2>/tmp/tar_error.log; then
         log error "Failed to extract Shadowsocks package! Error code: $?"
         log error "Tar error log: $(cat /tmp/tar_error.log)"
@@ -295,7 +293,7 @@ install_shadowsocks() {
         exit 1
     fi
     
-    # 检查解压后的文件是否存在
+    # Check if the extracted file exists
     if [[ ! -f "$temp_dir/ssserver" ]]; then
         log error "Extraction completed but ssserver binary not found in extracted files!"
         log info "Listing extracted files: $(ls -la $temp_dir)"
@@ -303,11 +301,11 @@ install_shadowsocks() {
         exit 1
     fi
     
-    # 设置权限并移动文件
+    # Set permissions and move file
     chmod +x "$temp_dir/ssserver"
     mv -f "$temp_dir/ssserver" /usr/local/bin/
     
-    # 清理其他文件
+    # Clean up other files
     rm -f "$temp_dir/sslocal" "$temp_dir/ssmanager" "$temp_dir/ssservice" "$temp_dir/ssurl" 2>/dev/null
     rm -rf "$temp_dir"
     rm -f "$current_dir/$archive_name"
@@ -318,16 +316,9 @@ install_shadowsocks() {
 # Prepare for Configuration
 ################################################################################
 prepare_configuration() {
-    # Determine encryption method:
-    # - If -a option is passed use 2022-blake3-aes-128-gcm
-    # - Otherwise default to aes-128-gcm
-    if [ "$use_blake3" = "yes" ]; then
-        ss_method="2022-blake3-aes-128-gcm"
-        log info "Using encryption method: $ss_method (from -a flag)"
-    else
-        ss_method="aes-128-gcm"
-        log info "Using default encryption method: $ss_method"
-    fi
+    # Set encryption method to 2022-blake3-aes-128-gcm
+    ss_method="2022-blake3-aes-128-gcm"
+    log info "Using encryption method: $ss_method"
 
     # Set or generate port
     if [ -z "$ssport" ]; then
@@ -480,6 +471,13 @@ update_shadowsocks() {
 ################################################################################
 uninstall_service() {
     echo -e "\n=== Uninstalling Shadowsocks ===\n"
+    
+    # Check if service exists before attempting to uninstall
+    if ! check_service_exists; then
+        log error "Shadowsocks service is not installed. Nothing to uninstall."
+        exit 1
+    fi
+    
     log progress "Stopping and disabling Shadowsocks service"
     systemctl stop shadowsocks.service 2>/dev/null
     systemctl disable shadowsocks.service 2>/dev/null
@@ -507,11 +505,32 @@ uninstall_service() {
 }
 
 ################################################################################
+# Check if Shadowsocks service exists
+################################################################################
+check_service_exists() {
+    # Check if service file exists
+    if [[ -f "/lib/systemd/system/shadowsocks.service" ]]; then
+        # Also verify the service is known to systemd
+        if systemctl list-unit-files | grep -q shadowsocks.service; then
+            return 0  # Service exists
+        fi
+    fi
+    return 1  # Service does not exist
+}
+
+################################################################################
 # Unified Installation Function
 #
 # This function encapsulates all steps needed for a successful installation.
 ################################################################################
 run_installation() {
+    # Check if service already exists
+    if check_service_exists; then
+        log error "Shadowsocks service is already installed. Please uninstall it first."
+        echo -e "\nTo uninstall, run: $0 uninstall\n"
+        exit 1
+    fi
+    
     install_packages
     detect_arch
     prepare_configuration
@@ -526,16 +545,16 @@ run_installation() {
 # 2. Otherwise, show the interactive menu.
 ################################################################################
 main() {
-    # 检查是否以root权限运行
+    # Check if running as root
     if [[ $EUID -ne 0 ]]; then
-        log error "此脚本必须以root权限运行！请使用sudo执行。"
+        log error "This script must be run as root! Please use sudo."
         exit 1
     fi
     
-    # 显示脚本版本和执行环境信息
-    log info "Shadowsocks安装脚本 v1.1 (修复版)"
-    log info "操作系统: $(uname -s) $(uname -r)"
-    log info "架构: $(uname -m)"
+    # Display script version and execution environment information
+    log info "Shadowsocks installation script v1.1"
+    log info "Operating System: $(uname -s) $(uname -r)"
+    log info "Architecture: $(uname -m)"
     
     # If parameters are provided (beyond script name) then execute non-interactive mode.
     if [ "$#" -gt 0 ]; then
