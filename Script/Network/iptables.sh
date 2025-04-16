@@ -152,18 +152,67 @@ process_forward_rules() {
         return 1
     fi
 
-    # Automatically get the public IP using wget
-    log_info "Detecting local IP address..."
-    LOCAL_IP=$(wget -qO- https://api.ipify.org 2>/dev/null)
-    if [ -z "$LOCAL_IP" ]; then
-        log_warn "Unable to auto-detect local IP. Please enter manually."
-        read -p "Please input local IP: " LOCAL_IP
+    # Get internal IP using ip command
+    log_info "Detecting internal IP address..."
+    INTERNAL_IP=$(ip -4 addr show scope global | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | head -n 1)
+    if [ -z "$INTERNAL_IP" ]; then
+        log_warn "Unable to detect internal IP."
+    else
+        log_info "Detected internal IP: $INTERNAL_IP"
+    fi
+
+    # Get public IP using wget
+    log_info "Detecting public IP address..."
+    PUBLIC_IP=$(wget -qO- https://api.ipify.org 2>/dev/null)
+    if [ -z "$PUBLIC_IP" ]; then
+        log_warn "Unable to detect public IP."
+    else
+        log_info "Detected public IP: $PUBLIC_IP"
+    fi
+
+    # Determine which IP to use
+    if [ -z "$INTERNAL_IP" ] && [ -z "$PUBLIC_IP" ]; then
+        # Both detection methods failed, ask user to input manually
+        log_warn "Failed to detect any IP address. Please enter manually."
+        read -p "Please input local IP for SNAT: " LOCAL_IP
         if [ -z "$LOCAL_IP" ]; then
             log_error "No IP address provided. Exiting."
             return 1
         fi
+    elif [ -z "$INTERNAL_IP" ]; then
+        # Only public IP available
+        LOCAL_IP=$PUBLIC_IP
+        log_info "Using public IP: $LOCAL_IP"
+    elif [ -z "$PUBLIC_IP" ]; then
+        # Only internal IP available
+        LOCAL_IP=$INTERNAL_IP
+        log_info "Using internal IP: $LOCAL_IP"
+    elif [ "$INTERNAL_IP" = "$PUBLIC_IP" ]; then
+        # Both IPs are the same
+        LOCAL_IP=$PUBLIC_IP
+        log_info "Internal and public IPs are identical. Using: $LOCAL_IP"
     else
-        log_info "Detected local IP: $LOCAL_IP"
+        # IPs are different, ask user which one to use
+        echo "Detected different IP addresses:"
+        echo "1. Internal IP: $INTERNAL_IP"
+        echo "2. Public IP: $PUBLIC_IP"
+        read -p "Which IP do you want to use for SNAT? [1/2]: " ip_choice
+
+        case $ip_choice in
+            1)
+                LOCAL_IP=$INTERNAL_IP
+                log_info "Using internal IP: $LOCAL_IP"
+                ;;
+            2)
+                LOCAL_IP=$PUBLIC_IP
+                log_info "Using public IP: $LOCAL_IP"
+                ;;
+            *)
+                log_warn "Invalid choice. Using internal IP by default."
+                LOCAL_IP=$INTERNAL_IP
+                log_info "Using internal IP: $LOCAL_IP"
+                ;;
+        esac
     fi
 
     while true; do
