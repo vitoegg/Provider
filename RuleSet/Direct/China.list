@@ -1,4 +1,4 @@
-# Update time: 2025-04-18 05:10:54
+# Update time: 2025-04-20 08:58:00
 # Merged from:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/Loyalsoldier/surge-rules
@@ -10344,6 +10344,7 @@
 .abykt.com
 .abyssdawn.com
 .abz-sh.com
+.ac.fun
 .ac268.com
 .ac57.com
 .acabridge.net
@@ -10393,6 +10394,7 @@
 .acfechina.org
 .acftu.org
 .acfun.com
+.acfun.net
 .acfun.tv
 .acfunchina.com
 .acfunchina.net
@@ -22109,6 +22111,8 @@
 .cheshipin.com
 .cheshirex.com
 .cheshizh.com
+.chesicc.com
+.chesicc.net
 .chesir.com
 .chesir.net
 .chestercharles.com
@@ -39822,6 +39826,8 @@
 .gfan.com
 .gfanstore.com
 .gfbk.net
+.gfbzb.com
+.gfbzb.net
 .gfcdn.xyz
 .gfcity.com
 .gfcname.com
@@ -51397,6 +51403,7 @@
 .huaweicloud-dns.net
 .huaweicloud-dns.org
 .huaweicloud-idme.com
+.huaweicloud-koophone.com
 .huaweicloud-smn.com
 .huaweicloud-smn.net
 .huaweicloud.com
@@ -71749,6 +71756,7 @@
 .modb.cc
 .modb.pro
 .modelarts-infer.com
+.modelarts-maas.com
 .modelevel.com
 .modelltd.com
 .modelones.com
@@ -80468,6 +80476,7 @@
 .qgyqshz.com
 .qgysj.org
 .qgyyzs.net
+.qgzb.net
 .qgzxx.com
 .qgzzz.com
 .qh-cdn.com
@@ -115856,6 +115865,7 @@
 .zbao.com
 .zbao56.com
 .zbbar.net
+.zbbm.net
 .zbbus.com
 .zbc.pub
 .zbc.wiki
@@ -120999,6 +121009,7 @@ api-edge.apps.apple.com
 api-p-ap-c.smoot.apple.com
 api-p-ap-d.smoot.apple.com
 api-p-ap-e.smoot.apple.com
+app-analytics-services.com
 app-measurement-cn.com
 app-measurement.com
 app-site-association.cdn-apple.com
@@ -121006,7 +121017,6 @@ app.xygdcm.com
 appldnld.apple.com
 appldnld.g.aaplimg.com
 appleid.cdn-apple.com
-applemdm.corp.google.com
 apps.mzstatic.com
 apps5.oingo.com
 apptrailers.itunes.apple.com
@@ -121027,7 +121037,6 @@ bg4.v4.a.dl.ws.microsoft.com
 bj1.api.bing.com
 blzddist1-a.akamaihd.net
 bookkeeper.itunes.apple.com
-borgmon.adz.google.com
 build.microsoft.com
 c.admob.com
 c.android.clients.google.com
@@ -121118,7 +121127,6 @@ distribution.qcpp1.net
 distribution.qpdp1.net
 dl.google.com
 dl.l.google.com
-dns.corp.google.com
 dns.weixin.qq.com
 dns.weixin.qq.com.cn
 docs.microsoft.com
@@ -121150,9 +121158,7 @@ fm901.cityfm.tw
 fm929.cityfm.tw
 fm971.cityfm.tw
 fm983.cityfm.tw
-fontfiles.googleadapis.com
 fontfiles.googleapis.com
-fonts.googleadapis.com
 fonts.googleapis.com
 fonts.gstatic.com
 fs.microsoft.com
@@ -121160,10 +121166,8 @@ g0.gstatic.com
 g1.gstatic.com
 g2.gstatic.com
 g3.gstatic.com
-g3doc.corp.google.com
 gayotv.net
 geetest.datasink.sensorsdata.cn
-gmskiosk-ssl.corp.google.com
 go.corp.google.com
 gog-cdn-fastly.gog.com
 gog-cdn.akamaized.net
@@ -121181,7 +121185,6 @@ googleapps-cn.com
 googleflights-cn.net
 googleoptimize-cn.com
 googleoptimize.com
-googleplex.com
 googlesyndication-cn.com
 googlesyndication.com
 googletagmanager-cn.com
@@ -121191,9 +121194,6 @@ googletagservices.com
 googletraveladservices-cn.com
 googletraveladservices.com
 googlevads-cn.com
-gorom.corp.google.com
-goto.corp.google.com
-goto.google.com
 gpb-hls.streamguys1.com
 gs-loc-cn.apple.com
 gs-loc.apple.com
@@ -121433,10 +121433,7 @@ qualysguard.qatp1.net
 qualysguard.qcpp1.net
 qualysguard.qpdp1.net
 r.cert.corp.google.com
-rapture-autopush.corp.google.com
 rapture-prod.corp.google.com
-rapture-test.corp.google.com
-rapture.corp.google.com
 recaptcha-cn.net
 recaptcha.net
 redirector.bdn.dev
@@ -121450,7 +121447,6 @@ redirector.gvt1.com
 redirector.offline-maps.gvt1.com
 redirector.snap.gvt1.com
 redirector.xn--ngstr-lra8j.com
-regioninfo-pa.googleapis.com
 res-1.cdn.office.net
 res.cdn.office.net
 reserve-prime.apple.com
@@ -121496,13 +121492,11 @@ software.download.prss.microsoft.com
 sohucao.duapp.com
 sp.itunes.apple.com
 ss.bjmu.edu.cn
-ssh-relay.corp.google.com
 ssl-google-analytics.l.google.com
 ssl.gstatic.com
 sslredirect.corp.google.com
 staging-controlbe.floonet.goog
 staging-databe.floonet.goog
-staging-regioninfo-pa.googleapis.com
 staging.databe.floonet.goog
 static-login.gog-statics.com
 static.gc.apple.com
@@ -121543,7 +121537,6 @@ sup.l.google.com
 support-china.apple-support.akadns.net
 support.1ucrs.com
 support.apple.com
-supportcenter.corp.google.com
 surface.downloads.prss.microsoft.com
 swallow-apple-com.v.aaplimg.com
 swallow.apple.com
@@ -121558,7 +121551,6 @@ swscan.apple.com
 sylvan.apple.com
 sync.itunes.apple.com
 tac.googleapis.com
-techstop.corp.google.com
 tesla-cdn.thron.cn
 test.bugs-qa.chromium.org
 test.gbugs-qa.chromium.org
@@ -121572,14 +121564,8 @@ tools.l.google.com
 trtcanlitv-lh.akamaihd.net
 tv.cnbeijing.xyz
 tv.nknews.org
-uberproxy-debug.corp.google.com
 uberproxy-debug4.corp.google.com
-uberproxy-pen-redirect.corp.google.com
-uberproxy-with-cn.l.google.com
-uberproxy-with-cn4.l.google.com
-uberproxy-with-cn6.l.google.com
 uberproxy.corp.google.com
-uberproxy4.corp.google.com
 uberproxy6.corp.google.com
 uni6rtmp.tulix.tv
 update.crashlytics.com
@@ -121592,7 +121578,6 @@ upp.itunes.apple.com
 v1.one-tv.com
 valid.apple.com
 valid.origin-apple.com.akadns.net
-vext.corp.google.com
 vip888.kuyun99.com
 voa-lh.akamaihd.net
 vod.qhdcm.com
@@ -121628,7 +121613,6 @@ www.cbsnews.com
 www.destinationurl.com
 www.entrust.cn
 www.filmon.com
-www.googleadapis.com
 www.gstatic.com
 www.libvideo.com
 www.microsoft.com
