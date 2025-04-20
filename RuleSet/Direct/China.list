@@ -1,4 +1,4 @@
-# Update time: 2025-04-20 08:58:00
+# Update time: 2025-04-21 05:09:29
 # Merged from:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/Loyalsoldier/surge-rules
@@ -120986,7 +120986,6 @@ adcdownload.apple.com
 adcdownload.apple.com.akadns.net
 admob-cn.com
 adservice.google.com
-ai.ytimg.com
 ai.zhaomi.cn
 aka-amd-njpwworld-hls-enlive.akamaized.net
 alibaba.cdn.steampipe.steamcontent.com
@@ -121122,9 +121121,6 @@ devblogs.microsoft.com
 developer.microsoft.com
 dg-meta.video.google.com
 discussionschinese.apple.com
-distribution.qatp1.net
-distribution.qcpp1.net
-distribution.qpdp1.net
 dl.google.com
 dl.l.google.com
 dns.weixin.qq.com
@@ -121137,8 +121133,6 @@ download.jetbrains.com
 download.microsoft.com
 download.mlcc.google.com
 download.qatp1.net
-download.qcpp1.net
-download.qpdp1.net
 download.tensorflow.google.com
 download.visualstudio.microsoft.com
 downloaddispatch.itunes.apple.com
@@ -121333,8 +121327,6 @@ mgugaklive.nowcdn.co.kr
 misc-assets.itunes.apple.com
 ml.cdn-apple.com
 mobile.ccdntech.com
-monitoring.qatp1.net
-monitoring.qcpp1.net
 monitoring.qpdp1.net
 moocs.unipus.cn
 movie.mcas.jp
@@ -121401,7 +121393,6 @@ pd-nk.itunes.apple.com
 pd.itunes.apple.com
 performanceparameters.googleapis.com
 pki-goog.l.google.com
-play.1ucrs.com
 play.itunes.apple.com
 play.jinnantv.top
 play.music.apple.com
@@ -121417,20 +121408,12 @@ productcard.gog-statics.com
 proxyconfig.corp.google.com
 publicassets.cdn-apple.com
 qagpublic.qatp1.net
-qagpublic.qcpp1.net
-qagpublic.qpdp1.net
-qgadmin.qatp1.net
 qgadmin.qcpp1.net
-qgadmin.qpdp1.net
 qh.dlservice.microsoft.com
 qiao-cn.com
 qpx.googleflights.net
 qqlivepull.seedata.top
 qualysapi.qatp1.net
-qualysapi.qcpp1.net
-qualysapi.qpdp1.net
-qualysguard.qatp1.net
-qualysguard.qcpp1.net
 qualysguard.qpdp1.net
 r.cert.corp.google.com
 rapture-prod.corp.google.com
@@ -121464,9 +121447,7 @@ s4.mzstatic.com
 s5.mzstatic.com
 safebrowsing-cache.google.com
 safebrowsing.googleapis.com
-scanservice1.qatp1.net
 scanservice1.qcpp1.net
-scanservice1.qpdp1.net
 sdn-global-live-streaming-packager-cache-3qsdn.akamaized.net
 sdx.microsoft.com
 se-edge.itunes.apple.com
@@ -121478,7 +121459,6 @@ seed-swallow.siri.apple.com
 seed.siri.apple.com
 sequoia.apple.com
 service.urchin.com
-settings.xn--9trs65b.com
 sf-api-token-service.itunes.apple.com
 sh-pod2-smp-device.apple.com
 shazam-insights.cdn-apple.com
@@ -121535,7 +121515,6 @@ sup-ssh-relay2.corp.google.com
 sup.corp.google.com
 sup.l.google.com
 support-china.apple-support.akadns.net
-support.1ucrs.com
 support.apple.com
 surface.downloads.prss.microsoft.com
 swallow-apple-com.v.aaplimg.com
@@ -121552,7 +121531,6 @@ sylvan.apple.com
 sync.itunes.apple.com
 tac.googleapis.com
 tesla-cdn.thron.cn
-test.bugs-qa.chromium.org
 test.gbugs-qa.chromium.org
 tf-feedback.itunes.apple.com
 time.amazonaws.cn
@@ -121625,7 +121603,6 @@ www.yxssp.com
 www.ztedevices.com
 www4-static.gog-statics.com
 xb.dlservice.microsoft.com
-xn--9kr7l.com
 xn--flw351e.com
 xp.apple.com
 xz.pphimalayanrt.com
