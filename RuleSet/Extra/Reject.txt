@@ -1,4 +1,4 @@
-# Update time: 2025-04-21 23:11:36
+# Update time: 2025-04-22 02:15:07
 # Merged from:
 # - https://https://ruleset.skk.moe/Clash/domainset/reject.txt
 # - https://https://ruleset.skk.moe/Clash/domainset/reject_extra.txt
@@ -9895,6 +9895,7 @@
 +.airtightcounty.com
 +.airyeject.com
 +.aiseet.atianqi.com
++.aisiteanalytics.com
 +.aisorussooxacm.net
 +.aistat.net
 +.aistekso.net
@@ -43704,6 +43705,7 @@
 +.fa3b0cdce1.37e1087e51.com
 +.fa77756437.com
 +.fa949fbb94.2daa3302bc.com
++.faamhel.com
 +.faaof.com
 +.faaqgje.icu
 +.faas.2dehands.be
@@ -66305,6 +66307,7 @@
 +.live-metasupport.com
 +.live-msr.com
 +.live-tag.creatopy.net
++.live.126.net
 +.live.4480.org
 +.live.alljobs.co.il
 +.live.blushtales.com
@@ -99889,6 +99892,7 @@
 +.sensitiveclick.com
 +.sensitivenessvalleyparasol.com
 +.sensor.coinsgames.net
++.sensor.grubhub.com
 +.sensor.org.ua
 +.sensor.souldeep.ai
 +.sensorpluck.com
@@ -110317,6 +110321,7 @@
 +.sucmetrics.unicredit.it
 +.sucmetrics.unicreditbanca.it
 +.sucmetrics.unicreditgroup.eu
++.sucnwtb.top
 +.sucocune.com
 +.sucrecoin.org
 +.suctionautomobile.com
@@ -126548,6 +126553,7 @@
 +.vnviettel.com
 +.vnwhzk.togas.com
 +.vnwish.shop
++.vnwu.cn
 +.vnxisingv.xyz
 +.vnzwxk.e-bebek.com
 +.voagbd.24mx.dk
@@ -135494,7 +135500,6 @@ static.vuevideo.net
 staticadm.leju.sina.com.cn
 statics.woozooo.com
 statis.api.3g.youku.com
-statistic.live.126.net
 stats.adityathebe.com
 stats.crdroid.net
 stats.ipinyou.com
