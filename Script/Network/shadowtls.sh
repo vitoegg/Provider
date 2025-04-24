@@ -54,7 +54,7 @@ fi
 #   --tls-domain   : TLS domain for ShadowTLS
 ################################################################################
 # Default encryption method
-DEFAULT_METHOD="2022-blake3-aes-128-gcm"
+DEFAULT_METHOD="aes-128-gcm"
 
 ################################################################################
 # Get the Shadowsocks encryption method
@@ -304,8 +304,8 @@ get_shadowsocks_config() {
     fi
 
     if [[ -z "$sspass" ]]; then
-        # Generate password using openssl for better randomness
-        sspass=$(openssl rand -base64 16)
+        # Generate password using tr -dc for better randomness, same as TLS password generation
+        sspass=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
         log_info "No Shadowsocks password provided. Generated password: $sspass"
     else
         log_info "Using specified Shadowsocks password."
