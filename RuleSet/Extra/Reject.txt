@@ -1,4 +1,4 @@
-# Update time: 2025-04-27 02:13:18
+# Update time: 2025-04-27 05:09:25
 # Merged from:
 # - https://https://ruleset.skk.moe/Clash/domainset/reject.txt
 # - https://https://ruleset.skk.moe/Clash/domainset/reject_extra.txt
@@ -8061,6 +8061,7 @@
 +.adunity.com
 +.aduniv.nesin.com
 +.adup-tech.com
++.adups.cn
 +.adups.com
 +.aduptaihafy.net
 +.aduu.cn
@@ -33079,6 +33080,7 @@
 +.data.inswa.coca-cola.com
 +.data.internal.amexgbt.com
 +.data.internaltest.amexgbt.com
++.data.intl.miui.com
 +.data.investing.questrade.com
 +.data.iverpan.hr
 +.data.iviskin.de
@@ -33733,6 +33735,7 @@
 +.dbj.quebecregion.com
 +.dbl.cadriamarketing.com
 +.dblks.net
++.dblowthrou.com
 +.dbm-metrics-intake-public.datadoghq.com
 +.dbm-metrics-intake.datadoghq.com
 +.dbmyvl.apartmentfinder.com
@@ -49268,6 +49271,7 @@
 +.guppy.omana.me
 +.guptetoowheerta.net
 +.guq9.vente-unique.it
++.guqeeflwaxjec.today
 +.guqoinly.com
 +.guqransoq.com
 +.guro2.com
@@ -49582,6 +49586,7 @@
 +.hacktaikhoan.com
 +.hacktaikhoanfacebook.com
 +.hacpool.com
++.hactifawlgro.com
 +.hacx60.com
 +.hadarone.com
 +.haddock.affilimate.com
@@ -49599,6 +49604,7 @@
 +.hadsokz.com
 +.hadtwobr.info
 +.hadute.xyz
++.haedbink.shop
 +.hafamgvupagz.com
 +.haffnetworkmm.com
 +.hafhwagagswy.com
@@ -51137,6 +51143,7 @@
 +.hntnca.petpetgo.com
 +.hntxyc.schadeautos.nl
 +.hnwttl.re-katsu.jp
++.hnwuamu.top
 +.hnxbnj.rippedupnutrition.com
 +.hnyishidengbao.com
 +.hnytrd.ssfshop.com
@@ -75867,6 +75874,7 @@
 +.njjavt.xyz
 +.njkiho.info
 +.njmhklddv.xyz
++.njmhnurksjktt.buzz
 +.njnhzh.icu
 +.njnlih.realitatea.net
 +.njorya.aosom.de
@@ -80027,7 +80035,6 @@
 +.p.victoria.dev
 +.p.viennaandbailey.co.nz
 +.p.vinit.cloud
-+.p.viowrel.com
 +.p.vtracy.de
 +.p.wktfkj.com
 +.p.wren.co
@@ -80151,6 +80158,7 @@
 +.packmenmaculas.shop
 +.packsofgood.com
 +.paclitor.com
++.pacteaten.com
 +.paddleangle.com
 +.paddlemenu.com
 +.paderrer.com
@@ -88978,7 +88986,6 @@
 +.resolutekey.com
 +.resolutethumb.com
 +.resolver.gslb.mi-idc.com
-+.resolver.mi.xiaomi.com
 +.resolvingserver.com
 +.reson8.com
 +.resonance.pk
@@ -93194,6 +93201,7 @@
 +.sebotr.rizeclinic.com
 +.sebumu28.com
 +.sec-analytics.panasonic.co.uk
++.sec-cdn.static.xiaomi.net
 +.sec-check.mosco.cc
 +.sec-checker.com
 +.sec.gandizon.com
@@ -93205,6 +93213,7 @@
 +.sec.mypage.ntt.com
 +.sec.mypage.ocn.ne.jp
 +.sec.plala.or.jp
++.sec.resource.xiaomi.net
 +.sec.vmware.com
 +.sec.webeyez.com
 +.sec.wolterskluwerfs.com
@@ -108360,6 +108369,7 @@
 +.tilingsfp.top
 +.tillertag-a.akamaihd.net
 +.tillinextricable.com
++.tillstayhereab.org
 +.tilohwozbbam.com
 +.tilpuvhis.com
 +.tilrozafains.net
@@ -118801,6 +118811,7 @@
 +.violet-strip.pro
 +.vionito.com
 +.vioturallis.com
++.viowrel.com
 +.viowyf.khaiafi.com
 +.vioyta.yeppon.it
 +.vip-datings.life
@@ -125352,6 +125363,7 @@
 +.yoscae.lottechilsung.co.kr
 +.yoshatia.com
 +.yosle.info
++.yotedroumy.com
 +.yotrack.cdn.ybn.io
 +.yottacash.com
 +.yottlyscript.com
@@ -127111,7 +127123,6 @@ api-shoulei-ssl.xunlei.com
 api.ad.yipinread.com
 api.adxpand.com
 api.chat.xiaomi.net
-api.collect.data.intl.miui.com
 api.cortana.ai
 api.d.xiaomi.com
 api.e.kuaishou.com
@@ -127363,7 +127374,6 @@ flash.sec.miui.com
 floor.bz.mgtv.com
 fm.p0y.cn
 fms.ipinyou.com
-fota4.adups.cn
 free-aos-cdn-image.amap.com
 front-perf.imoim.net
 frontier-aweme-hl.snssdk.com
@@ -127777,6 +127787,7 @@ render-web.11222.cn
 report.qqweb.qq.com
 report.yumobi.cn
 res.qhupdate.com
+resolver.mi.xiaomi.com
 resolver.msg.xiaomi.net
 rich.kuwo.cn
 river.zhidao.baidu.com
@@ -127838,8 +127849,6 @@ sdkclick.mobile.sina.cn
 sdkconf.avlyun.com
 sdkconfig.video.qq.com
 sdkinit.taobao.com
-sec-cdn.static.xiaomi.net
-sec.resource.xiaomi.net
 secode2.hd.xiaomi.com
 securemetrics.apple.com
 sentry.d.mi.com
