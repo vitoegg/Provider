@@ -31,8 +31,9 @@ server_selection() {
     echo "1. HK Frenzy"
     echo "2. JP Frenzy"
     echo "3. US Frenzy"
-    echo "4. Customized"
-    read -p "Enter your choice (1-4): " server_choice
+    echo "4. JP Relay"
+    echo "5. Customized"
+    read -p "Enter your choice (1-5): " server_choice
     case $server_choice in
         1)
             Rmem=9699328
@@ -47,6 +48,10 @@ server_selection() {
             Wmem=35966156
             ;;
         4)
+            Rmem=6759752
+            Wmem=6759752
+            ;;
+        5)
             read -p "Enter Rmem value: " Rmem
             read -p "Enter Wmem value: " Wmem
             ;;
