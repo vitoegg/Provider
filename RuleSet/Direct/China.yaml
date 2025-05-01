@@ -1,4 +1,4 @@
-# Update time: 2025-04-27 05:09:24
+# Update time: 2025-05-01 09:00:22
 # Merged from:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/Loyalsoldier/clash-rules
@@ -31830,6 +31830,7 @@ payload:
 - '+.djiang.net'
 - '+.djiavip.com'
 - '+.djicdn.com'
+- '+.djiits.com'
 - '+.djiops.com'
 - '+.djiservice.org'
 - '+.djjgj.com'
@@ -73430,6 +73431,7 @@ payload:
 - '+.mored.com'
 - '+.moredian.com'
 - '+.morefood.com'
+- '+.morefreegame.com'
 - '+.morefun-philippines.com'
 - '+.moregy.com'
 - '+.moreheadphones.com'
@@ -108295,6 +108297,7 @@ payload:
 - '+.xiaomeiti.com'
 - '+.xiaomeng1235.com'
 - '+.xiaomi.com'
+- '+.xiaomi.eu'
 - '+.xiaomi.hk'
 - '+.xiaomi.net'
 - '+.xiaomi.org'
