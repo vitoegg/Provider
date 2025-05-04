@@ -3,7 +3,6 @@ payload:
   # https://github.com/v2fly/domain-list-community/blob/master/data/openai
   
   # > ChatGPT
-  - '+.ai.com'
   - '+.openai.com'
   - '+.chatgpt.com'
   # > Sora

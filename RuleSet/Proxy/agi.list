@@ -1,7 +1,6 @@
 # https://testingcf.jsdelivr.net/gh/dler-io/Rules@main/Clash/Provider/AI%20Suite.yaml
 # https://github.com/v2fly/domain-list-community/blob/master/data/openai
 # > ChatGPT
-.ai.com
 .openai.com
 .chatgpt.com
 # > Sora
