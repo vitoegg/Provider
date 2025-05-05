@@ -436,7 +436,7 @@ get_tls_config() {
         "publicassets.cdn-apple.com"
         "s0.awsstatic.com"
         "p11.douyinpic.com"
-        "cmsassets.rgpub.io"
+        "sns-video-hw.xhscdn.com"
     )
     if [[ -z "$domain" ]]; then
         local random_index=$((RANDOM % ${#PRESET_DOMAINS[@]}))
