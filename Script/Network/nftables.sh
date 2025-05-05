@@ -48,6 +48,8 @@ if ! command -v nft &> /dev/null; then
     else
         log_info "nftables installed successfully"
     fi
+else
+    log_info "nftables is already installed"
 fi
 
 # Enable and start nftables service
@@ -95,15 +97,20 @@ EOF
     # Make sure IP forwarding is enabled in the kernel
     if [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "1" ]; then
         echo 1 > /proc/sys/net/ipv4/ip_forward
-        log_info "Enabled IP forwarding in kernel"
         
-        # Make IP forwarding persistent
-        if [ -d /etc/sysctl.d ]; then
-            echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-ip-forward.conf
-            sysctl -p /etc/sysctl.d/99-ip-forward.conf
+        # Check if net.ipv4.ip_forward = 1 already exists in /etc/sysctl.conf
+        if grep -q "net.ipv4.ip_forward = 1" /etc/sysctl.conf; then
+            log_info "IP forwarding is already enabled"
         else
+            # Add configuration and comment to /etc/sysctl.conf
+            echo "" >> /etc/sysctl.conf
+            echo "# Enable IP forwarding for port forwarding" >> /etc/sysctl.conf
             echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
-            sysctl -p
+            
+            # Apply configuration without logging output
+            sysctl -p > /dev/null 2>&1
+            
+            log_info "IP forwarding enabled successfully"
         fi
     fi
     
