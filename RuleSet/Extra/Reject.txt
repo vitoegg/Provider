@@ -1,4 +1,4 @@
-# Update time: 2025-05-05 23:12:08
+# Update time: 2025-05-06 17:12:23
 # Merged from:
 # - https://https://ruleset.skk.moe/Clash/domainset/reject.txt
 # - https://https://ruleset.skk.moe/Clash/domainset/reject_extra.txt
@@ -129514,6 +129514,7 @@ soft.data.weather.360.cn
 soul-ad.soulapp.cn
 soup.v.qq.com
 sousuo.xm.sjzhushou.com
+spider-tracker.xiaohongshu.com
 spl.ztvx8.com
 splash.yy.com
 splashimgbssdl.yun.kugou.com
