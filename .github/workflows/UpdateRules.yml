@@ -162,215 +162,93 @@ jobs:
               # 合并下载的文件
               find "$tmp_dir" -type f -name "download_*" -exec cat {} \; > "$merged_file"
               
-              # 快速清理文件
-              LC_ALL=C grep -v "^#\|^$\|^payload:" "$merged_file" > "$cleaned_file" || true
+              # 1. 清理规则：移除注释、空行、行首尾空格、payload:
+              LC_ALL=C sed -e 's/[[:space:]]*#.*$//' \\
+                           -e 's/^[[:space:]]*//;s/[[:space:]]*$//' \\
+                           -e '/^$/d' \\
+                           -e '/^[[:space:]]*#/d' \\
+                           -e '/^payload:/d' "$merged_file" > "$cleaned_file" || true
               rm -rf "$tmp_dir"  # 清理临时目录
               
-              # 获取数据行数
               local input_count=$(wc -l < "$cleaned_file")
-              echo "→ 输入规则数量: $input_count"
+              echo "→ 清理后输入规则数量: $input_count"
               echo "::endgroup::"
               
               # 仅当有内容时才处理域名
               if [[ -s "$cleaned_file" ]]; then
-                # 处理格式
-                local formatted_file
-                formatted_file=$(mktemp)
+                local sorted_unique_file
+                sorted_unique_file=$(mktemp)
                 
-                echo "::group::排序和去重"
-                echo "→ 对规则进行排序和去重..."
-                # 使用两阶段排序和标记来处理带点前缀域名
-                LC_ALL=C awk '
-                BEGIN {
-                  # 不处理空行和注释
-                  FS = "\n";
-                  OFS = "\n";
-                }
-                {
-                  # 清理空白
-                  gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0);
-                  
-                  # 跳过空行
-                  if (length($0) == 0) next;
-                  
-                  # 检查是否带前导点
-                  if (substr($0, 1, 1) == ".") {
-                    # 带前导点的域名，添加标记前缀DOT:，并移除前导点以便排序
-                    print "DOT:" substr($0, 2);
-                  } else {
-                    # 不带前导点的域名，添加标记前缀STD:
-                    print "STD:" $0;
-                  }
-                }
-                ' "$cleaned_file" | \
-                LC_ALL=C sort | \
-                LC_ALL=C awk '
-                BEGIN {
-                  FS = "\n";
-                  last_norm = "";
-                  last_prefix = "";
-                  last_line = "";
-                }
-                {
-                  # 解析当前行的前缀和规范化域名
-                  prefix = substr($0, 1, 4);
-                  norm = substr($0, 5);
-                  
-                  # 如果当前规范化域名与上一行相同
-                  if (norm == last_norm && last_norm != "") {
-                    # 如果上一行是带点前缀，当前行是不带点
-                    if (last_prefix == "DOT:" && prefix == "STD:") {
-                      # 跳过当前行（不带点版本）
-                      next;
-                    }
-                    # 如果上一行是不带点，当前行是带点前缀
-                    else if (last_prefix == "STD:" && prefix == "DOT:") {
-                      # 删除上一行的输出（因为我们还没有实际输出它）
-                      # 稍后会输出当前行（带点版本）
-                      last_line = "";
-                    }
-                  }
-                  
-                  # 输出上一行（如果有）
-                  if (last_line != "") {
-                    if (last_prefix == "DOT:") {
-                      print "." last_norm;
-                    } else if (last_prefix == "STD:") {
-                      print last_norm;
-                    }
-                  }
-                  
-                  # 记住当前行
-                  last_norm = norm;
-                  last_prefix = prefix;
-                  last_line = $0;
-                }
-                END {
-                  # 输出最后一行
-                  if (last_line != "") {
-                    if (last_prefix == "DOT:") {
-                      print "." last_norm;
-                    } else if (last_prefix == "STD:") {
-                      print last_norm;
-                    }
-                  }
-                }
-                ' > "$formatted_file"
-                
-                local sorted_count=$(wc -l < "$formatted_file")
-                echo "→ 排序后规则数量: $sorted_count"
+                echo "::group::排序和初步去重"
+                echo "→ 对规则进行排序和基础去重..."
+                LC_ALL=C sort -u "$cleaned_file" > "$sorted_unique_file"
+                local sorted_count=$(wc -l < "$sorted_unique_file")
+                echo "→ 初步去重后规则数量: $sorted_count"
                 echo "::endgroup::"
-                
-                echo "::group::处理域名关系"
-                echo "→ 处理域名关系..."
-                # 创建最终输出文件
+
+                echo "::group::处理父子域名去重"
+                echo "→ 根据父子域名关系进一步去重..."
                 local final_file
                 final_file=$(mktemp)
                 
-                # 根据文件类型添加头部
+                LC_ALL=C awk \'
+                # AWK script for final deduplication (parent/child domains)
+                # Input: cleaned and unique-sorted lines from sorted_unique_file
+
+                function normalize_domain(domain) {
+                    if (substr(domain, 1, 1) == ".") {
+                        return substr(domain, 2);
+                    }
+                    return domain;
+                }
+
+                function is_parent_of(p_candidate, c_candidate,    p_is_dot, c_is_dot, p_norm, c_norm) {
+                    p_is_dot = (substr(p_candidate, 1, 1) == ".");
+                    c_is_dot = (substr(c_candidate, 1, 1) == ".");
+                    
+                    p_norm = normalize_domain(p_candidate);
+                    c_norm = normalize_domain(c_candidate);
+
+                    # Rule a: .abc.com is parent of abc.com
+                    if (p_norm == c_norm) {
+                        if (p_is_dot && !c_is_dot) return 1; # .abc.com is parent of abc.com
+                        return 0; 
+                    }
+
+                    # Rule b: abc.com is parent of 1.abc.com (and by extension .abc.com is parent of 1.abc.com / .1.abc.com)
+                    if (length(c_norm) > length(p_norm) && \\
+                        substr(c_norm, length(c_norm) - length(p_norm)) == p_norm && \\
+                        substr(c_norm, length(c_norm) - length(p_norm) - 1, 1) == ".") {
+                        return 1; # p_norm is structural parent of c_norm, so p_candidate is parent of c_candidate
+                    }
+                    return 0;
+                }
+
                 {
-                  if [[ "$output_path" == *.yaml ]]; then
-                    echo "payload:"
-                  fi
-                  
-                  # 处理父子域名关系
-                  LC_ALL=C awk '
-                  function domain_is_subdomain(sub, parent,    sub_parts, parent_parts, i, sub_len, parent_len) {
-                    # 如果子域名比父域名短，肯定不是子域名
-                    if (length(sub) <= length(parent)) return 0;
-                    
-                    # 子域名必须以父域名结尾
-                    if (substr(sub, length(sub) - length(parent) + 1) != parent) return 0;
-                    
-                    # 父域名前面必须是点
-                    if (substr(sub, length(sub) - length(parent), 1) != ".") return 0;
-                    
-                    return 1;
-                  }
-                  
-                  # 预处理：读取所有域名到数组
-                  {
-                    # 去除前导点进行比较
-                    original = $0;
-                    normalized = original;
-                    if (substr(normalized, 1, 1) == ".") {
-                      normalized = substr(normalized, 2);
-                    }
-                    
-                    domains[++count] = original;
-                    norm_domains[count] = normalized;
-                  }
-                  
-                  END {
-                    # 按标准化域名长度进行排序（从短到长）
-                    for (i = 1; i <= count; i++) {
-                      len = length(norm_domains[i]);
-                      idx_by_len[len, ++len_count[len]] = i;
-                    }
-                    
-                    # 按长度对标准化域名进行排序
-                    for (len in len_count) {
-                      lens[++lcount] = len;
-                    }
-                    
-                    # 冒泡排序长度数组
-                    for (i = 1; i < lcount; i++) {
-                      for (j = i + 1; j <= lcount; j++) {
-                        if (lens[i] > lens[j]) {
-                          temp = lens[i];
-                          lens[i] = lens[j];
-                          lens[j] = temp;
-                        }
-                      }
-                    }
-                    
-                    # 处理父子域名关系
-                    # 由短到长处理，确保父域名先被处理
-                    for (li = 1; li <= lcount; li++) {
-                      curr_len = lens[li];
-                      
-                      # 处理当前长度的所有域名
-                      for (i = 1; i <= len_count[curr_len]; i++) {
-                        idx = idx_by_len[curr_len, i];
-                        
-                        # 如果已被标记为删除，跳过
-                        if (idx in to_remove) continue;
-                        
-                        curr_norm = norm_domains[idx];
-                        
-                        # 与所有更长的域名比较
-                        for (lj = li + 1; lj <= lcount; lj++) {
-                          longer_len = lens[lj];
-                          
-                          for (j = 1; j <= len_count[longer_len]; j++) {
-                            longer_idx = idx_by_len[longer_len, j];
-                            
-                            # 如果已被标记为删除，跳过
-                            if (longer_idx in to_remove) continue;
-                            
-                            longer_norm = norm_domains[longer_idx];
-                            
-                            # 检查是否是子域名关系
-                            if (domain_is_subdomain(longer_norm, curr_norm)) {
-                              # 标记子域名为删除
-                              to_remove[longer_idx] = 1;
+                    lines[++n] = $0;
+                }
+
+                END {
+                    for (i = 1; i <= n; i++) {
+                        is_child = 0;
+                        current_line = lines[i];
+                        for (j = 1; j <= n; j++) {
+                            if (i == j) continue;
+                            potential_parent = lines[j];
+                            if (is_parent_of(potential_parent, current_line)) {
+                                is_child = 1;
+                                break;
                             }
-                          }
                         }
-                      }
+                        if (!is_child) {
+                            print current_line;
+                        }
                     }
-                    
-                    # 输出最终结果
-                    for (i = 1; i <= count; i++) {
-                      if (!(i in to_remove)) {
-                        print domains[i];
-                      }
-                    }
-                  }
-                  ' "$formatted_file"
-                } > "$final_file"
+                }
+                \' "$sorted_unique_file" > "$final_file"
                 
-                # 获取处理后结果数量
+                rm -f "$sorted_unique_file" # Clean up sorted_unique_file
+
                 local output_count=$(wc -l < "$final_file")
                 echo "→ 处理后规则数量: $output_count (减少了 $((sorted_count - output_count)) 条冗余规则)" 
                 echo "::endgroup::"
@@ -418,7 +296,7 @@ jobs:
                 echo "::endgroup::"
                 
                 # 清理临时文件
-                rm -f "$formatted_file" "$final_file" "$meta_file"
+                rm -f "$final_file" "$meta_file"
               else
                 echo "→ 警告: $rule_name 没有有效内容"
               fi
