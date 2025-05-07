@@ -179,11 +179,121 @@ jobs:
                 
                 echo "::group::排序和去重"
                 echo "→ 对规则进行排序和去重..."
-                # 并行排序和去重以提高性能 (指定临时目录和缓冲区大小)
-                export LC_ALL=C
-                sed -E 's/[[:space:]]*#.*$//' "$cleaned_file" | \
-                  sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | \
-                  sort -u -S 50% -T /tmp > "$formatted_file"
+                # 使用直接的域名处理方法
+                LANG=C LC_ALL=C awk '
+                BEGIN {
+                  # 不区分大小写
+                  IGNORECASE = 1
+                }
+                
+                # 预处理：收集所有域名
+                {
+                  # 清理空白
+                  gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
+                  
+                  # 跳过空行
+                  if (length($0) == 0) continue
+                  
+                  # 存储域名
+                  domains[NR] = $0
+                  count++
+                }
+                
+                END {
+                  # 如果没有域名，直接退出
+                  if (count == 0) exit
+                  
+                  # 第一遍：标记所有带点前缀域名对应的不带点域名
+                  for (i = 1; i <= NR; i++) {
+                    if (i in domains) {
+                      domain = domains[i]
+                      
+                      # 如果是带点前缀域名
+                      if (substr(domain, 1, 1) == ".") {
+                        # 去除点的版本
+                        plain_domain = substr(domain, 2)
+                        
+                        # 查找并标记对应的不带点域名
+                        for (j = 1; j <= NR; j++) {
+                          if (j in domains && domains[j] == plain_domain) {
+                            # 标记不带点的版本为删除
+                            delete domains[j]
+                            break
+                          }
+                        }
+                      }
+                    }
+                  }
+                  
+                  # 第二遍：处理父域名关系
+                  # 对域名进行排序以便父域名处理
+                  n = 0
+                  for (i = 1; i <= NR; i++) {
+                    if (i in domains) {
+                      sorted_domains[++n] = domains[i]
+                    }
+                  }
+                  
+                  # 将域名按照长度排序（确保先处理较短的域名）
+                  for (i = 1; i < n; i++) {
+                    for (j = i + 1; j <= n; j++) {
+                      # 去除可能的点前缀进行比较
+                      a = sorted_domains[i]
+                      b = sorted_domains[j]
+                      
+                      a_norm = a
+                      b_norm = b
+                      
+                      sub(/^\./, "", a_norm)
+                      sub(/^\./, "", b_norm)
+                      
+                      if (length(a_norm) > length(b_norm)) {
+                        # 交换位置
+                        temp = sorted_domains[i]
+                        sorted_domains[i] = sorted_domains[j]
+                        sorted_domains[j] = temp
+                      }
+                    }
+                  }
+                  
+                  # 标记子域名
+                  for (i = 1; i <= n; i++) {
+                    parent = sorted_domains[i]
+                    if (parent == "") continue
+                    
+                    # 标准化父域名（移除前导点）
+                    parent_norm = parent
+                    sub(/^\./, "", parent_norm)
+                    
+                    for (j = i + 1; j <= n; j++) {
+                      child = sorted_domains[j]
+                      if (child == "") continue
+                      
+                      # 标准化子域名（移除前导点）
+                      child_norm = child
+                      sub(/^\./, "", child_norm)
+                      
+                      # 检查是否为子域名：必须是以父域名结尾，且前面有一个点
+                      parent_len = length(parent_norm)
+                      child_len = length(child_norm)
+                      
+                      if (child_len > parent_len && 
+                          substr(child_norm, child_len - parent_len + 1) == parent_norm &&
+                          substr(child_norm, child_len - parent_len, 1) == ".") {
+                        # 找到子域名，标记为删除
+                        sorted_domains[j] = ""
+                      }
+                    }
+                  }
+                  
+                  # 输出结果
+                  for (i = 1; i <= n; i++) {
+                    if (sorted_domains[i] != "") {
+                      print sorted_domains[i]
+                    }
+                  }
+                }
+                ' "$cleaned_file" > "$formatted_file"
                 
                 local sorted_count=$(wc -l < "$formatted_file")
                 echo "→ 排序后规则数量: $sorted_count"
