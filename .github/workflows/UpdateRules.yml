@@ -124,24 +124,21 @@ jobs:
             # 计时
             local start_time=$SECONDS
             
-            # 2. 合并和清理规则
-            echo "正在合并和清理规则..."
-            
-            # 创建临时文件和目录
-            merged_file=$(mktemp)  # 合并后的文件
-            cleaned_file=$(mktemp) # 清理后的文件
-            tmp_dir=$(mktemp -d)   # 临时下载目录
-            
             # 1. 下载规则文件
             echo "正在下载规则..."
             
+            # 创建临时文件
+            local merged_file=$(mktemp)  # 合并后的文件
+            local cleaned_file=$(mktemp) # 清理后的文件
+            local tmp_dir=$(mktemp -d)   # 临时下载目录
+            
             # 并行下载所有URL
-            download_count=0
-            download_pids=()
+            local download_count=0
+            local download_pids=()
             
             for url in $urls; do
               # 为每个URL创建临时文件
-              tmp_file="${tmp_dir}/download_${download_count}"
+              local tmp_file="${tmp_dir}/download_${download_count}"
               
               # 后台下载并显示结果
               (curl -sL --fail --connect-timeout 10 --max-time 30 "$url" > "$tmp_file" && 
@@ -154,32 +151,15 @@ jobs:
             done
             
             # 等待所有下载完成
-            download_success=0
             for pid in "${download_pids[@]}"; do
-              if wait $pid; then
-                download_success=$((download_success + 1))
-              fi
+              wait $pid
             done
             
-            echo "下载完成: $download_success/$download_count 个文件成功下载"
-            
-            # 如果没有文件成功下载，报错并退出
-            if [ $download_success -eq 0 ]; then
-              echo "错误: 所有文件下载均失败，无法继续处理"
-              echo "请检查网络连接或URL是否有效"
-              return 1
-            fi
+            # 2. 合并和清理规则
+            echo "正在合并和清理规则..."
             
             # 合并所有下载的文件
-            shopt -s nullglob  # 设置shell选项，使通配符在没有匹配时返回空字符串
-            downloads=("${tmp_dir}"/download_*)
-            if [ ${#downloads[@]} -gt 0 ]; then
-              cat "${downloads[@]}" > "$merged_file"
-            else
-              echo "警告: 没有下载到任何文件，创建空的合并文件"
-              touch "$merged_file"
-            fi
-            shopt -u nullglob  # 恢复默认设置
+            cat "${tmp_dir}"/download_* > "$merged_file"
             
             # 清理规则:
             # - 删除注释和空行
@@ -193,66 +173,56 @@ jobs:
                 "$merged_file" > "$cleaned_file"
             
             # 统计清理后的规则数量
-            cleaned_count=$(wc -l < "$cleaned_file")
+            local cleaned_count=$(wc -l < "$cleaned_file")
             echo "清理后的规则数量: $cleaned_count"
             
             # 3. 排序和去重
             if [[ -s "$cleaned_file" ]]; then
-              echo "正在排序和去除重复项..."
+              echo "正在使用高级算法排序和去除重复项..."
               
-              # 创建临时文件
-              final_file=$(mktemp)      # 最终文件
+              # 创建最终文件
+              local final_file=$(mktemp)
               
-              # 记录开始时间
-              dedup_start=$SECONDS
+              # 使用Python脚本进行高级去重和优化
+              # 在GitHub Actions环境中，当前目录是仓库根目录
+              echo "使用智能规则优化脚本处理..."
               
-              echo "开始高效处理规则..."
+              # 确保Python脚本有执行权限
+              script_path="${GITHUB_WORKSPACE}/Provider/Script/Workflow/process_rules.py"
+              chmod +x "$script_path"
               
-              # 为Python脚本添加执行权限
-              chmod +x "$GITHUB_WORKSPACE/Script/Workflow/process_rules.py"
+              # 创建临时文件用于存储Python脚本的输出信息
+              local stats_file=$(mktemp)
               
-              # 使用外部Python脚本处理规则
-              python3 "$GITHUB_WORKSPACE/Script/Workflow/process_rules.py" "$cleaned_file" > "$final_file" 2>/tmp/python_stats
+              # 将Python的标准错误输出重定向到stats_file，标准输出重定向到final_file
+              python3 "$script_path" "$cleaned_file" > "$final_file" 2> "$stats_file"
+              python_exit=$?
               
-              # 检查Python脚本是否成功执行
-              if [ $? -ne 0 ]; then
-                echo "Python处理失败，使用备用方案..."
-                # 备用方案：使用基本排序去重
+              # 检查Python脚本执行状态
+              if [ $python_exit -ne 0 ]; then
+                echo "Python脚本执行失败，回退到基础排序和去重"
+                echo "错误信息: $(cat "$stats_file")"
+                # 如果Python脚本失败，回退到基础排序和去重
                 sort -u "$cleaned_file" > "$final_file"
-                echo "已使用基本排序和去重，跳过高级处理"
               else
-                # 读取Python处理的统计信息
-                if [ -f "/tmp/python_stats" ]; then
-                  processing_time=$(grep "处理时间" /tmp/python_stats | awk '{print $2}')
-                  total_rules=$(grep "总规则数" /tmp/python_stats | awk '{print $2}')
-                  duplicate_rules=$(grep "重复规则" /tmp/python_stats | awk '{print $2}')
-                  wildcard_covered=$(grep "泛域名被覆盖" /tmp/python_stats | awk '{print $2}')
-                  exact_covered=$(grep "精确域名被覆盖" /tmp/python_stats | awk '{print $2}')
-                  kept_rules=$(grep "保留规则" /tmp/python_stats | awk '{print $2}')
-                  
-                  # 显示总体去重耗时和统计信息
-                  dedup_duration=$((SECONDS - dedup_start))
-                  echo "规则处理完成，Python处理耗时: $processing_time 秒，总耗时: $dedup_duration 秒"
-                  echo "去重统计:"
-                  echo "- 原始规则数: $total_rules"
-                  echo "- 去除重复规则: $duplicate_rules"
-                  echo "- 去除被覆盖的泛域名: $wildcard_covered"
-                  echo "- 去除被覆盖的精确域名: $exact_covered"
-                  echo "- 保留规则数: $kept_rules"
-                  echo "- 总计移除: $((total_rules - kept_rules)) 条规则"
-                else
-                  echo "警告: 无法获取处理统计信息"
-                fi
+                # 显示Python脚本的统计信息
+                cat "$stats_file"
+                echo "智能优化完成"
               fi
               
-              # 清理临时文件以释放内存
-              rm -f /tmp/python_stats
+              # 清理临时文件
+              rm -f "$stats_file"
+              
+              # 统计结果
+              local final_count=$(wc -l < "$final_file")
+              local removed_count=$((cleaned_count - final_count))
+              echo "去重后的规则数量: $final_count (减少了 $removed_count 个重复项)"
               
               # 4. 添加元数据并保存
               echo "正在生成最终规则文件..."
               
               # 创建带有元数据的版本
-              meta_file=$(mktemp)
+              local meta_file=$(mktemp)
               
               # 添加元数据
               {
@@ -268,48 +238,30 @@ jobs:
               } > "$meta_file"
               
               # 5. 检查是否有更改
-              changed=0
+              local changed=0
               if [ -f "$output_path" ]; then
                 # 比较旧文件和新文件(忽略更新时间)
-                old_file=$(mktemp)
+                local old_file=$(mktemp)
                 grep -v "^# Update time:" "$output_path" > "$old_file"
                 
                 if ! cmp -s "$old_file" "$meta_file"; then
                   changed=1  # 文件有变化
                   # 计算增加和删除的规则数量
-                  old_lines=$(grep -v "^#" "$old_file" | wc -l)
-                  new_lines=$(grep -v "^#" "$meta_file" | wc -l)
-                  added=$((new_lines > old_lines ? new_lines - old_lines : 0))
-                  removed=$((old_lines > new_lines ? old_lines - new_lines : 0))
+                  local old_lines=$(grep -v "^#" "$old_file" | wc -l)
+                  local new_lines=$(grep -v "^#" "$meta_file" | wc -l)
+                  local added=$((new_lines > old_lines ? new_lines - old_lines : 0))
+                  local removed=$((old_lines > new_lines ? old_lines - new_lines : 0))
                   
                   echo "规则变化统计:"
                   echo "- 原有规则数量: $old_lines"
                   echo "- 新规则数量: $new_lines"
                   echo "- 变化: 新增 $added 条, 移除 $removed 条"
-                  
-                  # 记录变化统计到临时文件，供main函数读取
-                  basename=$(basename "$output_path")
-                  {
-                    echo "规则变化统计:"
-                    echo "- 原有规则数量: $old_lines"
-                    echo "- 新规则数量: $new_lines" 
-                    echo "- 变化: 新增 $added 条, 移除 $removed 条"
-                  } > "/tmp/rule_changes_${basename}.log"
                 fi
                 rm -f "$old_file"
               else
                 changed=1  # 文件不存在,需要创建
-                new_lines=$(grep -v "^#" "$meta_file" | wc -l)
+                local new_lines=$(grep -v "^#" "$meta_file" | wc -l)
                 echo "新建规则文件，包含 $new_lines 条规则"
-                
-                # 记录新建文件的统计到临时文件
-                basename=$(basename "$output_path")
-                {
-                  echo "规则变化统计:"
-                  echo "- 原有规则数量: 0"
-                  echo "- 新规则数量: $new_lines" 
-                  echo "- 变化: 新增 $new_lines 条, 移除 0 条"
-                } > "/tmp/rule_changes_${basename}.log"
               fi
               
               # 如果有更改，写入新文件
@@ -334,7 +286,7 @@ jobs:
             rm -rf "$tmp_dir"
             
             # 显示处理用时
-            duration=$((SECONDS - start_time))
+            local duration=$((SECONDS - start_time))
             echo "处理用时: $duration 秒"
           }
 
@@ -362,7 +314,7 @@ jobs:
             echo "============================"
             
             # 记录开始时间
-            start_time=$SECONDS
+            local start_time=$SECONDS
             
             # 处理每个规则
             for rule_name in "${!rule_configs[@]}"; do
@@ -376,45 +328,39 @@ jobs:
             done
             
             # 计算总耗时
-            duration=$((SECONDS - start_time))
+            local duration=$((SECONDS - start_time))
             echo "所有规则处理完成"
             echo "总用时: $((duration / 60))分$((duration % 60))秒"
             
             # 检测是否有变化
-            has_changes=false
-            change_summary=""
-            total_added=0
-            total_removed=0
+            local has_changes=false
+            local change_summary=""
+            local total_added=0
+            local total_removed=0
             
-            # 检查每个文件是否有实质变化 - 使用直接文件比较而非git diff
+            # 添加文件到Git以检测变化
+            git add "${rule_files[@]}" 2>/dev/null || true
+            
+            # 检查每个文件是否有实质变化
             for file in "${rule_files[@]}"; do
-              if [ -f "$file" ]; then
-                # 检查文件是否在处理过程中被修改（比较修改时间）
-                file_mod_time=$(stat -c %Y "$file" 2>/dev/null || stat -f %m "$file" 2>/dev/null)
-                current_time=$SECONDS
+              if [ -f "$file" ] && git diff --cached --no-color "$file" | 
+                 grep -v '^[+-]# Update time:' | grep -q '^[+-]'; then
+                has_changes=true
+                local basename=$(basename "$file")
                 
-                # 如果文件是最近更新的（30秒内）
-                if (( current_time - file_mod_time < 30 )); then
-                  # 提取文件名并读取变化统计信息日志（从临时文件或变量）
-                  basename=$(basename "$file")
-                  # 从日志或输出中获取变化统计
-                  added_lines=$(grep -A3 "规则变化统计:" /tmp/rule_changes_${basename}.log 2>/dev/null | grep "新增" | grep -o "[0-9]*" | head -1 || echo "0")
-                  removed_lines=$(grep -A3 "规则变化统计:" /tmp/rule_changes_${basename}.log 2>/dev/null | grep "移除" | grep -o "[0-9]*" | head -1 || echo "0")
-                  
-                  # 如果有任何变化
-                  if [ "$added_lines" != "0" ] || [ "$removed_lines" != "0" ]; then
-                    has_changes=true
-                    echo "文件有变化: $file"
-                    echo "- 详细统计: 新增 $added_lines 条规则, 移除 $removed_lines 条规则"
-                    
-                    # 添加到变化摘要
-                    change_summary="${change_summary}[$basename] +$added_lines/-$removed_lines "
-                    
-                    # 累计总变化量
-                    total_added=$((total_added + added_lines))
-                    total_removed=$((total_removed + removed_lines))
-                  fi
-                fi
+                # 计算具体变化的行数
+                local added_lines=$(git diff --cached --no-color "$file" | grep -v '^[+-]# ' | grep -c '^+')
+                local removed_lines=$(git diff --cached --no-color "$file" | grep -v '^[+-]# ' | grep -c '^-')
+                
+                echo "文件有变化: $file"
+                echo "- 详细统计: 新增 $added_lines 条规则, 移除 $removed_lines 条规则"
+                
+                # 添加到变化摘要
+                change_summary="${change_summary}[$basename] +$added_lines/-$removed_lines "
+                
+                # 累计总变化量
+                total_added=$((total_added + added_lines))
+                total_removed=$((total_removed + removed_lines))
               fi
             done
             
@@ -432,6 +378,8 @@ jobs:
             else
               echo "has_changes=false" >> "$GITHUB_OUTPUT"
               echo "规则无变化，无需提交"
+              # 还原已暂存的文件
+              git restore --staged "${rule_files[@]}" 2>/dev/null || true
             fi
             
             echo "============================"
