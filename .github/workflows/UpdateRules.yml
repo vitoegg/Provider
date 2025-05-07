@@ -109,7 +109,7 @@ jobs:
             rm "${temp_files[@]}" "$merged_file" "$temp_new_content" "$temp_old_content"
           done
 
-      - name: Check for changes
+      - name: Check for Changes
         id: check_changes
         run: |
           # 对每个文件进行实质性变更检查
@@ -135,7 +135,7 @@ jobs:
             git restore --staged "${files[@]}"
           fi
 
-      - name: Commit and push changes
+      - name: Commit and Push Changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           git config --local user.email "action@github.com"
@@ -143,13 +143,12 @@ jobs:
           git commit -m "Auto update rules by action bot"
           git push
         env:
-          GITHUB_TOKEN: ${{ secrets.GIT_USER_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
 
-      - name: Delete workflows runs
-        uses: ophub/delete-releases-workflows@main
+      - name: Delete Workflow Runs
+        uses: Mattraks/delete-workflow-runs@v2
         with:
-          delete_releases: false
-          releases_keep_latest: 0
-          delete_workflows: true
-          workflows_keep_day: 0
-          gh_token: ${{ secrets.GIT_USER_TOKEN }}
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 0
