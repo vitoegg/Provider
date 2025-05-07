@@ -60,7 +60,7 @@ jobs:
           echo "脚本功能: 下载规则、清理规则、合并规则、统计变化"
           echo "脚本结构: 3个主要函数 - 配置读取、规则处理、主程序"
           
-          cat > process_rules.sh << 'EOF'
+          cat > process_rules.sh << EOF
           #!/bin/bash
           set -eo pipefail
 
@@ -236,107 +236,107 @@ jobs:
                 echo "处理 $wildcard_norm_count 个泛域名..."
                 
                 # 2. 泛域名去重 - 使用C语言级别的高效算法
-                cat > "${tmp_process_dir}/process.c" << 'EOF'
-                #include <stdio.h>
-                #include <stdlib.h>
-                #include <string.h>
-                
-                #define MAX_DOMAIN_LEN 256
-                
-                // 泛域名结构
-                typedef struct {
-                    char domain[MAX_DOMAIN_LEN];
-                    int keep;  // 1表示保留，0表示删除
-                } WildcardDomain;
-                
-                // 检查domain_b是否是domain_a的子域名
-                int is_subdomain(const char *domain_a, const char *domain_b) {
-                    int len_a = strlen(domain_a);
-                    int len_b = strlen(domain_b);
-                    
-                    // 完全相同
-                    if (strcmp(domain_a, domain_b) == 0) return 1;
-                    
-                    // b更长，检查b是否以.a结尾
-                    if (len_b > len_a) {
-                        // 检查b是否以.a结尾
-                        if (domain_b[len_b - len_a - 1] == '.' && 
-                            strcmp(domain_b + (len_b - len_a), domain_a) == 0) {
-                            return 1;
-                        }
-                    }
-                    
-                    return 0;
-                }
-                
-                int main() {
-                    FILE *in = fopen("wildcards_sorted.txt", "r");
-                    FILE *out = fopen("wildcards_filtered.txt", "w");
-                    
-                    if (!in || !out) {
-                        fprintf(stderr, "文件打开失败\n");
-                        return 1;
-                    }
-                    
-                    char line[MAX_DOMAIN_LEN];
-                    char type[2];
-                    char domain[MAX_DOMAIN_LEN];
-                    
-                    // 第一阶段：读取所有泛域名并标记
-                    WildcardDomain *wildcards = NULL;
-                    int wildcard_count = 0;
-                    int capacity = 1024;
-                    
-                    wildcards = (WildcardDomain*)malloc(capacity * sizeof(WildcardDomain));
-                    
-                    // 读取所有泛域名
-                    while (fgets(line, MAX_DOMAIN_LEN, in)) {
-                        if (sscanf(line, "%1s %255s", type, domain) != 2) continue;
-                        
-                        if (wildcard_count >= capacity) {
-                            capacity *= 2;
-                            wildcards = (WildcardDomain*)realloc(wildcards, capacity * sizeof(WildcardDomain));
-                        }
-                        
-                        strncpy(wildcards[wildcard_count].domain, domain, MAX_DOMAIN_LEN - 1);
-                        wildcards[wildcard_count].keep = 1;
-                        wildcard_count++;
-                    }
-                    
-                    // 泛域名去重
-                    int removed = 0;
-                    
-                    // 由于已按长度排序，短域名在前，只需检查每个域名是否被前面的域名覆盖
-                    for (int i = 1; i < wildcard_count; i++) {
-                        if (!wildcards[i].keep) continue;
-                        
-                        for (int j = 0; j < i; j++) {
-                            if (!wildcards[j].keep) continue;
-                            
-                            if (is_subdomain(wildcards[j].domain, wildcards[i].domain)) {
-                                wildcards[i].keep = 0;
-                                removed++;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    // 输出结果
-                    for (int i = 0; i < wildcard_count; i++) {
-                        if (wildcards[i].keep) {
-                            fprintf(out, "W %s\n", wildcards[i].domain);
-                        }
-                    }
-                    
-                    fprintf(stderr, "- 泛域名去重: 删除了 %d 个冗余泛域名\n", removed);
-                    
-                    fclose(in);
-                    fclose(out);
-                    free(wildcards);
-                    
-                    return 0;
-                }
-                EOF
+                # 使用printf方式生成C代码文件，避免heredoc问题
+                printf '%s\n' \
+                '#include <stdio.h>' \
+                '#include <stdlib.h>' \
+                '#include <string.h>' \
+                '' \
+                '#define MAX_DOMAIN_LEN 256' \
+                '' \
+                '// 泛域名结构' \
+                'typedef struct {' \
+                '    char domain[MAX_DOMAIN_LEN];' \
+                '    int keep;  // 1表示保留，0表示删除' \
+                '} WildcardDomain;' \
+                '' \
+                '// 检查domain_b是否是domain_a的子域名' \
+                'int is_subdomain(const char *domain_a, const char *domain_b) {' \
+                '    int len_a = strlen(domain_a);' \
+                '    int len_b = strlen(domain_b);' \
+                '    ' \
+                '    // 完全相同' \
+                '    if (strcmp(domain_a, domain_b) == 0) return 1;' \
+                '    ' \
+                '    // b更长，检查b是否以.a结尾' \
+                '    if (len_b > len_a) {' \
+                '        // 检查b是否以.a结尾' \
+                '        if (domain_b[len_b - len_a - 1] == '\''.'\'' && ' \
+                '            strcmp(domain_b + (len_b - len_a), domain_a) == 0) {' \
+                '            return 1;' \
+                '        }' \
+                '    }' \
+                '    ' \
+                '    return 0;' \
+                '}' \
+                '' \
+                'int main() {' \
+                '    FILE *in = fopen("wildcards_sorted.txt", "r");' \
+                '    FILE *out = fopen("wildcards_filtered.txt", "w");' \
+                '    ' \
+                '    if (!in || !out) {' \
+                '        fprintf(stderr, "文件打开失败\\n");' \
+                '        return 1;' \
+                '    }' \
+                '    ' \
+                '    char line[MAX_DOMAIN_LEN];' \
+                '    char type[2];' \
+                '    char domain[MAX_DOMAIN_LEN];' \
+                '    ' \
+                '    // 第一阶段：读取所有泛域名并标记' \
+                '    WildcardDomain *wildcards = NULL;' \
+                '    int wildcard_count = 0;' \
+                '    int capacity = 1024;' \
+                '    ' \
+                '    wildcards = (WildcardDomain*)malloc(capacity * sizeof(WildcardDomain));' \
+                '    ' \
+                '    // 读取所有泛域名' \
+                '    while (fgets(line, MAX_DOMAIN_LEN, in)) {' \
+                '        if (sscanf(line, "%1s %255s", type, domain) != 2) continue;' \
+                '        ' \
+                '        if (wildcard_count >= capacity) {' \
+                '            capacity *= 2;' \
+                '            wildcards = (WildcardDomain*)realloc(wildcards, capacity * sizeof(WildcardDomain));' \
+                '        }' \
+                '        ' \
+                '        strncpy(wildcards[wildcard_count].domain, domain, MAX_DOMAIN_LEN - 1);' \
+                '        wildcards[wildcard_count].keep = 1;' \
+                '        wildcard_count++;' \
+                '    }' \
+                '    ' \
+                '    // 泛域名去重' \
+                '    int removed = 0;' \
+                '    ' \
+                '    // 由于已按长度排序，短域名在前，只需检查每个域名是否被前面的域名覆盖' \
+                '    for (int i = 1; i < wildcard_count; i++) {' \
+                '        if (!wildcards[i].keep) continue;' \
+                '        ' \
+                '        for (int j = 0; j < i; j++) {' \
+                '            if (!wildcards[j].keep) continue;' \
+                '            ' \
+                '            if (is_subdomain(wildcards[j].domain, wildcards[i].domain)) {' \
+                '                wildcards[i].keep = 0;' \
+                '                removed++;' \
+                '                break;' \
+                '            }' \
+                '        }' \
+                '    }' \
+                '    ' \
+                '    // 输出结果' \
+                '    for (int i = 0; i < wildcard_count; i++) {' \
+                '        if (wildcards[i].keep) {' \
+                '            fprintf(out, "W %s\\n", wildcards[i].domain);' \
+                '        }' \
+                '    }' \
+                '    ' \
+                '    fprintf(stderr, "- 泛域名去重: 删除了 %d 个冗余泛域名\\n", removed);' \
+                '    ' \
+                '    fclose(in);' \
+                '    fclose(out);' \
+                '    free(wildcards);' \
+                '    ' \
+                '    return 0;' \
+                '}' > "${tmp_process_dir}/process.c"
                 
                 # 编译并运行C程序
                 echo "编译并运行高性能处理程序..."
@@ -347,144 +347,144 @@ jobs:
                 echo "- 泛域名去重后剩余: $wildcard_filtered_count 个泛域名"
                 
                 # 3. 精确域名过滤 - 使用更高效率的C程序
-                cat > "${tmp_process_dir}/filter_exact.c" << 'EOF'
-                #include <stdio.h>
-                #include <stdlib.h>
-                #include <string.h>
-                
-                #define MAX_DOMAIN_LEN 256
-                #define HASH_SIZE 1000003
-                
-                // 简单的哈希表实现
-                typedef struct HashNode {
-                    char key[MAX_DOMAIN_LEN];
-                    struct HashNode *next;
-                } HashNode;
-                
-                HashNode *hash_table[HASH_SIZE] = {NULL};
-                
-                // 简单哈希函数
-                unsigned int hash(const char *str) {
-                    unsigned int h = 0;
-                    while (*str) {
-                        h = h * 31 + (*str++);
-                    }
-                    return h % HASH_SIZE;
-                }
-                
-                // 添加到哈希表
-                void hash_add(const char *key) {
-                    unsigned int h = hash(key);
-                    
-                    HashNode *node = (HashNode*)malloc(sizeof(HashNode));
-                    strncpy(node->key, key, MAX_DOMAIN_LEN - 1);
-                    node->key[MAX_DOMAIN_LEN - 1] = '\0';
-                    node->next = hash_table[h];
-                    hash_table[h] = node;
-                }
-                
-                // 检查是否在哈希表中
-                int hash_contains(const char *key) {
-                    unsigned int h = hash(key);
-                    
-                    HashNode *node = hash_table[h];
-                    while (node) {
-                        if (strcmp(node->key, key) == 0) {
-                            return 1;
-                        }
-                        node = node->next;
-                    }
-                    return 0;
-                }
-                
-                int main() {
-                    FILE *wildcards = fopen("wildcards_filtered.txt", "r");
-                    FILE *normalized = fopen("normalized.txt", "r");
-                    FILE *result = fopen("result.txt", "w");
-                    
-                    if (!wildcards || !normalized || !result) {
-                        fprintf(stderr, "文件打开失败\n");
-                        return 1;
-                    }
-                    
-                    char line[MAX_DOMAIN_LEN];
-                    char type[2];
-                    char domain[MAX_DOMAIN_LEN];
-                    
-                    // 1. 读取所有泛域名并建立哈希表
-                    while (fgets(line, MAX_DOMAIN_LEN, wildcards)) {
-                        if (sscanf(line, "%1s %255s", type, domain) != 2) continue;
-                        
-                        // 添加到哈希表
-                        hash_add(domain);
-                        
-                        // 同时输出泛域名（需要保留）
-                        fprintf(result, ".%s\n", domain);
-                    }
-                    fclose(wildcards);
-                    
-                    // 2. 处理所有域名
-                    int kept = 0;
-                    int filtered = 0;
-                    int total = 0;
-                    
-                    while (fgets(line, MAX_DOMAIN_LEN, normalized)) {
-                        if (sscanf(line, "%1s %255s", type, domain) != 2) continue;
-                        
-                        // 跳过泛域名，已经处理过
-                        if (type[0] == 'W') continue;
-                        
-                        total++;
-                        
-                        // 检查是否被任何泛域名覆盖
-                        int keep = 1;
-                        char temp[MAX_DOMAIN_LEN];
-                        strncpy(temp, domain, MAX_DOMAIN_LEN);
-                        
-                        while (temp[0]) {
-                            if (hash_contains(temp)) {
-                                keep = 0;
-                                filtered++;
-                                break;
-                            }
-                            
-                            // 获取父域名
-                            char *dot = strchr(temp, '.');
-                            if (!dot) break;
-                            
-                            // 移到下一个部分
-                            memmove(temp, dot + 1, strlen(dot));
-                        }
-                        
-                        if (keep) {
-                            fprintf(result, "%s\n", domain);
-                            kept++;
-                        }
-                        
-                        // 打印进度
-                        if (total % 10000 == 0) {
-                            fprintf(stderr, "处理进度: %d (保留: %d, 过滤: %d)\n", total, kept, filtered);
-                        }
-                    }
-                    
-                    fprintf(stderr, "- 精确域名过滤完成: 保留 %d 个, 过滤 %d 个\n", kept, filtered);
-                    
-                    fclose(normalized);
-                    fclose(result);
-                    
-                    // 清理哈希表
-                    for (int i = 0; i < HASH_SIZE; i++) {
-                        HashNode *node = hash_table[i];
-                        while (node) {
-                            HashNode *next = node->next;
-                            free(node);
-                            node = next;
-                        }
-                    }
-                    
-                    return 0;
-                }
-                EOF
+                # 使用printf方式生成C代码文件，避免heredoc问题
+                printf '%s\n' \
+                '#include <stdio.h>' \
+                '#include <stdlib.h>' \
+                '#include <string.h>' \
+                '' \
+                '#define MAX_DOMAIN_LEN 256' \
+                '#define HASH_SIZE 1000003' \
+                '' \
+                '// 简单的哈希表实现' \
+                'typedef struct HashNode {' \
+                '    char key[MAX_DOMAIN_LEN];' \
+                '    struct HashNode *next;' \
+                '} HashNode;' \
+                '' \
+                'HashNode *hash_table[HASH_SIZE] = {NULL};' \
+                '' \
+                '// 简单哈希函数' \
+                'unsigned int hash(const char *str) {' \
+                '    unsigned int h = 0;' \
+                '    while (*str) {' \
+                '        h = h * 31 + (*str++);' \
+                '    }' \
+                '    return h % HASH_SIZE;' \
+                '}' \
+                '' \
+                '// 添加到哈希表' \
+                'void hash_add(const char *key) {' \
+                '    unsigned int h = hash(key);' \
+                '    ' \
+                '    HashNode *node = (HashNode*)malloc(sizeof(HashNode));' \
+                '    strncpy(node->key, key, MAX_DOMAIN_LEN - 1);' \
+                '    node->key[MAX_DOMAIN_LEN - 1] = '\'\\0\'';' \
+                '    node->next = hash_table[h];' \
+                '    hash_table[h] = node;' \
+                '}' \
+                '' \
+                '// 检查是否在哈希表中' \
+                'int hash_contains(const char *key) {' \
+                '    unsigned int h = hash(key);' \
+                '    ' \
+                '    HashNode *node = hash_table[h];' \
+                '    while (node) {' \
+                '        if (strcmp(node->key, key) == 0) {' \
+                '            return 1;' \
+                '        }' \
+                '        node = node->next;' \
+                '    }' \
+                '    return 0;' \
+                '}' \
+                '' \
+                'int main() {' \
+                '    FILE *wildcards = fopen("wildcards_filtered.txt", "r");' \
+                '    FILE *normalized = fopen("normalized.txt", "r");' \
+                '    FILE *result = fopen("result.txt", "w");' \
+                '    ' \
+                '    if (!wildcards || !normalized || !result) {' \
+                '        fprintf(stderr, "文件打开失败\\n");' \
+                '        return 1;' \
+                '    }' \
+                '    ' \
+                '    char line[MAX_DOMAIN_LEN];' \
+                '    char type[2];' \
+                '    char domain[MAX_DOMAIN_LEN];' \
+                '    ' \
+                '    // 1. 读取所有泛域名并建立哈希表' \
+                '    while (fgets(line, MAX_DOMAIN_LEN, wildcards)) {' \
+                '        if (sscanf(line, "%1s %255s", type, domain) != 2) continue;' \
+                '        ' \
+                '        // 添加到哈希表' \
+                '        hash_add(domain);' \
+                '        ' \
+                '        // 同时输出泛域名（需要保留）' \
+                '        fprintf(result, ".%s\\n", domain);' \
+                '    }' \
+                '    fclose(wildcards);' \
+                '    ' \
+                '    // 2. 处理所有域名' \
+                '    int kept = 0;' \
+                '    int filtered = 0;' \
+                '    int total = 0;' \
+                '    ' \
+                '    while (fgets(line, MAX_DOMAIN_LEN, normalized)) {' \
+                '        if (sscanf(line, "%1s %255s", type, domain) != 2) continue;' \
+                '        ' \
+                '        // 跳过泛域名，已经处理过' \
+                '        if (type[0] == '\'W\'') continue;' \
+                '        ' \
+                '        total++;' \
+                '        ' \
+                '        // 检查是否被任何泛域名覆盖' \
+                '        int keep = 1;' \
+                '        char temp[MAX_DOMAIN_LEN];' \
+                '        strncpy(temp, domain, MAX_DOMAIN_LEN);' \
+                '        ' \
+                '        while (temp[0]) {' \
+                '            if (hash_contains(temp)) {' \
+                '                keep = 0;' \
+                '                filtered++;' \
+                '                break;' \
+                '            }' \
+                '            ' \
+                '            // 获取父域名' \
+                '            char *dot = strchr(temp, '\''.\'');' \
+                '            if (!dot) break;' \
+                '            ' \
+                '            // 移到下一个部分' \
+                '            memmove(temp, dot + 1, strlen(dot));' \
+                '        }' \
+                '        ' \
+                '        if (keep) {' \
+                '            fprintf(result, "%s\\n", domain);' \
+                '            kept++;' \
+                '        }' \
+                '        ' \
+                '        // 打印进度' \
+                '        if (total % 10000 == 0) {' \
+                '            fprintf(stderr, "处理进度: %d (保留: %d, 过滤: %d)\\n", total, kept, filtered);' \
+                '        }' \
+                '    }' \
+                '    ' \
+                '    fprintf(stderr, "- 精确域名过滤完成: 保留 %d 个, 过滤: %d 个\\n", kept, filtered);' \
+                '    ' \
+                '    fclose(normalized);' \
+                '    fclose(result);' \
+                '    ' \
+                '    // 清理哈希表' \
+                '    for (int i = 0; i < HASH_SIZE; i++) {' \
+                '        HashNode *node = hash_table[i];' \
+                '        while (node) {' \
+                '            HashNode *next = node->next;' \
+                '            free(node);' \
+                '            node = next;' \
+                '        }' \
+                '    }' \
+                '    ' \
+                '    return 0;' \
+                '}' > "${tmp_process_dir}/filter_exact.c"
                 
                 # 编译并运行过滤程序
                 echo "编译并运行高性能域名过滤程序..."
