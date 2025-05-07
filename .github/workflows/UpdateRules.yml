@@ -188,7 +188,7 @@ jobs:
               echo "使用智能规则优化脚本处理..."
               
               # 确保Python脚本有执行权限
-              script_path="${GITHUB_WORKSPACE}/Provider/Script/Workflow/process_rules.py"
+              script_path="${GITHUB_WORKSPACE}/Script/Workflow/process_rules.py"
               chmod +x "$script_path"
               
               # 创建临时文件用于存储Python脚本的输出信息
