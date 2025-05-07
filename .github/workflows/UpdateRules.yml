@@ -180,16 +180,145 @@ jobs:
             if [[ -s "$cleaned_file" ]]; then
               echo "正在排序和去除重复项..."
               
-              # 创建最终文件
+              # 创建临时文件
+              local domains_file=$(mktemp)
+              local wildcard_file=$(mktemp)
               local final_file=$(mktemp)
               
-              # 排序并去除重复行
-              sort -u "$cleaned_file" > "$final_file"
+              # 先排序(不去重)，确保数据有序
+              sort "$cleaned_file" > "$domains_file"
+              
+              # 分离出泛域名和普通域名
+              echo "正在处理泛域名和普通域名..."
+              grep "^\\." "$domains_file" > "$wildcard_file" || true
+              
+              # 创建泛域名索引，用于高效查找
+              echo "正在创建泛域名索引..."
+              local wildcard_count=$(wc -l < "$wildcard_file")
+              echo "- 发现 $wildcard_count 个泛域名"
+              
+              # 去重处理：删除被泛域名覆盖的精确域名
+              echo "正在根据泛域名规则清理冗余域名..."
+              
+              if [[ $wildcard_count -gt 0 ]]; then
+                # 创建临时文件存储泛域名去重结果
+                local wildcard_deduped=$(mktemp)
+                
+                # 先处理泛域名之间的包含关系（泛域名内部去重）
+                echo "正在处理泛域名之间的包含关系..."
+                awk '
+                BEGIN {
+                  # 初始化计数器
+                  removed = 0;
+                }
+                
+                # 预处理所有泛域名（去掉前导点）
+                {
+                  domains[NR] = substr($0, 2);
+                  original[NR] = $0;
+                  keep[NR] = 1;  # 默认保留所有域名
+                }
+                
+                # 处理完成后，检查所有泛域名对
+                END {
+                  # 对每对泛域名进行比较
+                  for (i = 1; i <= NR; i++) {
+                    if (keep[i] == 0) continue;  # 已标记删除的跳过
+                    
+                    for (j = 1; j <= NR; j++) {
+                      if (i == j || keep[j] == 0) continue;  # 跳过自身和已标记删除的
+                      
+                      # 检查j是否是i的子域名
+                      # 例如，j=sub.example.com，i=example.com
+                      domain_i = domains[i];
+                      domain_j = domains[j];
+                      
+                      # 检查j是否以i结尾，且前面是.或者是整个域名
+                      suffix = "." domain_i;
+                      if (domain_j == domain_i || 
+                          (length(domain_j) > length(domain_i) && 
+                           substr(domain_j, length(domain_j) - length(suffix) + 1) == suffix)) {
+                        # j是i的子域名，可以删除j
+                        keep[j] = 0;
+                        removed++;
+                      }
+                    }
+                  }
+                  
+                  # 输出要保留的泛域名
+                  for (i = 1; i <= NR; i++) {
+                    if (keep[i] == 1) {
+                      print original[i];
+                    }
+                  }
+                  
+                  # 打印统计信息到stderr
+                  printf "- 泛域名去重: 删除了 %d 个冗余泛域名\n", removed > "/dev/stderr";
+                }
+                ' "$wildcard_file" 2>&1 > "$wildcard_deduped"
+                
+                # 获取泛域名去重后的数量
+                local wildcard_deduped_count=$(wc -l < "$wildcard_deduped")
+                echo "- 泛域名去重后剩余: $wildcard_deduped_count 个泛域名"
+                
+                # 处理泛域名和普通域名的关系
+                echo "正在根据泛域名过滤精确域名..."
+                awk '
+                # 第一遍读取所有泛域名
+                NR == FNR {
+                  # 存储泛域名(去掉前导点)
+                  domain = substr($0, 2);
+                  wildcards[domain] = 1;
+                  print;  # 保留所有泛域名
+                  next;
+                }
+                
+                # 第二遍处理所有域名
+                {
+                  # 如果是泛域名，跳过（已在上面处理）
+                  if ($0 ~ /^\./) {
+                    next;
+                  }
+                  
+                  # 检查是否是某个泛域名的子域名或精确匹配
+                  domain = $0;
+                  keep = 1;
+                  
+                  while (domain != "") {
+                    # 检查当前域名是否匹配某个泛域名
+                    if (wildcards[domain] == 1) {
+                      keep = 0;
+                      break;
+                    }
+                    
+                    # 获取父域名
+                    pos = index(domain, ".");
+                    if (pos == 0) break;
+                    domain = substr(domain, pos + 1);
+                  }
+                  
+                  # 如果需要保留，则输出
+                  if (keep == 1) {
+                    print;
+                  }
+                }
+                ' "$wildcard_deduped" "$domains_file" > "$final_file"
+                
+                # 清理临时文件
+                rm -f "$wildcard_deduped"
+              else
+                # 如果没有泛域名，只进行普通去重
+                sort -u "$domains_file" > "$final_file"
+              fi
               
               # 统计结果
+              local cleaned_count=$(wc -l < "$cleaned_file")
               local final_count=$(wc -l < "$final_file")
               local removed_count=$((cleaned_count - final_count))
               echo "去重后的规则数量: $final_count (减少了 $removed_count 个重复项)"
+              
+              # 清理临时文件
+              rm -f "$domains_file" "$wildcard_file"
               
               # 4. 添加元数据并保存
               echo "正在生成最终规则文件..."
