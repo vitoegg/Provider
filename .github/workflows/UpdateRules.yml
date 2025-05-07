@@ -178,28 +178,73 @@ jobs:
               } > "$meta_file"
               
               local changed=0
+              local new_rules_count=$(grep -v "^#" "$meta_file" | wc -l)
+              local old_rules_count=0
+              local added_rules=0
+              local removed_rules=0
+              
+              echo "最新规则文件包含 $new_rules_count 条规则"
+              
               if [ -f "$output_path" ]; then
                 local old_file=$(mktemp)
                 grep -v "^# Update time:" "$output_path" > "$old_file"
                 
+                old_rules_count=$(grep -v "^#" "$old_file" | wc -l)
+                echo "仓库已有规则文件包含 $old_rules_count 条规则"
+                
                 if ! cmp -s "$old_file" "$meta_file"; then
                   changed=1
-                  local old_lines=$(grep -v "^#" "$old_file" | wc -l)
-                  local new_lines=$(grep -v "^#" "$meta_file" | wc -l)
-                  local added=$((new_lines > old_lines ? new_lines - old_lines : 0))
-                  local removed=$((old_lines > new_lines ? old_lines - new_lines : 0))
                   
-                  echo "规则变化统计:"
-                  echo "- 原有规则数量: $old_lines"
-                  echo "- 新规则数量: $new_lines"
-                  echo "- 变化: 新增 $added 条, 移除 $removed 条"
+                  # 创建临时文件存储规则 (不含注释)
+                  local old_rules=$(mktemp)
+                  local new_rules=$(mktemp)
+                  grep -v "^#" "$old_file" > "$old_rules"
+                  grep -v "^#" "$meta_file" > "$new_rules"
+                  
+                  # 计算新增的规则
+                  local added_rules_file=$(mktemp)
+                  comm -23 "$new_rules" "$old_rules" > "$added_rules_file"
+                  added_rules=$(wc -l < "$added_rules_file")
+                  
+                  # 计算删除的规则
+                  local removed_rules_file=$(mktemp)
+                  comm -13 "$new_rules" "$old_rules" > "$removed_rules_file"
+                  removed_rules=$(wc -l < "$removed_rules_file")
+                  
+                  echo "规则变化详情:"
+                  echo "- 新增规则: $added_rules 条"
+                  echo "- 删除规则: $removed_rules 条"
+                  
+                  if [ $added_rules -gt 0 ]; then
+                    echo "新增规则列表:"
+                    cat "$added_rules_file"
+                  fi
+                  
+                  if [ $removed_rules -gt 0 ]; then
+                    echo "删除规则列表:"
+                    cat "$removed_rules_file"
+                  fi
+                  
+                  # 清理临时文件
+                  rm -f "$old_rules" "$new_rules" "$added_rules_file" "$removed_rules_file"
+                else
+                  echo "规则对比: 内容完全相同，无变化"
                 fi
                 rm -f "$old_file"
               else
                 changed=1
-                local new_lines=$(grep -v "^#" "$meta_file" | wc -l)
-                echo "新建规则文件，包含 $new_lines 条规则"
+                added_rules=$new_rules_count
+                echo "新建规则文件，新增 $added_rules 条规则"
               fi
+              
+              # 总结规则状态
+              echo "规则状态摘要:"
+              echo "- 文件: $(basename "$output_path")"
+              echo "- 最新规则数量: $new_rules_count"
+              echo "- 仓库规则数量: $old_rules_count"
+              echo "- 增加规则数量: $added_rules"
+              echo "- 删除规则数量: $removed_rules"
+              echo "- 是否有变更: $([ $changed -eq 1 ] && echo '是' || echo '否')"
               
               if [ $changed -eq 1 ]; then
                 {
@@ -263,30 +308,53 @@ jobs:
             
             git add "${rule_files[@]}" 2>/dev/null || true
             
+            echo "============================"
+            echo "规则变更汇总报告"
+            echo "============================"
+            
             for file in "${rule_files[@]}"; do
               if [ -f "$file" ]; then
                 local diff_file=$(mktemp)
                 git diff --cached --no-color "$file" > "$diff_file"
                 
+                local file_changed=false
+                
                 if grep -v '^[+-]# Update time:' "$diff_file" | grep -q '^[+-]'; then
+                  file_changed=true
                   has_changes=true
                   local basename=$(basename "$file")
                   
                   local added_lines=$(grep -v '^[+-]# ' "$diff_file" | grep -c '^+' || echo 0)
                   local removed_lines=$(grep -v '^[+-]# ' "$diff_file" | grep -c '^-' || echo 0)
                   
-                  echo "文件有变化: $file"
-                  echo "- 详细统计: 新增 $added_lines 条规则, 移除 $removed_lines 条规则"
+                  local new_count=$(grep -v '^#' "$file" | wc -l)
+                  local old_count=$((new_count - added_lines + removed_lines))
+                  
+                  echo "文件: $basename"
+                  echo "- 最新规则数量: $new_count"
+                  echo "- 仓库规则数量: $old_count"
+                  echo "- 增加规则数量: $added_lines"
+                  echo "- 删除规则数量: $removed_lines"
+                  echo "- 是否有变更: 是"
                   
                   change_summary="${change_summary}[$basename] +$added_lines/-$removed_lines "
                   
                   total_added=$((total_added + added_lines))
                   total_removed=$((total_removed + removed_lines))
+                else
+                  local new_count=$(grep -v '^#' "$file" | wc -l)
+                  local basename=$(basename "$file")
+                  
+                  echo "文件: $basename"
+                  echo "- 规则数量: $new_count"
+                  echo "- 是否有变更: 否"
                 fi
                 
                 rm -f "$diff_file"
               fi
             done
+            
+            echo "============================"
             
             if [ "$has_changes" = true ]; then
               change_summary="${change_summary}[总计] +$total_added/-$total_removed"
@@ -297,6 +365,8 @@ jobs:
                 echo "change_summary=${change_summary}" >> $GITHUB_OUTPUT
               fi
             else
+              echo "总结: 所有规则文件均无变化"
+              
               if [ -n "$GITHUB_OUTPUT" ]; then
                 echo "has_changes=false" >> $GITHUB_OUTPUT
               fi
