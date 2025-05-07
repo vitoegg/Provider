@@ -337,7 +337,9 @@ jobs:
                   echo "- 删除规则数量: $removed_lines"
                   echo "- 是否有变更: 是"
                   
-                  change_summary="${change_summary}[$basename] +$added_lines/-$removed_lines "
+                  # 提取规则类型名称 (去掉.list后缀)
+                  local rule_name=$(basename "$file" .list)
+                  change_summary="${change_summary}${rule_name}(+${added_lines}/-${removed_lines}) "
                   
                   total_added=$((total_added + added_lines))
                   total_removed=$((total_removed + removed_lines))
@@ -357,8 +359,9 @@ jobs:
             echo "============================"
             
             if [ "$has_changes" = true ]; then
-              change_summary="${change_summary}[总计] +$total_added/-$total_removed"
-              echo "总变化: 新增 $total_added 条规则, 移除 $total_removed 条规则"
+              # 移除末尾的空格
+              change_summary=$(echo "$change_summary" | sed 's/ $//')
+              echo "新的commit信息: Update rules: $change_summary"
               
               if [ -n "$GITHUB_OUTPUT" ]; then
                 echo "has_changes=true" >> $GITHUB_OUTPUT
@@ -388,7 +391,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git commit -m "Auto update rules: ${{ steps.check_changes.outputs.change_summary }}"
+          git commit -m "Update rules: ${{ steps.check_changes.outputs.change_summary }}"
           git push
         env:
           GITHUB_TOKEN: ${{ github.token }}
