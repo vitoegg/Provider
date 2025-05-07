@@ -124,6 +124,14 @@ jobs:
             # 计时
             local start_time=$SECONDS
             
+            # 2. 合并和清理规则
+            echo "正在合并和清理规则..."
+            
+            # 创建临时文件和目录
+            merged_file=$(mktemp)  # 合并后的文件
+            cleaned_file=$(mktemp) # 清理后的文件
+            tmp_dir=$(mktemp -d)   # 临时下载目录
+            
             # 1. 下载规则文件
             echo "正在下载规则..."
             
@@ -161,14 +169,6 @@ jobs:
               echo "请检查网络连接或URL是否有效"
               return 1
             fi
-            
-            # 2. 合并和清理规则
-            echo "正在合并和清理规则..."
-            
-            # 创建临时文件
-            merged_file=$(mktemp)  # 合并后的文件
-            cleaned_file=$(mktemp) # 清理后的文件
-            tmp_dir=$(mktemp -d)   # 临时下载目录
             
             # 合并所有下载的文件
             shopt -s nullglob  # 设置shell选项，使通配符在没有匹配时返回空字符串
