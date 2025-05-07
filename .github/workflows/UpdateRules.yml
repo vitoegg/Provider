@@ -355,10 +355,14 @@ jobs:
                   # 保存变更信息用于提交 - 不使用括号，使用英文标识
                   rule_type=$(basename $(dirname "$output_path"))
                   rule_file=$(basename "$output_path")
-                  echo "RULE_${rule_name}_TYPE=${rule_type}" >> $GITHUB_ENV
-                  echo "RULE_${rule_name}_FILE=${rule_file}" >> $GITHUB_ENV
-                  echo "RULE_${rule_name}_ADDED=${real_added}" >> $GITHUB_ENV
-                  echo "RULE_${rule_name}_REMOVED=${real_removed}" >> $GITHUB_ENV
+                  
+                  # 使用正确的 GitHub Actions 环境变量格式
+                  {
+                    echo "RULE_${rule_name}_TYPE=$rule_type"
+                    echo "RULE_${rule_name}_FILE=$rule_file"
+                    echo "RULE_${rule_name}_ADDED=$real_added"
+                    echo "RULE_${rule_name}_REMOVED=$real_removed"
+                  } >> $GITHUB_ENV
                   
                   # 清理差异文件
                   rm -f "$diff_file"
@@ -371,10 +375,14 @@ jobs:
                 # 保存新建信息 - 不使用括号，使用英文标识
                 rule_type=$(basename $(dirname "$output_path"))
                 rule_file=$(basename "$output_path")
-                echo "RULE_${rule_name}_TYPE=${rule_type}" >> $GITHUB_ENV
-                echo "RULE_${rule_name}_FILE=${rule_file}" >> $GITHUB_ENV
-                echo "RULE_${rule_name}_ADDED=${new_lines}" >> $GITHUB_ENV
-                echo "RULE_${rule_name}_REMOVED=0" >> $GITHUB_ENV
+                
+                # 使用正确的 GitHub Actions 环境变量格式
+                {
+                  echo "RULE_${rule_name}_TYPE=$rule_type"
+                  echo "RULE_${rule_name}_FILE=$rule_file"
+                  echo "RULE_${rule_name}_ADDED=$new_lines"
+                  echo "RULE_${rule_name}_REMOVED=0"
+                } >> $GITHUB_ENV
               fi
               
               # 如果有更改，写入新文件
@@ -460,34 +468,48 @@ jobs:
             # 添加文件到Git以检测变化
             git add "${rule_files[@]}" 2>/dev/null || true
             
-            # 检查每个文件是否有实质变化
-            for file in "${rule_files[@]}"; do
-              if [ -f "$file" ]; then
-                # 提取文件名作为规则标识
-                local basename=$(basename "$file" .list)
-                local env_added="RULE_${basename}_ADDED"
-                local env_removed="RULE_${basename}_REMOVED"
-                
-                # 检查是否有对应的环境变量
-                if [[ -n "${!env_added}" ]] && [[ -n "${!env_removed}" ]]; then
-                  has_changes=true
-                  local added_lines="${!env_added}"
-                  local removed_lines="${!env_removed}"
+            # 检查是否有变化的文件
+            if git diff --cached --name-only | grep -q "\.list$"; then
+              has_changes=true
+              
+              # 获取变更的文件列表
+              changed_files=$(git diff --cached --name-only | grep "\.list$")
+              
+              echo "检测到以下文件有变化:"
+              for file in $changed_files; do
+                # 获取当前文件的行数变化统计
+                file_stats=$(git diff --cached --numstat "$file" | awk '{print $1" "$2}')
+                if [ -n "$file_stats" ]; then
+                  read added_lines removed_lines <<< "$file_stats"
                   
-                  echo "文件变化: $file"
-                  echo "- 变化详情: 新增 $added_lines, 移除 $removed_lines"
+                  # 提取规则类型和文件名，用于生成提交信息
+                  dir_name=$(dirname "$file")
+                  file_name=$(basename "$file")
+                  rule_type=$(basename "$dir_name")
+                  rule_name=$(basename "$file_name" .list)
+                  
+                  echo "- $file: +$added_lines/-$removed_lines"
+                  
+                  # 保存变更信息用于提交
+                  {
+                    echo "RULE_${rule_name}_TYPE=$rule_type"
+                    echo "RULE_${rule_name}_FILE=$file_name"
+                    echo "RULE_${rule_name}_ADDED=$added_lines"
+                    echo "RULE_${rule_name}_REMOVED=$removed_lines"
+                  } >> $GITHUB_ENV
                   
                   # 累计总变化量
                   total_added=$((total_added + added_lines))
                   total_removed=$((total_removed + removed_lines))
                 fi
-              fi
-            done
-            
-            # 设置总变化量
-            if [ "$has_changes" = true ]; then
-              echo "TOTAL_ADDED=${total_added}" >> $GITHUB_ENV
-              echo "TOTAL_REMOVED=${total_removed}" >> $GITHUB_ENV
+              done
+              
+              # 保存总变化量
+              {
+                echo "TOTAL_ADDED=$total_added"
+                echo "TOTAL_REMOVED=$total_removed"
+              } >> $GITHUB_ENV
+              
               echo "总变化: 新增 $total_added 条规则, 移除 $total_removed 条规则"
               
               # 设置GitHub Actions输出变量 - 有变化
@@ -524,7 +546,8 @@ jobs:
           # 执行脚本
           ./process_rules.sh
           
-          # 通过检查git状态确定是否有变更
+          # 检查git状态确定是否有变更
+          git add RuleSet/**/*.list
           if git diff --cached --name-only | grep -q "\.list$"; then
             echo "has_changes=true" >> $GITHUB_OUTPUT
           else
@@ -539,38 +562,39 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # 检查变更的文件，分别创建提交信息
-          for var in $(env | grep "^RULE_.*_TYPE=" | cut -d= -f1); do
-            # 提取规则名称
-            rule_name=${var%_TYPE}
-            rule_name=${rule_name#RULE_}
+          # 获取所有变更的规则文件
+          changed_files=$(git diff --cached --name-only | grep "\.list$")
+          
+          # 为每个变更的文件创建单独的提交
+          for file in $changed_files; do
+            # 提取文件信息用于提交消息
+            dir_name=$(dirname "$file")
+            file_name=$(basename "$file")
+            rule_type=$(basename "$dir_name")
             
-            # 获取相关变量
-            type_var="RULE_${rule_name}_TYPE"
-            file_var="RULE_${rule_name}_FILE"
-            added_var="RULE_${rule_name}_ADDED"
-            removed_var="RULE_${rule_name}_REMOVED"
-            
-            # 如果所有变量存在
-            if [[ -n "${!type_var}" ]] && [[ -n "${!file_var}" ]] && [[ -n "${!added_var}" ]] && [[ -n "${!removed_var}" ]]; then
-              rule_type="${!type_var}"
-              rule_file="${!file_var}"
-              added="${!added_var}"
-              removed="${!removed_var}"
+            # 获取文件的行数变化
+            file_stats=$(git diff --cached --numstat "$file" | awk '{print $1" "$2}')
+            if [ -n "$file_stats" ]; then
+              read added removed <<< "$file_stats"
               
               # 构建提交信息 - 使用英文，不含括号
-              commit_msg="Update $rule_type $rule_file: added $added removed $removed rules"
+              commit_msg="Update $rule_type $file_name: added $added removed $removed rules"
               
               # 提交特定文件
-              file_path="RuleSet/$rule_type/$rule_file"
-              git commit -m "$commit_msg" "$file_path" || true
+              git commit -m "$commit_msg" "$file" || true
             fi
           done
           
-          # 如果有未提交的文件，用总结信息提交
+          # 如果还有未提交的暂存文件，用总结信息提交
           if git diff --cached --name-only | grep -q "\.list$"; then
-            total_added="${TOTAL_ADDED:-0}"
-            total_removed="${TOTAL_REMOVED:-0}"
+            # 获取总体变化统计
+            total_stats=$(git diff --cached --numstat | grep "\.list$" | awk '{a+=$1; r+=$2} END {print a" "r}')
+            if [ -n "$total_stats" ]; then
+              read total_added total_removed <<< "$total_stats"
+            else
+              total_added=0
+              total_removed=0
+            fi
             
             git commit -m "Update remaining rules: added $total_added removed $total_removed rules" || true
           fi
