@@ -66,88 +66,92 @@ jobs:
           set -eo pipefail
 
           # ==========================================
-          # 规则更新脚本 - 自动分析并优化网络规则集合
+          # 规则更新脚本 - 简化版
+          # 功能：下载、清理、去重并合并网络规则
           # ==========================================
 
           # 解析规则配置
-          # 参数:
-          # $1 - 规则配置文本
-          # $2 - 规则配置关联数组的引用 (输出)
-          # $3 - 规则文件列表数组的引用 (输出)
+          # 输入：规则配置文本
+          # 输出：规则设置和文件列表
           parse_rules_config() {
-            local config="$1"
-            local -n rule_configs_ref="$2"
-            local -n rule_files_ref="$3"
+            local config="$1"           # 配置文本
+            local -n configs_ref="$2"   # 规则配置引用
+            local -n files_ref="$3"     # 文件列表引用
 
-            local rule_name=""
-            local path=""
-            local urls=""
+            local rule_name=""  # 当前规则名称
+            local path=""       # 规则输出路径
+            local urls=""       # 规则源URL列表
 
+            # 逐行读取配置
             while IFS= read -r line; do
               # 跳过空行和注释
               [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
 
+              # 匹配规则名称行
               if [[ "$line" =~ ^[[:space:]]*([^:]+):[[:space:]]*$ ]]; then
                 rule_name="${BASH_REMATCH[1]}"
                 if [[ "$rule_name" != "rules" ]]; then
                   path=""
                   urls=""
                 fi
+              # 匹配路径行
               elif [[ "$line" =~ ^[[:space:]]*path:[[:space:]]*([^[:space:]]+) ]]; then
                 path="${BASH_REMATCH[1]}"
-                rule_files_ref+=("$path")
+                files_ref+=("$path")  # 添加到文件列表
+              # 跳过urls标记行
               elif [[ "$line" =~ ^[[:space:]]*urls:[[:space:]]*$ ]]; then
                 continue
+              # 匹配URL行
               elif [[ "$line" =~ ^[[:space:]]*-[[:space:]]*([^[:space:]]+) ]]; then
-                urls+="${BASH_REMATCH[1]} "
-              elif [[ -n "$rule_name" && -n "$path" && -n "$urls" ]]; then
-                rule_configs_ref["$rule_name"]="$path;$urls"
+                urls+="${BASH_REMATCH[1]} "  # 添加URL到列表
+              # 保存已完成的规则配置
+              elif [[ -n "$rule_name" && -n "$path" && -n "$urls" && "$rule_name" != "rules" ]]; then
+                configs_ref["$rule_name"]="$path;$urls"  # 保存为"路径;URL列表"格式
                 rule_name=""
               fi
             done <<< "$config"
 
-            # 检查最后一个规则
+            # 保存最后一个规则配置
             if [[ -n "$rule_name" && -n "$path" && -n "$urls" && "$rule_name" != "rules" ]]; then
-              rule_configs_ref["$rule_name"]="$path;$urls"
+              configs_ref["$rule_name"]="$path;$urls"
             fi
           }
 
           # 下载并处理规则
-          # 参数:
-          # $1 - 规则名称
-          # $2 - 输出文件路径
-          # $3 - 规则源URL列表（空格分隔）
+          # 参数: 规则名称、输出路径、URL列表
           process_rule() {
-            local rule_name="$1"      # 当前处理的规则集名称
-            local output_path="$2"    # 规则输出路径
-            local urls="$3"           # 空格分隔的URL列表
+            local rule_name="$1"      # 规则名称
+            local output_path="$2"    # 输出文件路径
+            local urls="$3"           # URL列表（空格分隔）
             
-            # 获取输出目录
-            local output_dir
-            output_dir=$(dirname "$output_path")
+            # 创建输出目录
+            local output_dir=$(dirname "$output_path")
+            mkdir -p "$output_dir"
             
-            echo "Processing $rule_name to $output_path..."
-            # 输出处理时间统计
+            echo "处理规则: $rule_name -> $output_path"
+            # 记录处理时间
             TIMEFORMAT='处理用时: %R 秒'
             time (
-              # 创建输出目录（如果不存在）
-              mkdir -p "$output_dir"
+              # === 第1步: 下载规则文件 ===
+              echo "→ 开始下载规则源..."
               
-              # === 设置处理所需的临时文件 ===
-              local merged_file=$(mktemp "/tmp/rule_merged_${rule_name//[^a-zA-Z0-9]/_}.XXXXXX")
-              local cleaned_file=$(mktemp "/tmp/rule_cleaned_${rule_name//[^a-zA-Z0-9]/_}.XXXXXX")
+              # 创建临时文件和目录
+              local merged_file=$(mktemp)  # 合并后的文件
+              local cleaned_file=$(mktemp) # 清理后的文件
+              local tmp_dir=$(mktemp -d)   # 临时下载目录
               
-              # 创建临时下载目录
-              local tmp_dir=$(mktemp -d "/tmp/rule_download_${rule_name//[^a-zA-Z0-9]/_}.XXXXXX")
+              # 并行下载所有规则源
               local download_count=0
               local download_pids=()
               
-              echo "::group::下载规则源文件"
-              echo "→ 并行下载规则文件..."
-              # 并行下载规则
+              echo "::group::下载规则源"
+              # 遍历并下载每个URL
               for url in $urls; do
                 local tmp_file="${tmp_dir}/download_${download_count}"
-                (curl -sL --fail --connect-timeout 10 --max-time 30 "$url" > "$tmp_file" && echo "  √ 下载成功: $url" || echo "  × 下载失败: $url") &
+                # 后台下载并显示结果
+                (curl -sL --fail --connect-timeout 10 --max-time 30 "$url" > "$tmp_file" && 
+                 echo "  ✓ 下载成功: $url" || 
+                 echo "  ✗ 下载失败: $url") &
                 download_pids+=($!)
                 download_count=$((download_count + 1))
               done
@@ -158,188 +162,80 @@ jobs:
               done
               echo "::endgroup::"
               
+              # === 第2步: 合并和清理规则 ===
               echo "::group::合并和清理规则"
-              echo "→ 合并和清理规则文件..."
-              # 合并下载的文件
-              find "$tmp_dir" -type f -name "download_*" -exec cat {} \; > "$merged_file"
+              echo "→ 合并下载的规则文件..."
               
-              # === 规则清理流程 ===
-              # 按顺序执行一系列清理操作，确保规则标准化和干净
-              echo "→ 执行规则清理操作..."
-              LC_ALL=C sed -e 's/[[:space:]]*#.*$//'        `# 1. 移除每行末尾的注释` \
-                         -e 's/^[[:space:]]*//;s/[[:space:]]*$//' `# 2. 移除行首尾空白字符` \
-                         -e '/^$/d'                         `# 3. 删除空行` \
-                         -e '/^[[:space:]]*#/d'             `# 4. 删除纯注释行` \
-                         -e '/^payload:/d'                  `# 5. 删除payload标记行` \
-                         "$merged_file" > "$cleaned_file" || true
+              # 合并所有下载的文件
+              cat "${tmp_dir}"/download_* > "$merged_file"
               
-              # 清理临时下载目录节省空间
-              rm -rf "$tmp_dir"
+              echo "→ 清理规则..."
+              # 执行规则清理:
+              # 1. 删除各种格式的注释
+              # 2. 删除空白行和空格
+              # 3. 确保格式统一
+              sed -e 's/[[:space:]]*[#;\/\/].*$//' \
+                  -e 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+                  -e '/^$/d' \
+                  -e '/^[[:space:]]*[#;\/\/]/d' \
+                  -e '/^payload:/d' \
+                  -e '/^[[:space:]]*\/\*/d;/\*\//d' \
+                  "$merged_file" > "$cleaned_file"
               
-              # 统计清理后的规则数量
+              # 统计清理后的规则数
               local input_count=$(wc -l < "$cleaned_file")
-              echo "→ 清理后输入规则数量: $input_count"
+              echo "→ 清理后规则数: $input_count"
               echo "::endgroup::"
               
-              # 仅当有内容时才处理域名
+              # === 第3步: 排序和去重 ===
+              # 只有当有内容时才继续处理
               if [[ -s "$cleaned_file" ]]; then
-                local sorted_unique_file
-                sorted_unique_file=$(mktemp)
+                echo "::group::排序和去重"
+                echo "→ 对规则排序并去重..."
                 
-                echo "::group::排序和初步去重"
-                echo "→ 对规则进行排序和基础去重..."
-                # 使用LC_ALL=C确保排序一致性，提高性能
-                LC_ALL=C sort -u "$cleaned_file" > "$sorted_unique_file"
-                local sorted_count=$(wc -l < "$sorted_unique_file")
-                echo "→ 初步去重后规则数量: $sorted_count"
-                echo "::endgroup::"
-
-                echo "::group::处理父子域名去重"
-                echo "→ 根据父子域名关系进一步去重..."
-                local final_file
-                final_file=$(mktemp)
+                # 创建临时文件
+                local final_file=$(mktemp)
                 
-                # 使用AWK进行高效的父子域名去重分析
-                LC_ALL=C awk '
-                # === 域名规则去重处理程序 ===
-                # 用途：分析并删除被父域名包含的子域名规则
-                # 策略：两阶段处理 - 1.收集和预处理数据 2.执行高效去重算法
-
-                BEGIN {
-                  # 初始化数据结构，预分配内存以优化性能
-                  split("", domains);      # 存储规范化后的域名
-                  split("", is_dot_prefix); # 记录域名是否有点前缀
-                  # 注意：预分配可减少动态分配的内存开销，提高大数据集处理性能
-                }
-
-                # === 域名规范化函数 ===
-                # 作用：统一处理域名格式，移除前导点
-                # 输入：原始域名
-                # 输出：规范化的域名字符串
-                function normalize_domain(domain) {
-                  # 检测并移除前导点
-                  if (substr(domain, 1, 1) == ".") {
-                    return substr(domain, 2); # 返回无点前缀的域名
-                  }
-                  return domain; # 原样返回无前导点的域名
-                }
-
-                # === 父域名检测函数 ===
-                # 作用：判断一个域名是否是另一个域名的父域名
-                # 输入：两个域名字符串 - 潜在父域名和潜在子域名
-                # 输出：布尔值，1表示是父域名，0表示不是
-                function is_parent_of(p_candidate, c_candidate) {
-                  # 高效获取预处理的域名属性
-                  local p_is_dot = is_dot_prefix[p_candidate]; # 父域名是否有点前缀
-                  local c_is_dot = is_dot_prefix[c_candidate]; # 子域名是否有点前缀
-                  local p_norm = domains[p_candidate];         # 规范化后的父域名
-                  local c_norm = domains[c_candidate];         # 规范化后的子域名
-
-                  # === 规则A：点前缀优先级规则 ===
-                  # 情况：相同域名但一个有点前缀
-                  # 例如：.example.com 是 example.com 的父域名
-                  if (p_norm == c_norm) {
-                    if (p_is_dot && !c_is_dot) return 1; # 前导点版本优先
-                    return 0; # 其他情况非父子关系
-                  }
-
-                  # === 规则B：域名层级规则 ===
-                  # 情况：检查一个域名是否是另一个的顶级域名
-                  # 例如：example.com 是 sub.example.com 的父域名
-                  if (length(c_norm) > length(p_norm) && 
-                      # 检查c_norm是否以p_norm结尾
-                      substr(c_norm, length(c_norm) - length(p_norm) + 1) == p_norm && 
-                      # 确保在p_norm前有一个点（表示子域关系）
-                      substr(c_norm, length(c_norm) - length(p_norm), 1) == ".") {
-                    return 1; # 确认是父域名关系
-                  }
-                  
-                  return 0; # 默认情况：不是父子域名关系
-                }
-
-                # === 第一阶段：数据收集与预处理 ===
-                # 作用：读取每一行规则，进行预处理
-                {
-                  lines[NR] = $0; # 按原样存储每行规则
-                  
-                  # 预计算并存储每个域名的关键属性
-                  is_dot_prefix[$0] = (substr($0, 1, 1) == "."); # 是否有点前缀
-                  domains[$0] = normalize_domain($0);            # 存储规范化域名
-                }
-
-                # === 第二阶段：智能去重算法 ===
-                # 执行高效的父子域名识别和去重
-                END {
-                  # 使用分离的数组存储子域名标记
-                  split("", is_child);
-                  
-                  # 第一步：标记所有子域名
-                  for (i = 1; i <= NR; i++) {
-                    # 性能优化：已知是子域名的跳过后续比较
-                    if (is_child[i]) continue;
-                    
-                    current = lines[i]; # 当前检查的域名
-                    
-                    # 与所有其他域名比较
-                    for (j = 1; j <= NR; j++) {
-                      if (i == j) continue; # 跳过自身比较
-                      
-                      potential_parent = lines[j]; # 潜在父域名
-                      
-                      # 如果发现是子域名，标记并停止比较
-                      if (is_parent_of(potential_parent, current)) {
-                        is_child[i] = 1; # 标记为子域名
-                        break; # 找到一个父域名就足够，无需继续比较
-                      }
-                    }
-                  }
-                  
-                  # 第二步：只输出非子域名（即父域名或独立域名）
-                  for (i = 1; i <= NR; i++) {
-                    if (!is_child[i]) {
-                      print lines[i]; # 输出需要保留的规则
-                    }
-                  }
-                }
-                ' "$sorted_unique_file" > "$final_file"
+                # 执行排序和去重
+                sort -u "$cleaned_file" > "$final_file"
                 
-                # 清理临时文件
-                rm -f "$sorted_unique_file"
-
-                # 输出处理结果统计
-                local output_count=$(wc -l < "$final_file")
-                local removed_count=$((sorted_count - output_count))
-                echo "→ 处理后规则数量: $output_count (减少了 $removed_count 条冗余规则)" 
+                # 统计结果
+                local final_count=$(wc -l < "$final_file")
+                local removed_count=$((input_count - final_count))
+                echo "→ 去重后规则数: $final_count (减少了 $removed_count 条重复规则)"
                 echo "::endgroup::"
                 
+                # === 第4步: 添加元数据并保存 ===
                 echo "::group::生成最终规则文件"
                 # 创建带有元数据的版本
-                local meta_file
-                meta_file=$(mktemp)
+                local meta_file=$(mktemp)
                 
+                # 添加元数据
                 {
-                  echo "# Merged from:"
+                  echo "# 规则来源:"
                   for url in $urls; do
+                    # 转换为GitHub仓库URL显示
                     repo_url=$(echo "$url" | sed -E 's|raw.githubusercontent.com/([^/]+/[^/]+).*|github.com/\1|')
                     echo "# - https://$repo_url"
                   done
                   echo ""
+                  # 添加规则内容
                   cat "$final_file"
                 } > "$meta_file"
                 
-                # 检查是否有更改
+                # === 第5步: 检查是否有更改 ===
                 local changed=0
                 if [ -f "$output_path" ]; then
-                  local old_file
-                  old_file=$(mktemp)
+                  # 比较旧文件和新文件(忽略更新时间)
+                  local old_file=$(mktemp)
                   grep -v "^# Update time:" "$output_path" > "$old_file"
                   
                   if ! cmp -s "$old_file" "$meta_file"; then
-                    changed=1
+                    changed=1  # 文件有变化
                   fi
                   rm -f "$old_file"
                 else
-                  changed=1
+                  changed=1  # 文件不存在,需要创建
                 fi
                 
                 # 如果有更改，写入新文件
@@ -348,106 +244,85 @@ jobs:
                     echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')"
                     cat "$meta_file"
                   } > "$output_path"
-                  echo "→ 检测到规则变更，已更新文件"
+                  echo "→ 规则已更新"
                 else
-                  echo "→ 未检测到规则变更"
+                  echo "→ 规则无变化"
                 fi
                 echo "::endgroup::"
                 
                 # 清理临时文件
                 rm -f "$final_file" "$meta_file"
               else
-                echo "→ 警告: $rule_name 没有有效内容"
+                echo "警告: $rule_name 没有有效内容"
               fi
               
-              # 清理主要临时文件
+              # 删除所有临时文件
               rm -f "$merged_file" "$cleaned_file"
+              rm -rf "$tmp_dir"
             )
           }
 
-          # 主函数 - 协调整个规则更新过程
-          # 参数:
-          # $1 - 完整的规则配置
+          # 主函数 - 控制整个处理流程
           main() {
-            local config="$1"
+            local config="$1"  # 规则配置
             
-            # === 初始化阶段 ===
-            # 声明关联数组存储规则配置，普通数组存储规则文件列表
-            declare -A rule_configs  # 关联数组：规则名称 -> 路径和URL
-            declare -a rule_files    # 普通数组：所有规则文件路径列表
+            # 初始化数据结构
+            declare -A rule_configs  # 关联数组: 规则名称 -> 配置
+            declare -a rule_files    # 数组: 所有规则文件路径
             
-            # 解析输入的YAML配置
             echo "→ 解析规则配置..."
             parse_rules_config "$config" rule_configs rule_files
             
-            echo "==============================="
-            echo "开始更新规则文件 ($(date '+%Y-%m-%d %H:%M:%S'))"
-            echo "==============================="
+            echo "======================================"
+            echo "开始更新规则 ($(date '+%Y-%m-%d %H:%M:%S'))"
+            echo "======================================"
             
-            # 记录总处理开始时间
+            # 记录开始时间
             local start_time=$SECONDS
             
-            # === 规则处理阶段 ===
-            # 依次处理每个规则集
-            echo "→ 共发现 ${#rule_configs[@]} 个规则集需要处理"
-            for rule in "${!rule_configs[@]}"; do
-              # 提取规则的路径和URL列表
-              IFS=';' read -r output_path urls <<< "${rule_configs[$rule]}"
-              echo "==============================="
-              echo "::group::处理规则: $rule"
-              # 调用处理函数处理单个规则
-              process_rule "$rule" "$output_path" "$urls"
-              echo "::endgroup::"
-              echo "==============================="
+            # 处理每个规则
+            echo "→ 发现 ${#rule_configs[@]} 个规则集"
+            for rule_name in "${!rule_configs[@]}"; do
+              # 解析配置字符串: 路径和URL
+              IFS=';' read -r output_path urls <<< "${rule_configs[$rule_name]}"
+              echo "======================================"
+              # 调用处理函数
+              process_rule "$rule_name" "$output_path" "$urls"
+              echo "======================================"
             done
             
-            # === 总结阶段 ===
-            # 计算总耗时并评估性能
+            # 计算总耗时
             local duration=$((SECONDS - start_time))
-            echo "::group::处理总结"
-            echo "所有规则处理完成，总耗时: $((duration / 60))分$((duration % 60))秒"
+            echo "→ 处理完成，总用时: $((duration / 60))分$((duration % 60))秒"
             
-            # 性能评估
-            if [ $duration -gt 180 ]; then
-              echo "⚠️ 警告: 处理时间超过3分钟，建议进一步优化性能"
-            elif [ $duration -lt 30 ]; then
-              echo "✅ 性能良好: 处理时间少于30秒"
-            else
-              echo "✓ 性能正常: 处理时间在目标范围内"
-            fi
-            echo "::endgroup::"
+            # 检测是否有变化
+            local changes=false
             
-            # === 变更检测阶段 ===
-            # 检查是否有规则文件发生变化
-            local changes_detected=false
-            
-            # 将所有规则文件添加到Git暂存区，用于检测变更
+            # 添加文件到Git以检测变化
             git add "${rule_files[@]}" 2>/dev/null || true
             
-            echo "::group::检查文件变更"
+            # 检查每个文件是否有实质变化
             for file in "${rule_files[@]}"; do
-              # 检查文件是否存在且有除更新时间外的实质性变更
-              if [ -f "$file" ] && git diff --cached --no-color "$file" | grep -v '^[+-]# Update time:' | grep -q '^[+-]'; then
-                changes_detected=true
-                echo "检测到变更: $file"
+              if [ -f "$file" ] && git diff --cached --no-color "$file" | 
+                 grep -v '^[+-]# Update time:' | grep -q '^[+-]'; then
+                changes=true
+                echo "发现变化: $file"
               fi
             done
-            echo "::endgroup::"
             
-            # === 输出结果 ===
-            # 设置GitHub Actions输出变量并输出结果
-            if [ "$changes_detected" = true ]; then
+            # 设置输出变量
+            if [ "$changes" = true ]; then
               echo "has_changes=true" >> "$GITHUB_OUTPUT"
-              echo "✨ 检测到规则文件变更，将在后续步骤提交更改"
+              echo "✨ 规则已更新，即将提交更改"
             else
               echo "has_changes=false" >> "$GITHUB_OUTPUT"
-              echo "ℹ️ 未检测到规则文件变更，无需提交"
-              # 恢复已暂存的文件
+              echo "ℹ️ 规则无变化，无需提交"
+              # 还原已暂存的文件
               git restore --staged "${rule_files[@]}" 2>/dev/null || true
             fi
           }
 
-          # 运行主函数
+          # 启动程序
           main "$1"
           EOF
           
@@ -489,4 +364,4 @@ jobs:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
           retain_days: 0
-          keep_minimum_runs: 6  # 保留最近6次运行记录，便于查看历史
+          keep_minimum_runs: 2  # 保留最近6次运行记录，便于查看历史
