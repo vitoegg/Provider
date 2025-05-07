@@ -60,7 +60,7 @@ jobs:
           echo "脚本功能: 下载规则、清理规则、合并规则、统计变化"
           echo "脚本结构: 3个主要函数 - 配置读取、规则处理、主程序"
           
-          cat > process_rules.sh << EOF
+          cat > process_rules.sh << 'EOF'
           #!/bin/bash
           set -eo pipefail
 
@@ -86,12 +86,11 @@ jobs:
               # 获取对应的URL变量名 (格式: RULE_规则名_URLS)
               local url_var="RULE_${rule_name}_URLS"
               
-              # 检查URL变量是否存在 (更兼容的方式)
-              local url_value=$(eval echo \${$url_var:-})
-              if [ -n "$url_value" ]; then
-                # 获取路径和URL值 (避免使用间接引用)
-                local path=$(eval echo \${$var})
-                local urls="$url_value"
+              # 检查URL变量是否存在
+              if [[ -v $url_var ]]; then
+                # 获取路径和URL值
+                local path=${!var}             # 获取路径变量的值
+                local urls=${!url_var}         # 获取URL变量的值
                 
                 # 显示找到的规则信息
                 echo "找到规则: $rule_name"
@@ -182,329 +181,174 @@ jobs:
               echo "正在排序和去除重复项..."
               
               # 创建临时文件
+              local deduped_file=$(mktemp)
               local domains_file=$(mktemp)
               local wildcard_file=$(mktemp)
+              local exact_file=$(mktemp)
               local final_file=$(mktemp)
               
-              # 先排序(不去重)，确保数据有序
-              sort "$cleaned_file" > "$domains_file"
+              # 先进行基础去重，减少数据量
+              echo "进行基础去重..."
+              sort -u "$cleaned_file" > "$deduped_file"
+              local basic_dedup_count=$(wc -l < "$deduped_file")
+              local initial_removed=$((cleaned_count - basic_dedup_count))
+              echo "基础去重: 从 $cleaned_count 减少到 $basic_dedup_count (减少了 $initial_removed 个完全重复项)"
               
-              # 分离出泛域名和普通域名
-              echo "正在处理泛域名和普通域名..."
+              # 对去重后的数据进行分类和排序
+              echo "分离和排序域名..."
+              sort "$deduped_file" > "$domains_file"
+              
+              # 提取泛域名（以.开头的域名）和普通域名
+              echo "分离泛域名和普通域名..."
               grep "^\\." "$domains_file" > "$wildcard_file" || true
+              grep -v "^\\." "$domains_file" > "$exact_file" || true
               
-              # 创建泛域名索引，用于高效查找
-              echo "正在创建泛域名索引..."
+              # 获取泛域名和普通域名的数量
               local wildcard_count=$(wc -l < "$wildcard_file")
-              echo "- 发现 $wildcard_count 个泛域名"
+              local exact_count=$(wc -l < "$exact_file")
+              echo "共发现 $wildcard_count 个泛域名和 $exact_count 个普通域名"
               
-              # 去重处理：删除被泛域名覆盖的精确域名
-              echo "正在根据泛域名规则清理冗余域名..."
-              
-              if [[ $wildcard_count -gt 0 ]]; then
-                # 超高性能泛域名处理方案
-                echo "使用超高性能方案处理大规模规则..."
+              if [[ $wildcard_count -gt 0 && $exact_count -gt 0 ]]; then
+                echo "执行泛域名规则去重..."
                 
-                # 创建临时目录存放中间文件
-                local tmp_process_dir=$(mktemp -d)
-                local normalized_file="${tmp_process_dir}/normalized.txt"
-                local wildcard_file_sorted="${tmp_process_dir}/wildcards_sorted.txt"
-                local result_file="${tmp_process_dir}/result.txt"
+                # 泛域名去重 - 使用两步过滤方法
+                # 1. 处理泛域名之间的冗余（如果有.example.com，则不需要.sub.example.com）
+                echo "处理泛域名之间的冗余关系..."
                 
-                # 1. 预处理 - 将泛域名和普通域名标准化存储
-                echo "预处理域名数据..."
-                # 并行处理，使用管道和多进程
+                local deduped_wildcards=$(mktemp)
+                
+                # 先按域名长度排序（短的在前，这些通常是父域名）
+                awk '{print length($0) "\t" $0}' "$wildcard_file" | sort -n | cut -f2- > "$deduped_wildcards"
+                
+                # 保留不冗余的泛域名
+                local final_wildcards=$(mktemp)
+                if [[ -s "$deduped_wildcards" ]]; then
+                  # 一行行处理，检查每个域名是否是前面某个域名的子域名
+                  awk '
+                  BEGIN {
+                    count = 0;
+                  }
+                  {
+                    current = substr($0, 2);  # 去掉前导点
+                    keep = 1;
+                    
+                    # 检查是否是前面已保留域名的子域名
+                    for (i = 0; i < count; i++) {
+                      parent = domains[i];
+                      if (current == parent) {
+                        # 完全相同，这不应该发生，但为了安全起见
+                        keep = 0;
+                        break;
+                      }
+                      else if (index(current, "." parent) > 0 && 
+                              substr(current, length(current) - length(parent)) == parent) {
+                        # 当前域名是已知父域名的子域名
+                        keep = 0;
+                        break;
+                      }
+                    }
+                    
+                    if (keep) {
+                      print $0;
+                      domains[count++] = current;
+                    }
+                  }
+                  ' "$deduped_wildcards" > "$final_wildcards"
+                else
+                  cp "$deduped_wildcards" "$final_wildcards"
+                fi
+                
+                local wildcards_filtered_count=$(wc -l < "$final_wildcards")
+                local wildcards_removed=$((wildcard_count - wildcards_filtered_count))
+                echo "- 泛域名去重: 从 $wildcard_count 减少到 $wildcards_filtered_count (减少了 $wildcards_removed 个)"
+                
+                # 2. 过滤被泛域名覆盖的精确域名
+                echo "过滤被泛域名覆盖的精确域名..."
+                
+                # 预处理泛域名文件：去掉前导点，方便匹配
+                local wildcards_processed=$(mktemp)
+                sed 's/^\.//' "$final_wildcards" > "$wildcards_processed"
+                
+                # 使用awk过滤精确域名
+                local final_exact=$(mktemp)
+                
+                awk -v wildcard_file="$wildcards_processed" '
+                BEGIN {
+                  # 读取所有泛域名到数组
+                  while ((getline wcard < wildcard_file) > 0) {
+                    wildcards[wcard] = 1;
+                  }
+                  close(wildcard_file);
+                  kept = 0;
+                  filtered = 0;
+                }
+                
                 {
-                  # 提取泛域名，标记类型，去掉前导点
-                  grep "^\\." "$domains_file" | sed 's/^\./W /' > "${tmp_process_dir}/wildcards.txt" &
+                  domain = $0;
+                  keep = 1;
                   
-                  # 提取普通域名，标记类型
-                  grep -v "^\\." "$domains_file" | sed 's/^/E /' > "${tmp_process_dir}/exact.txt" &
+                  # 检查是否与任何泛域名匹配
+                  # 先检查整个域名是否匹配
+                  if (wildcards[domain] == 1) {
+                    keep = 0;
+                    filtered++;
+                  } else {
+                    # 检查父域名是否匹配
+                    split_pos = index(domain, ".");
+                    if (split_pos > 0) {
+                      parent = substr(domain, split_pos + 1);
+                      if (wildcards[parent] == 1) {
+                        keep = 0;
+                        filtered++;
+                      } else {
+                        # 进一步检查上一级父域名
+                        while (split_pos = index(parent, ".")) {
+                          parent = substr(parent, split_pos + 1);
+                          if (wildcards[parent] == 1) {
+                            keep = 0;
+                            filtered++;
+                            break;
+                          }
+                        }
+                      }
+                    }
+                  }
                   
-                  # 等待两个进程完成
-                  wait
+                  if (keep) {
+                    print domain;
+                    kept++;
+                  }
                   
-                  # 合并结果
-                  cat "${tmp_process_dir}/wildcards.txt" "${tmp_process_dir}/exact.txt" > "$normalized_file"
-                  
-                  # 泛域名单独排序 (按长度，用于泛域名间去重)
-                  awk -F' ' '$1=="W" {print length($2) "\t" $0}' "$normalized_file" | 
-                  sort -n | cut -f2- > "$wildcard_file_sorted"
-                } &> /dev/null
+                  # 打印进度（每处理10万行）
+                  total = kept + filtered;
+                  if (total % 100000 == 0) {
+                    printf "处理进度: %d\n", total > "/dev/stderr";
+                  }
+                }
                 
-                # 获取泛域名数量
-                local wildcard_norm_count=$(wc -l < "$wildcard_file_sorted")
-                echo "处理 $wildcard_norm_count 个泛域名..."
+                END {
+                  printf "- 精确域名过滤: 保留 %d, 过滤 %d\n", kept, filtered > "/dev/stderr";
+                }
+                ' "$exact_file" 2>&1 > "$final_exact"
                 
-                # 2. 泛域名去重 - 使用C语言级别的高效算法
-                # 使用printf方式生成C代码文件，避免heredoc问题
-                printf '%s\n' \
-                '#include <stdio.h>' \
-                '#include <stdlib.h>' \
-                '#include <string.h>' \
-                '' \
-                '#define MAX_DOMAIN_LEN 256' \
-                '' \
-                '// 泛域名结构' \
-                'typedef struct {' \
-                '    char domain[MAX_DOMAIN_LEN];' \
-                '    int keep;  // 1表示保留，0表示删除' \
-                '} WildcardDomain;' \
-                '' \
-                '// 检查domain_b是否是domain_a的子域名' \
-                'int is_subdomain(const char *domain_a, const char *domain_b) {' \
-                '    int len_a = strlen(domain_a);' \
-                '    int len_b = strlen(domain_b);' \
-                '    ' \
-                '    // 完全相同' \
-                '    if (strcmp(domain_a, domain_b) == 0) return 1;' \
-                '    ' \
-                '    // b更长，检查b是否以.a结尾' \
-                '    if (len_b > len_a) {' \
-                '        // 检查b是否以.a结尾' \
-                '        if (domain_b[len_b - len_a - 1] == '\''.'\'' && ' \
-                '            strcmp(domain_b + (len_b - len_a), domain_a) == 0) {' \
-                '            return 1;' \
-                '        }' \
-                '    }' \
-                '    ' \
-                '    return 0;' \
-                '}' \
-                '' \
-                'int main() {' \
-                '    FILE *in = fopen("wildcards_sorted.txt", "r");' \
-                '    FILE *out = fopen("wildcards_filtered.txt", "w");' \
-                '    ' \
-                '    if (!in || !out) {' \
-                '        fprintf(stderr, "文件打开失败\\n");' \
-                '        return 1;' \
-                '    }' \
-                '    ' \
-                '    char line[MAX_DOMAIN_LEN];' \
-                '    char type[2];' \
-                '    char domain[MAX_DOMAIN_LEN];' \
-                '    ' \
-                '    // 第一阶段：读取所有泛域名并标记' \
-                '    WildcardDomain *wildcards = NULL;' \
-                '    int wildcard_count = 0;' \
-                '    int capacity = 1024;' \
-                '    ' \
-                '    wildcards = (WildcardDomain*)malloc(capacity * sizeof(WildcardDomain));' \
-                '    ' \
-                '    // 读取所有泛域名' \
-                '    while (fgets(line, MAX_DOMAIN_LEN, in)) {' \
-                '        if (sscanf(line, "%1s %255s", type, domain) != 2) continue;' \
-                '        ' \
-                '        if (wildcard_count >= capacity) {' \
-                '            capacity *= 2;' \
-                '            wildcards = (WildcardDomain*)realloc(wildcards, capacity * sizeof(WildcardDomain));' \
-                '        }' \
-                '        ' \
-                '        strncpy(wildcards[wildcard_count].domain, domain, MAX_DOMAIN_LEN - 1);' \
-                '        wildcards[wildcard_count].keep = 1;' \
-                '        wildcard_count++;' \
-                '    }' \
-                '    ' \
-                '    // 泛域名去重' \
-                '    int removed = 0;' \
-                '    ' \
-                '    // 由于已按长度排序，短域名在前，只需检查每个域名是否被前面的域名覆盖' \
-                '    for (int i = 1; i < wildcard_count; i++) {' \
-                '        if (!wildcards[i].keep) continue;' \
-                '        ' \
-                '        for (int j = 0; j < i; j++) {' \
-                '            if (!wildcards[j].keep) continue;' \
-                '            ' \
-                '            if (is_subdomain(wildcards[j].domain, wildcards[i].domain)) {' \
-                '                wildcards[i].keep = 0;' \
-                '                removed++;' \
-                '                break;' \
-                '            }' \
-                '        }' \
-                '    }' \
-                '    ' \
-                '    // 输出结果' \
-                '    for (int i = 0; i < wildcard_count; i++) {' \
-                '        if (wildcards[i].keep) {' \
-                '            fprintf(out, "W %s\\n", wildcards[i].domain);' \
-                '        }' \
-                '    }' \
-                '    ' \
-                '    fprintf(stderr, "- 泛域名去重: 删除了 %d 个冗余泛域名\\n", removed);' \
-                '    ' \
-                '    fclose(in);' \
-                '    fclose(out);' \
-                '    free(wildcards);' \
-                '    ' \
-                '    return 0;' \
-                '}' > "${tmp_process_dir}/process.c"
+                # 合并结果
+                cat "$final_wildcards" "$final_exact" | sort -u > "$final_file"
                 
-                # 编译并运行C程序
-                echo "编译并运行高性能处理程序..."
-                (cd "${tmp_process_dir}" && gcc -O3 -o process process.c && ./process)
-                
-                # 获取泛域名去重后的数量
-                local wildcard_filtered_count=$(wc -l < "${tmp_process_dir}/wildcards_filtered.txt")
-                echo "- 泛域名去重后剩余: $wildcard_filtered_count 个泛域名"
-                
-                # 3. 精确域名过滤 - 使用更高效率的C程序
-                # 使用printf方式生成C代码文件，避免heredoc问题
-                printf '%s\n' \
-                '#include <stdio.h>' \
-                '#include <stdlib.h>' \
-                '#include <string.h>' \
-                '' \
-                '#define MAX_DOMAIN_LEN 256' \
-                '#define HASH_SIZE 1000003' \
-                '' \
-                '// 简单的哈希表实现' \
-                'typedef struct HashNode {' \
-                '    char key[MAX_DOMAIN_LEN];' \
-                '    struct HashNode *next;' \
-                '} HashNode;' \
-                '' \
-                'HashNode *hash_table[HASH_SIZE] = {NULL};' \
-                '' \
-                '// 简单哈希函数' \
-                'unsigned int hash(const char *str) {' \
-                '    unsigned int h = 0;' \
-                '    while (*str) {' \
-                '        h = h * 31 + (*str++);' \
-                '    }' \
-                '    return h % HASH_SIZE;' \
-                '}' \
-                '' \
-                '// 添加到哈希表' \
-                'void hash_add(const char *key) {' \
-                '    unsigned int h = hash(key);' \
-                '    ' \
-                '    HashNode *node = (HashNode*)malloc(sizeof(HashNode));' \
-                '    strncpy(node->key, key, MAX_DOMAIN_LEN - 1);' \
-                '    node->key[MAX_DOMAIN_LEN - 1] = '\'\\0\'';' \
-                '    node->next = hash_table[h];' \
-                '    hash_table[h] = node;' \
-                '}' \
-                '' \
-                '// 检查是否在哈希表中' \
-                'int hash_contains(const char *key) {' \
-                '    unsigned int h = hash(key);' \
-                '    ' \
-                '    HashNode *node = hash_table[h];' \
-                '    while (node) {' \
-                '        if (strcmp(node->key, key) == 0) {' \
-                '            return 1;' \
-                '        }' \
-                '        node = node->next;' \
-                '    }' \
-                '    return 0;' \
-                '}' \
-                '' \
-                'int main() {' \
-                '    FILE *wildcards = fopen("wildcards_filtered.txt", "r");' \
-                '    FILE *normalized = fopen("normalized.txt", "r");' \
-                '    FILE *result = fopen("result.txt", "w");' \
-                '    ' \
-                '    if (!wildcards || !normalized || !result) {' \
-                '        fprintf(stderr, "文件打开失败\\n");' \
-                '        return 1;' \
-                '    }' \
-                '    ' \
-                '    char line[MAX_DOMAIN_LEN];' \
-                '    char type[2];' \
-                '    char domain[MAX_DOMAIN_LEN];' \
-                '    ' \
-                '    // 1. 读取所有泛域名并建立哈希表' \
-                '    while (fgets(line, MAX_DOMAIN_LEN, wildcards)) {' \
-                '        if (sscanf(line, "%1s %255s", type, domain) != 2) continue;' \
-                '        ' \
-                '        // 添加到哈希表' \
-                '        hash_add(domain);' \
-                '        ' \
-                '        // 同时输出泛域名（需要保留）' \
-                '        fprintf(result, ".%s\\n", domain);' \
-                '    }' \
-                '    fclose(wildcards);' \
-                '    ' \
-                '    // 2. 处理所有域名' \
-                '    int kept = 0;' \
-                '    int filtered = 0;' \
-                '    int total = 0;' \
-                '    ' \
-                '    while (fgets(line, MAX_DOMAIN_LEN, normalized)) {' \
-                '        if (sscanf(line, "%1s %255s", type, domain) != 2) continue;' \
-                '        ' \
-                '        // 跳过泛域名，已经处理过' \
-                '        if (type[0] == '\'W\'') continue;' \
-                '        ' \
-                '        total++;' \
-                '        ' \
-                '        // 检查是否被任何泛域名覆盖' \
-                '        int keep = 1;' \
-                '        char temp[MAX_DOMAIN_LEN];' \
-                '        strncpy(temp, domain, MAX_DOMAIN_LEN);' \
-                '        ' \
-                '        while (temp[0]) {' \
-                '            if (hash_contains(temp)) {' \
-                '                keep = 0;' \
-                '                filtered++;' \
-                '                break;' \
-                '            }' \
-                '            ' \
-                '            // 获取父域名' \
-                '            char *dot = strchr(temp, '\''.\'');' \
-                '            if (!dot) break;' \
-                '            ' \
-                '            // 移到下一个部分' \
-                '            memmove(temp, dot + 1, strlen(dot));' \
-                '        }' \
-                '        ' \
-                '        if (keep) {' \
-                '            fprintf(result, "%s\\n", domain);' \
-                '            kept++;' \
-                '        }' \
-                '        ' \
-                '        // 打印进度' \
-                '        if (total % 10000 == 0) {' \
-                '            fprintf(stderr, "处理进度: %d (保留: %d, 过滤: %d)\\n", total, kept, filtered);' \
-                '        }' \
-                '    }' \
-                '    ' \
-                '    fprintf(stderr, "- 精确域名过滤完成: 保留 %d 个, 过滤: %d 个\\n", kept, filtered);' \
-                '    ' \
-                '    fclose(normalized);' \
-                '    fclose(result);' \
-                '    ' \
-                '    // 清理哈希表' \
-                '    for (int i = 0; i < HASH_SIZE; i++) {' \
-                '        HashNode *node = hash_table[i];' \
-                '        while (node) {' \
-                '            HashNode *next = node->next;' \
-                '            free(node);' \
-                '            node = next;' \
-                '        }' \
-                '    }' \
-                '    ' \
-                '    return 0;' \
-                '}' > "${tmp_process_dir}/filter_exact.c"
-                
-                # 编译并运行过滤程序
-                echo "编译并运行高性能域名过滤程序..."
-                (cd "${tmp_process_dir}" && gcc -O3 -o filter_exact filter_exact.c && ./filter_exact)
-                
-                # 4. 最后处理 - 复制结果
-                cat "${tmp_process_dir}/result.txt" > "$final_file"
-                
-                # 统计结果
-                local final_count=$(wc -l < "$final_file")
-                local removed_count=$((cleaned_count - final_count))
-                echo "去重后的规则数量: $final_count (减少了 $removed_count 个重复项)"
-                
-                # 清理临时目录
-                rm -rf "${tmp_process_dir}"
+                # 清理临时文件
+                rm -f "$deduped_wildcards" "$final_wildcards" "$wildcards_processed" "$final_exact"
               else
-                # 如果没有泛域名，只进行普通去重
+                # 如果没有泛域名或没有精确域名，直接去重
+                echo "没有发现泛域名关系，直接去重..."
                 sort -u "$domains_file" > "$final_file"
               fi
+              
+              # 统计结果
+              local final_count=$(wc -l < "$final_file")
+              local removed_count=$((cleaned_count - final_count))
+              echo "去重后的规则数量: $final_count (减少了 $removed_count 个重复项)"
+              
+              # 清理临时文件
+              rm -f "$domains_file" "$wildcard_file" "$exact_file" "$deduped_file"
               
               # 4. 添加元数据并保存
               echo "正在生成最终规则文件..."
@@ -677,7 +521,7 @@ jobs:
 
           # 运行主程序
           main
-          EOF
+EOF
           
           chmod +x process_rules.sh
           echo "规则处理脚本已生成，权限设置为可执行"
