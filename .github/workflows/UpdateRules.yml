@@ -118,26 +118,27 @@ jobs:
           # $2 - 输出文件路径
           # $3 - 规则源URL列表（空格分隔）
           process_rule() {
-            local rule_name="$1"
-            local output_path="$2"
-            local urls="$3"
+            local rule_name="$1"      # 当前处理的规则集名称
+            local output_path="$2"    # 规则输出路径
+            local urls="$3"           # 空格分隔的URL列表
+            
+            # 获取输出目录
             local output_dir
             output_dir=$(dirname "$output_path")
             
             echo "Processing $rule_name to $output_path..."
+            # 输出处理时间统计
             TIMEFORMAT='处理用时: %R 秒'
             time (
-              # 创建输出目录
+              # 创建输出目录（如果不存在）
               mkdir -p "$output_dir"
               
-              # 临时文件
-              local merged_file
-              local cleaned_file
-              merged_file=$(mktemp)
-              cleaned_file=$(mktemp)
+              # === 设置处理所需的临时文件 ===
+              local merged_file=$(mktemp "/tmp/rule_merged_${rule_name//[^a-zA-Z0-9]/_}.XXXXXX")
+              local cleaned_file=$(mktemp "/tmp/rule_cleaned_${rule_name//[^a-zA-Z0-9]/_}.XXXXXX")
               
-              # 临时目录和并行下载计数
-              local tmp_dir=$(mktemp -d)
+              # 创建临时下载目录
+              local tmp_dir=$(mktemp -d "/tmp/rule_download_${rule_name//[^a-zA-Z0-9]/_}.XXXXXX")
               local download_count=0
               local download_pids=()
               
@@ -162,14 +163,20 @@ jobs:
               # 合并下载的文件
               find "$tmp_dir" -type f -name "download_*" -exec cat {} \; > "$merged_file"
               
-              # 1. 清理规则：移除注释、空行、行首尾空格、payload:
-              LC_ALL=C sed -e 's/[[:space:]]*#.*$//' \\
-                           -e 's/^[[:space:]]*//;s/[[:space:]]*$//' \\
-                           -e '/^$/d' \\
-                           -e '/^[[:space:]]*#/d' \\
-                           -e '/^payload:/d' "$merged_file" > "$cleaned_file" || true
-              rm -rf "$tmp_dir"  # 清理临时目录
+              # === 规则清理流程 ===
+              # 按顺序执行一系列清理操作，确保规则标准化和干净
+              echo "→ 执行规则清理操作..."
+              LC_ALL=C sed -e 's/[[:space:]]*#.*$//'        `# 1. 移除每行末尾的注释` \
+                         -e 's/^[[:space:]]*//;s/[[:space:]]*$//' `# 2. 移除行首尾空白字符` \
+                         -e '/^$/d'                         `# 3. 删除空行` \
+                         -e '/^[[:space:]]*#/d'             `# 4. 删除纯注释行` \
+                         -e '/^payload:/d'                  `# 5. 删除payload标记行` \
+                         "$merged_file" > "$cleaned_file" || true
               
+              # 清理临时下载目录节省空间
+              rm -rf "$tmp_dir"
+              
+              # 统计清理后的规则数量
               local input_count=$(wc -l < "$cleaned_file")
               echo "→ 清理后输入规则数量: $input_count"
               echo "::endgroup::"
@@ -181,6 +188,7 @@ jobs:
                 
                 echo "::group::排序和初步去重"
                 echo "→ 对规则进行排序和基础去重..."
+                # 使用LC_ALL=C确保排序一致性，提高性能
                 LC_ALL=C sort -u "$cleaned_file" > "$sorted_unique_file"
                 local sorted_count=$(wc -l < "$sorted_unique_file")
                 echo "→ 初步去重后规则数量: $sorted_count"
@@ -191,66 +199,117 @@ jobs:
                 local final_file
                 final_file=$(mktemp)
                 
-                LC_ALL=C awk \'
-                # AWK script for final deduplication (parent/child domains)
-                # Input: cleaned and unique-sorted lines from sorted_unique_file
+                # 使用AWK进行高效的父子域名去重分析
+                LC_ALL=C awk '
+                # === 域名规则去重处理程序 ===
+                # 用途：分析并删除被父域名包含的子域名规则
+                # 策略：两阶段处理 - 1.收集和预处理数据 2.执行高效去重算法
 
+                BEGIN {
+                  # 初始化数据结构，预分配内存以优化性能
+                  split("", domains);      # 存储规范化后的域名
+                  split("", is_dot_prefix); # 记录域名是否有点前缀
+                  # 注意：预分配可减少动态分配的内存开销，提高大数据集处理性能
+                }
+
+                # === 域名规范化函数 ===
+                # 作用：统一处理域名格式，移除前导点
+                # 输入：原始域名
+                # 输出：规范化的域名字符串
                 function normalize_domain(domain) {
-                    if (substr(domain, 1, 1) == ".") {
-                        return substr(domain, 2);
-                    }
-                    return domain;
+                  # 检测并移除前导点
+                  if (substr(domain, 1, 1) == ".") {
+                    return substr(domain, 2); # 返回无点前缀的域名
+                  }
+                  return domain; # 原样返回无前导点的域名
                 }
 
-                function is_parent_of(p_candidate, c_candidate,    p_is_dot, c_is_dot, p_norm, c_norm) {
-                    p_is_dot = (substr(p_candidate, 1, 1) == ".");
-                    c_is_dot = (substr(c_candidate, 1, 1) == ".");
-                    
-                    p_norm = normalize_domain(p_candidate);
-                    c_norm = normalize_domain(c_candidate);
+                # === 父域名检测函数 ===
+                # 作用：判断一个域名是否是另一个域名的父域名
+                # 输入：两个域名字符串 - 潜在父域名和潜在子域名
+                # 输出：布尔值，1表示是父域名，0表示不是
+                function is_parent_of(p_candidate, c_candidate) {
+                  # 高效获取预处理的域名属性
+                  local p_is_dot = is_dot_prefix[p_candidate]; # 父域名是否有点前缀
+                  local c_is_dot = is_dot_prefix[c_candidate]; # 子域名是否有点前缀
+                  local p_norm = domains[p_candidate];         # 规范化后的父域名
+                  local c_norm = domains[c_candidate];         # 规范化后的子域名
 
-                    # Rule a: .abc.com is parent of abc.com
-                    if (p_norm == c_norm) {
-                        if (p_is_dot && !c_is_dot) return 1; # .abc.com is parent of abc.com
-                        return 0; 
-                    }
+                  # === 规则A：点前缀优先级规则 ===
+                  # 情况：相同域名但一个有点前缀
+                  # 例如：.example.com 是 example.com 的父域名
+                  if (p_norm == c_norm) {
+                    if (p_is_dot && !c_is_dot) return 1; # 前导点版本优先
+                    return 0; # 其他情况非父子关系
+                  }
 
-                    # Rule b: abc.com is parent of 1.abc.com (and by extension .abc.com is parent of 1.abc.com / .1.abc.com)
-                    if (length(c_norm) > length(p_norm) && \\\
-                        substr(c_norm, length(c_norm) - length(p_norm)) == p_norm && \\\
-                        substr(c_norm, length(c_norm) - length(p_norm) - 1, 1) == ".") {
-                        return 1; # p_norm is structural parent of c_norm, so p_candidate is parent of c_candidate
-                    }
-                    return 0;
+                  # === 规则B：域名层级规则 ===
+                  # 情况：检查一个域名是否是另一个的顶级域名
+                  # 例如：example.com 是 sub.example.com 的父域名
+                  if (length(c_norm) > length(p_norm) && 
+                      # 检查c_norm是否以p_norm结尾
+                      substr(c_norm, length(c_norm) - length(p_norm) + 1) == p_norm && 
+                      # 确保在p_norm前有一个点（表示子域关系）
+                      substr(c_norm, length(c_norm) - length(p_norm), 1) == ".") {
+                    return 1; # 确认是父域名关系
+                  }
+                  
+                  return 0; # 默认情况：不是父子域名关系
                 }
 
+                # === 第一阶段：数据收集与预处理 ===
+                # 作用：读取每一行规则，进行预处理
                 {
-                    lines[++n] = $0;
+                  lines[NR] = $0; # 按原样存储每行规则
+                  
+                  # 预计算并存储每个域名的关键属性
+                  is_dot_prefix[$0] = (substr($0, 1, 1) == "."); # 是否有点前缀
+                  domains[$0] = normalize_domain($0);            # 存储规范化域名
                 }
 
+                # === 第二阶段：智能去重算法 ===
+                # 执行高效的父子域名识别和去重
                 END {
-                    for (i = 1; i <= n; i++) {
-                        is_child = 0;
-                        current_line = lines[i];
-                        for (j = 1; j <= n; j++) {
-                            if (i == j) continue;
-                            potential_parent = lines[j];
-                            if (is_parent_of(potential_parent, current_line)) {
-                                is_child = 1;
-                                break;
-                            }
-                        }
-                        if (!is_child) {
-                            print current_line;
-                        }
+                  # 使用分离的数组存储子域名标记
+                  split("", is_child);
+                  
+                  # 第一步：标记所有子域名
+                  for (i = 1; i <= NR; i++) {
+                    # 性能优化：已知是子域名的跳过后续比较
+                    if (is_child[i]) continue;
+                    
+                    current = lines[i]; # 当前检查的域名
+                    
+                    # 与所有其他域名比较
+                    for (j = 1; j <= NR; j++) {
+                      if (i == j) continue; # 跳过自身比较
+                      
+                      potential_parent = lines[j]; # 潜在父域名
+                      
+                      # 如果发现是子域名，标记并停止比较
+                      if (is_parent_of(potential_parent, current)) {
+                        is_child[i] = 1; # 标记为子域名
+                        break; # 找到一个父域名就足够，无需继续比较
+                      }
                     }
+                  }
+                  
+                  # 第二步：只输出非子域名（即父域名或独立域名）
+                  for (i = 1; i <= NR; i++) {
+                    if (!is_child[i]) {
+                      print lines[i]; # 输出需要保留的规则
+                    }
+                  }
                 }
-                \' "$sorted_unique_file" > "$final_file"
+                ' "$sorted_unique_file" > "$final_file"
                 
-                rm -f "$sorted_unique_file" # Clean up sorted_unique_file
+                # 清理临时文件
+                rm -f "$sorted_unique_file"
 
+                # 输出处理结果统计
                 local output_count=$(wc -l < "$final_file")
-                echo "→ 处理后规则数量: $output_count (减少了 $((sorted_count - output_count)) 条冗余规则)" 
+                local removed_count=$((sorted_count - output_count))
+                echo "→ 处理后规则数量: $output_count (减少了 $removed_count 条冗余规则)" 
                 echo "::endgroup::"
                 
                 echo "::group::生成最终规则文件"
@@ -312,52 +371,62 @@ jobs:
           main() {
             local config="$1"
             
-            # 初始化数据结构
-            declare -A rule_configs
-            declare -a rule_files
+            # === 初始化阶段 ===
+            # 声明关联数组存储规则配置，普通数组存储规则文件列表
+            declare -A rule_configs  # 关联数组：规则名称 -> 路径和URL
+            declare -a rule_files    # 普通数组：所有规则文件路径列表
             
-            # 解析配置
+            # 解析输入的YAML配置
+            echo "→ 解析规则配置..."
             parse_rules_config "$config" rule_configs rule_files
             
             echo "==============================="
             echo "开始更新规则文件 ($(date '+%Y-%m-%d %H:%M:%S'))"
             echo "==============================="
             
-            # 记录总体开始时间
+            # 记录总处理开始时间
             local start_time=$SECONDS
             
-            # 处理每个规则
+            # === 规则处理阶段 ===
+            # 依次处理每个规则集
+            echo "→ 共发现 ${#rule_configs[@]} 个规则集需要处理"
             for rule in "${!rule_configs[@]}"; do
+              # 提取规则的路径和URL列表
               IFS=';' read -r output_path urls <<< "${rule_configs[$rule]}"
               echo "==============================="
               echo "::group::处理规则: $rule"
+              # 调用处理函数处理单个规则
               process_rule "$rule" "$output_path" "$urls"
               echo "::endgroup::"
               echo "==============================="
             done
             
-            # 计算总耗时
+            # === 总结阶段 ===
+            # 计算总耗时并评估性能
             local duration=$((SECONDS - start_time))
             echo "::group::处理总结"
             echo "所有规则处理完成，总耗时: $((duration / 60))分$((duration % 60))秒"
             
-            # 性能检查
+            # 性能评估
             if [ $duration -gt 180 ]; then
-              echo "警告: 处理时间超过3分钟，建议进一步优化性能"
+              echo "⚠️ 警告: 处理时间超过3分钟，建议进一步优化性能"
             elif [ $duration -lt 30 ]; then
-              echo "性能良好: 处理时间少于30秒"
+              echo "✅ 性能良好: 处理时间少于30秒"
             else
-              echo "性能正常: 处理时间在目标范围内"
+              echo "✓ 性能正常: 处理时间在目标范围内"
             fi
             echo "::endgroup::"
             
-            # 检查Git变更
+            # === 变更检测阶段 ===
+            # 检查是否有规则文件发生变化
             local changes_detected=false
             
+            # 将所有规则文件添加到Git暂存区，用于检测变更
             git add "${rule_files[@]}" 2>/dev/null || true
             
             echo "::group::检查文件变更"
             for file in "${rule_files[@]}"; do
+              # 检查文件是否存在且有除更新时间外的实质性变更
               if [ -f "$file" ] && git diff --cached --no-color "$file" | grep -v '^[+-]# Update time:' | grep -q '^[+-]'; then
                 changes_detected=true
                 echo "检测到变更: $file"
@@ -365,13 +434,15 @@ jobs:
             done
             echo "::endgroup::"
             
-            # 输出结果
+            # === 输出结果 ===
+            # 设置GitHub Actions输出变量并输出结果
             if [ "$changes_detected" = true ]; then
               echo "has_changes=true" >> "$GITHUB_OUTPUT"
-              echo "检测到规则文件变更"
+              echo "✨ 检测到规则文件变更，将在后续步骤提交更改"
             else
               echo "has_changes=false" >> "$GITHUB_OUTPUT"
-              echo "未检测到规则文件变更"
+              echo "ℹ️ 未检测到规则文件变更，无需提交"
+              # 恢复已暂存的文件
               git restore --staged "${rule_files[@]}" 2>/dev/null || true
             fi
           }
