@@ -127,18 +127,13 @@ jobs:
             # 1. 下载规则文件
             echo "正在下载规则..."
             
-            # 创建临时文件
-            local merged_file=$(mktemp)  # 合并后的文件
-            local cleaned_file=$(mktemp) # 清理后的文件
-            local tmp_dir=$(mktemp -d)   # 临时下载目录
-            
             # 并行下载所有URL
-            local download_count=0
-            local download_pids=()
+            download_count=0
+            download_pids=()
             
             for url in $urls; do
               # 为每个URL创建临时文件
-              local tmp_file="${tmp_dir}/download_${download_count}"
+              tmp_file="${tmp_dir}/download_${download_count}"
               
               # 后台下载并显示结果
               (curl -sL --fail --connect-timeout 10 --max-time 30 "$url" > "$tmp_file" && 
@@ -158,6 +153,11 @@ jobs:
             # 2. 合并和清理规则
             echo "正在合并和清理规则..."
             
+            # 创建临时文件
+            merged_file=$(mktemp)  # 合并后的文件
+            cleaned_file=$(mktemp) # 清理后的文件
+            tmp_dir=$(mktemp -d)   # 临时下载目录
+            
             # 合并所有下载的文件
             cat "${tmp_dir}"/download_* > "$merged_file"
             
@@ -173,7 +173,7 @@ jobs:
                 "$merged_file" > "$cleaned_file"
             
             # 统计清理后的规则数量
-            local cleaned_count=$(wc -l < "$cleaned_file")
+            cleaned_count=$(wc -l < "$cleaned_file")
             echo "清理后的规则数量: $cleaned_count"
             
             # 3. 排序和去重
@@ -181,195 +181,58 @@ jobs:
               echo "正在排序和去除重复项..."
               
               # 创建临时文件
-              local final_file=$(mktemp)      # 最终文件
+              final_file=$(mktemp)      # 最终文件
               
               # 记录开始时间
-              local dedup_start=$SECONDS
+              dedup_start=$SECONDS
               
-              echo "开始高效处理规则（单次遍历）..."
+              echo "开始高效处理规则..."
               
-              # 使用Python处理大规模域名集合，效率更高
-              # 创建Python脚本进行高效处理
-              cat > /tmp/process_rules.py << 'EOL'
-#!/usr/bin/env python3
-import sys
-import time
-import os
-
-def main():
-    # 检查参数
-    if len(sys.argv) != 2:
-        print(f"用法: {sys.argv[0]} <input_file>", file=sys.stderr)
-        sys.exit(1)
-        
-    input_file = sys.argv[1]
-    
-    # 检查输入文件是否存在
-    if not os.path.exists(input_file):
-        print(f"错误: 输入文件 '{input_file}' 不存在", file=sys.stderr)
-        sys.exit(1)
-    
-    start_time = time.time()
-    
-    # 统计信息
-    stats = {
-        "total": 0,
-        "duplicates": 0,
-        "wildcard_covered": 0,
-        "exact_covered": 0,
-        "kept": 0
-    }
-    
-    # 数据结构
-    all_rules = set()           # 存储所有规则，用于基础去重
-    wildcard_domains = set()    # 存储所有泛域名（不带前导点）
-    
-    # 临时保存规则
-    wildcard_rules = []
-    exact_rules = []
-    
-    try:
-        print(f"[1/4] 读取规则文件...", file=sys.stderr)
-        # 第一遍：读取文件，进行基础分类
-        with open(input_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                    
-                stats["total"] += 1
-                
-                # 基础去重
-                if line in all_rules:
-                    stats["duplicates"] += 1
-                    continue
-                    
-                all_rules.add(line)
-                
-                # 区分泛域名和精确域名
-                if line.startswith('.'):
-                    domain = line[1:]  # 去掉前导点
-                    wildcard_rules.append((domain, line))
-                else:
-                    exact_rules.append(line)
-        
-        print(f"[2/4] 处理泛域名规则 ({len(wildcard_rules)} 条)...", file=sys.stderr)
-        # 对泛域名排序，优先处理短的域名（如.com比.example.com先处理）
-        wildcard_rules.sort(key=lambda x: (len(x[0].split('.')), x[0]))
-        
-        # 处理泛域名规则
-        kept_wildcards = []
-        for domain, original in wildcard_rules:
-            keep = True
-            # 检查是否被更短的泛域名覆盖
-            domain_parts = domain.split('.')
-            for i in range(1, len(domain_parts)):
-                parent = '.'.join(domain_parts[i:])
-                if parent in wildcard_domains:
-                    keep = False
-                    stats["wildcard_covered"] += 1
-                    break
-            
-            if keep:
-                wildcard_domains.add(domain)
-                kept_wildcards.append(original)
-                stats["kept"] += 1
-        
-        print(f"[3/4] 处理精确域名规则 ({len(exact_rules)} 条)...", file=sys.stderr)
-        # 处理精确域名规则
-        kept_exact = []
-        for line in exact_rules:
-            keep = True
-            # 检查是否被泛域名覆盖
-            domain_parts = line.split('.')
-            for i in range(0, len(domain_parts)):
-                parent = '.'.join(domain_parts[i:])
-                if parent in wildcard_domains:
-                    keep = False
-                    stats["exact_covered"] += 1
-                    break
-            
-            if keep:
-                kept_exact.append(line)
-                stats["kept"] += 1
-        
-        print(f"[4/4] 生成最终规则...", file=sys.stderr)
-        # 输出所有保留的规则
-        for rule in sorted(kept_wildcards + kept_exact):
-            print(rule)
-        
-        # 输出统计信息
-        end_time = time.time()
-        print(f"处理时间: {end_time - start_time:.2f} 秒", file=sys.stderr)
-        print(f"总规则数: {stats['total']}", file=sys.stderr)
-        print(f"重复规则: {stats['duplicates']}", file=sys.stderr)
-        print(f"泛域名被覆盖: {stats['wildcard_covered']}", file=sys.stderr)
-        print(f"精确域名被覆盖: {stats['exact_covered']}", file=sys.stderr)
-        print(f"保留规则: {stats['kept']}", file=sys.stderr)
-    
-    except Exception as e:
-        print(f"处理出错: {str(e)}", file=sys.stderr)
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
-EOL
-
-              # 给Python脚本执行权限
-              chmod +x /tmp/process_rules.py
+              # 为Python脚本添加执行权限
+              chmod +x "$GITHUB_WORKSPACE/Script/Workflow/process_rules.py"
               
-              # 确保Python3可用
-              if ! command -v python3 &> /dev/null; then
-                echo "错误: Python3 未安装，尝试安装..."
-                apt-get update && apt-get install -y python3 || {
-                  echo "无法安装Python3，将使用备用方案..."
-                  # 备用方案：使用基本排序和去重
-                  sort -u "$cleaned_file" > "$final_file"
-                  echo "已使用基本排序和去重，跳过高级处理"
-                }
+              # 使用外部Python脚本处理规则
+              python3 "$GITHUB_WORKSPACE/Script/Workflow/process_rules.py" "$cleaned_file" > "$final_file" 2>/tmp/python_stats
+              
+              # 检查Python脚本是否成功执行
+              if [ $? -ne 0 ]; then
+                echo "Python处理失败，使用备用方案..."
+                # 备用方案：使用基本排序去重
+                sort -u "$cleaned_file" > "$final_file"
+                echo "已使用基本排序和去重，跳过高级处理"
               else
-                # 执行Python处理
-                python3 /tmp/process_rules.py "$cleaned_file" > "$final_file" 2>/tmp/python_stats
-                
-                # 检查Python脚本是否成功执行
-                if [ $? -ne 0 ]; then
-                  echo "Python处理失败，使用备用方案..."
-                  # 备用方案
-                  sort -u "$cleaned_file" > "$final_file"
+                # 读取Python处理的统计信息
+                if [ -f "/tmp/python_stats" ]; then
+                  processing_time=$(grep "处理时间" /tmp/python_stats | awk '{print $2}')
+                  total_rules=$(grep "总规则数" /tmp/python_stats | awk '{print $2}')
+                  duplicate_rules=$(grep "重复规则" /tmp/python_stats | awk '{print $2}')
+                  wildcard_covered=$(grep "泛域名被覆盖" /tmp/python_stats | awk '{print $2}')
+                  exact_covered=$(grep "精确域名被覆盖" /tmp/python_stats | awk '{print $2}')
+                  kept_rules=$(grep "保留规则" /tmp/python_stats | awk '{print $2}')
+                  
+                  # 显示总体去重耗时和统计信息
+                  dedup_duration=$((SECONDS - dedup_start))
+                  echo "规则处理完成，Python处理耗时: $processing_time 秒，总耗时: $dedup_duration 秒"
+                  echo "去重统计:"
+                  echo "- 原始规则数: $total_rules"
+                  echo "- 去除重复规则: $duplicate_rules"
+                  echo "- 去除被覆盖的泛域名: $wildcard_covered"
+                  echo "- 去除被覆盖的精确域名: $exact_covered"
+                  echo "- 保留规则数: $kept_rules"
+                  echo "- 总计移除: $((total_rules - kept_rules)) 条规则"
                 else
-                  # 读取Python处理的统计信息
-                  if [ -f "/tmp/python_stats" ]; then
-                    local processing_time=$(grep "处理时间" /tmp/python_stats | awk '{print $2}')
-                    local total_rules=$(grep "总规则数" /tmp/python_stats | awk '{print $2}')
-                    local duplicate_rules=$(grep "重复规则" /tmp/python_stats | awk '{print $2}')
-                    local wildcard_covered=$(grep "泛域名被覆盖" /tmp/python_stats | awk '{print $2}')
-                    local exact_covered=$(grep "精确域名被覆盖" /tmp/python_stats | awk '{print $2}')
-                    local kept_rules=$(grep "保留规则" /tmp/python_stats | awk '{print $2}')
-                    
-                    # 显示总体去重耗时和统计信息
-                    local dedup_duration=$((SECONDS - dedup_start))
-                    echo "规则处理完成，Python处理耗时: $processing_time 秒，总耗时: $dedup_duration 秒"
-                    echo "去重统计:"
-                    echo "- 原始规则数: $total_rules"
-                    echo "- 去除重复规则: $duplicate_rules"
-                    echo "- 去除被覆盖的泛域名: $wildcard_covered"
-                    echo "- 去除被覆盖的精确域名: $exact_covered"
-                    echo "- 保留规则数: $kept_rules"
-                    echo "- 总计移除: $((total_rules - kept_rules)) 条规则"
-                  else
-                    echo "警告: 无法获取处理统计信息"
-                  fi
+                  echo "警告: 无法获取处理统计信息"
                 fi
               fi
               
               # 清理临时文件以释放内存
-              rm -f /tmp/process_rules.py /tmp/python_stats
+              rm -f /tmp/python_stats
               
               # 4. 添加元数据并保存
               echo "正在生成最终规则文件..."
               
               # 创建带有元数据的版本
-              local meta_file=$(mktemp)
+              meta_file=$(mktemp)
               
               # 添加元数据
               {
@@ -385,19 +248,19 @@ EOL
               } > "$meta_file"
               
               # 5. 检查是否有更改
-              local changed=0
+              changed=0
               if [ -f "$output_path" ]; then
                 # 比较旧文件和新文件(忽略更新时间)
-                local old_file=$(mktemp)
+                old_file=$(mktemp)
                 grep -v "^# Update time:" "$output_path" > "$old_file"
                 
                 if ! cmp -s "$old_file" "$meta_file"; then
                   changed=1  # 文件有变化
                   # 计算增加和删除的规则数量
-                  local old_lines=$(grep -v "^#" "$old_file" | wc -l)
-                  local new_lines=$(grep -v "^#" "$meta_file" | wc -l)
-                  local added=$((new_lines > old_lines ? new_lines - old_lines : 0))
-                  local removed=$((old_lines > new_lines ? old_lines - new_lines : 0))
+                  old_lines=$(grep -v "^#" "$old_file" | wc -l)
+                  new_lines=$(grep -v "^#" "$meta_file" | wc -l)
+                  added=$((new_lines > old_lines ? new_lines - old_lines : 0))
+                  removed=$((old_lines > new_lines ? old_lines - new_lines : 0))
                   
                   echo "规则变化统计:"
                   echo "- 原有规则数量: $old_lines"
@@ -407,7 +270,7 @@ EOL
                 rm -f "$old_file"
               else
                 changed=1  # 文件不存在,需要创建
-                local new_lines=$(grep -v "^#" "$meta_file" | wc -l)
+                new_lines=$(grep -v "^#" "$meta_file" | wc -l)
                 echo "新建规则文件，包含 $new_lines 条规则"
               fi
               
@@ -433,7 +296,7 @@ EOL
             rm -rf "$tmp_dir"
             
             # 显示处理用时
-            local duration=$((SECONDS - start_time))
+            duration=$((SECONDS - start_time))
             echo "处理用时: $duration 秒"
           }
 
@@ -461,7 +324,7 @@ EOL
             echo "============================"
             
             # 记录开始时间
-            local start_time=$SECONDS
+            start_time=$SECONDS
             
             # 处理每个规则
             for rule_name in "${!rule_configs[@]}"; do
@@ -475,15 +338,15 @@ EOL
             done
             
             # 计算总耗时
-            local duration=$((SECONDS - start_time))
+            duration=$((SECONDS - start_time))
             echo "所有规则处理完成"
             echo "总用时: $((duration / 60))分$((duration % 60))秒"
             
             # 检测是否有变化
-            local has_changes=false
-            local change_summary=""
-            local total_added=0
-            local total_removed=0
+            has_changes=false
+            change_summary=""
+            total_added=0
+            total_removed=0
             
             # 添加文件到Git以检测变化
             git add "${rule_files[@]}" 2>/dev/null || true
@@ -493,11 +356,11 @@ EOL
               if [ -f "$file" ] && git diff --cached --no-color "$file" | 
                  grep -v '^[+-]# Update time:' | grep -q '^[+-]'; then
                 has_changes=true
-                local basename=$(basename "$file")
+                basename=$(basename "$file")
                 
                 # 计算具体变化的行数
-                local added_lines=$(git diff --cached --no-color "$file" | grep -v '^[+-]# ' | grep -c '^+')
-                local removed_lines=$(git diff --cached --no-color "$file" | grep -v '^[+-]# ' | grep -c '^-')
+                added_lines=$(git diff --cached --no-color "$file" | grep -v '^[+-]# ' | grep -c '^+')
+                removed_lines=$(git diff --cached --no-color "$file" | grep -v '^[+-]# ' | grep -c '^-')
                 
                 echo "文件有变化: $file"
                 echo "- 详细统计: 新增 $added_lines 条规则, 移除 $removed_lines 条规则"
