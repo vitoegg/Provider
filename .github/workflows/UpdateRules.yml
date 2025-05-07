@@ -56,7 +56,10 @@ jobs:
       - name: Create Processing Script
         id: create_script
         run: |
-          echo "::group::规则处理脚本"
+          echo "开始生成规则处理脚本..."
+          echo "脚本功能: 下载规则、清理规则、合并规则、统计变化"
+          echo "脚本结构: 3个主要函数 - 配置读取、规则处理、主程序"
+          
           cat > process_rules.sh << 'EOF'
           #!/bin/bash
           set -eo pipefail
@@ -362,19 +365,19 @@ jobs:
           EOF
           
           chmod +x process_rules.sh
-          echo "::endgroup::"
+          echo "规则处理脚本已生成，权限设置为可执行"
+          echo "脚本生成完成，将执行规则更新..."
 
       - name: Update RuleSets
         id: check_changes
         run: |
-          echo "::group::规则集更新"
+          echo "开始执行规则更新流程..."
           ./process_rules.sh
-          echo "::endgroup::"
 
       - name: Commit and Push Changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
-          echo "::group::提交变更"
+          echo "检测到规则变更，准备提交..."
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
@@ -382,10 +385,11 @@ jobs:
           git commit -m "Auto update rules: ${{ steps.check_changes.outputs.change_summary }}"
           
           # 显示本次提交的统计信息
+          echo "提交变更统计:"
           git show --stat --oneline HEAD
           
+          echo "推送变更到仓库..."
           git push
-          echo "::endgroup::"
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
