@@ -343,24 +343,33 @@ jobs:
             
             # 检查每个文件是否有实质变化
             for file in "${rule_files[@]}"; do
-              if [ -f "$file" ] && git diff --cached --no-color "$file" | 
-                 grep -v '^[+-]# Update time:' | grep -q '^[+-]'; then
-                has_changes=true
-                local basename=$(basename "$file")
+              if [ -f "$file" ]; then
+                # 创建临时文件存储差异，避免管道问题
+                local diff_file=$(mktemp)
+                git diff --cached --no-color "$file" > "$diff_file"
                 
-                # 计算具体变化的行数
-                local added_lines=$(git diff --cached --no-color "$file" | grep -v '^[+-]# ' | grep -c '^+')
-                local removed_lines=$(git diff --cached --no-color "$file" | grep -v '^[+-]# ' | grep -c '^-')
+                # 检查除更新时间外是否有实质变化
+                if grep -v '^[+-]# Update time:' "$diff_file" | grep -q '^[+-]'; then
+                  has_changes=true
+                  local basename=$(basename "$file")
+                  
+                  # 计算具体变化的行数
+                  local added_lines=$(grep -v '^[+-]# ' "$diff_file" | grep -c '^+' || echo 0)
+                  local removed_lines=$(grep -v '^[+-]# ' "$diff_file" | grep -c '^-' || echo 0)
+                  
+                  echo "文件有变化: $file"
+                  echo "- 详细统计: 新增 $added_lines 条规则, 移除 $removed_lines 条规则"
+                  
+                  # 添加到变化摘要
+                  change_summary="${change_summary}[$basename] +$added_lines/-$removed_lines "
+                  
+                  # 累计总变化量
+                  total_added=$((total_added + added_lines))
+                  total_removed=$((total_removed + removed_lines))
+                fi
                 
-                echo "文件有变化: $file"
-                echo "- 详细统计: 新增 $added_lines 条规则, 移除 $removed_lines 条规则"
-                
-                # 添加到变化摘要
-                change_summary="${change_summary}[$basename] +$added_lines/-$removed_lines "
-                
-                # 累计总变化量
-                total_added=$((total_added + added_lines))
-                total_removed=$((total_removed + removed_lines))
+                # 清理临时文件
+                rm -f "$diff_file"
               fi
             done
             
@@ -370,12 +379,22 @@ jobs:
               echo "总变化: 新增 $total_added 条规则, 移除 $total_removed 条规则"
               
               # 设置输出变量 - 有变化
-              echo "has_changes=true" >> "$GITHUB_OUTPUT"
-              echo "change_summary=$change_summary" >> "$GITHUB_OUTPUT"
+              if [ -n "$GITHUB_OUTPUT" ]; then
+                echo "has_changes=true" >> $GITHUB_OUTPUT
+                echo "change_summary=${change_summary}" >> $GITHUB_OUTPUT
+                echo "规则已更新，输出变量已设置"
+              else
+                echo "warning: GITHUB_OUTPUT not set"
+              fi
               echo "规则已更新，即将提交更改"
             else
               # 设置输出变量 - 无变化
-              echo "has_changes=false" >> "$GITHUB_OUTPUT"
+              if [ -n "$GITHUB_OUTPUT" ]; then
+                echo "has_changes=false" >> $GITHUB_OUTPUT
+                echo "规则无变化，输出变量已设置"
+              else
+                echo "warning: GITHUB_OUTPUT not set"
+              fi
               echo "规则无变化，无需提交"
               # 还原已暂存的文件
               git restore --staged "${rule_files[@]}" 2>/dev/null || true
@@ -398,12 +417,41 @@ jobs:
         id: check_changes
         run: |
           echo "开始执行规则更新流程..."
-          ./process_rules.sh
+          # 将日志也写入到标准输出，便于调试
+          ./process_rules.sh 2>&1 | tee process.log
+          
+          # 通过检查日志确定是否有变更
+          if grep -q "规则已更新，输出变量已设置" process.log; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            # 从日志中提取变更摘要
+            change_summary=$(grep "总变化:" process.log | sed 's/.*总变化: 新增 \([0-9]*\) 条规则, 移除 \([0-9]*\) 条规则.*/[总计] +\1\/-\2/')
+            echo "change_summary=${change_summary}" >> $GITHUB_OUTPUT
+            echo "已从日志提取变更信息"
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "没有检测到变更"
+          fi
+          
+          # 调试信息：输出Git状态
+          echo "Git仓库状态："
+          git status
+          echo "暂存区文件："
+          git diff --name-status --cached
+
+      # 输出变量检查步骤
+      - name: Debug Output Variables
+        run: |
+          echo "检查输出变量：has_changes=${{ steps.check_changes.outputs.has_changes }}"
+          echo "检查输出变量：change_summary=${{ steps.check_changes.outputs.change_summary }}"
 
       - name: Commit and Push Changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           echo "检测到规则变更，准备提交..."
+          # 再次检查变更状态
+          echo "Git变更状态："
+          git status
+          
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
