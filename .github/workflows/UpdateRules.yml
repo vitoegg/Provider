@@ -31,29 +31,49 @@ env:
 
 jobs:
   update-rules:
+    # 使用 Ubuntu 最新版本作为运行环境
     runs-on: ubuntu-latest
     outputs:
       has_changes: ${{ steps.check_changes.outputs.has_changes }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        # 添加日志输出
+        id: checkout
+        with:
+          fetch-depth: 1  # 仅获取最近一次提交，加速检出过程
 
       - name: Setup Timezone
         run: sudo timedatectl set-timezone "Asia/Shanghai"
+        # 添加日志输出
+        id: timezone
 
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
+        # 添加日志输出
+        id: python
 
       - name: Create Processing Script
+        id: create_script
         run: |
+          echo "::group::创建规则处理脚本"
+          echo "创建高效的规则处理脚本..."
           # 创建高效处理脚本
           cat > process_rules.sh << 'EOF'
           #!/bin/bash
           set -eo pipefail
 
+          # ==========================================
+          # 规则更新脚本 - 自动分析并优化网络规则集合
+          # ==========================================
+
           # 解析规则配置
+          # 参数:
+          # $1 - 规则配置文本
+          # $2 - 规则配置关联数组的引用 (输出)
+          # $3 - 规则文件列表数组的引用 (输出)
           parse_rules_config() {
             local config="$1"
             local -n rule_configs_ref="$2"
@@ -93,6 +113,10 @@ jobs:
           }
 
           # 下载并处理规则
+          # 参数:
+          # $1 - 规则名称
+          # $2 - 输出文件路径
+          # $3 - 规则源URL列表（空格分隔）
           process_rule() {
             local rule_name="$1"
             local output_path="$2"
@@ -101,158 +125,224 @@ jobs:
             output_dir=$(dirname "$output_path")
             
             echo "Processing $rule_name to $output_path..."
-
-            # 创建输出目录
-            mkdir -p "$output_dir"
-            
-            # 临时文件
-            local merged_file
-            local cleaned_file
-            merged_file=$(mktemp)
-            cleaned_file=$(mktemp)
-            
-            # 下载和合并规则
-            echo "" > "$merged_file"
-            for url in $urls; do
-              echo "Downloading from $url..."
-              if curl -sL --fail "$url" >> "$merged_file"; then
-                echo "  Download successful"
-              else
-                echo "  Download failed, skipping"
-              fi
-            done
-            
-            # 快速清理文件 (移除注释、空行和前缀)
-            grep -v "^#" "$merged_file" | grep -v "^$" | grep -v "^payload:" > "$cleaned_file" || true
-            
-            # 仅当有内容时才处理域名
-            if [[ -s "$cleaned_file" ]]; then
-              # 处理格式
-              local formatted_file
-              formatted_file=$(mktemp)
+            TIMEFORMAT='处理用时: %R 秒'
+            time {
+              # 创建输出目录
+              mkdir -p "$output_dir"
               
-              sed -E 's/[[:space:]]*#.*$//' "$cleaned_file" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | sort | uniq > "$formatted_file"
+              # 临时文件
+              local merged_file
+              local cleaned_file
+              merged_file=$(mktemp)
+              cleaned_file=$(mktemp)
               
-              # 创建最终输出文件
-              local final_file
-              final_file=$(mktemp)
+              # 临时目录和并行下载计数
+              local tmp_dir=$(mktemp -d)
+              local download_count=0
+              local download_pids=()
               
-              # 根据文件类型添加头部
-              {
-                if [[ "$output_path" == *.yaml ]]; then
-                  echo "payload:"
-                fi
+              echo "::group::下载规则源文件"
+              echo "→ 并行下载规则文件..."
+              # 并行下载规则
+              for url in $urls; do
+                local tmp_file="${tmp_dir}/download_${download_count}"
+                (curl -sL --fail --connect-timeout 10 --max-time 30 "$url" > "$tmp_file" && echo "  √ 下载成功: $url" || echo "  × 下载失败: $url") &
+                download_pids+=($!)
+                download_count=$((download_count + 1))
+              done
+              
+              # 等待所有下载完成
+              for pid in "${download_pids[@]}"; do
+                wait $pid
+              done
+              echo "::endgroup::"
+              
+              echo "::group::合并和清理规则"
+              echo "→ 合并和清理规则文件..."
+              # 合并下载的文件
+              find "$tmp_dir" -type f -name "download_*" -exec cat {} \; > "$merged_file"
+              
+              # 快速清理文件 (使用更高效的方式)
+              LC_ALL=C grep -v "^#\|^$\|^payload:" "$merged_file" > "$cleaned_file" || true
+              rm -rf "$tmp_dir"  # 清理临时目录
+              
+              # 获取数据行数
+              local input_count=$(wc -l < "$cleaned_file")
+              echo "→ 输入规则数量: $input_count"
+              echo "::endgroup::"
+              
+              # 仅当有内容时才处理域名
+              if [[ -s "$cleaned_file" ]]; then
+                # 处理格式
+                local formatted_file
+                formatted_file=$(mktemp)
                 
-                # 处理域名关系
-                # 高效过滤域名：创建反向索引，检查子域名关系
-                awk '
-                BEGIN {
-                  IGNORECASE = 1  # 忽略大小写
-                }
+                echo "::group::排序和去重"
+                echo "→ 对规则进行排序和去重..."
+                # 并行排序和去重以提高性能 (指定临时目录和缓冲区大小)
+                export LC_ALL=C
+                sed -E 's/[[:space:]]*#.*$//' "$cleaned_file" | \
+                  sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | \
+                  sort -u -S 50% -T /tmp > "$formatted_file"
+                
+                local sorted_count=$(wc -l < "$formatted_file")
+                echo "→ 排序后规则数量: $sorted_count"
+                echo "::endgroup::"
+                
+                # 创建最终输出文件
+                local final_file
+                final_file=$(mktemp)
+                
+                echo "::group::处理域名关系"
+                echo "→ 处理域名关系..."
+                # 根据文件类型添加头部
                 {
-                  # 提取域名部分
-                  domain = $0
-                  gsub(/^[^:]+:[[:space:]]*/, "", domain)
+                  if [[ "$output_path" == *.yaml ]]; then
+                    echo "payload:"
+                  fi
                   
-                  # 存储域名信息
-                  if (length(domain) > 0) {
-                    domains[domain] = $0
-                    count++
+                  # 使用AWK优化处理域名关系 - 性能优化版本
+                  LANG=C LC_ALL=C awk -v OFS= '
+                  BEGIN {
+                    IGNORECASE = 1  # 忽略大小写
                   }
-                }
-                END {
-                  if (count > 0) {
-                    # 创建排序数组
-                    n = asort(domains, sorted_domains, "@val_str_asc")
+                  {
+                    # 提取域名部分 (假设输入已经清理过)
+                    domain = $0
+                    gsub(/^[^:]+:[[:space:]]*/, "", domain)
                     
-                    # 进行单次遍历
-                    for (i = 1; i <= n; i++) {
-                      current = sorted_domains[i]
-                      if (length(current) > 0) {
-                        keep = 1
+                    # 跳过空行
+                    if (length(domain) == 0) continue
+                    
+                    # 标准化域名 - 移除可能的前导点
+                    normalized = domain
+                    sub(/^\./, "", normalized)
+                    
+                    # 使用哈希表存储域名信息
+                    domains[domain] = 1
+                    norm_to_orig[normalized][domain] = 1
+                    all_domains[++count] = domain
+                    domain_to_norm[domain] = normalized
+                  }
+                  END {
+                    if (count > 0) {
+                      # 预处理标记带前导点的情况
+                      for (norm in norm_to_orig) {
+                        dot_version = "." norm
+                        no_dot_version = norm
                         
-                        # 提取域名
-                        current_domain = current
-                        gsub(/^[^:]+:[[:space:]]*/, "", current_domain)
+                        # 检查是否同时存在带点和不带点的版本
+                        if ((dot_version in domains) && (no_dot_version in domains)) {
+                          # 标记不带点的版本为删除
+                          skip_domains[no_dot_version] = 1
+                        }
+                      }
+                      
+                      # 第一次遍历：构建父域名索引
+                      for (i = 1; i <= count; i++) {
+                        domain = all_domains[i]
+                        norm = domain_to_norm[domain]
                         
-                        # 快速域名检测
-                        for (j = 1; j <= n; j++) {
-                          if (i != j) {
-                            other = sorted_domains[j]
-                            other_domain = other
-                            gsub(/^[^:]+:[[:space:]]*/, "", other_domain)
+                        split(norm, parts, ".")
+                        parts_count = length(parts)
+                        
+                        # 至少需要两个部分才能有父域名
+                        if (parts_count >= 2) {
+                          for (level = 2; level <= parts_count; level++) {
+                            parent = ""
+                            for (p = parts_count - level + 1; p <= parts_count; p++) {
+                              parent = parent (parent ? "." : "") parts[p]
+                            }
                             
-                            # 检查是否为子域名
-                            if (length(current_domain) < length(other_domain) && 
-                                index(other_domain, current_domain) == 1 && 
-                                substr(other_domain, length(current_domain) + 1, 1) == ".") {
-                              keep = 0
-                              break
+                            if (parent in norm_to_orig) {
+                              for (pdomain in norm_to_orig[parent]) {
+                                has_parent[domain] = 1
+                                break
+                              }
                             }
                           }
                         }
+                      }
+                      
+                      # 第二次遍历：输出处理后的域名
+                      for (i = 1; i <= count; i++) {
+                        domain = all_domains[i]
                         
-                        if (keep) {
-                          print current
-                        }
+                        # 如果已被标记为跳过，则不输出
+                        if (domain in skip_domains) continue
+                        
+                        # 如果有父域名，则不输出
+                        if (domain in has_parent) continue
+                        
+                        # 通过所有检查，可以输出该域名
+                        print domain
                       }
                     }
                   }
-                }
-                ' "$formatted_file"
-              } > "$final_file"
-              
-              # 创建带有元数据的版本
-              local meta_file
-              meta_file=$(mktemp)
-              
-              {
-                echo "# Merged from:"
-                for url in $urls; do
-                  repo_url=$(echo "$url" | sed -E 's|raw.githubusercontent.com/([^/]+/[^/]+).*|github.com/\1|')
-                  echo "# - https://$repo_url"
-                done
-                echo ""
-                cat "$final_file"
-              } > "$meta_file"
-              
-              # 检查是否有更改
-              local changed=0
-              if [ -f "$output_path" ]; then
-                local old_file
-                old_file=$(mktemp)
-                grep -v "^# Update time:" "$output_path" > "$old_file"
+                  ' "$formatted_file"
+                } > "$final_file"
                 
-                if ! cmp -s "$old_file" "$meta_file"; then
+                # 获取处理后结果数量
+                local output_count=$(wc -l < "$final_file")
+                echo "→ 处理后规则数量: $output_count (减少了 $((sorted_count - output_count)) 条冗余规则)"
+                echo "::endgroup::"
+                
+                echo "::group::生成最终规则文件"
+                # 创建带有元数据的版本
+                local meta_file
+                meta_file=$(mktemp)
+                
+                {
+                  echo "# Merged from:"
+                  for url in $urls; do
+                    repo_url=$(echo "$url" | sed -E 's|raw.githubusercontent.com/([^/]+/[^/]+).*|github.com/\1|')
+                    echo "# - https://$repo_url"
+                  done
+                  echo ""
+                  cat "$final_file"
+                } > "$meta_file"
+                
+                # 检查是否有更改
+                local changed=0
+                if [ -f "$output_path" ]; then
+                  local old_file
+                  old_file=$(mktemp)
+                  grep -v "^# Update time:" "$output_path" > "$old_file"
+                  
+                  if ! cmp -s "$old_file" "$meta_file"; then
+                    changed=1
+                  fi
+                  rm -f "$old_file"
+                else
                   changed=1
                 fi
-                rm -f "$old_file"
+                
+                # 如果有更改，写入新文件
+                if [ $changed -eq 1 ]; then
+                  {
+                    echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')"
+                    cat "$meta_file"
+                  } > "$output_path"
+                  echo "→ 检测到规则变更，已更新文件"
+                else
+                  echo "→ 未检测到规则变更"
+                fi
+                echo "::endgroup::"
+                
+                # 清理临时文件
+                rm -f "$formatted_file" "$final_file" "$meta_file"
               else
-                changed=1
+                echo "→ 警告: $rule_name 没有有效内容"
               fi
               
-              # 如果有更改，写入新文件
-              if [ $changed -eq 1 ]; then
-                {
-                  echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')"
-                  cat "$meta_file"
-                } > "$output_path"
-                echo "Changes detected in $rule_name rules."
-              else
-                echo "No changes detected in $rule_name rules."
-              fi
-              
-              # 清理临时文件
-              rm -f "$formatted_file" "$final_file" "$meta_file"
-            else
-              echo "Warning: No valid content for $rule_name"
-            fi
-            
-            # 清理主要临时文件
-            rm -f "$merged_file" "$cleaned_file"
+              # 清理主要临时文件
+              rm -f "$merged_file" "$cleaned_file"
+            }
           }
 
-          # 主函数
+          # 主函数 - 协调整个规则更新过程
+          # 参数:
+          # $1 - 完整的规则配置
           main() {
             local config="$1"
             
@@ -263,31 +353,59 @@ jobs:
             # 解析配置
             parse_rules_config "$config" rule_configs rule_files
             
+            echo "==============================="
+            echo "开始更新规则文件 ($(date '+%Y-%m-%d %H:%M:%S'))"
+            echo "==============================="
+            
+            # 记录总体开始时间
+            local start_time=$SECONDS
+            
             # 处理每个规则
             for rule in "${!rule_configs[@]}"; do
               IFS=';' read -r output_path urls <<< "${rule_configs[$rule]}"
+              echo "==============================="
+              echo "::group::处理规则: $rule"
               process_rule "$rule" "$output_path" "$urls"
+              echo "::endgroup::"
+              echo "==============================="
             done
+            
+            # 计算总耗时
+            local duration=$((SECONDS - start_time))
+            echo "::group::处理总结"
+            echo "所有规则处理完成，总耗时: $((duration / 60))分$((duration % 60))秒"
+            
+            # 性能检查
+            if [ $duration -gt 180 ]; then
+              echo "警告: 处理时间超过3分钟，建议进一步优化性能"
+            elif [ $duration -lt 30 ]; then
+              echo "性能良好: 处理时间少于30秒"
+            else
+              echo "性能正常: 处理时间在目标范围内"
+            fi
+            echo "::endgroup::"
             
             # 检查Git变更
             local changes_detected=false
             
             git add "${rule_files[@]}" 2>/dev/null || true
             
+            echo "::group::检查文件变更"
             for file in "${rule_files[@]}"; do
               if [ -f "$file" ] && git diff --cached --no-color "$file" | grep -v '^[+-]# Update time:' | grep -q '^[+-]'; then
                 changes_detected=true
-                break
+                echo "检测到变更: $file"
               fi
             done
+            echo "::endgroup::"
             
             # 输出结果
             if [ "$changes_detected" = true ]; then
               echo "has_changes=true" >> "$GITHUB_OUTPUT"
-              echo "Changes detected in rules files"
+              echo "检测到规则文件变更"
             else
               echo "has_changes=false" >> "$GITHUB_OUTPUT"
-              echo "No changes detected in rules files"
+              echo "未检测到规则文件变更"
               git restore --staged "${rule_files[@]}" 2>/dev/null || true
             fi
           }
@@ -297,19 +415,34 @@ jobs:
           EOF
           
           chmod +x process_rules.sh
+          echo "脚本创建完成"
+          echo "::endgroup::"
 
       - name: Update RuleSets
-        id: update_rules
+        id: check_changes
         run: |
+          echo "::group::开始更新规则集"
+          echo "开始规则处理流程..."
           ./process_rules.sh "${{ env.RULES_CONFIG }}"
+          echo "::endgroup::"
 
       - name: Commit and Push Changes
-        if: steps.update_rules.outputs.has_changes == 'true'
+        if: steps.check_changes.outputs.has_changes == 'true'
         run: |
+          echo "::group::提交变更"
+          echo "检测到规则变更，提交到仓库..."
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git commit -m "Auto update rules by action bot"
+          
+          # 显示本次提交的统计信息但不显示具体内容
+          echo "本次更新统计:"
+          git show --stat --oneline HEAD
+          
+          # 推送更改
+          echo "推送更改到远程仓库..."
           git push
+          echo "::endgroup::"
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
@@ -319,4 +452,4 @@ jobs:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
           retain_days: 0
-          keep_minimum_runs: 0
+          keep_minimum_runs: 6  # 保留最近6次运行记录，便于查看历史
