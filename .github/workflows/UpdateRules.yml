@@ -2,242 +2,126 @@ name: Update Rules
 
 on:
   schedule:
-    - cron: '0 */3 * * *'  # 每3小时执行一次
-  workflow_dispatch:        # 允许手动触发
+    - cron: '0 */3 * * *'
+  workflow_dispatch:
 
-# ===============================
-# 规则配置区域
-# 格式说明: 
-# - RULE_名称_PATH: 规则输出的文件路径
-# - RULE_名称_URLS: 规则数据来源的URL列表
-# ===============================
 env:
-  # China规则 - 用于中国大陆直连网站
   RULE_CHINA_PATH: RuleSet/Direct/China.list
   RULE_CHINA_URLS: >-
     https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list
     https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/direct.txt
     https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/LocalNet.list
   
-  # Apple规则 - 用于Apple服务相关网站
   RULE_APPLE_PATH: RuleSet/Apple/Service.list
   RULE_APPLE_URLS: >-
     https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple_Domain.list
     https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt
     https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt
   
-  # Reject规则 - 用于广告和隐私跟踪域名
   RULE_REJECT_PATH: RuleSet/Extra/Reject.list
   RULE_REJECT_URLS: >-
     https://ruleset.skk.moe/List/domainset/reject.conf
     https://ruleset.skk.moe/List/domainset/reject_extra.conf
     https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Privacy.list
 
-# ===============================
-# 任务定义
-# ===============================
 jobs:
   update-rules:
-    runs-on: ubuntu-latest  # 使用Ubuntu最新版本作为运行环境
+    runs-on: ubuntu-latest
     outputs:
-      has_changes: ${{ steps.check_changes.outputs.has_changes }}  # 记录是否有规则变更
-    
+      has_changes: ${{ steps.check_changes.outputs.has_changes }}
     steps:
-      # 步骤1: 检出代码仓库
-      - name: 检出代码仓库
+      - name: Checkout repository
         uses: actions/checkout@v4
         id: checkout
         with:
-          fetch-depth: 1  # 只获取最近一次提交，加快检出速度
-      
-      # 步骤2: 设置时区为中国时区
-      - name: 设置时区
+          fetch-depth: 1
+
+      - name: Setup Timezone
         run: sudo timedatectl set-timezone "Asia/Shanghai"
         id: timezone
-      
-      # 步骤3: 设置Python环境
-      - name: 设置Python环境
+
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'  # 使用Python 3.x版本
+          python-version: '3.x'
         id: python
-      
-      # 步骤4: 创建规则处理脚本
-      - name: 创建规则处理脚本
+
+      - name: Create Processing Script
         id: create_script
         run: |
-          echo "开始生成规则处理脚本..."
-          
-          # 将脚本内容写入文件
           cat > process_rules.sh << 'EOF'
           #!/bin/bash
-          set -eo pipefail  # 遇到错误立即退出，管道命令任何一个失败都视为失败
+          set -eo pipefail
 
-          # ==========================================
-          # 网络规则更新脚本
-          # 
-          # 主要功能:
-          # 1. 从网络下载规则
-          # 2. 清理规则内容(去除注释、空行等)
-          # 3. 去除重复规则
-          # 4. 生成最终规则文件并统计变化
-          # ==========================================
-
-          # 函数1: 从环境变量读取规则配置
-          # 输入: 
-          #   $1 - 保存规则配置的数组变量名
-          #   $2 - 保存规则文件路径的数组变量名
-          # 功能: 解析环境变量中的规则配置信息
           get_rules_config() {
-            # 接收函数参数(通过引用传递数组变量)
-            local -n rule_list="$1"   # 存放规则配置的数组
-            local -n file_list="$2"   # 存放文件路径的数组
+            local -n rule_list="$1"
+            local -n file_list="$2"
             
             echo "正在查找规则配置..."
             
-            # 查找所有RULE_*_PATH环境变量
             for var in $(env | grep "^RULE_.*_PATH=" | cut -d= -f1); do
-              # 提取规则名称，去掉RULE_前缀和_PATH后缀
-              local rule_name=${var%_PATH}   # 去掉_PATH后缀
-              rule_name=${rule_name#RULE_}   # 去掉RULE_前缀
+              local rule_name=${var%_PATH}
+              rule_name=${rule_name#RULE_}
               
-              # 获取对应的URL变量名
               local url_var="RULE_${rule_name}_URLS"
               
-              # 检查URL变量是否存在
               if [[ -v $url_var ]]; then
-                # 获取路径和URL值
-                local path=${!var}             # 获取路径变量的值
-                local urls=${!url_var}         # 获取URL变量的值
-                local url_count=$(echo "$urls" | wc -w)
+                local path=${!var}
+                local urls=${!url_var}
                 
-                # 显示找到的规则信息
                 echo "找到规则: $rule_name"
                 echo "- 保存路径: $path"
-                echo "- 下载地址数量: $url_count"
+                echo "- 下载地址数量: $(echo "$urls" | wc -w)"
                 
-                # 保存规则信息到数组中
-                rule_list["$rule_name"]="$path;$urls"  # 路径和URL用分号分隔
-                file_list+=("$path")                   # 添加到文件列表
+                rule_list["$rule_name"]="$path;$urls"
+                file_list+=("$path")
               fi
             done
             
-            # 显示找到的规则总数
             echo "共找到 ${#rule_list[@]} 个规则"
           }
 
-          # 函数2: 处理单个规则
-          # 输入:
-          #   $1 - 规则名称
-          #   $2 - 输出文件路径
-          #   $3 - URL列表
-          # 功能: 下载、清理、去重并生成最终规则文件
           process_rule() {
-            # 接收参数
-            local rule_name="$1"      # 规则名称
-            local output_path="$2"    # 输出文件路径
-            local urls="$3"           # URL列表(以空格分隔)
+            local rule_name="$1"
+            local output_path="$2"
+            local urls="$3"
             
-            # 创建输出目录(如果不存在)
             local output_dir=$(dirname "$output_path")
             mkdir -p "$output_dir"
             
-            echo "====== 开始处理规则: $rule_name ======"
+            echo "开始处理规则: $rule_name"
             echo "保存位置: $output_path"
             
-            # 记录开始时间(用于计算处理时间)
             local start_time=$SECONDS
             
-            # 步骤1: 下载规则文件
-            echo "[1/4] 正在下载规则源..."
+            echo "正在下载规则..."
             
-            # 创建临时文件和目录
-            local merged_file=$(mktemp)  # 合并后的文件
-            local cleaned_file=$(mktemp) # 清理后的文件
-            local tmp_dir=$(mktemp -d)   # 临时下载目录
+            local merged_file=$(mktemp)
+            local cleaned_file=$(mktemp)
+            local tmp_dir=$(mktemp -d)
             
-            # 并行下载所有URL
             local download_count=0
             local download_pids=()
-            local download_urls=()
-            local download_files=()
             
             for url in $urls; do
-              # 为每个URL创建临时文件
               local tmp_file="${tmp_dir}/download_${download_count}"
               
-              # 保存URL和文件路径
-              download_urls+=("$url")
-              download_files+=("$tmp_file")
+              (curl -sL --fail --connect-timeout 10 --max-time 30 "$url" > "$tmp_file" && 
+               echo "下载成功: $url" || 
+               echo "下载失败: $url") &
               
-              # 后台下载
-              curl -sL --fail --connect-timeout 10 --max-time 30 "$url" > "$tmp_file" &
-              
-              # 保存进程ID和递增下载计数
               download_pids+=($!)
               download_count=$((download_count + 1))
             done
             
-            # 等待所有下载进程完成并显示结果
-            local total_size=0
-            local total_lines=0
-            local success_count=0
-            
-            echo "[1/4] 下载结果:"
-            for i in $(seq 0 $((download_count - 1))); do
-              wait ${download_pids[$i]}
-              exit_code=$?
-              url="${download_urls[$i]}"
-              file="${download_files[$i]}"
-              
-              # 计算文件大小和行数
-              if [ $exit_code -eq 0 ] && [ -f "$file" ]; then
-                size=$(wc -c < "$file")
-                lines=$(wc -l < "$file")
-                total_size=$((total_size + size))
-                total_lines=$((total_lines + lines))
-                success_count=$((success_count + 1))
-                
-                # 格式化大小显示
-                if [ $size -ge 1048576 ]; then
-                  size_fmt="$(echo "scale=2; $size/1048576" | bc) MB"
-                elif [ $size -ge 1024 ]; then
-                  size_fmt="$(echo "scale=2; $size/1024" | bc) KB"
-                else
-                  size_fmt="$size 字节"
-                fi
-                
-                echo "  - 下载成功: $url (大小: $size_fmt, 规则数: $lines)"
-              else
-                echo "  - 下载失败: $url"
-              fi
+            for pid in "${download_pids[@]}"; do
+              wait $pid
             done
             
-            # 显示下载总结
-            echo "[1/4] 下载摘要: $success_count/$download_count 成功"
+            echo "正在合并和清理规则..."
             
-            # 格式化总大小显示
-            if [ $total_size -ge 1048576 ]; then
-              size_fmt="$(echo "scale=2; $total_size/1048576" | bc) MB"
-            elif [ $total_size -ge 1024 ]; then
-              size_fmt="$(echo "scale=2; $total_size/1024" | bc) KB"
-            else
-              size_fmt="$total_size 字节"
-            fi
-            echo "[1/4] 总数据量: $size_fmt, 总规则数: $total_lines"
-            
-            # 步骤2: 合并和清理规则
-            echo "[2/4] 正在合并和清理规则..."
-            
-            # 合并所有下载的临时文件
             cat "${tmp_dir}"/download_* > "$merged_file"
-            local merged_count=$(wc -l < "$merged_file")
-            echo "[2/4] 原始合并规则数: $merged_count"
             
-            # 使用sed命令清理规则:
-            # 1. 删除注释和空行
-            # 2. 删除行首尾空格
-            # 3. 删除特殊格式行
             sed -e 's/[[:space:]]*[#;\/\/].*$//' \
                 -e 's/^[[:space:]]*//;s/[[:space:]]*$//' \
                 -e '/^$/d' \
@@ -246,369 +130,203 @@ jobs:
                 -e '/^[[:space:]]*\/\*/d;/\*\//d' \
                 "$merged_file" > "$cleaned_file"
             
-            # 统计清理后的规则数量
             local cleaned_count=$(wc -l < "$cleaned_file")
-            local removed_count=$((merged_count - cleaned_count))
-            echo "[2/4] 清理后规则数: $cleaned_count (移除了 $removed_count 个无效条目)"
+            echo "清理后的规则数量: $cleaned_count"
             
-            # 步骤3: 排序和去重
-            if [[ -s "$cleaned_file" ]]; then  # 检查文件是否非空
-              echo "[3/4] 正在排序和去重规则..."
+            if [[ -s "$cleaned_file" ]]; then
+              echo "正在使用高级算法排序和去除重复项..."
               
-              # 创建最终文件
               local final_file=$(mktemp)
               
-              # 使用Python脚本进行高级去重和优化
-              echo "[3/4] 正在使用规则处理器优化..."
+              echo "使用智能规则优化脚本处理..."
               
-              # 确保Python脚本有执行权限
               script_path="${GITHUB_WORKSPACE}/Script/Workflow/process_rules.py"
               chmod +x "$script_path"
               
-              # 创建临时文件用于存储Python脚本的输出信息
               local stats_file=$(mktemp)
               
-              # 执行Python脚本
               python3 "$script_path" "$cleaned_file" > "$final_file" 2> "$stats_file"
               python_exit=$?
               
-              # 检查Python脚本执行状态
               if [ $python_exit -ne 0 ]; then
-                echo "[3/4] Python处理器失败，回退到基础去重"
-                echo "[3/4] 错误: $(cat "$stats_file")"
-                # 使用基础的排序和去重命令
+                echo "Python脚本执行失败，回退到基础排序和去重"
+                echo "错误信息: $(cat "$stats_file")"
                 sort -u "$cleaned_file" > "$final_file"
-                local unique_count=$(wc -l < "$final_file")
-                local dupe_count=$((cleaned_count - unique_count))
-                echo "[3/4] 基础去重后规则数: $unique_count (移除了 $dupe_count 个重复项)"
               else
-                # 提取Python脚本的统计信息
-                local total=$(grep "总规则数:" "$stats_file" | awk '{print $2}')
-                local dupes=$(grep "重复规则:" "$stats_file" | awk '{print $2}')
-                local wildcards=$(grep "泛域名被覆盖:" "$stats_file" | awk '{print $2}')
-                local exact=$(grep "精确域名被覆盖:" "$stats_file" | awk '{print $2}')
-                local kept=$(grep "保留规则:" "$stats_file" | awk '{print $2}')
-                
-                echo "[3/4] 高级优化结果:"
-                echo "  - 总规则数: $total"
-                echo "  - 移除重复项: $dupes"
-                echo "  - 泛域名优化: $wildcards"
-                echo "  - 精确域名优化: $exact"
-                echo "  - 最终规则数: $kept"
+                cat "$stats_file"
+                echo "智能优化完成"
               fi
               
-              # 清理临时文件
               rm -f "$stats_file"
               
-              # 步骤4: 添加元数据并保存
-              echo "[4/4] 正在生成最终规则文件..."
+              local final_count=$(wc -l < "$final_file")
+              local removed_count=$((cleaned_count - final_count))
+              echo "去重后的规则数量: $final_count (减少了 $removed_count 个重复项)"
               
-              # 创建带有元数据的版本
+              echo "正在生成最终规则文件..."
+              
               local meta_file=$(mktemp)
               
-              # 添加元数据信息
               {
-                echo "# 规则: $rule_name"
-                echo "# 来源:"
+                echo "# 规则来源:"
                 for url in $urls; do
-                  # 转换为GitHub仓库URL显示
                   repo_url=$(echo "$url" | sed -E 's|raw.githubusercontent.com/([^/]+/[^/]+).*|github.com/\1|')
                   echo "# - https://$repo_url"
                 done
                 echo ""
-                # 添加规则内容
                 cat "$final_file"
               } > "$meta_file"
               
-              # 步骤5: 检查是否有更改
               local changed=0
-              local old_lines=0
-              local new_lines=$(grep -v "^#" "$meta_file" | wc -l)
-              
               if [ -f "$output_path" ]; then
-                # 比较旧文件和新文件(忽略更新时间行)
                 local old_file=$(mktemp)
                 grep -v "^# Update time:" "$output_path" > "$old_file"
-                old_lines=$(grep -v "^#" "$old_file" | wc -l)
                 
                 if ! cmp -s "$old_file" "$meta_file"; then
-                  changed=1  # 文件有变化
-                  
-                  # 计算规则数量变化
+                  changed=1
+                  local old_lines=$(grep -v "^#" "$old_file" | wc -l)
+                  local new_lines=$(grep -v "^#" "$meta_file" | wc -l)
                   local added=$((new_lines > old_lines ? new_lines - old_lines : 0))
                   local removed=$((old_lines > new_lines ? old_lines - new_lines : 0))
                   
-                  # 创建差异文件，用于详细分析
-                  local diff_file=$(mktemp)
-                  diff -u <(grep -v "^#" "$old_file") <(grep -v "^#" "$meta_file") > "$diff_file" || true
-                  
-                  # 计算真实的添加和删除行
-                  local real_added=$(grep -c "^+" "$diff_file" || echo 0)
-                  local real_removed=$(grep -c "^-" "$diff_file" || echo 0)
-                  
-                  echo "[4/4] 检测到规则变化:"
-                  echo "  - 原有规则数: $old_lines"
-                  echo "  - 新规则数: $new_lines"
-                  echo "  - 净变化: +$added/-$removed"
-                  echo "  - 实际变化: +$real_added/-$real_removed"
-                  
-                  # 保存变更信息用于提交 - 不使用括号，使用英文标识
-                  rule_type=$(basename $(dirname "$output_path"))
-                  rule_file=$(basename "$output_path")
-                  
-                  # 使用正确的 GitHub Actions 环境变量格式
-                  {
-                    echo "RULE_${rule_name}_TYPE=$rule_type"
-                    echo "RULE_${rule_name}_FILE=$rule_file"
-                    echo "RULE_${rule_name}_ADDED=$real_added"
-                    echo "RULE_${rule_name}_REMOVED=$real_removed"
-                  } >> $GITHUB_ENV
-                  
-                  # 清理差异文件
-                  rm -f "$diff_file"
+                  echo "规则变化统计:"
+                  echo "- 原有规则数量: $old_lines"
+                  echo "- 新规则数量: $new_lines"
+                  echo "- 变化: 新增 $added 条, 移除 $removed 条"
                 fi
                 rm -f "$old_file"
               else
-                changed=1  # 文件不存在，需要创建
-                echo "[4/4] 新建规则文件，包含 $new_lines 条规则"
-                
-                # 保存新建信息 - 不使用括号，使用英文标识
-                rule_type=$(basename $(dirname "$output_path"))
-                rule_file=$(basename "$output_path")
-                
-                # 使用正确的 GitHub Actions 环境变量格式
-                {
-                  echo "RULE_${rule_name}_TYPE=$rule_type"
-                  echo "RULE_${rule_name}_FILE=$rule_file"
-                  echo "RULE_${rule_name}_ADDED=$new_lines"
-                  echo "RULE_${rule_name}_REMOVED=0"
-                } >> $GITHUB_ENV
+                changed=1
+                local new_lines=$(grep -v "^#" "$meta_file" | wc -l)
+                echo "新建规则文件，包含 $new_lines 条规则"
               fi
               
-              # 如果有更改，写入新文件
               if [ $changed -eq 1 ]; then
                 {
                   echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')"
                   cat "$meta_file"
                 } > "$output_path"
-                echo "[4/4] 规则文件已更新"
+                echo "规则已更新"
               else
-                echo "[4/4] 无变化，文件保持不变"
+                echo "规则无变化，无需更新"
               fi
               
-              # 清理临时文件
               rm -f "$final_file" "$meta_file"
             else
-              echo "[3/4] 警告: 未找到有效内容，跳过处理"
+              echo "警告: 没有找到有效内容，跳过处理"
             fi
             
-            # 删除所有临时文件
             rm -f "$merged_file" "$cleaned_file"
             rm -rf "$tmp_dir"
             
-            # 显示处理用时
             local duration=$((SECONDS - start_time))
-            echo "处理完成，用时 $duration 秒"
-            echo "========================================"
+            echo "处理用时: $duration 秒"
           }
 
-          # 主函数: 控制整个处理流程
           main() {
-            echo "====== 网络规则更新程序 ======"
+            echo "===== 网络规则更新程序 ====="
             echo "开始时间: $(date '+%Y-%m-%d %H:%M:%S')"
             echo "============================"
             
-            # 初始化数据结构
-            declare -A rule_configs  # 关联数组，存储规则配置
-            declare -a rule_files    # 普通数组，存储规则文件路径
+            declare -A rule_configs
+            declare -a rule_files
             
-            # 获取所有规则配置
             get_rules_config rule_configs rule_files
             
-            # 如果没有找到规则，就退出
             if [ ${#rule_configs[@]} -eq 0 ]; then
-              echo "错误: 未找到规则配置，退出程序"
+              echo "没有找到规则配置，程序结束"
               return
             fi
             
             echo "============================"
-            echo "开始更新规则..."
+            echo "开始更新规则"
             echo "============================"
             
-            # 记录开始时间(用于计算总处理时间)
             local start_time=$SECONDS
             
-            # 处理每个规则
-            local rule_count=${#rule_configs[@]}
-            local current_rule=0
-            
             for rule_name in "${!rule_configs[@]}"; do
-              # 更新进度
-              current_rule=$((current_rule + 1))
-              echo "进度: 正在处理规则 $current_rule/$rule_count: $rule_name"
-              
-              # 分离路径和URL
               IFS=';' read -r output_path urls <<< "${rule_configs[$rule_name]}"
               
-              # 处理规则
+              echo "============================"
               process_rule "$rule_name" "$output_path" "$urls"
-              echo ""
+              echo "============================"
             done
             
-            # 计算总耗时
             local duration=$((SECONDS - start_time))
             echo "所有规则处理完成"
             echo "总用时: $((duration / 60))分$((duration % 60))秒"
             
-            # 检测Git变更
             local has_changes=false
+            local change_summary=""
             local total_added=0
             local total_removed=0
             
-            # 添加文件到Git以检测变化
             git add "${rule_files[@]}" 2>/dev/null || true
             
-            # 检查是否有变化的文件
-            if git diff --cached --name-only | grep -q "\.list$"; then
-              has_changes=true
-              
-              # 获取变更的文件列表
-              changed_files=$(git diff --cached --name-only | grep "\.list$")
-              
-              echo "检测到以下文件有变化:"
-              for file in $changed_files; do
-                # 获取当前文件的行数变化统计
-                file_stats=$(git diff --cached --numstat "$file" | awk '{print $1" "$2}')
-                if [ -n "$file_stats" ]; then
-                  read added_lines removed_lines <<< "$file_stats"
+            for file in "${rule_files[@]}"; do
+              if [ -f "$file" ]; then
+                local diff_file=$(mktemp)
+                git diff --cached --no-color "$file" > "$diff_file"
+                
+                if grep -v '^[+-]# Update time:' "$diff_file" | grep -q '^[+-]'; then
+                  has_changes=true
+                  local basename=$(basename "$file")
                   
-                  # 提取规则类型和文件名，用于生成提交信息
-                  dir_name=$(dirname "$file")
-                  file_name=$(basename "$file")
-                  rule_type=$(basename "$dir_name")
-                  rule_name=$(basename "$file_name" .list)
+                  local added_lines=$(grep -v '^[+-]# ' "$diff_file" | grep -c '^+' || echo 0)
+                  local removed_lines=$(grep -v '^[+-]# ' "$diff_file" | grep -c '^-' || echo 0)
                   
-                  echo "- $file: +$added_lines/-$removed_lines"
+                  echo "文件有变化: $file"
+                  echo "- 详细统计: 新增 $added_lines 条规则, 移除 $removed_lines 条规则"
                   
-                  # 保存变更信息用于提交
-                  {
-                    echo "RULE_${rule_name}_TYPE=$rule_type"
-                    echo "RULE_${rule_name}_FILE=$file_name"
-                    echo "RULE_${rule_name}_ADDED=$added_lines"
-                    echo "RULE_${rule_name}_REMOVED=$removed_lines"
-                  } >> $GITHUB_ENV
+                  change_summary="${change_summary}[$basename] +$added_lines/-$removed_lines "
                   
-                  # 累计总变化量
                   total_added=$((total_added + added_lines))
                   total_removed=$((total_removed + removed_lines))
                 fi
-              done
-              
-              # 保存总变化量
-              {
-                echo "TOTAL_ADDED=$total_added"
-                echo "TOTAL_REMOVED=$total_removed"
-              } >> $GITHUB_ENV
-              
+                
+                rm -f "$diff_file"
+              fi
+            done
+            
+            if [ "$has_changes" = true ]; then
+              change_summary="${change_summary}[总计] +$total_added/-$total_removed"
               echo "总变化: 新增 $total_added 条规则, 移除 $total_removed 条规则"
               
-              # 设置GitHub Actions输出变量 - 有变化
               if [ -n "$GITHUB_OUTPUT" ]; then
                 echo "has_changes=true" >> $GITHUB_OUTPUT
+                echo "change_summary=${change_summary}" >> $GITHUB_OUTPUT
               fi
-              echo "规则已更新，准备提交更改"
             else
-              # 设置GitHub Actions输出变量 - 无变化
               if [ -n "$GITHUB_OUTPUT" ]; then
                 echo "has_changes=false" >> $GITHUB_OUTPUT
               fi
-              echo "未检测到规则变化，无需提交"
-              # 还原已暂存的文件
               git restore --staged "${rule_files[@]}" 2>/dev/null || true
             fi
-            
-            echo "============================"
-            echo "程序结束"
-            echo "============================"
           }
 
-          # 执行主函数
           main
           EOF
           
-          # 设置脚本可执行权限
           chmod +x process_rules.sh
 
-      # 步骤5: 执行规则更新并检查变更
-      - name: 执行规则更新
+      - name: Update RuleSets
         id: check_changes
-        run: |
-          # 执行脚本
-          ./process_rules.sh
-          
-          # 检查git状态确定是否有变更
-          git add RuleSet/**/*.list
-          if git diff --cached --name-only | grep -q "\.list$"; then
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-          fi
+        run: ./process_rules.sh
 
-      # 步骤6: 提交并推送变更(仅当有变更时执行)
-      - name: 提交并推送变更
+      - name: Commit and Push Changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
-          # 设置Git提交信息
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          
-          # 获取所有变更的规则文件
-          changed_files=$(git diff --cached --name-only | grep "\.list$")
-          
-          # 为每个变更的文件创建单独的提交
-          for file in $changed_files; do
-            # 提取文件信息用于提交消息
-            dir_name=$(dirname "$file")
-            file_name=$(basename "$file")
-            rule_type=$(basename "$dir_name")
-            
-            # 获取文件的行数变化
-            file_stats=$(git diff --cached --numstat "$file" | awk '{print $1" "$2}')
-            if [ -n "$file_stats" ]; then
-              read added removed <<< "$file_stats"
-              
-              # 构建提交信息 - 使用英文，不含括号
-              commit_msg="Update $rule_type $file_name: added $added removed $removed rules"
-              
-              # 提交特定文件
-              git commit -m "$commit_msg" "$file" || true
-            fi
-          done
-          
-          # 如果还有未提交的暂存文件，用总结信息提交
-          if git diff --cached --name-only | grep -q "\.list$"; then
-            # 获取总体变化统计
-            total_stats=$(git diff --cached --numstat | grep "\.list$" | awk '{a+=$1; r+=$2} END {print a" "r}')
-            if [ -n "$total_stats" ]; then
-              read total_added total_removed <<< "$total_stats"
-            else
-              total_added=0
-              total_removed=0
-            fi
-            
-            git commit -m "Update remaining rules: added $total_added removed $total_removed rules" || true
-          fi
-          
-          # 推送变更到仓库
+          git commit -m "Auto update rules: ${{ steps.check_changes.outputs.change_summary }}"
           git push
         env:
-          GITHUB_TOKEN: ${{ github.token }}  # 使用GitHub提供的令牌进行认证
+          GITHUB_TOKEN: ${{ github.token }}
 
-      # 步骤7: 清理旧的工作流运行记录
-      - name: 清理旧的工作流运行记录
+      - name: Delete Workflow Runs
         uses: Mattraks/delete-workflow-runs@v2
         with:
           token: ${{ github.token }}
           repository: ${{ github.repository }}
           retain_days: 0
-          keep_minimum_runs: 2  # 保留最近2次运行记录，便于查看历史
+          keep_minimum_runs: 2
