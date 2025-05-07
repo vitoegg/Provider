@@ -146,9 +146,21 @@ jobs:
             done
             
             # 等待所有下载完成
+            download_success=0
             for pid in "${download_pids[@]}"; do
-              wait $pid
+              if wait $pid; then
+                download_success=$((download_success + 1))
+              fi
             done
+            
+            echo "下载完成: $download_success/$download_count 个文件成功下载"
+            
+            # 如果没有文件成功下载，报错并退出
+            if [ $download_success -eq 0 ]; then
+              echo "错误: 所有文件下载均失败，无法继续处理"
+              echo "请检查网络连接或URL是否有效"
+              return 1
+            fi
             
             # 2. 合并和清理规则
             echo "正在合并和清理规则..."
@@ -159,7 +171,15 @@ jobs:
             tmp_dir=$(mktemp -d)   # 临时下载目录
             
             # 合并所有下载的文件
-            cat "${tmp_dir}"/download_* > "$merged_file"
+            shopt -s nullglob  # 设置shell选项，使通配符在没有匹配时返回空字符串
+            downloads=("${tmp_dir}"/download_*)
+            if [ ${#downloads[@]} -gt 0 ]; then
+              cat "${downloads[@]}" > "$merged_file"
+            else
+              echo "警告: 没有下载到任何文件，创建空的合并文件"
+              touch "$merged_file"
+            fi
+            shopt -u nullglob  # 恢复默认设置
             
             # 清理规则:
             # - 删除注释和空行
