@@ -6,28 +6,29 @@ on:
   workflow_dispatch:
 
 env:
-  RULES_CONFIG: |
-    rules:
-      China:
-        path: RuleSet/Direct/China.list
-        urls:
-          - https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list
-          - https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/direct.txt
-          - https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/LocalNet.list
-      
-      Apple:
-        path: RuleSet/Apple/Service.list
-        urls:
-          - https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple_Domain.list
-          - https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt
-          - https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt
-      
-      Reject:
-        path: RuleSet/Extra/Reject.list
-        urls:
-          - https://ruleset.skk.moe/List/domainset/reject.conf
-          - https://ruleset.skk.moe/List/domainset/reject_extra.conf
-          - https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Privacy.list
+  # 规则配置 - 简单格式
+  # 格式: RULE_名称_PATH=输出路径 和 RULE_名称_URLS=URL1 URL2 URL3
+  
+  # China规则
+  RULE_CHINA_PATH: RuleSet/Direct/China.list
+  RULE_CHINA_URLS: >-
+    https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list
+    https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/direct.txt
+    https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/LocalNet.list
+  
+  # Apple规则
+  RULE_APPLE_PATH: RuleSet/Apple/Service.list
+  RULE_APPLE_URLS: >-
+    https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple_Domain.list
+    https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt
+    https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt
+  
+  # Reject规则
+  RULE_REJECT_PATH: RuleSet/Extra/Reject.list
+  RULE_REJECT_URLS: >-
+    https://ruleset.skk.moe/List/domainset/reject.conf
+    https://ruleset.skk.moe/List/domainset/reject_extra.conf
+    https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Privacy.list
 
 jobs:
   update-rules:
@@ -65,238 +66,237 @@ jobs:
           #!/bin/bash
           set -eo pipefail
 
-          # ==========================================
-          # 规则更新脚本 - 简化版
-          # 功能：下载、清理、去重并合并网络规则
-          # ==========================================
+          # =====================================
+          # 网络规则更新脚本
+          # 功能: 下载、清理、去掉重复的规则
+          # =====================================
 
-          # 解析规则配置
-          # 输入：规则配置文本
-          # 输出：规则设置和文件列表
-          parse_rules_config() {
-            local config="$1"           # 配置文本
-            local -n configs_ref="$2"   # 规则配置引用
-            local -n files_ref="$3"     # 文件列表引用
-
-            local rule_name=""  # 当前规则名称
-            local path=""       # 规则输出路径
-            local urls=""       # 规则源URL列表
-
-            # 逐行读取配置
-            while IFS= read -r line; do
-              # 跳过空行和注释
-              [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-
-              # 匹配规则名称行
-              if [[ "$line" =~ ^[[:space:]]*([^:]+):[[:space:]]*$ ]]; then
-                rule_name="${BASH_REMATCH[1]}"
-                if [[ "$rule_name" != "rules" ]]; then
-                  path=""
-                  urls=""
-                fi
-              # 匹配路径行
-              elif [[ "$line" =~ ^[[:space:]]*path:[[:space:]]*([^[:space:]]+) ]]; then
-                path="${BASH_REMATCH[1]}"
-                files_ref+=("$path")  # 添加到文件列表
-              # 跳过urls标记行
-              elif [[ "$line" =~ ^[[:space:]]*urls:[[:space:]]*$ ]]; then
-                continue
-              # 匹配URL行
-              elif [[ "$line" =~ ^[[:space:]]*-[[:space:]]*([^[:space:]]+) ]]; then
-                urls+="${BASH_REMATCH[1]} "  # 添加URL到列表
-              # 保存已完成的规则配置
-              elif [[ -n "$rule_name" && -n "$path" && -n "$urls" && "$rule_name" != "rules" ]]; then
-                configs_ref["$rule_name"]="$path;$urls"  # 保存为"路径;URL列表"格式
-                rule_name=""
+          # 第一步: 从环境变量获取规则配置信息
+          get_rules_config() {
+            # 接收参数
+            local -n rule_list="$1"   # 存放规则配置的数组
+            local -n file_list="$2"   # 存放文件路径的数组
+            
+            echo "正在查找规则配置..."
+            
+            # 查找所有规则变量 (格式: RULE_规则名_PATH)
+            for var in $(env | grep "^RULE_.*_PATH=" | cut -d= -f1); do
+              # 从变量名中提取规则名称
+              local rule_name=${var%_PATH}   # 去掉_PATH后缀
+              rule_name=${rule_name#RULE_}   # 去掉RULE_前缀
+              
+              # 获取对应的URL变量名 (格式: RULE_规则名_URLS)
+              local url_var="RULE_${rule_name}_URLS"
+              
+              # 检查URL变量是否存在
+              if [[ -v $url_var ]]; then
+                # 获取路径和URL值
+                local path=${!var}             # 获取路径变量的值
+                local urls=${!url_var}         # 获取URL变量的值
+                
+                # 显示找到的规则信息
+                echo "找到规则: $rule_name"
+                echo "- 保存路径: $path"
+                echo "- 下载地址数量: $(echo "$urls" | wc -w)"
+                
+                # 保存规则信息到数组中
+                rule_list["$rule_name"]="$path;$urls"  # 路径和URL用分号分隔
+                file_list+=("$path")                   # 添加到文件列表
               fi
-            done <<< "$config"
-
-            # 保存最后一个规则配置
-            if [[ -n "$rule_name" && -n "$path" && -n "$urls" && "$rule_name" != "rules" ]]; then
-              configs_ref["$rule_name"]="$path;$urls"
-            fi
+            done
+            
+            # 显示找到的规则总数
+            echo "共找到 ${#rule_list[@]} 个规则"
           }
 
-          # 下载并处理规则
-          # 参数: 规则名称、输出路径、URL列表
+          # 第二步: 处理单个规则
           process_rule() {
+            # 接收参数
             local rule_name="$1"      # 规则名称
             local output_path="$2"    # 输出文件路径
-            local urls="$3"           # URL列表（空格分隔）
+            local urls="$3"           # URL列表
             
-            # 创建输出目录
+            # 创建输出目录(如果不存在)
             local output_dir=$(dirname "$output_path")
             mkdir -p "$output_dir"
             
-            echo "处理规则: $rule_name -> $output_path"
-            # 记录处理时间
-            TIMEFORMAT='处理用时: %R 秒'
-            time (
-              # === 第1步: 下载规则文件 ===
-              echo "→ 开始下载规则源..."
+            echo "开始处理规则: $rule_name"
+            echo "保存位置: $output_path"
+            
+            # 计时
+            local start_time=$SECONDS
+            
+            # 1. 下载规则文件
+            echo "正在下载规则..."
+            
+            # 创建临时文件
+            local merged_file=$(mktemp)  # 合并后的文件
+            local cleaned_file=$(mktemp) # 清理后的文件
+            local tmp_dir=$(mktemp -d)   # 临时下载目录
+            
+            # 并行下载所有URL
+            local download_count=0
+            local download_pids=()
+            
+            for url in $urls; do
+              # 为每个URL创建临时文件
+              local tmp_file="${tmp_dir}/download_${download_count}"
               
-              # 创建临时文件和目录
-              local merged_file=$(mktemp)  # 合并后的文件
-              local cleaned_file=$(mktemp) # 清理后的文件
-              local tmp_dir=$(mktemp -d)   # 临时下载目录
+              # 后台下载并显示结果
+              (curl -sL --fail --connect-timeout 10 --max-time 30 "$url" > "$tmp_file" && 
+               echo "下载成功: $url" || 
+               echo "下载失败: $url") &
               
-              # 并行下载所有规则源
-              local download_count=0
-              local download_pids=()
+              # 保存进程ID和计数
+              download_pids+=($!)
+              download_count=$((download_count + 1))
+            done
+            
+            # 等待所有下载完成
+            for pid in "${download_pids[@]}"; do
+              wait $pid
+            done
+            
+            # 2. 合并和清理规则
+            echo "正在合并和清理规则..."
+            
+            # 合并所有下载的文件
+            cat "${tmp_dir}"/download_* > "$merged_file"
+            
+            # 清理规则:
+            # - 删除注释和空行
+            # - 删除行首尾空格
+            sed -e 's/[[:space:]]*[#;\/\/].*$//' \
+                -e 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+                -e '/^$/d' \
+                -e '/^[[:space:]]*[#;\/\/]/d' \
+                -e '/^payload:/d' \
+                -e '/^[[:space:]]*\/\*/d;/\*\//d' \
+                "$merged_file" > "$cleaned_file"
+            
+            # 统计清理后的规则数量
+            local cleaned_count=$(wc -l < "$cleaned_file")
+            echo "清理后的规则数量: $cleaned_count"
+            
+            # 3. 排序和去重
+            if [[ -s "$cleaned_file" ]]; then
+              echo "正在排序和去除重复项..."
               
-              echo "::group::下载规则源"
-              # 遍历并下载每个URL
-              for url in $urls; do
-                local tmp_file="${tmp_dir}/download_${download_count}"
-                # 后台下载并显示结果
-                (curl -sL --fail --connect-timeout 10 --max-time 30 "$url" > "$tmp_file" && 
-                 echo "  ✓ 下载成功: $url" || 
-                 echo "  ✗ 下载失败: $url") &
-                download_pids+=($!)
-                download_count=$((download_count + 1))
-              done
+              # 创建最终文件
+              local final_file=$(mktemp)
               
-              # 等待所有下载完成
-              for pid in "${download_pids[@]}"; do
-                wait $pid
-              done
-              echo "::endgroup::"
+              # 排序并去除重复行
+              sort -u "$cleaned_file" > "$final_file"
               
-              # === 第2步: 合并和清理规则 ===
-              echo "::group::合并和清理规则"
-              echo "→ 合并下载的规则文件..."
+              # 统计结果
+              local final_count=$(wc -l < "$final_file")
+              local removed_count=$((cleaned_count - final_count))
+              echo "去重后的规则数量: $final_count (减少了 $removed_count 个重复项)"
               
-              # 合并所有下载的文件
-              cat "${tmp_dir}"/download_* > "$merged_file"
+              # 4. 添加元数据并保存
+              echo "正在生成最终规则文件..."
               
-              echo "→ 清理规则..."
-              # 执行规则清理:
-              # 1. 删除各种格式的注释
-              # 2. 删除空白行和空格
-              # 3. 确保格式统一
-              sed -e 's/[[:space:]]*[#;\/\/].*$//' \
-                  -e 's/^[[:space:]]*//;s/[[:space:]]*$//' \
-                  -e '/^$/d' \
-                  -e '/^[[:space:]]*[#;\/\/]/d' \
-                  -e '/^payload:/d' \
-                  -e '/^[[:space:]]*\/\*/d;/\*\//d' \
-                  "$merged_file" > "$cleaned_file"
+              # 创建带有元数据的版本
+              local meta_file=$(mktemp)
               
-              # 统计清理后的规则数
-              local input_count=$(wc -l < "$cleaned_file")
-              echo "→ 清理后规则数: $input_count"
-              echo "::endgroup::"
+              # 添加元数据
+              {
+                echo "# 规则来源:"
+                for url in $urls; do
+                  # 转换为GitHub仓库URL显示
+                  repo_url=$(echo "$url" | sed -E 's|raw.githubusercontent.com/([^/]+/[^/]+).*|github.com/\1|')
+                  echo "# - https://$repo_url"
+                done
+                echo ""
+                # 添加规则内容
+                cat "$final_file"
+              } > "$meta_file"
               
-              # === 第3步: 排序和去重 ===
-              # 只有当有内容时才继续处理
-              if [[ -s "$cleaned_file" ]]; then
-                echo "::group::排序和去重"
-                echo "→ 对规则排序并去重..."
+              # 5. 检查是否有更改
+              local changed=0
+              if [ -f "$output_path" ]; then
+                # 比较旧文件和新文件(忽略更新时间)
+                local old_file=$(mktemp)
+                grep -v "^# Update time:" "$output_path" > "$old_file"
                 
-                # 创建临时文件
-                local final_file=$(mktemp)
-                
-                # 执行排序和去重
-                sort -u "$cleaned_file" > "$final_file"
-                
-                # 统计结果
-                local final_count=$(wc -l < "$final_file")
-                local removed_count=$((input_count - final_count))
-                echo "→ 去重后规则数: $final_count (减少了 $removed_count 条重复规则)"
-                echo "::endgroup::"
-                
-                # === 第4步: 添加元数据并保存 ===
-                echo "::group::生成最终规则文件"
-                # 创建带有元数据的版本
-                local meta_file=$(mktemp)
-                
-                # 添加元数据
-                {
-                  echo "# 规则来源:"
-                  for url in $urls; do
-                    # 转换为GitHub仓库URL显示
-                    repo_url=$(echo "$url" | sed -E 's|raw.githubusercontent.com/([^/]+/[^/]+).*|github.com/\1|')
-                    echo "# - https://$repo_url"
-                  done
-                  echo ""
-                  # 添加规则内容
-                  cat "$final_file"
-                } > "$meta_file"
-                
-                # === 第5步: 检查是否有更改 ===
-                local changed=0
-                if [ -f "$output_path" ]; then
-                  # 比较旧文件和新文件(忽略更新时间)
-                  local old_file=$(mktemp)
-                  grep -v "^# Update time:" "$output_path" > "$old_file"
-                  
-                  if ! cmp -s "$old_file" "$meta_file"; then
-                    changed=1  # 文件有变化
-                  fi
-                  rm -f "$old_file"
-                else
-                  changed=1  # 文件不存在,需要创建
+                if ! cmp -s "$old_file" "$meta_file"; then
+                  changed=1  # 文件有变化
                 fi
-                
-                # 如果有更改，写入新文件
-                if [ $changed -eq 1 ]; then
-                  {
-                    echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')"
-                    cat "$meta_file"
-                  } > "$output_path"
-                  echo "→ 规则已更新"
-                else
-                  echo "→ 规则无变化"
-                fi
-                echo "::endgroup::"
-                
-                # 清理临时文件
-                rm -f "$final_file" "$meta_file"
+                rm -f "$old_file"
               else
-                echo "警告: $rule_name 没有有效内容"
+                changed=1  # 文件不存在,需要创建
               fi
               
-              # 删除所有临时文件
-              rm -f "$merged_file" "$cleaned_file"
-              rm -rf "$tmp_dir"
-            )
+              # 如果有更改，写入新文件
+              if [ $changed -eq 1 ]; then
+                {
+                  echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')"
+                  cat "$meta_file"
+                } > "$output_path"
+                echo "规则已更新"
+              else
+                echo "规则无变化，无需更新"
+              fi
+              
+              # 清理临时文件
+              rm -f "$final_file" "$meta_file"
+            else
+              echo "警告: 没有找到有效内容，跳过处理"
+            fi
+            
+            # 删除所有临时文件
+            rm -f "$merged_file" "$cleaned_file"
+            rm -rf "$tmp_dir"
+            
+            # 显示处理用时
+            local duration=$((SECONDS - start_time))
+            echo "处理用时: $duration 秒"
           }
 
-          # 主函数 - 控制整个处理流程
+          # 主程序 - 控制整个处理流程
           main() {
-            local config="$1"  # 规则配置
+            echo "===== 网络规则更新程序 ====="
+            echo "开始时间: $(date '+%Y-%m-%d %H:%M:%S')"
+            echo "============================"
             
             # 初始化数据结构
-            declare -A rule_configs  # 关联数组: 规则名称 -> 配置
-            declare -a rule_files    # 数组: 所有规则文件路径
+            declare -A rule_configs  # 存储规则配置
+            declare -a rule_files    # 存储规则文件路径
             
-            echo "→ 解析规则配置..."
-            parse_rules_config "$config" rule_configs rule_files
+            # 获取所有规则配置
+            get_rules_config rule_configs rule_files
             
-            echo "======================================"
-            echo "开始更新规则 ($(date '+%Y-%m-%d %H:%M:%S'))"
-            echo "======================================"
+            # 如果没有找到规则，就退出
+            if [ ${#rule_configs[@]} -eq 0 ]; then
+              echo "没有找到规则配置，程序结束"
+              return
+            fi
+            
+            echo "============================"
+            echo "开始更新规则"
+            echo "============================"
             
             # 记录开始时间
             local start_time=$SECONDS
             
             # 处理每个规则
-            echo "→ 发现 ${#rule_configs[@]} 个规则集"
             for rule_name in "${!rule_configs[@]}"; do
-              # 解析配置字符串: 路径和URL
+              # 分离路径和URL
               IFS=';' read -r output_path urls <<< "${rule_configs[$rule_name]}"
-              echo "======================================"
-              # 调用处理函数
+              
+              echo "============================"
+              # 处理规则
               process_rule "$rule_name" "$output_path" "$urls"
-              echo "======================================"
+              echo "============================"
             done
             
             # 计算总耗时
             local duration=$((SECONDS - start_time))
-            echo "→ 处理完成，总用时: $((duration / 60))分$((duration % 60))秒"
+            echo "所有规则处理完成"
+            echo "总用时: $((duration / 60))分$((duration % 60))秒"
             
             # 检测是否有变化
-            local changes=false
+            local has_changes=false
             
             # 添加文件到Git以检测变化
             git add "${rule_files[@]}" 2>/dev/null || true
@@ -305,25 +305,29 @@ jobs:
             for file in "${rule_files[@]}"; do
               if [ -f "$file" ] && git diff --cached --no-color "$file" | 
                  grep -v '^[+-]# Update time:' | grep -q '^[+-]'; then
-                changes=true
-                echo "发现变化: $file"
+                has_changes=true
+                echo "文件有变化: $file"
               fi
             done
             
             # 设置输出变量
-            if [ "$changes" = true ]; then
+            if [ "$has_changes" = true ]; then
               echo "has_changes=true" >> "$GITHUB_OUTPUT"
-              echo "✨ 规则已更新，即将提交更改"
+              echo "规则已更新，即将提交更改"
             else
               echo "has_changes=false" >> "$GITHUB_OUTPUT"
-              echo "ℹ️ 规则无变化，无需提交"
+              echo "规则无变化，无需提交"
               # 还原已暂存的文件
               git restore --staged "${rule_files[@]}" 2>/dev/null || true
             fi
+            
+            echo "============================"
+            echo "程序结束"
+            echo "============================"
           }
 
-          # 启动程序
-          main "$1"
+          # 运行主程序
+          main
           EOF
           
           chmod +x process_rules.sh
@@ -335,7 +339,7 @@ jobs:
         run: |
           echo "::group::开始更新规则集"
           echo "开始规则处理流程..."
-          ./process_rules.sh "${{ env.RULES_CONFIG }}"
+          ./process_rules.sh
           echo "::endgroup::"
 
       - name: Commit and Push Changes
