@@ -5,6 +5,30 @@ on:
     - cron: '0 */3 * * *'  # 每3小时执行一次
   workflow_dispatch:
 
+env:
+  RULES_CONFIG: |
+    rules:
+      China:
+        path: RuleSet/Direct/China.list
+        urls:
+          - https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list
+          - https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/direct.txt
+          - https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/LocalNet.list
+      
+      Apple:
+        path: RuleSet/Apple/Service.list
+        urls:
+          - https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple_Domain.list
+          - https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt
+          - https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt
+      
+      Reject:
+        path: RuleSet/Extra/Reject.list
+        urls:
+          - https://ruleset.skk.moe/List/domainset/reject.conf
+          - https://ruleset.skk.moe/List/domainset/reject_extra.conf
+          - https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Privacy.list
+
 jobs:
   update-rules:
     runs-on: ubuntu-latest
@@ -25,13 +49,33 @@ jobs:
       - name: Update RuleSets
         id: update_rules
         run: |
-          # 定义规则配置：规则名称 => [输出路径, URL数组]
-          declare -A rule_configs=(
-            ["China"]="RuleSet/Direct/China.list;https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/direct.txt https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/LocalNet.list"
-            ["ChinaClash"]="RuleSet/Direct/China.yaml;https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/ChinaMax/ChinaMax_Domain.yaml https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/direct.txt https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/LocalNet.yaml https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Clash/Apple/Apple_Domain.yaml https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/apple.txt https://raw.githubusercontent.com/Loyalsoldier/clash-rules/release/icloud.txt"
-            ["Apple"]="RuleSet/Apple/Service.list;https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple_Domain.list https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt"
-            ["Reject"]="RuleSet/Extra/Reject.txt;https://ruleset.skk.moe/Clash/domainset/reject.txt https://ruleset.skk.moe/Clash/domainset/reject_extra.txt https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Privacy.txt"
-          )
+          # 从环境变量读取规则配置
+          declare -A rule_configs
+          while IFS= read -r line; do
+            if [[ "$line" =~ ^[[:space:]]*([^:]+):[[:space:]]*$ ]]; then
+              rule_name="${BASH_REMATCH[1]}"
+              if [[ "$rule_name" != "rules" ]]; then
+                # 读取path
+                read -r path_line
+                if [[ "$path_line" =~ ^[[:space:]]*path:[[:space:]]*([^[:space:]]+)[[:space:]]*$ ]]; then
+                  path="${BASH_REMATCH[1]}"
+                  # 读取urls
+                  read -r urls_line
+                  if [[ "$urls_line" =~ ^[[:space:]]*urls:[[:space:]]*$ ]]; then
+                    urls=""
+                    while IFS= read -r url_line; do
+                      if [[ "$url_line" =~ ^[[:space:]]*-[[:space:]]*([^[:space:]]+)[[:space:]]*$ ]]; then
+                        urls+="${BASH_REMATCH[1]} "
+                      elif [[ "$url_line" =~ ^[[:space:]]*[^[:space:]] ]]; then
+                        break
+                      fi
+                    done
+                    rule_configs["$rule_name"]="$path;$urls"
+                  fi
+                fi
+              fi
+            fi
+          done <<< "${{ env.RULES_CONFIG }}"
           
           for rule in "${!rule_configs[@]}"; do
             IFS=';' read -r output_path urls <<< "${rule_configs[$rule]}"
@@ -49,26 +93,37 @@ jobs:
             # 合并并处理文件
             merged_file=$(mktemp)
             
-            # 根据文件扩展名决定不同的处理方式
-            if [[ "$output_path" == *.yaml ]]; then
-              # YAML文件处理
-              echo "Processing YAML file..."
-              {
+            # 统一处理文件格式
+            {
+              # 根据文件类型添加不同的头部
+              if [[ "$output_path" == *.yaml ]]; then
                 echo "payload:"
-                cat "${temp_files[@]}" | 
-                  grep -v "^#" |                # 移除以#开头的注释行
-                  grep -v "^ *#" |              # 移除以空格+#开头的注释行
-                  sed 's/[[:space:]]*#.*$//' |  # 移除行尾注释
-                  sed 's/^[[:space:]]*//g' |    # 移除行首空格
-                  sed 's/[[:space:]]*$//g' |    # 移除行尾空格
-                  grep -v "^$" |                # 移除空行
-                  grep -v "^payload:" |         # 移除原有的payload行
-                  sort | uniq
-              } > "$merged_file"
-            else
-              # 普通列表文件处理
-              cat "${temp_files[@]}" | grep -v "^#" | grep -v "^$" | sort | uniq > "$merged_file"
-            fi
+              fi
+
+              # 使用统一的 awk 脚本处理文件内容
+              cat "${temp_files[@]}" | 
+                awk -v file_type="${output_path##*.}" '
+                  # 跳过注释行和空行
+                  /^[[:space:]]*#/ { next }
+                  /^[[:space:]]*$/ { next }
+                  /^payload:/ { next }
+                  {
+                    # 移除行尾注释和空白字符
+                    sub(/[[:space:]]*#.*$/, "")
+                    gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+                    
+                    # 处理特殊字符（针对不同格式）
+                    if (file_type == "yaml") {
+                      gsub(/\\/, "\\\\")  # 处理反斜杠
+                      gsub(/"/, "\\\"")   # 处理双引号
+                    }
+                    
+                    if ($0 != "") {
+                      print $0
+                    }
+                  }
+                ' | sort | uniq
+            } > "$merged_file"
             
             # 确保输出目录存在
             mkdir -p "$(dirname "$output_path")"
@@ -112,8 +167,22 @@ jobs:
       - name: Check for Changes
         id: check_changes
         run: |
-          # 对每个文件进行实质性变更检查
-          declare -a files=("RuleSet/Direct/China.list" "RuleSet/Direct/China.yaml" "RuleSet/Apple/Service.list" "RuleSet/Extra/Reject.txt")
+          # 从环境变量读取规则配置并提取所有文件路径
+          declare -a files=()
+          while IFS= read -r line; do
+            if [[ "$line" =~ ^[[:space:]]*([^:]+):[[:space:]]*$ ]]; then
+              rule_name="${BASH_REMATCH[1]}"
+              if [[ "$rule_name" != "rules" ]]; then
+                # 读取path
+                read -r path_line
+                if [[ "$path_line" =~ ^[[:space:]]*path:[[:space:]]*([^[:space:]]+)[[:space:]]*$ ]]; then
+                  path="${BASH_REMATCH[1]}"
+                  files+=("$path")
+                fi
+              fi
+            fi
+          done <<< "${{ env.RULES_CONFIG }}"
+          
           changes_detected=false
           
           git add "${files[@]}"
