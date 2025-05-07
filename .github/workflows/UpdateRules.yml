@@ -355,10 +355,10 @@ jobs:
                   # 保存变更信息用于提交 - 不使用括号，使用英文标识
                   rule_type=$(basename $(dirname "$output_path"))
                   rule_file=$(basename "$output_path")
-                  echo "RULE_${rule_name}_TYPE=$rule_type" >> $GITHUB_ENV
-                  echo "RULE_${rule_name}_FILE=$rule_file" >> $GITHUB_ENV
-                  echo "RULE_${rule_name}_ADDED=$real_added" >> $GITHUB_ENV
-                  echo "RULE_${rule_name}_REMOVED=$real_removed" >> $GITHUB_ENV
+                  echo "RULE_${rule_name}_TYPE=${rule_type}" >> $GITHUB_ENV
+                  echo "RULE_${rule_name}_FILE=${rule_file}" >> $GITHUB_ENV
+                  echo "RULE_${rule_name}_ADDED=${real_added}" >> $GITHUB_ENV
+                  echo "RULE_${rule_name}_REMOVED=${real_removed}" >> $GITHUB_ENV
                   
                   # 清理差异文件
                   rm -f "$diff_file"
@@ -371,9 +371,9 @@ jobs:
                 # 保存新建信息 - 不使用括号，使用英文标识
                 rule_type=$(basename $(dirname "$output_path"))
                 rule_file=$(basename "$output_path")
-                echo "RULE_${rule_name}_TYPE=$rule_type" >> $GITHUB_ENV
-                echo "RULE_${rule_name}_FILE=$rule_file" >> $GITHUB_ENV
-                echo "RULE_${rule_name}_ADDED=$new_lines" >> $GITHUB_ENV
+                echo "RULE_${rule_name}_TYPE=${rule_type}" >> $GITHUB_ENV
+                echo "RULE_${rule_name}_FILE=${rule_file}" >> $GITHUB_ENV
+                echo "RULE_${rule_name}_ADDED=${new_lines}" >> $GITHUB_ENV
                 echo "RULE_${rule_name}_REMOVED=0" >> $GITHUB_ENV
               fi
               
@@ -469,10 +469,10 @@ jobs:
                 local env_removed="RULE_${basename}_REMOVED"
                 
                 # 检查是否有对应的环境变量
-                if [ -n "${!env_added}" ] && [ -n "${!env_removed}" ]; then
+                if [[ -n "${!env_added}" ]] && [[ -n "${!env_removed}" ]]; then
                   has_changes=true
-                  local added_lines=${!env_added}
-                  local removed_lines=${!env_removed}
+                  local added_lines="${!env_added}"
+                  local removed_lines="${!env_removed}"
                   
                   echo "文件变化: $file"
                   echo "- 变化详情: 新增 $added_lines, 移除 $removed_lines"
@@ -486,8 +486,8 @@ jobs:
             
             # 设置总变化量
             if [ "$has_changes" = true ]; then
-              echo "TOTAL_ADDED=$total_added" >> $GITHUB_ENV
-              echo "TOTAL_REMOVED=$total_removed" >> $GITHUB_ENV
+              echo "TOTAL_ADDED=${total_added}" >> $GITHUB_ENV
+              echo "TOTAL_REMOVED=${total_removed}" >> $GITHUB_ENV
               echo "总变化: 新增 $total_added 条规则, 移除 $total_removed 条规则"
               
               # 设置GitHub Actions输出变量 - 有变化
@@ -552,11 +552,11 @@ jobs:
             removed_var="RULE_${rule_name}_REMOVED"
             
             # 如果所有变量存在
-            if [[ -v $type_var ]] && [[ -v $file_var ]] && [[ -v $added_var ]] && [[ -v $removed_var ]]; then
-              rule_type=${!type_var}
-              rule_file=${!file_var}
-              added=${!added_var}
-              removed=${!removed_var}
+            if [[ -n "${!type_var}" ]] && [[ -n "${!file_var}" ]] && [[ -n "${!added_var}" ]] && [[ -n "${!removed_var}" ]]; then
+              rule_type="${!type_var}"
+              rule_file="${!file_var}"
+              added="${!added_var}"
+              removed="${!removed_var}"
               
               # 构建提交信息 - 使用英文，不含括号
               commit_msg="Update $rule_type $rule_file: added $added removed $removed rules"
@@ -569,10 +569,8 @@ jobs:
           
           # 如果有未提交的文件，用总结信息提交
           if git diff --cached --name-only | grep -q "\.list$"; then
-            total_added=$TOTAL_ADDED
-            total_removed=$TOTAL_REMOVED
-            [ -z "$total_added" ] && total_added=0
-            [ -z "$total_removed" ] && total_removed=0
+            total_added="${TOTAL_ADDED:-0}"
+            total_removed="${TOTAL_REMOVED:-0}"
             
             git commit -m "Update remaining rules: added $total_added removed $total_removed rules" || true
           fi
