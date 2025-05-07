@@ -181,166 +181,189 @@ jobs:
               echo "正在排序和去除重复项..."
               
               # 创建临时文件
-              local basic_dedup=$(mktemp)     # 基础去重后的文件
-              local wildcard_dedup=$(mktemp)  # 泛域名去重后的文件
               local final_file=$(mktemp)      # 最终文件
               
               # 记录开始时间
               local dedup_start=$SECONDS
               
-              # 第1步：基础去重 - 移除完全相同的行
-              echo "第1步：执行基础去重（移除完全相同的规则）..."
-              LC_ALL=C sort -u -S 50% "$cleaned_file" > "$basic_dedup"
-              local cleaned_count=$(wc -l < "$cleaned_file")
-              local basic_count=$(wc -l < "$basic_dedup")
-              local basic_removed=$((cleaned_count - basic_count))
-              echo "基础去重完成：原始 $cleaned_count 条，保留 $basic_count 条，移除 $basic_removed 条"
+              echo "开始高效处理规则（单次遍历）..."
               
-              # 第2步：泛域名去重 - 处理泛域名规则
-              echo "第2步：执行泛域名去重（移除被泛域名覆盖的子泛域名）..."
-              awk '
-              BEGIN {
-                total = 0;
-                kept = 0;
-                removed = 0;
-                # 存储所有泛域名
-                wildcard_count = 0;
-              }
-              
-              # 处理函数
-              {
-                line = $0;
-                total++;
-                
-                # 仅处理泛域名（以.开头）
-                if (substr(line, 1, 1) == ".") {
-                  domain = substr(line, 2);  # 去掉前导点
-                  keep = 1;  # 默认保留
-                  
-                  # 检查是否被已存储的泛域名覆盖
-                  for (i = 1; i <= wildcard_count; i++) {
-                    parent = wildcards[i];
+              # 使用Python处理大规模域名集合，效率更高
+              # 创建Python脚本进行高效处理
+              cat > /tmp/process_rules.py << 'EOL'
+#!/usr/bin/env python3
+import sys
+import time
+import os
+
+def main():
+    # 检查参数
+    if len(sys.argv) != 2:
+        print(f"用法: {sys.argv[0]} <input_file>", file=sys.stderr)
+        sys.exit(1)
+        
+    input_file = sys.argv[1]
+    
+    # 检查输入文件是否存在
+    if not os.path.exists(input_file):
+        print(f"错误: 输入文件 '{input_file}' 不存在", file=sys.stderr)
+        sys.exit(1)
+    
+    start_time = time.time()
+    
+    # 统计信息
+    stats = {
+        "total": 0,
+        "duplicates": 0,
+        "wildcard_covered": 0,
+        "exact_covered": 0,
+        "kept": 0
+    }
+    
+    # 数据结构
+    all_rules = set()           # 存储所有规则，用于基础去重
+    wildcard_domains = set()    # 存储所有泛域名（不带前导点）
+    
+    # 临时保存规则
+    wildcard_rules = []
+    exact_rules = []
+    
+    try:
+        print(f"[1/4] 读取规则文件...", file=sys.stderr)
+        # 第一遍：读取文件，进行基础分类
+        with open(input_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
                     
-                    # 检查是否为子域名（比如.a.example.com被.example.com覆盖）
-                    if (length(domain) > length(parent) && 
-                        substr(domain, length(domain) - length(parent)) == parent && 
-                        substr(domain, length(domain) - length(parent) - 1, 1) == ".") {
-                      keep = 0;  # 被覆盖，不保留
-                      removed++;
-                      break;
-                    }
-                  }
-                  
-                  if (keep == 1) {
-                    # 保留此泛域名
-                    wildcard_count++;
-                    wildcards[wildcard_count] = domain;
-                    kept++;
-                    print line;
-                  }
-                } else {
-                  # 非泛域名直接保留
-                  print line;
-                  kept++;
-                }
-              }
-              
-              END {
-                print "泛域名总数: " wildcard_count > "/dev/stderr";
-                print "处理规则数: " total > "/dev/stderr";
-                print "保留规则数: " kept > "/dev/stderr";
-                print "移除规则数: " removed > "/dev/stderr";
-              }
-              ' "$basic_dedup" > "$wildcard_dedup" 2>/tmp/wildcard_stats
-              
-              # 读取泛域名去重统计
-              local wildcard_total=$(grep "泛域名总数" /tmp/wildcard_stats | awk '{print $2}')
-              local wildcard_processed=$(grep "处理规则数" /tmp/wildcard_stats | awk '{print $2}')
-              local wildcard_kept=$(grep "保留规则数" /tmp/wildcard_stats | awk '{print $2}')
-              local wildcard_removed=$(grep "移除规则数" /tmp/wildcard_stats | awk '{print $2}')
-              echo "泛域名去重完成：处理 $wildcard_processed 条，保留 $wildcard_kept 条，移除 $wildcard_removed 条"
-              
-              # 第3步：精确域名去重 - 检查精确域名是否被泛域名覆盖
-              echo "第3步：执行精确域名去重（移除被泛域名覆盖的精确域名）..."
-              awk '
-              BEGIN {
-                total = 0;
-                kept = 0;
-                removed = 0;
-                wildcard_count = 0;
-              }
-              
-              # 第一遍：收集所有泛域名
-              NR == FNR {
-                if (substr($0, 1, 1) == ".") {
-                  domain = substr($0, 2);  # 去掉前导点
-                  wildcard_count++;
-                  wildcards[wildcard_count] = domain;
-                }
-                next;
-              }
-              
-              # 第二遍：处理所有规则，检查精确域名是否被泛域名覆盖
-              {
-                line = $0;
-                total++;
+                stats["total"] += 1
                 
-                if (substr(line, 1, 1) == ".") {
-                  # 泛域名已经在第二步处理过，直接保留
-                  kept++;
-                  print line;
-                } else {
-                  # 精确域名
-                  domain = line;
-                  keep = 1;  # 默认保留
-                  
-                  # 检查是否被任何泛域名覆盖
-                  for (i = 1; i <= wildcard_count; i++) {
-                    parent = wildcards[i];
+                # 基础去重
+                if line in all_rules:
+                    stats["duplicates"] += 1
+                    continue
                     
-                    # 检查是否匹配泛域名（如example.com被.example.com覆盖）
-                    if (domain == parent || 
-                        (length(domain) > length(parent) && 
-                         substr(domain, length(domain) - length(parent)) == parent && 
-                         substr(domain, length(domain) - length(parent) - 1, 1) == ".")) {
-                      keep = 0;  # 被覆盖，不保留
-                      removed++;
-                      break;
-                    }
-                  }
-                  
-                  if (keep == 1) {
-                    kept++;
-                    print line;
-                  }
+                all_rules.add(line)
+                
+                # 区分泛域名和精确域名
+                if line.startswith('.'):
+                    domain = line[1:]  # 去掉前导点
+                    wildcard_rules.append((domain, line))
+                else:
+                    exact_rules.append(line)
+        
+        print(f"[2/4] 处理泛域名规则 ({len(wildcard_rules)} 条)...", file=sys.stderr)
+        # 对泛域名排序，优先处理短的域名（如.com比.example.com先处理）
+        wildcard_rules.sort(key=lambda x: (len(x[0].split('.')), x[0]))
+        
+        # 处理泛域名规则
+        kept_wildcards = []
+        for domain, original in wildcard_rules:
+            keep = True
+            # 检查是否被更短的泛域名覆盖
+            domain_parts = domain.split('.')
+            for i in range(1, len(domain_parts)):
+                parent = '.'.join(domain_parts[i:])
+                if parent in wildcard_domains:
+                    keep = False
+                    stats["wildcard_covered"] += 1
+                    break
+            
+            if keep:
+                wildcard_domains.add(domain)
+                kept_wildcards.append(original)
+                stats["kept"] += 1
+        
+        print(f"[3/4] 处理精确域名规则 ({len(exact_rules)} 条)...", file=sys.stderr)
+        # 处理精确域名规则
+        kept_exact = []
+        for line in exact_rules:
+            keep = True
+            # 检查是否被泛域名覆盖
+            domain_parts = line.split('.')
+            for i in range(0, len(domain_parts)):
+                parent = '.'.join(domain_parts[i:])
+                if parent in wildcard_domains:
+                    keep = False
+                    stats["exact_covered"] += 1
+                    break
+            
+            if keep:
+                kept_exact.append(line)
+                stats["kept"] += 1
+        
+        print(f"[4/4] 生成最终规则...", file=sys.stderr)
+        # 输出所有保留的规则
+        for rule in sorted(kept_wildcards + kept_exact):
+            print(rule)
+        
+        # 输出统计信息
+        end_time = time.time()
+        print(f"处理时间: {end_time - start_time:.2f} 秒", file=sys.stderr)
+        print(f"总规则数: {stats['total']}", file=sys.stderr)
+        print(f"重复规则: {stats['duplicates']}", file=sys.stderr)
+        print(f"泛域名被覆盖: {stats['wildcard_covered']}", file=sys.stderr)
+        print(f"精确域名被覆盖: {stats['exact_covered']}", file=sys.stderr)
+        print(f"保留规则: {stats['kept']}", file=sys.stderr)
+    
+    except Exception as e:
+        print(f"处理出错: {str(e)}", file=sys.stderr)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+EOL
+
+              # 给Python脚本执行权限
+              chmod +x /tmp/process_rules.py
+              
+              # 确保Python3可用
+              if ! command -v python3 &> /dev/null; then
+                echo "错误: Python3 未安装，尝试安装..."
+                apt-get update && apt-get install -y python3 || {
+                  echo "无法安装Python3，将使用备用方案..."
+                  # 备用方案：使用基本排序和去重
+                  sort -u "$cleaned_file" > "$final_file"
+                  echo "已使用基本排序和去重，跳过高级处理"
                 }
-              }
-              
-              END {
-                print "处理规则数: " total > "/dev/stderr";
-                print "保留规则数: " kept > "/dev/stderr";
-                print "移除规则数: " removed > "/dev/stderr";
-              }
-              ' "$wildcard_dedup" "$wildcard_dedup" > "$final_file" 2>/tmp/exact_stats
-              
-              # 读取精确域名去重统计
-              local exact_processed=$(grep "处理规则数" /tmp/exact_stats | awk '{print $2}')
-              local exact_kept=$(grep "保留规则数" /tmp/exact_stats | awk '{print $2}')
-              local exact_removed=$(grep "移除规则数" /tmp/exact_stats | awk '{print $2}')
-              echo "精确域名去重完成：处理 $exact_processed 条，保留 $exact_kept 条，移除 $exact_removed 条"
-              
-              # 显示总体去重耗时和统计信息
-              local dedup_duration=$((SECONDS - dedup_start))
-              echo "所有去重完成，总耗时: $dedup_duration 秒"
-              echo "去重总统计:"
-              echo "- 原始规则数: $cleaned_count"
-              echo "- 基础去重后: $basic_count (-$basic_removed)"
-              echo "- 泛域名去重后: $wildcard_kept (-$wildcard_removed)"
-              echo "- 精确域名去重后: $exact_kept (-$exact_removed)"
-              echo "- 总计移除: $((basic_removed + wildcard_removed + exact_removed)) 条规则"
+              else
+                # 执行Python处理
+                python3 /tmp/process_rules.py "$cleaned_file" > "$final_file" 2>/tmp/python_stats
+                
+                # 检查Python脚本是否成功执行
+                if [ $? -ne 0 ]; then
+                  echo "Python处理失败，使用备用方案..."
+                  # 备用方案
+                  sort -u "$cleaned_file" > "$final_file"
+                else
+                  # 读取Python处理的统计信息
+                  if [ -f "/tmp/python_stats" ]; then
+                    local processing_time=$(grep "处理时间" /tmp/python_stats | awk '{print $2}')
+                    local total_rules=$(grep "总规则数" /tmp/python_stats | awk '{print $2}')
+                    local duplicate_rules=$(grep "重复规则" /tmp/python_stats | awk '{print $2}')
+                    local wildcard_covered=$(grep "泛域名被覆盖" /tmp/python_stats | awk '{print $2}')
+                    local exact_covered=$(grep "精确域名被覆盖" /tmp/python_stats | awk '{print $2}')
+                    local kept_rules=$(grep "保留规则" /tmp/python_stats | awk '{print $2}')
+                    
+                    # 显示总体去重耗时和统计信息
+                    local dedup_duration=$((SECONDS - dedup_start))
+                    echo "规则处理完成，Python处理耗时: $processing_time 秒，总耗时: $dedup_duration 秒"
+                    echo "去重统计:"
+                    echo "- 原始规则数: $total_rules"
+                    echo "- 去除重复规则: $duplicate_rules"
+                    echo "- 去除被覆盖的泛域名: $wildcard_covered"
+                    echo "- 去除被覆盖的精确域名: $exact_covered"
+                    echo "- 保留规则数: $kept_rules"
+                    echo "- 总计移除: $((total_rules - kept_rules)) 条规则"
+                  else
+                    echo "警告: 无法获取处理统计信息"
+                  fi
+                fi
+              fi
               
               # 清理临时文件以释放内存
-              rm -f "$basic_dedup" "$wildcard_dedup" /tmp/wildcard_stats /tmp/exact_stats
+              rm -f /tmp/process_rules.py /tmp/python_stats
               
               # 4. 添加元数据并保存
               echo "正在生成最终规则文件..."
