@@ -39,28 +39,24 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        # 添加日志输出
         id: checkout
         with:
           fetch-depth: 1  # 仅获取最近一次提交，加速检出过程
 
       - name: Setup Timezone
         run: sudo timedatectl set-timezone "Asia/Shanghai"
-        # 添加日志输出
         id: timezone
 
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
-        # 添加日志输出
         id: python
 
       - name: Create Processing Script
         id: create_script
         run: |
-          echo "::group::创建规则处理脚本"
-          # 创建处理脚本
+          echo "::group::规则处理脚本"
           cat > process_rules.sh << 'EOF'
           #!/bin/bash
           set -eo pipefail
@@ -366,14 +362,12 @@ jobs:
           EOF
           
           chmod +x process_rules.sh
-          echo "脚本创建完成"
           echo "::endgroup::"
 
       - name: Update RuleSets
         id: check_changes
         run: |
-          echo "::group::开始更新规则集"
-          echo "开始规则处理流程..."
+          echo "::group::规则集更新"
           ./process_rules.sh
           echo "::endgroup::"
 
@@ -381,19 +375,15 @@ jobs:
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           echo "::group::提交变更"
-          echo "检测到规则变更，提交到仓库..."
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
           # 使用变化摘要作为提交消息
           git commit -m "Auto update rules: ${{ steps.check_changes.outputs.change_summary }}"
           
-          # 显示本次提交的统计信息但不显示具体内容
-          echo "本次更新统计:"
+          # 显示本次提交的统计信息
           git show --stat --oneline HEAD
           
-          # 推送更改
-          echo "推送更改到远程仓库..."
           git push
           echo "::endgroup::"
         env:
