@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-规则处理脚本：执行规则的去重和优化
-功能：
-1. 基础去重 - 移除完全相同的规则
-2. 泛域名去重 - 如果.x.com存在，则.a.x.com被视为重复并移除
-3. 精确域名去重 - 如果.x.com存在，则a.x.com被视为重复并移除
+规则处理脚本
+功能: 去重域名规则、优化规则集合
 """
 
 import sys
@@ -13,9 +10,9 @@ import time
 import os
 
 def main():
-    # 检查参数
+    # 检查命令行参数
     if len(sys.argv) < 2:
-        print("用法: {} <input_file>".format(sys.argv[0]), file=sys.stderr)
+        print("用法: {} <输入文件路径>".format(sys.argv[0]), file=sys.stderr)
         sys.exit(1)
         
     input_file = sys.argv[1]
@@ -27,26 +24,24 @@ def main():
     
     start_time = time.time()
     
-    # 统计信息
+    # 初始化统计信息
     stats = {
-        "total": 0,
-        "duplicates": 0,
-        "wildcard_covered": 0,
-        "exact_covered": 0,
-        "kept": 0
+        "total": 0,          # 总规则数
+        "duplicates": 0,     # 重复规则数
+        "wildcard_covered": 0, # 被泛域名覆盖的规则数
+        "exact_covered": 0,  # 被泛域名覆盖的精确域名规则数
+        "kept": 0            # 保留的规则数
     }
     
-    # 数据结构
-    all_rules = set()           # 存储所有规则，用于基础去重
+    # 初始化数据结构
+    all_rules = set()           # 存储所有规则
     wildcard_domains = set()    # 存储所有泛域名（不带前导点）
-    
-    # 临时保存规则
-    wildcard_rules = []
-    exact_rules = []
+    wildcard_rules = []         # 存储泛域名规则
+    exact_rules = []            # 存储精确域名规则
     
     try:
+        # 1. 读取文件并进行基础分类
         print("[1/4] 读取规则文件...", file=sys.stderr)
-        # 第一遍：读取文件，进行基础分类和去重
         with open(input_file, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
@@ -62,18 +57,18 @@ def main():
                     
                 all_rules.add(line)
                 
-                # 区分泛域名和精确域名
+                # 区分泛域名和精确域名规则
                 if line.startswith('.'):
                     domain = line[1:]  # 去掉前导点
                     wildcard_rules.append((domain, line))
                 else:
                     exact_rules.append(line)
         
+        # 2. 处理泛域名规则
         print(f"[2/4] 处理泛域名规则 ({len(wildcard_rules)} 条)...", file=sys.stderr)
-        # 对泛域名排序，优先处理短的域名（如.com比.example.com先处理）
+        # 优先处理短域名
         wildcard_rules.sort(key=lambda x: (len(x[0].split('.')), x[0]))
         
-        # 处理泛域名规则
         kept_wildcards = []
         for domain, original in wildcard_rules:
             keep = True
@@ -91,8 +86,8 @@ def main():
                 kept_wildcards.append(original)
                 stats["kept"] += 1
         
+        # 3. 处理精确域名规则
         print(f"[3/4] 处理精确域名规则 ({len(exact_rules)} 条)...", file=sys.stderr)
-        # 处理精确域名规则
         kept_exact = []
         for line in exact_rules:
             keep = True
@@ -109,8 +104,8 @@ def main():
                 kept_exact.append(line)
                 stats["kept"] += 1
         
+        # 4. 生成最终规则
         print(f"[4/4] 生成最终规则...", file=sys.stderr)
-        # 输出所有保留的规则
         for rule in sorted(kept_wildcards + kept_exact):
             print(rule)
         
