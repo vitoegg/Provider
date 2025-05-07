@@ -121,16 +121,11 @@ jobs:
                     if ($0 != "") {
                       # 提取域名部分
                       domain = $0
-                      prefix = ""
-                      if (match(domain, /^([^:]+:[[:space:]]*)(.*)/, arr)) {
-                        prefix = arr[1]
-                        domain = arr[2]
-                      }
+                      sub(/^[^:]+:[[:space:]]*/, "", domain)
                       
                       # 存储域名信息
                       if (!(domain in domains)) {
                         domains[domain] = $0
-                        domain_prefixes[domain] = prefix
                       }
                     }
                   }
@@ -138,27 +133,26 @@ jobs:
                     # 对域名进行排序
                     n = asorti(domains, sorted_domains)
                     
-                    # 第一遍：标记需要保留的域名
+                    # 使用哈希表存储需要删除的域名
                     for (i = 1; i <= n; i++) {
                       domain = sorted_domains[i]
-                      keep_domain[domain] = 1
-                      
-                      # 检查是否有更具体的域名
-                      for (j = 1; j <= n; j++) {
-                        other_domain = sorted_domains[j]
-                        if (other_domain != domain && 
-                            index(other_domain, domain) == 1 && 
-                            substr(other_domain, length(domain) + 1, 1) == ".") {
-                          keep_domain[domain] = 0
-                          break
+                      if (!(domain in to_delete)) {
+                        # 检查是否有更具体的域名
+                        for (j = i + 1; j <= n; j++) {
+                          other_domain = sorted_domains[j]
+                          if (index(other_domain, domain) == 1 && 
+                              substr(other_domain, length(domain) + 1, 1) == ".") {
+                            to_delete[domain] = 1
+                            break
+                          }
                         }
                       }
                     }
                     
-                    # 第二遍：输出保留的域名
+                    # 输出保留的域名
                     for (i = 1; i <= n; i++) {
                       domain = sorted_domains[i]
-                      if (keep_domain[domain]) {
+                      if (!(domain in to_delete)) {
                         print domains[domain]
                       }
                     }
