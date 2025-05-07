@@ -46,201 +46,265 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Update RuleSets
-        id: update_rules
+      - name: Create Processing Script
         run: |
-          # 从环境变量读取规则配置
-          declare -A rule_configs
-          while IFS= read -r line; do
-            if [[ "$line" =~ ^[[:space:]]*([^:]+):[[:space:]]*$ ]]; then
-              rule_name="${BASH_REMATCH[1]}"
-              if [[ "$rule_name" != "rules" ]]; then
-                # 读取path
-                read -r path_line
-                if [[ "$path_line" =~ ^[[:space:]]*path:[[:space:]]*([^[:space:]]+)[[:space:]]*$ ]]; then
-                  path="${BASH_REMATCH[1]}"
-                  # 读取urls
-                  read -r urls_line
-                  if [[ "$urls_line" =~ ^[[:space:]]*urls:[[:space:]]*$ ]]; then
-                    urls=""
-                    while IFS= read -r url_line; do
-                      if [[ "$url_line" =~ ^[[:space:]]*-[[:space:]]*([^[:space:]]+)[[:space:]]*$ ]]; then
-                        urls+="${BASH_REMATCH[1]} "
-                      elif [[ "$url_line" =~ ^[[:space:]]*[^[:space:]] ]]; then
-                        break
-                      fi
-                    done
-                    rule_configs["$rule_name"]="$path;$urls"
-                  fi
+          # 创建高效处理脚本
+          cat > process_rules.sh << 'EOF'
+          #!/bin/bash
+          set -eo pipefail
+
+          # 解析规则配置
+          parse_rules_config() {
+            local config="$1"
+            local -n rule_configs_ref="$2"
+            local -n rule_files_ref="$3"
+
+            local rule_name=""
+            local path=""
+            local urls=""
+
+            while IFS= read -r line; do
+              # 跳过空行和注释
+              [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+
+              if [[ "$line" =~ ^[[:space:]]*([^:]+):[[:space:]]*$ ]]; then
+                rule_name="${BASH_REMATCH[1]}"
+                if [[ "$rule_name" != "rules" ]]; then
+                  path=""
+                  urls=""
                 fi
+              elif [[ "$line" =~ ^[[:space:]]*path:[[:space:]]*([^[:space:]]+) ]]; then
+                path="${BASH_REMATCH[1]}"
+                rule_files_ref+=("$path")
+              elif [[ "$line" =~ ^[[:space:]]*urls:[[:space:]]*$ ]]; then
+                continue
+              elif [[ "$line" =~ ^[[:space:]]*-[[:space:]]*([^[:space:]]+) ]]; then
+                urls+="${BASH_REMATCH[1]} "
+              elif [[ -n "$rule_name" && -n "$path" && -n "$urls" ]]; then
+                rule_configs_ref["$rule_name"]="$path;$urls"
+                rule_name=""
               fi
+            done <<< "$config"
+
+            # 检查最后一个规则
+            if [[ -n "$rule_name" && -n "$path" && -n "$urls" && "$rule_name" != "rules" ]]; then
+              rule_configs_ref["$rule_name"]="$path;$urls"
             fi
-          done <<< "${{ env.RULES_CONFIG }}"
-          
-          for rule in "${!rule_configs[@]}"; do
-            IFS=';' read -r output_path urls <<< "${rule_configs[$rule]}"
-            echo "Updating $rule rules to $output_path..."
+          }
+
+          # 下载并处理规则
+          process_rule() {
+            local rule_name="$1"
+            local output_path="$2"
+            local urls="$3"
+            local output_dir
+            output_dir=$(dirname "$output_path")
             
-            # 创建临时文件数组
-            temp_files=()
+            echo "Processing $rule_name to $output_path..."
+
+            # 创建输出目录
+            mkdir -p "$output_dir"
+            
+            # 临时文件
+            local merged_file
+            local cleaned_file
+            merged_file=$(mktemp)
+            cleaned_file=$(mktemp)
+            
+            # 下载和合并规则
+            echo "" > "$merged_file"
             for url in $urls; do
-              temp_file=$(mktemp)
               echo "Downloading from $url..."
-              curl -s "$url" > "$temp_file"
-              temp_files+=("$temp_file")
+              if curl -sL --fail "$url" >> "$merged_file"; then
+                echo "  Download successful"
+              else
+                echo "  Download failed, skipping"
+              fi
             done
             
-            # 合并并处理文件
-            merged_file=$(mktemp)
+            # 快速清理文件 (移除注释、空行和前缀)
+            grep -v "^#" "$merged_file" | grep -v "^$" | grep -v "^payload:" > "$cleaned_file" || true
             
-            # 统一处理文件格式
-            {
-              # 根据文件类型添加不同的头部
-              if [[ "$output_path" == *.yaml ]]; then
-                echo "payload:"
-              fi
-
-              # 使用统一的 awk 脚本处理文件内容
-              cat "${temp_files[@]}" | 
-                awk -v file_type="${output_path##*.}" '
-                  # 跳过注释行和空行
-                  /^[[:space:]]*#/ { next }
-                  /^[[:space:]]*$/ { next }
-                  /^payload:/ { next }
-                  {
-                    # 移除行尾注释和空白字符
-                    sub(/[[:space:]]*#.*$/, "")
-                    gsub(/^[[:space:]]+|[[:space:]]+$/, "")
-                    
-                    # 处理特殊字符（针对不同格式）
-                    if (file_type == "yaml") {
-                      gsub(/\\/, "\\\\")  # 处理反斜杠
-                      gsub(/"/, "\\\"")   # 处理双引号
-                    }
-                    
-                    if ($0 != "") {
-                      # 提取域名部分
-                      domain = $0
-                      sub(/^[^:]+:[[:space:]]*/, "", domain)
-                      
-                      # 存储域名信息
-                      if (!(domain in domains)) {
-                        domains[domain] = $0
-                      }
-                    }
+            # 仅当有内容时才处理域名
+            if [[ -s "$cleaned_file" ]]; then
+              # 处理格式
+              local formatted_file
+              formatted_file=$(mktemp)
+              
+              sed -E 's/[[:space:]]*#.*$//' "$cleaned_file" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' | sort | uniq > "$formatted_file"
+              
+              # 创建最终输出文件
+              local final_file
+              final_file=$(mktemp)
+              
+              # 根据文件类型添加头部
+              {
+                if [[ "$output_path" == *.yaml ]]; then
+                  echo "payload:"
+                fi
+                
+                # 处理域名关系
+                # 高效过滤域名：创建反向索引，检查子域名关系
+                awk '
+                BEGIN {
+                  IGNORECASE = 1  # 忽略大小写
+                }
+                {
+                  # 提取域名部分
+                  domain = $0
+                  gsub(/^[^:]+:[[:space:]]*/, "", domain)
+                  
+                  # 存储域名信息
+                  if (length(domain) > 0) {
+                    domains[domain] = $0
+                    count++
                   }
-                  END {
-                    # 对域名进行排序
-                    n = asorti(domains, sorted_domains)
+                }
+                END {
+                  if (count > 0) {
+                    # 创建排序数组
+                    n = asort(domains, sorted_domains, "@val_str_asc")
                     
-                    # 使用哈希表存储需要删除的域名
+                    # 进行单次遍历
                     for (i = 1; i <= n; i++) {
-                      domain = sorted_domains[i]
-                      if (!(domain in to_delete)) {
-                        # 检查是否有更具体的域名
-                        for (j = i + 1; j <= n; j++) {
-                          other_domain = sorted_domains[j]
-                          if (index(other_domain, domain) == 1 && 
-                              substr(other_domain, length(domain) + 1, 1) == ".") {
-                            to_delete[domain] = 1
-                            break
+                      current = sorted_domains[i]
+                      if (length(current) > 0) {
+                        keep = 1
+                        
+                        # 提取域名
+                        current_domain = current
+                        gsub(/^[^:]+:[[:space:]]*/, "", current_domain)
+                        
+                        # 快速域名检测
+                        for (j = 1; j <= n; j++) {
+                          if (i != j) {
+                            other = sorted_domains[j]
+                            other_domain = other
+                            gsub(/^[^:]+:[[:space:]]*/, "", other_domain)
+                            
+                            # 检查是否为子域名
+                            if (length(current_domain) < length(other_domain) && 
+                                index(other_domain, current_domain) == 1 && 
+                                substr(other_domain, length(current_domain) + 1, 1) == ".") {
+                              keep = 0
+                              break
+                            }
                           }
+                        }
+                        
+                        if (keep) {
+                          print current
                         }
                       }
                     }
-                    
-                    # 输出保留的域名
-                    for (i = 1; i <= n; i++) {
-                      domain = sorted_domains[i]
-                      if (!(domain in to_delete)) {
-                        print domains[domain]
-                      }
-                    }
                   }
-                ' | sort | uniq
-            } > "$merged_file"
-            
-            # 确保输出目录存在
-            mkdir -p "$(dirname "$output_path")"
-            
-            # 为了比较，创建一个不包含时间戳的临时文件
-            temp_new_content=$(mktemp)
-            {
-              echo "# Merged from:"
-              for url in $urls; do
-                repo_url=$(echo "$url" | sed -E 's|raw.githubusercontent.com/([^/]+/[^/]+).*|github.com/\1|')
-                echo "# - https://$repo_url"
-              done
-              echo ""
-              cat "$merged_file"
-            } > "$temp_new_content"
-            
-            # 如果原文件存在，创建一个不包含时间戳的版本用于比较
-            temp_old_content=$(mktemp)
-            if [ -f "$output_path" ]; then
-              cat "$output_path" | grep -v "^# Update time:" > "$temp_old_content"
-            else
-              touch "$temp_old_content"
-            fi
-            
-            # 比较文件内容（忽略时间戳）
-            if ! cmp -s "$temp_old_content" "$temp_new_content"; then
-              # 如果内容有实质性变化，则写入新文件（包含新的时间戳）
+                }
+                ' "$formatted_file"
+              } > "$final_file"
+              
+              # 创建带有元数据的版本
+              local meta_file
+              meta_file=$(mktemp)
+              
               {
-                echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')"
-                cat "$temp_new_content"
-              } > "$output_path"
-              echo "Changes detected in $rule rules."
+                echo "# Merged from:"
+                for url in $urls; do
+                  repo_url=$(echo "$url" | sed -E 's|raw.githubusercontent.com/([^/]+/[^/]+).*|github.com/\1|')
+                  echo "# - https://$repo_url"
+                done
+                echo ""
+                cat "$final_file"
+              } > "$meta_file"
+              
+              # 检查是否有更改
+              local changed=0
+              if [ -f "$output_path" ]; then
+                local old_file
+                old_file=$(mktemp)
+                grep -v "^# Update time:" "$output_path" > "$old_file"
+                
+                if ! cmp -s "$old_file" "$meta_file"; then
+                  changed=1
+                fi
+                rm -f "$old_file"
+              else
+                changed=1
+              fi
+              
+              # 如果有更改，写入新文件
+              if [ $changed -eq 1 ]; then
+                {
+                  echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')"
+                  cat "$meta_file"
+                } > "$output_path"
+                echo "Changes detected in $rule_name rules."
+              else
+                echo "No changes detected in $rule_name rules."
+              fi
+              
+              # 清理临时文件
+              rm -f "$formatted_file" "$final_file" "$meta_file"
             else
-              echo "No changes detected in $rule rules."
+              echo "Warning: No valid content for $rule_name"
             fi
             
-            # 清理临时文件
-            rm "${temp_files[@]}" "$merged_file" "$temp_new_content" "$temp_old_content"
-          done
+            # 清理主要临时文件
+            rm -f "$merged_file" "$cleaned_file"
+          }
 
-      - name: Check for Changes
-        id: check_changes
-        run: |
-          # 从环境变量读取规则配置并提取所有文件路径
-          declare -a files=()
-          while IFS= read -r line; do
-            if [[ "$line" =~ ^[[:space:]]*([^:]+):[[:space:]]*$ ]]; then
-              rule_name="${BASH_REMATCH[1]}"
-              if [[ "$rule_name" != "rules" ]]; then
-                # 读取path
-                read -r path_line
-                if [[ "$path_line" =~ ^[[:space:]]*path:[[:space:]]*([^[:space:]]+)[[:space:]]*$ ]]; then
-                  path="${BASH_REMATCH[1]}"
-                  files+=("$path")
-                fi
+          # 主函数
+          main() {
+            local config="$1"
+            
+            # 初始化数据结构
+            declare -A rule_configs
+            declare -a rule_files
+            
+            # 解析配置
+            parse_rules_config "$config" rule_configs rule_files
+            
+            # 处理每个规则
+            for rule in "${!rule_configs[@]}"; do
+              IFS=';' read -r output_path urls <<< "${rule_configs[$rule]}"
+              process_rule "$rule" "$output_path" "$urls"
+            done
+            
+            # 检查Git变更
+            local changes_detected=false
+            
+            git add "${rule_files[@]}" 2>/dev/null || true
+            
+            for file in "${rule_files[@]}"; do
+              if [ -f "$file" ] && git diff --cached --no-color "$file" | grep -v '^[+-]# Update time:' | grep -q '^[+-]'; then
+                changes_detected=true
+                break
               fi
+            done
+            
+            # 输出结果
+            if [ "$changes_detected" = true ]; then
+              echo "has_changes=true" >> "$GITHUB_OUTPUT"
+              echo "Changes detected in rules files"
+            else
+              echo "has_changes=false" >> "$GITHUB_OUTPUT"
+              echo "No changes detected in rules files"
+              git restore --staged "${rule_files[@]}" 2>/dev/null || true
             fi
-          done <<< "${{ env.RULES_CONFIG }}"
+          }
+
+          # 运行主函数
+          main "$1"
+          EOF
           
-          changes_detected=false
-          
-          git add "${files[@]}"
-          
-          for file in "${files[@]}"; do
-            # 获取git diff，排除时间戳行
-            if git diff --cached --no-color "$file" | grep -v '^[+-]# Update time:' | grep -q '^[+-]'; then
-              changes_detected=true
-              break
-            fi
-          done
-          
-          if [ "$changes_detected" = true ]; then
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "Changes detected in rules files"
-          else
-            echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "No changes detected in rules files"
-            git restore --staged "${files[@]}"
-          fi
+          chmod +x process_rules.sh
+
+      - name: Update RuleSets
+        id: update_rules
+        run: |
+          ./process_rules.sh "${{ env.RULES_CONFIG }}"
 
       - name: Commit and Push Changes
-        if: steps.check_changes.outputs.has_changes == 'true'
+        if: steps.update_rules.outputs.has_changes == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
