@@ -207,77 +207,96 @@ jobs:
                     IGNORECASE = 1  # 忽略大小写
                   }
                   {
-                    # 提取域名部分 (假设输入已经清理过)
+                    # 提取域名部分
                     domain = $0
                     gsub(/^[[:space:]]+|[[:space:]]+$/, "", domain)
                     
                     # 跳过空行
                     if (length(domain) == 0) continue
+
+                    # 记录所有域名，保持原始顺序
+                    all_domains[++count] = domain
                     
-                    # 获取标准化版本（移除前导点）
-                    normalized = domain
-                    sub(/^\./, "", normalized)
-
-                    # 存储域名信息
-                    domains[domain] = 1  # 原始域名
-                    all_domains[++count] = domain  # 保持插入顺序
-
-                    # 构建域名索引，用于快速查找
+                    # 标记是否是带点前缀域名
                     if (substr(domain, 1, 1) == ".") {
-                      # 带点前缀的域名
-                      dot_domains[normalized] = domain
-                    } else {
-                      # 不带点前缀的域名
-                      no_dot_domains[normalized] = domain
-                    }
-                    
-                    # 构建父域名索引用于快速查找
-                    split(normalized, parts, ".")
-                    if (length(parts) >= 2) {
-                      # 至少有一个父域名
-                      reverse_domain = ""
-                      for (i = length(parts); i >= 1; i--) {
-                        if (reverse_domain == "") {
-                          reverse_domain = parts[i]
-                        } else {
-                          reverse_domain = reverse_domain "." parts[i]
-                        }
-                        
-                        if (i < length(parts)) {
-                          reverse_parents[reverse_domain] = 1
-                        }
-                      }
+                      has_dot[domain] = 1
                       
-                      # 存储反向表示的域名
-                      reverse_all[reverse_domain] = domain
+                      # 获取不带点的版本
+                      no_dot_version = substr(domain, 2)
+                      
+                      # 建立映射：从不带点版本到带点版本
+                      no_dot_to_dot[no_dot_version] = domain
+                    } else {
+                      # 将不带点版本映射到自身
+                      no_dot_to_dot[domain] = ""
                     }
                   }
                   END {
-                    # 标记要保留和删除的域名 - O(n)
-                    for (norm in dot_domains) {
-                      if (norm in no_dot_domains) {
-                        # 当带点和不带点版本同时存在时，删除不带点版本
-                        to_remove[no_dot_domains[norm]] = 1
-                      }
-                    }
+                    if (count == 0) exit
                     
-                    # 使用排序后的父域名索引处理父子域名关系 - O(n log n)
-                    asort(reverse_parents, sorted_reverse_parents)
-                    for (i = 1; i <= length(sorted_reverse_parents); i++) {
-                      parent = sorted_reverse_parents[i]
-                      if (parent in reverse_all) {
-                        # 找到所有以这个父域名开头的域名
-                        l = length(parent)
-                        for (rev_dom in reverse_all) {
-                          if (rev_dom != parent && index(rev_dom, parent ".") == 1) {
-                            # 是子域名，标记为删除
-                            to_remove[reverse_all[rev_dom]] = 1
+                    # 第一步：识别并标记所有应该被移除的域名
+                    # 初始化要移除的域名哈希表
+                    split("", to_remove)
+                    
+                    # 首先处理带点前缀和不带点前缀的情况
+                    for (i = 1; i <= count; i++) {
+                      domain = all_domains[i]
+                      
+                      # 不处理已标记为移除的域名
+                      if (domain in to_remove) continue
+                      
+                      # 检查是否是带点前缀的域名
+                      if (domain in has_dot) {
+                        # 获取不带点版本
+                        no_dot = substr(domain, 2)
+                        
+                        # 如果不带点版本在原始域名列表中存在，标记为移除
+                        for (j = 1; j <= count; j++) {
+                          if (all_domains[j] == no_dot) {
+                            to_remove[no_dot] = 1
+                            break
                           }
                         }
                       }
                     }
                     
-                    # 输出最终保留的域名 - O(n)
+                    # 第二步：处理子域名关系
+                    for (i = 1; i <= count; i++) {
+                      domain_i = all_domains[i]
+                      
+                      # 跳过已标记为移除的域名
+                      if (domain_i in to_remove) continue
+                      
+                      # 获取标准化版本（去除前导点）
+                      norm_i = domain_i
+                      sub(/^\./, "", norm_i)
+                      
+                      # 检查是否为其他域名的子域名
+                      for (j = 1; j <= count; j++) {
+                        if (i == j) continue
+                        
+                        domain_j = all_domains[j]
+                        
+                        # 跳过已标记为移除的域名
+                        if (domain_j in to_remove) continue
+                        
+                        # 获取标准化版本
+                        norm_j = domain_j
+                        sub(/^\./, "", norm_j)
+                        
+                        # 子域名检测: 如果norm_i以norm_j结尾且前面有一个点
+                        if (norm_i != norm_j && 
+                            length(norm_i) > length(norm_j) + 1 && 
+                            substr(norm_i, length(norm_i) - length(norm_j) + 1) == norm_j && 
+                            substr(norm_i, length(norm_i) - length(norm_j), 1) == ".") {
+                          # domain_i是domain_j的子域名，标记为移除
+                          to_remove[domain_i] = 1
+                          break
+                        }
+                      }
+                    }
+                    
+                    # 输出最终保留的域名
                     for (i = 1; i <= count; i++) {
                       domain = all_domains[i]
                       if (!(domain in to_remove)) {
