@@ -180,16 +180,107 @@ jobs:
             if [[ -s "$cleaned_file" ]]; then
               echo "正在排序和去除重复项..."
               
-              # 创建最终文件
+              # 创建临时文件
+              local sorted_file=$(mktemp)
               local final_file=$(mktemp)
               
-              # 排序并去除重复行
-              sort -u "$cleaned_file" > "$final_file"
+              # 首先进行基础排序以提高处理速度（处理超大文件时，设置内存限制）
+              echo "正在排序域名，这可能需要一些时间..."
+              LC_ALL=C sort -r -S 50% "$cleaned_file" > "$sorted_file"
               
-              # 统计结果
-              local final_count=$(wc -l < "$final_file")
-              local removed_count=$((cleaned_count - final_count))
-              echo "去重后的规则数量: $final_count (减少了 $removed_count 个重复项)"
+              # 记录开始时间
+              local dedup_start=$SECONDS
+              local rule_count=$(wc -l < "$sorted_file")
+              echo "排序完成，共有 $rule_count 条规则需要去重"
+              echo "执行高级域名去重（处理泛域名和精确域名）..."
+              
+              # 优化的awk脚本，高效处理大量域名
+              awk '
+              BEGIN {
+                # 初始化计数器
+                total = 0;
+                kept = 0;
+                removed = 0;
+                # 使用哈希表存储泛域名，提高查找效率
+                wildcard_count = 0;
+              }
+              
+              # 主要处理函数
+              {
+                total++;
+                line = $0;
+                
+                # 检查是否为域名规则（以.开头）
+                if (substr(line, 1, 1) == ".") {
+                  domain = substr(line, 2);  # 去掉前导点
+                  is_wildcard = 1;           # 这是泛域名
+                } else {
+                  domain = line;
+                  is_wildcard = 0;           # 这是精确域名
+                }
+                
+                keep = 1;  # 默认保留该规则
+                
+                # 检查是否被已有泛域名覆盖
+                for (i = 1; i <= wildcard_count; i++) {
+                  suffix = wildcards[i];
+                  
+                  # 检查完整匹配（例如：当前是abc.com，已存在的是.abc.com的泛域名）
+                  if (domain == suffix) {
+                    keep = 0;
+                    removed++;
+                    break;
+                  }
+                  
+                  # 检查后缀匹配（例如：当前是a.abc.com或.a.abc.com，已存在的是.abc.com的泛域名）
+                  if (length(domain) > length(suffix) && 
+                      substr(domain, length(domain) - length(suffix)) == suffix && 
+                      substr(domain, length(domain) - length(suffix) - 1, 1) == ".") {
+                    keep = 0;
+                    removed++;
+                    break;
+                  }
+                }
+                
+                # 如果需要保留
+                if (keep == 1) {
+                  kept++;
+                  print line;  # 输出到结果文件
+                  
+                  # 如果是泛域名，加入到列表中
+                  if (is_wildcard) {
+                    wildcard_count++;
+                    wildcards[wildcard_count] = domain;
+                  }
+                }
+              }
+              
+              END {
+                # 输出统计信息到stderr
+                print "总规则数: " total > "/dev/stderr";
+                print "保留规则数: " kept > "/dev/stderr";
+                print "移除重复规则数: " removed > "/dev/stderr";
+                print "处理的泛域名数: " wildcard_count > "/dev/stderr";
+              }
+              ' "$sorted_file" > "$final_file" 2>/tmp/awk_stats
+              
+              # 读取awk输出的统计信息
+              local total_count=$(grep "总规则数" /tmp/awk_stats | awk '{print $2}')
+              local kept_count=$(grep "保留规则数" /tmp/awk_stats | awk '{print $2}')
+              local removed_count=$(grep "移除重复规则数" /tmp/awk_stats | awk '{print $2}')
+              local wildcard_count=$(grep "处理的泛域名数" /tmp/awk_stats | awk '{print $2}')
+              
+              # 显示去重耗时和内存使用情况
+              local dedup_duration=$((SECONDS - dedup_start))
+              echo "域名去重完成，耗时: $dedup_duration 秒"
+              echo "去重统计:"
+              echo "- 原始规则数: $total_count"
+              echo "- 保留规则数: $kept_count"
+              echo "- 移除规则数: $removed_count"
+              echo "- 处理的泛域名数: $wildcard_count"
+              
+              # 清理临时文件以释放内存
+              rm -f "$sorted_file" /tmp/awk_stats
               
               # 4. 添加元数据并保存
               echo "正在生成最终规则文件..."
