@@ -119,7 +119,48 @@ jobs:
                     }
                     
                     if ($0 != "") {
-                      print $0
+                      # 提取域名部分
+                      domain = $0
+                      prefix = ""
+                      if (match(domain, /^([^:]+:[[:space:]]*)(.*)/, arr)) {
+                        prefix = arr[1]
+                        domain = arr[2]
+                      }
+                      
+                      # 存储域名信息
+                      if (!(domain in domains)) {
+                        domains[domain] = $0
+                        domain_prefixes[domain] = prefix
+                      }
+                    }
+                  }
+                  END {
+                    # 对域名进行排序
+                    n = asorti(domains, sorted_domains)
+                    
+                    # 第一遍：标记需要保留的域名
+                    for (i = 1; i <= n; i++) {
+                      domain = sorted_domains[i]
+                      keep_domain[domain] = 1
+                      
+                      # 检查是否有更具体的域名
+                      for (j = 1; j <= n; j++) {
+                        other_domain = sorted_domains[j]
+                        if (other_domain != domain && 
+                            index(other_domain, domain) == 1 && 
+                            substr(other_domain, length(domain) + 1, 1) == ".") {
+                          keep_domain[domain] = 0
+                          break
+                        }
+                      }
+                    }
+                    
+                    # 第二遍：输出保留的域名
+                    for (i = 1; i <= n; i++) {
+                      domain = sorted_domains[i]
+                      if (keep_domain[domain]) {
+                        print domains[domain]
+                      }
                     }
                   }
                 ' | sort | uniq
