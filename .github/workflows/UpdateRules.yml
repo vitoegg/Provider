@@ -86,11 +86,12 @@ jobs:
               # 获取对应的URL变量名 (格式: RULE_规则名_URLS)
               local url_var="RULE_${rule_name}_URLS"
               
-              # 检查URL变量是否存在
-              if [[ -v $url_var ]]; then
-                # 获取路径和URL值
-                local path=${!var}             # 获取路径变量的值
-                local urls=${!url_var}         # 获取URL变量的值
+              # 检查URL变量是否存在 (更兼容的方式)
+              local url_value=$(eval echo \${$url_var:-})
+              if [ -n "$url_value" ]; then
+                # 获取路径和URL值 (避免使用间接引用)
+                local path=$(eval echo \${$var})
+                local urls="$url_value"
                 
                 # 显示找到的规则信息
                 echo "找到规则: $rule_name"
