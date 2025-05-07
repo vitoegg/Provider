@@ -126,7 +126,7 @@ jobs:
             
             echo "Processing $rule_name to $output_path..."
             TIMEFORMAT='处理用时: %R 秒'
-            time {
+            time (
               # 创建输出目录
               mkdir -p "$output_dir"
               
@@ -216,8 +216,8 @@ jobs:
                     }
 
                     # Rule b: abc.com is parent of 1.abc.com (and by extension .abc.com is parent of 1.abc.com / .1.abc.com)
-                    if (length(c_norm) > length(p_norm) && \\
-                        substr(c_norm, length(c_norm) - length(p_norm)) == p_norm && \\
+                    if (length(c_norm) > length(p_norm) && \\\
+                        substr(c_norm, length(c_norm) - length(p_norm)) == p_norm && \\\
                         substr(c_norm, length(c_norm) - length(p_norm) - 1, 1) == ".") {
                         return 1; # p_norm is structural parent of c_norm, so p_candidate is parent of c_candidate
                     }
@@ -303,7 +303,7 @@ jobs:
               
               # 清理主要临时文件
               rm -f "$merged_file" "$cleaned_file"
-            }
+            )
           }
 
           # 主函数 - 协调整个规则更新过程
