@@ -194,7 +194,7 @@ jobs:
               # 创建临时文件用于存储Python脚本的输出信息
               local stats_file=$(mktemp)
               
-              # 将Python的标准错误输出重定向到stats_file，标准输出重定向到final_file
+              # 执行Python脚本
               python3 "$script_path" "$cleaned_file" > "$final_file" 2> "$stats_file"
               python_exit=$?
               
@@ -368,14 +368,13 @@ jobs:
             if [ "$has_changes" = true ]; then
               change_summary="${change_summary}[总计] +$total_added/-$total_removed"
               echo "总变化: 新增 $total_added 条规则, 移除 $total_removed 条规则"
-            fi
-            
-            # 设置输出变量
-            if [ "$has_changes" = true ]; then
+              
+              # 设置输出变量 - 有变化
               echo "has_changes=true" >> "$GITHUB_OUTPUT"
               echo "change_summary=$change_summary" >> "$GITHUB_OUTPUT"
               echo "规则已更新，即将提交更改"
             else
+              # 设置输出变量 - 无变化
               echo "has_changes=false" >> "$GITHUB_OUTPUT"
               echo "规则无变化，无需提交"
               # 还原已暂存的文件
