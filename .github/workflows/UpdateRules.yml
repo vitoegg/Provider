@@ -286,12 +286,30 @@ jobs:
                   echo "- 原有规则数量: $old_lines"
                   echo "- 新规则数量: $new_lines"
                   echo "- 变化: 新增 $added 条, 移除 $removed 条"
+                  
+                  # 记录变化统计到临时文件，供main函数读取
+                  basename=$(basename "$output_path")
+                  {
+                    echo "规则变化统计:"
+                    echo "- 原有规则数量: $old_lines"
+                    echo "- 新规则数量: $new_lines" 
+                    echo "- 变化: 新增 $added 条, 移除 $removed 条"
+                  } > "/tmp/rule_changes_${basename}.log"
                 fi
                 rm -f "$old_file"
               else
                 changed=1  # 文件不存在,需要创建
                 new_lines=$(grep -v "^#" "$meta_file" | wc -l)
                 echo "新建规则文件，包含 $new_lines 条规则"
+                
+                # 记录新建文件的统计到临时文件
+                basename=$(basename "$output_path")
+                {
+                  echo "规则变化统计:"
+                  echo "- 原有规则数量: 0"
+                  echo "- 新规则数量: $new_lines" 
+                  echo "- 变化: 新增 $new_lines 条, 移除 0 条"
+                } > "/tmp/rule_changes_${basename}.log"
               fi
               
               # 如果有更改，写入新文件
@@ -368,29 +386,35 @@ jobs:
             total_added=0
             total_removed=0
             
-            # 添加文件到Git以检测变化
-            git add "${rule_files[@]}" 2>/dev/null || true
-            
-            # 检查每个文件是否有实质变化
+            # 检查每个文件是否有实质变化 - 使用直接文件比较而非git diff
             for file in "${rule_files[@]}"; do
-              if [ -f "$file" ] && git diff --cached --no-color "$file" | 
-                 grep -v '^[+-]# Update time:' | grep -q '^[+-]'; then
-                has_changes=true
-                basename=$(basename "$file")
+              if [ -f "$file" ]; then
+                # 检查文件是否在处理过程中被修改（比较修改时间）
+                file_mod_time=$(stat -c %Y "$file" 2>/dev/null || stat -f %m "$file" 2>/dev/null)
+                current_time=$SECONDS
                 
-                # 计算具体变化的行数
-                added_lines=$(git diff --cached --no-color "$file" | grep -v '^[+-]# ' | grep -c '^+')
-                removed_lines=$(git diff --cached --no-color "$file" | grep -v '^[+-]# ' | grep -c '^-')
-                
-                echo "文件有变化: $file"
-                echo "- 详细统计: 新增 $added_lines 条规则, 移除 $removed_lines 条规则"
-                
-                # 添加到变化摘要
-                change_summary="${change_summary}[$basename] +$added_lines/-$removed_lines "
-                
-                # 累计总变化量
-                total_added=$((total_added + added_lines))
-                total_removed=$((total_removed + removed_lines))
+                # 如果文件是最近更新的（30秒内）
+                if (( current_time - file_mod_time < 30 )); then
+                  # 提取文件名并读取变化统计信息日志（从临时文件或变量）
+                  basename=$(basename "$file")
+                  # 从日志或输出中获取变化统计
+                  added_lines=$(grep -A3 "规则变化统计:" /tmp/rule_changes_${basename}.log 2>/dev/null | grep "新增" | grep -o "[0-9]*" | head -1 || echo "0")
+                  removed_lines=$(grep -A3 "规则变化统计:" /tmp/rule_changes_${basename}.log 2>/dev/null | grep "移除" | grep -o "[0-9]*" | head -1 || echo "0")
+                  
+                  # 如果有任何变化
+                  if [ "$added_lines" != "0" ] || [ "$removed_lines" != "0" ]; then
+                    has_changes=true
+                    echo "文件有变化: $file"
+                    echo "- 详细统计: 新增 $added_lines 条规则, 移除 $removed_lines 条规则"
+                    
+                    # 添加到变化摘要
+                    change_summary="${change_summary}[$basename] +$added_lines/-$removed_lines "
+                    
+                    # 累计总变化量
+                    total_added=$((total_added + added_lines))
+                    total_removed=$((total_removed + removed_lines))
+                  fi
+                fi
               fi
             done
             
@@ -408,8 +432,6 @@ jobs:
             else
               echo "has_changes=false" >> "$GITHUB_OUTPUT"
               echo "规则无变化，无需提交"
-              # 还原已暂存的文件
-              git restore --staged "${rule_files[@]}" 2>/dev/null || true
             fi
             
             echo "============================"
