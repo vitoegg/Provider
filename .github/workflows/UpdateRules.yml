@@ -209,84 +209,79 @@ jobs:
                   {
                     # 提取域名部分 (假设输入已经清理过)
                     domain = $0
-                    gsub(/^[^:]+:[[:space:]]*/, "", domain)
+                    gsub(/^[[:space:]]+|[[:space:]]+$/, "", domain)
                     
                     # 跳过空行
                     if (length(domain) == 0) continue
                     
-                    # 判断是否带前导点
-                    has_dot = (substr(domain, 1, 1) == ".")
-                    
-                    # 标准化域名 - 移除可能的前导点
+                    # 获取标准化版本（移除前导点）
                     normalized = domain
                     sub(/^\./, "", normalized)
-                    
-                    # 记录原始域名和对应的标准化域名
-                    orig_domains[domain] = 1
-                    
-                    # 如果是带点域名，直接记录对应的不带点版本需要被跳过
-                    if (has_dot) {
-                      skip_domains[normalized] = 1
+
+                    # 存储域名信息
+                    domains[domain] = 1  # 原始域名
+                    all_domains[++count] = domain  # 保持插入顺序
+
+                    # 构建域名索引，用于快速查找
+                    if (substr(domain, 1, 1) == ".") {
+                      # 带点前缀的域名
+                      dot_domains[normalized] = domain
+                    } else {
+                      # 不带点前缀的域名
+                      no_dot_domains[normalized] = domain
                     }
                     
-                    # 收集所有域名并构建映射关系
-                    all_domains[++count] = domain
-                    
-                    # 按标准化后组织域名，用于检查父子关系
-                    norm_domains[normalized] = 1
-                  }
-                  END {
-                    if (count > 0) {
-                      # 处理父子域名关系
-                      for (i = 1; i <= count; i++) {
-                        domain = all_domains[i]
-                        
-                        # 如果当前域名在需要跳过的列表中，则跳过
-                        if (domain in skip_domains) continue
-                        
-                        # 标准化当前域名(去除前导点)
-                        normalized = domain
-                        sub(/^\./, "", normalized)
-                        
-                        # 如果标准化后的域名和原始域名不同，且标准化后的域名在原始域名列表中，
-                        # 说明存在不带点的同名域名，则保留带点版本，跳过不带点版本
-                        if (normalized != domain && (normalized in orig_domains)) {
-                          skip_domains[normalized] = 1
-                          continue
+                    # 构建父域名索引用于快速查找
+                    split(normalized, parts, ".")
+                    if (length(parts) >= 2) {
+                      # 至少有一个父域名
+                      reverse_domain = ""
+                      for (i = length(parts); i >= 1; i--) {
+                        if (reverse_domain == "") {
+                          reverse_domain = parts[i]
+                        } else {
+                          reverse_domain = reverse_domain "." parts[i]
                         }
                         
-                        # 检查是否为其他域名的子域名
-                        keep = 1
-                        split(normalized, parts, ".")
-                        parts_count = length(parts)
-                        
-                        # 至少需要两个部分才能进行子域名检查
-                        if (parts_count >= 2) {
-                          # 构建所有可能的父域名
-                          for (level = 2; level <= parts_count; level++) {
-                            parent = ""
-                            for (p = parts_count - level + 1; p <= parts_count; p++) {
-                              parent = parent (parent ? "." : "") parts[p]
-                            }
-                            
-                            # 检查父域名是否存在 (无论带不带点)
-                            if (parent in norm_domains) {
-                              keep = 0
-                              skip_domains[domain] = 1
-                              break
-                            }
-                          }
+                        if (i < length(parts)) {
+                          reverse_parents[reverse_domain] = 1
                         }
                       }
                       
-                      # 输出最终保留的域名
-                      for (i = 1; i <= count; i++) {
-                        domain = all_domains[i]
-                        
-                        # 如果不在跳过列表中，则输出
-                        if (!(domain in skip_domains)) {
-                          print domain
+                      # 存储反向表示的域名
+                      reverse_all[reverse_domain] = domain
+                    }
+                  }
+                  END {
+                    # 标记要保留和删除的域名 - O(n)
+                    for (norm in dot_domains) {
+                      if (norm in no_dot_domains) {
+                        # 当带点和不带点版本同时存在时，删除不带点版本
+                        to_remove[no_dot_domains[norm]] = 1
+                      }
+                    }
+                    
+                    # 使用排序后的父域名索引处理父子域名关系 - O(n log n)
+                    asort(reverse_parents, sorted_reverse_parents)
+                    for (i = 1; i <= length(sorted_reverse_parents); i++) {
+                      parent = sorted_reverse_parents[i]
+                      if (parent in reverse_all) {
+                        # 找到所有以这个父域名开头的域名
+                        l = length(parent)
+                        for (rev_dom in reverse_all) {
+                          if (rev_dom != parent && index(rev_dom, parent ".") == 1) {
+                            # 是子域名，标记为删除
+                            to_remove[reverse_all[rev_dom]] = 1
+                          }
                         }
+                      }
+                    }
+                    
+                    # 输出最终保留的域名 - O(n)
+                    for (i = 1; i <= count; i++) {
+                      domain = all_domains[i]
+                      if (!(domain in to_remove)) {
+                        print domain
                       }
                     }
                   }
