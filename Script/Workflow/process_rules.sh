@@ -184,7 +184,7 @@ process_rule() {
         # 清理临时文件
         rm -f "$old_rules_content" "$new_rules_content" "$added_rules_file" "$removed_rules_file"
       else
-        echo "┃ 🔄 规则对比: 内容完全相同，无需更新" | tee -a "$log_file"
+        echo "┃ 🔄 规则对比: 内容完全相同，无需更新 ❌" | tee -a "$log_file"
         # 清理临时文件
         rm -f "$old_rules_content" "$new_rules_content"
       fi
@@ -192,7 +192,7 @@ process_rule() {
     else
       changed=1
       added_rules=$new_rules_count
-      echo "┃ 📝 新建规则文件，共添加 $added_rules 条规则" | tee -a "$log_file"
+      echo "┃ 📝 新建规则文件，共添加 $added_rules 条规则 ✅" | tee -a "$log_file"
     fi
     
     # 总结规则状态
@@ -202,7 +202,7 @@ process_rule() {
     echo "┃   🔢 原有规则条数: $old_rules_count" | tee -a "$log_file"
     echo "┃   ➕ 新增规则条数: $added_rules" | tee -a "$log_file"
     echo "┃   ➖ 移除规则条数: $removed_rules" | tee -a "$log_file"
-    echo "┃   🔄 是否有变更: $([ $changed -eq 1 ] && echo '是' || echo '否')" | tee -a "$log_file"
+    echo "┃   🔄 是否有变更: $([ $changed -eq 1 ] && echo '✅ 是' || echo '❌ 否')" | tee -a "$log_file"
     
     if [ $changed -eq 1 ]; then
       {
@@ -211,7 +211,7 @@ process_rule() {
       } > "$output_path"
       echo "┃ ✅ 规则已成功更新" | tee -a "$log_file"
     else
-      echo "┃ ℹ️ 规则无变化，无需更新" | tee -a "$log_file"
+      echo "┃ ℹ️ 规则无变化，无需更新 ❌" | tee -a "$log_file"
     fi
     
     rm -f "$final_file" "$meta_file"
@@ -337,7 +337,7 @@ main() {
       
       echo "┃ 📄 文件: $basename"
       echo "┃   🔢 规则条数: $new_count"
-      echo "┃   🔄 是否有变更: $([ "$file_changed" = "true" ] && echo "是" || echo "否")"
+      echo "┃   🔄 是否有变更: $([ "$file_changed" = "true" ] && echo "✅ 是" || echo "❌ 否")"
       
       # 如果有变更，从git diff中获取变更详情
       if [ "$file_changed" = "true" ]; then
@@ -346,7 +346,7 @@ main() {
         # 提取规则类型名称 (去掉.list后缀)
         local rule_name=$(basename "$file" .list)
         
-        # 从process_rule函数中获取变更行数
+        # 初始化变更行数变量
         local added_lines=0
         local removed_lines=0
         
@@ -359,12 +359,27 @@ main() {
         awk '!/^[+-]# Update time:/' "$diff_file" > "$filtered_diff"
         
         # 计算变更行数
-        local add_count=$(grep -c "^+" "$filtered_diff" || echo 0)
-        local del_count=$(grep -c "^-" "$filtered_diff" || echo 0)
+        local add_count=$(grep "^+" "$filtered_diff" | grep -v "^+++" | wc -l || echo 0)
+        local del_count=$(grep "^-" "$filtered_diff" | grep -v "^---" | wc -l || echo 0)
         
-        # 如果无法从git diff获取，则使用默认值
-        added_lines=$add_count
-        removed_lines=$del_count
+        # 从process_rule函数中获取的实际变更数
+        if [ -f "$file.tmp.log" ]; then
+            # 尝试从临时日志中获取实际的新增/移除规则数
+            local log_added=$(grep -oP "➕ 新增规则: \K[0-9]+" "$file.tmp.log" 2>/dev/null || echo 0)
+            local log_removed=$(grep -oP "➖ 移除规则: \K[0-9]+" "$file.tmp.log" 2>/dev/null || echo 0)
+            
+            # 如果能找到日志中的数据，优先使用
+            if [ "$log_added" -gt 0 ] || [ "$log_removed" -gt 0 ]; then
+                added_lines=$log_added
+                removed_lines=$log_removed
+            else
+                added_lines=$add_count
+                removed_lines=$del_count
+            fi
+        else
+            added_lines=$add_count
+            removed_lines=$del_count
+        fi
         
         # 更新变更摘要
         change_summary="${change_summary}${rule_name}(+${added_lines}/-${removed_lines}) "
@@ -395,7 +410,7 @@ main() {
       echo "change_summary=${change_summary}" >> $GITHUB_OUTPUT
     fi
   else
-    echo "┃ ℹ️ 总结: 所有规则文件均无变化"
+    echo "┃ ℹ️ 总结: 所有规则文件均无变化 ❌"
     
     if [ -n "$GITHUB_OUTPUT" ]; then
       echo "has_changes=false" >> $GITHUB_OUTPUT
