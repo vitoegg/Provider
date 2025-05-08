@@ -1,0 +1,32 @@
+{
+  "rules": [
+    {
+      "name": "CHINA",
+      "path": "RuleSet/Direct/China.list",
+      "urls": [
+        "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list",
+        "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/direct.txt",
+        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/LocalNet.list"
+      ]
+    },
+    {
+      "name": "APPLE",
+      "path": "RuleSet/Apple/Service.list",
+      "urls": [
+        "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple_Domain.list",
+        "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt",
+        "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt"
+      ]
+    },
+    {
+      "name": "REJECT",
+      "path": "RuleSet/Extra/Reject.list",
+      "urls": [
+        "https://ruleset.skk.moe/List/domainset/reject.conf",
+        "https://ruleset.skk.moe/List/domainset/reject_extra.conf",
+        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Privacy.list",
+        "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Surge.list"
+      ]
+    }
+  ]
+} 
