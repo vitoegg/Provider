@@ -69,8 +69,8 @@ jobs:
                 local path=${!var}
                 local urls=${!url_var}
                 
-                echo "找到规则: $rule_name"
-                echo "- 保存路径: $path"
+                echo "找到规则集: $rule_name"
+                echo "- 保存位置: $path"
                 echo "- 下载地址数量: $(echo "$urls" | wc -w)"
                 
                 rule_list["$rule_name"]="$path;$urls"
@@ -78,7 +78,7 @@ jobs:
               fi
             done
             
-            echo "共找到 ${#rule_list[@]} 个规则"
+            echo "共找到 ${#rule_list[@]} 个规则集"
           }
 
           process_rule() {
@@ -89,12 +89,12 @@ jobs:
             local output_dir=$(dirname "$output_path")
             mkdir -p "$output_dir"
             
-            echo "开始处理规则: $rule_name"
+            echo "开始处理规则集: $rule_name"
             echo "保存位置: $output_path"
             
             local start_time=$SECONDS
             
-            echo "正在下载规则..."
+            echo "正在下载规则数据..."
             
             local merged_file=$(mktemp)
             local cleaned_file=$(mktemp)
@@ -118,7 +118,7 @@ jobs:
               wait $pid
             done
             
-            echo "正在合并和清理规则..."
+            echo "正在合并和清理规则数据..."
             
             cat "${tmp_dir}"/download_* > "$merged_file"
             
@@ -131,14 +131,14 @@ jobs:
                 "$merged_file" > "$cleaned_file"
             
             local cleaned_count=$(wc -l < "$cleaned_file")
-            echo "清理后的规则数量: $cleaned_count"
+            echo "清理后的规则条数: $cleaned_count"
             
             if [[ -s "$cleaned_file" ]]; then
-              echo "正在使用高级算法排序和去除重复项..."
+              echo "正在对规则进行清洗..."
               
               local final_file=$(mktemp)
               
-              echo "使用智能规则优化脚本处理..."
+              echo "使用Python脚本进行规则清洗..."
               
               script_path="${GITHUB_WORKSPACE}/Script/Workflow/process_rules.py"
               chmod +x "$script_path"
@@ -149,19 +149,19 @@ jobs:
               python_exit=$?
               
               if [ $python_exit -ne 0 ]; then
-                echo "Python脚本执行失败，回退到基础排序和去重"
+                echo "Python脚本执行失败，使用基础清洗方法"
                 echo "错误信息: $(cat "$stats_file")"
                 sort -u "$cleaned_file" > "$final_file"
               else
                 cat "$stats_file"
-                echo "智能优化完成"
+                echo "规则清洗完成"
               fi
               
               rm -f "$stats_file"
               
               local final_count=$(wc -l < "$final_file")
               local removed_count=$((cleaned_count - final_count))
-              echo "去重后的规则数量: $final_count (减少了 $removed_count 个重复项)"
+              echo "去重后的规则条数: $final_count (减少了 $removed_count 条重复规则)"
               
               echo "正在生成最终规则文件..."
               
@@ -190,7 +190,7 @@ jobs:
                 grep -v "^# Update time:" "$output_path" > "$old_file"
                 
                 old_rules_count=$(grep -v "^#" "$old_file" | wc -l)
-                echo "仓库已有规则文件包含 $old_rules_count 条规则"
+                echo "仓库中已有规则文件包含 $old_rules_count 条规则"
                 
                 # 比较实际规则内容而不是整个文件
                 local old_rules_content=$(mktemp)
@@ -219,22 +219,35 @@ jobs:
                   
                   echo "规则变化详情:"
                   echo "- 新增规则: $added_rules 条"
-                  echo "- 删除规则: $removed_rules 条"
+                  echo "- 移除规则: $removed_rules 条"
                   
+                  # 在日志中显示变化的规则（最多显示20条）
                   if [ $added_rules -gt 0 ]; then
-                    echo "新增规则列表:"
-                    cat "$added_rules_file"
+                    if [ $added_rules -gt 20 ]; then
+                      echo "新增规则预览(前20条):"
+                      head -n 20 "$added_rules_file"
+                      echo "... 以及其他 $((added_rules - 20)) 条规则"
+                    else
+                      echo "新增规则列表:"
+                      cat "$added_rules_file"
+                    fi
                   fi
                   
                   if [ $removed_rules -gt 0 ]; then
-                    echo "删除规则列表:"
-                    cat "$removed_rules_file"
+                    if [ $removed_rules -gt 20 ]; then
+                      echo "移除规则预览(前20条):"
+                      head -n 20 "$removed_rules_file"
+                      echo "... 以及其他 $((removed_rules - 20)) 条规则"
+                    else
+                      echo "移除规则列表:"
+                      cat "$removed_rules_file"
+                    fi
                   fi
                   
                   # 清理临时文件
                   rm -f "$old_rules_content" "$new_rules_content" "$added_rules_file" "$removed_rules_file"
                 else
-                  echo "规则对比: 内容完全相同，无变化"
+                  echo "规则对比: 内容完全相同，无需更新"
                   # 清理临时文件
                   rm -f "$old_rules_content" "$new_rules_content"
                 fi
@@ -242,24 +255,24 @@ jobs:
               else
                 changed=1
                 added_rules=$new_rules_count
-                echo "新建规则文件，新增 $added_rules 条规则"
+                echo "新建规则文件，共添加 $added_rules 条规则"
               fi
               
               # 总结规则状态
-              echo "规则状态摘要:"
+              echo "规则更新摘要:"
               echo "- 文件: $(basename "$output_path")"
-              echo "- 最新规则数量: $new_rules_count"
-              echo "- 仓库规则数量: $old_rules_count"
-              echo "- 增加规则数量: $added_rules"
-              echo "- 删除规则数量: $removed_rules"
+              echo "- 最新规则条数: $new_rules_count"
+              echo "- 原有规则条数: $old_rules_count"
+              echo "- 新增规则条数: $added_rules"
+              echo "- 移除规则条数: $removed_rules"
               echo "- 是否有变更: $([ $changed -eq 1 ] && echo '是' || echo '否')"
               
               if [ $changed -eq 1 ]; then
                 {
-                  echo "# Update time: $(date '+%Y-%m-%d %H:%M:%S')"
+                  echo "# 更新时间: $(date '+%Y-%m-%d %H:%M:%S')"
                   cat "$meta_file"
                 } > "$output_path"
-                echo "规则已更新"
+                echo "规则已成功更新"
               else
                 echo "规则无变化，无需更新"
               fi
@@ -273,11 +286,11 @@ jobs:
             rm -rf "$tmp_dir"
             
             local duration=$((SECONDS - start_time))
-            echo "处理用时: $duration 秒"
+            echo "处理完成，用时: $duration 秒"
           }
 
           main() {
-            echo "===== 网络规则更新程序 ====="
+            echo "===== 网络规则更新工具 ====="
             echo "开始时间: $(date '+%Y-%m-%d %H:%M:%S')"
             echo "============================"
             
@@ -292,7 +305,7 @@ jobs:
             fi
             
             echo "============================"
-            echo "开始更新规则"
+            echo "开始更新规则集"
             echo "============================"
             
             local start_time=$SECONDS
@@ -318,7 +331,7 @@ jobs:
             git add "${rule_files[@]}" 2>/dev/null || true
             
             echo "============================"
-            echo "规则变更汇总报告"
+            echo "规则变更总结"
             echo "============================"
             
             for file in "${rule_files[@]}"; do
@@ -361,10 +374,10 @@ jobs:
                   local old_count=$(wc -l < "$old_rules_only")
                   
                   echo "文件: $basename"
-                  echo "- 最新规则数量: $new_count"
-                  echo "- 仓库规则数量: $old_count"
-                  echo "- 增加规则数量: $added_lines"
-                  echo "- 删除规则数量: $removed_lines"
+                  echo "- 最新规则条数: $new_count"
+                  echo "- 原有规则条数: $old_count"
+                  echo "- 新增规则条数: $added_lines"
+                  echo "- 移除规则条数: $removed_lines"
                   echo "- 是否有变更: 是"
                   
                   # 提取规则类型名称 (去掉.list后缀)
@@ -382,7 +395,7 @@ jobs:
                   local basename=$(basename "$file")
                   
                   echo "文件: $basename"
-                  echo "- 规则数量: $new_count"
+                  echo "- 规则条数: $new_count"
                   echo "- 是否有变更: 否"
                 fi
                 
@@ -395,7 +408,7 @@ jobs:
             if [ "$has_changes" = true ]; then
               # 移除末尾的空格
               change_summary=$(echo "$change_summary" | sed 's/ $//')
-              echo "新的commit信息: Update rules: $change_summary"
+              echo "新的提交信息: Update rules: $change_summary"
               
               if [ -n "$GITHUB_OUTPUT" ]; then
                 echo "has_changes=true" >> $GITHUB_OUTPUT
