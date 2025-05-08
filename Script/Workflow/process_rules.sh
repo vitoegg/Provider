@@ -64,6 +64,7 @@ process_rule() {
     }
   ' "$merged_file" > "$cleaned_file"
   
+  # 统计清理后的非空规则行数
   local cleaned_count=$(wc -l < "$cleaned_file")
   echo "┃ 📊 清理后的规则条数: $cleaned_count" | tee -a "$log_file"
   
@@ -96,6 +97,7 @@ process_rule() {
     
     rm -f "$stats_file"
     
+    # 统计最终有效规则数量
     local final_count=$(wc -l < "$final_file")
     local removed_count=$((cleaned_count - final_count))
     echo "┃ 📊 去重后的规则条数: $final_count (减少了 $removed_count 条重复规则)" | tee -a "$log_file"
@@ -115,7 +117,7 @@ process_rule() {
     } > "$meta_file"
     
     local changed=0
-    local new_rules_count=$(awk '!/^#/' "$meta_file" | wc -l)
+    local new_rules_count=$(awk '!/^#/ && !/^[[:space:]]*$/' "$meta_file" | wc -l)
     local old_rules_count=0
     local added_rules=0
     local removed_rules=0
@@ -126,7 +128,7 @@ process_rule() {
       local old_file=$(mktemp)
       grep -v "^# Update time:" "$output_path" > "$old_file"
       
-      old_rules_count=$(awk '!/^#/' "$old_file" | wc -l)
+      old_rules_count=$(awk '!/^#/ && !/^[[:space:]]*$/' "$old_file" | wc -l)
       echo "┃ 📊 仓库中已有规则文件包含 $old_rules_count 条规则" | tee -a "$log_file"
       
       # 比较实际规则内容而不是整个文件
@@ -134,8 +136,8 @@ process_rule() {
       local new_rules_content=$(mktemp)
       
       # 提取并排序规则内容进行比较，使用awk避免处理大量数据时出错
-      awk '!/^#/' "$old_file" | sort > "$old_rules_content"
-      awk '!/^#/' "$meta_file" | sort > "$new_rules_content"
+      awk '!/^#/ && !/^[[:space:]]*$/' "$old_file" | sort > "$old_rules_content"
+      awk '!/^#/ && !/^[[:space:]]*$/' "$meta_file" | sort > "$new_rules_content"
       
       if ! cmp -s "$old_rules_content" "$new_rules_content"; then
         changed=1
@@ -335,9 +337,9 @@ main() {
     if [ -f "$file" ]; then
       local file_changed=${rule_changes["$file"]:-false}
       
-      # 获取规则数量（不含注释）
+      # 获取规则数量（不含注释和空行）
       local new_count_file=$(mktemp)
-      awk '!/^#/' "$file" > "$new_count_file"
+      awk '!/^#/ && !/^[[:space:]]*$/' "$file" > "$new_count_file"
       local new_count=$(wc -l < "$new_count_file")
       rm -f "$new_count_file"
       
@@ -369,7 +371,7 @@ main() {
           local diff_file=$(mktemp)
           git diff --cached --no-color "$file" > "$diff_file"
           
-          # 移除注释空行，只统计规则行数
+          # 移除注释和空行，只统计规则行数
           local counts=$(awk '
             BEGIN { add=0; del=0; }
             /^[+][^+]/ && !/^[+]#/ && !/^[+][[:space:]]*$/ { add++ }
