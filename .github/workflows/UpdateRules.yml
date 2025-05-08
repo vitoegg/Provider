@@ -343,7 +343,9 @@ jobs:
                 local file_changed=false
                 
                 # 检查是否有非更新时间的变化
-                if grep -v '^[+-]# Update time:' "$diff_file" | grep -q '^[+-]'; then
+                local filtered_diff=$(mktemp)
+                awk '!/^[+-]# Update time:/' "$diff_file" > "$filtered_diff"
+                if [ -s "$filtered_diff" ] && awk '/^[+-]/' "$filtered_diff" | head -1 > /dev/null; then
                   file_changed=true
                   has_changes=true
                   local basename=$(basename "$file")
@@ -353,12 +355,18 @@ jobs:
                   local old_rules_only=$(mktemp)
                   
                   # 计算新文件中的规则
-                  grep -v '^#' "$file" | sort > "$new_rules_only"
+                  awk '!/^#/' "$file" > "$new_rules_only"
+                  local new_count=$(wc -l < "$new_rules_only")
                   
                   # 获取暂存区的文件内容以计算旧文件中的规则
                   local old_file_content=$(mktemp)
                   git show HEAD:"$file" > "$old_file_content" 2>/dev/null || touch "$old_file_content"
-                  grep -v '^#' "$old_file_content" | sort > "$old_rules_only"
+                  awk '!/^#/' "$old_file_content" > "$old_rules_only"
+                  local old_count=$(wc -l < "$old_rules_only")
+                  
+                  # 使用文件排序处理
+                  LC_ALL=C sort -u "$new_rules_only" -o "$new_rules_only"
+                  LC_ALL=C sort -u "$old_rules_only" -o "$old_rules_only"
                   
                   # 计算新增的规则
                   local added_rules_file=$(mktemp)
@@ -371,8 +379,8 @@ jobs:
                   local removed_lines=$(wc -l < "$removed_rules_file")
                   
                   # 计算规则数量
-                  local new_count=$(wc -l < "$new_rules_only")
-                  local old_count=$(wc -l < "$old_rules_only")
+                  # local new_count=$(wc -l < "$new_rules_only")
+                  # local old_count=$(wc -l < "$old_rules_only")
                   
                   echo "文件: $basename"
                   echo "- 最新规则条数: $new_count"
@@ -390,9 +398,15 @@ jobs:
                   
                   # 清理临时文件
                   rm -f "$new_rules_only" "$old_rules_only" "$added_rules_file" "$removed_rules_file" "$old_file_content"
+                  rm -f "$filtered_diff"
                 else
+                  rm -f "$filtered_diff"
                   # 没有变化的情况
-                  local new_count=$(grep -v '^#' "$file" | wc -l)
+                  local new_count_file=$(mktemp)
+                  awk '!/^#/' "$file" > "$new_count_file"
+                  local new_count=$(wc -l < "$new_count_file")
+                  rm -f "$new_count_file"
+                  
                   local basename=$(basename "$file")
                   
                   echo "文件: $basename"
