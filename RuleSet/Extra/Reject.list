@@ -1,4 +1,4 @@
-# 更新时间: 2025-05-08 09:27:29
+# 更新时间: 2025-05-08 09:52:26
 # 规则来源:
 # - https://https://ruleset.skk.moe/List/domainset/reject.conf
 # - https://https://ruleset.skk.moe/List/domainset/reject_extra.conf
@@ -121480,6 +121480,7 @@
 .wetransfer.it.com
 .wetsireoverload.com
 .wetter24.fr
+.wetype.weixin.qq.com
 .wevbgr.vidaxl.it
 .wevrwqjqemkyj.top
 .wew.dushiwenxue.net
@@ -127794,7 +127795,6 @@ wbpctips.mobile.sina.cn
 weatherapi.market.xioami.com
 web-track.go2yd.com
 web.data.pplive.com
-wetype.weixin.qq.com
 weus2watcab01.blob.core.windows.net
 weus2watcab02.blob.core.windows.net
 win10.ipv6.microsoft.com
