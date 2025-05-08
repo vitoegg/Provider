@@ -231,7 +231,7 @@ main() {
   config_file="${GITHUB_WORKSPACE}/Script/Workflow/rules_config.json"
   
   echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "┃ 🚀 网络规则更新工具"
+  echo "┃ 🚀 规则集更新工具"
   echo "┃ 🕒 开始时间: $(date '+%Y-%m-%d %H:%M:%S')"
   echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   
