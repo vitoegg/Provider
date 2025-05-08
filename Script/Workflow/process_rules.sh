@@ -359,14 +359,30 @@ main() {
         awk '!/^[+-]# Update time:/' "$diff_file" > "$filtered_diff"
         
         # 计算变更行数
-        local add_count=$(grep "^+" "$filtered_diff" | grep -v "^+++" | wc -l || echo 0)
-        local del_count=$(grep "^-" "$filtered_diff" | grep -v "^---" | wc -l || echo 0)
+        local add_count=0
+        local del_count=0
+        
+        if grep "^+" "$filtered_diff" | grep -v "^+++" > /dev/null; then
+            add_count=$(grep "^+" "$filtered_diff" | grep -v "^+++" | wc -l)
+        fi
+        
+        if grep "^-" "$filtered_diff" | grep -v "^---" > /dev/null; then
+            del_count=$(grep "^-" "$filtered_diff" | grep -v "^---" | wc -l)
+        fi
         
         # 从process_rule函数中获取的实际变更数
         if [ -f "$file.tmp.log" ]; then
             # 尝试从临时日志中获取实际的新增/移除规则数
-            local log_added=$(grep -oP "➕ 新增规则: \K[0-9]+" "$file.tmp.log" 2>/dev/null || echo 0)
-            local log_removed=$(grep -oP "➖ 移除规则: \K[0-9]+" "$file.tmp.log" 2>/dev/null || echo 0)
+            local log_added=0
+            local log_removed=0
+            
+            if grep -oP "➕ 新增规则: \K[0-9]+" "$file.tmp.log" >/dev/null 2>&1; then
+                log_added=$(grep -oP "➕ 新增规则: \K[0-9]+" "$file.tmp.log")
+            fi
+            
+            if grep -oP "➖ 移除规则: \K[0-9]+" "$file.tmp.log" >/dev/null 2>&1; then
+                log_removed=$(grep -oP "➖ 移除规则: \K[0-9]+" "$file.tmp.log")
+            fi
             
             # 如果能找到日志中的数据，优先使用
             if [ "$log_added" -gt 0 ] || [ "$log_removed" -gt 0 ]; then
