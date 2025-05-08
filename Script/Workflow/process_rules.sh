@@ -48,13 +48,21 @@ process_rule() {
   
   cat "${tmp_dir}"/download_* > "$merged_file"
   
-  sed -e 's/[[:space:]]*[#;\/\/].*$//' \
-      -e 's/^[[:space:]]*//;s/[[:space:]]*$//' \
-      -e '/^$/d' \
-      -e '/^[[:space:]]*[#;\/\/]/d' \
-      -e '/^payload:/d' \
-      -e '/^[[:space:]]*\/\*/d;/\*\//d' \
-      "$merged_file" > "$cleaned_file"
+  # 使用AWK一次性处理文件，而不是多次使用sed
+  awk '
+    # 跳过注释、空行和特殊行
+    !/^[[:space:]]*[#;\/\/]/ && 
+    !/^[[:space:]]*$/ && 
+    !/^payload:/ && 
+    !/^[[:space:]]*\/\*/ && 
+    !/\*\// { 
+      # 移除每行的注释部分和前后空白
+      gsub(/[[:space:]]*[#;\/\/].*$/, "");
+      gsub(/^[[:space:]]*/, "");
+      gsub(/[[:space:]]*$/, "");
+      if (length($0) > 0) print;
+    }
+  ' "$merged_file" > "$cleaned_file"
   
   local cleaned_count=$(wc -l < "$cleaned_file")
   echo "┃ 📊 清理后的规则条数: $cleaned_count" | tee -a "$log_file"
@@ -107,7 +115,7 @@ process_rule() {
     } > "$meta_file"
     
     local changed=0
-    local new_rules_count=$(grep -v "^#" "$meta_file" | wc -l)
+    local new_rules_count=$(awk '!/^#/' "$meta_file" | wc -l)
     local old_rules_count=0
     local added_rules=0
     local removed_rules=0
@@ -118,16 +126,16 @@ process_rule() {
       local old_file=$(mktemp)
       grep -v "^# Update time:" "$output_path" > "$old_file"
       
-      old_rules_count=$(grep -v "^#" "$old_file" | wc -l)
+      old_rules_count=$(awk '!/^#/' "$old_file" | wc -l)
       echo "┃ 📊 仓库中已有规则文件包含 $old_rules_count 条规则" | tee -a "$log_file"
       
       # 比较实际规则内容而不是整个文件
       local old_rules_content=$(mktemp)
       local new_rules_content=$(mktemp)
       
-      # 提取并排序规则内容进行比较
-      grep -v "^#" "$old_file" | sort > "$old_rules_content"
-      grep -v "^#" "$meta_file" | sort > "$new_rules_content"
+      # 提取并排序规则内容进行比较，使用awk避免处理大量数据时出错
+      awk '!/^#/' "$old_file" | sort > "$old_rules_content"
+      awk '!/^#/' "$meta_file" | sort > "$new_rules_content"
       
       if ! cmp -s "$old_rules_content" "$new_rules_content"; then
         changed=1
@@ -214,6 +222,16 @@ process_rule() {
       echo "┃ ℹ️ 规则无变化，无需更新 ❌" | tee -a "$log_file"
     fi
     
+    # 记录规则文件的变更信息到全局变量，方便main函数使用
+    if [ -f "$output_path" ] && [ $changed -eq 1 ]; then
+      # 将变更信息保存在全局变量中
+      rule_line_changes["$output_path.added"]=$added_rules
+      rule_line_changes["$output_path.removed"]=$removed_rules
+      rule_changes["$output_path"]=true
+    elif [ -f "$output_path" ]; then
+      rule_changes["$output_path"]=false
+    fi
+    
     rm -f "$final_file" "$meta_file"
   else
     echo "┃ ⚠️ 警告: 没有找到有效内容，跳过处理" | tee -a "$log_file"
@@ -239,6 +257,8 @@ main() {
   declare -a rule_files
   # 保存每个规则文件的变更状态
   declare -A rule_changes
+  # 保存规则变更的行数信息
+  declare -g -A rule_line_changes
   
   echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo "┃ 🔍 规则配置检查"
@@ -291,18 +311,6 @@ main() {
     urls=$(echo "$rules_json" | jq -r ".rules[$i].urls | join(\" \")")
     
     process_rule "$rule_name" "$rule_path" "$urls"
-    
-    # 记录规则文件的变更状态
-    if [ -f "$rule_path" ]; then
-      # 读取process_rule函数中的changed变量，通过检查文件内容判断
-      if grep -q "是否有变更: 是" "$rule_path.tmp.log" 2>/dev/null || \
-         grep -q "规则已成功更新" "$rule_path.tmp.log" 2>/dev/null; then
-        rule_changes["$rule_path"]=true
-      else
-        rule_changes["$rule_path"]=false
-      fi
-      rm -f "$rule_path.tmp.log" 2>/dev/null || true
-    fi
   done
   
   local duration=$((SECONDS - start_time))
@@ -343,58 +351,36 @@ main() {
       if [ "$file_changed" = "true" ]; then
         has_changes=true
         
-        # 提取规则类型名称 (去掉.list后缀)
-        local rule_name=$(basename "$file" .list)
+        # 提取规则类型名称
+        local rule_name=$(basename "$file")
+        # 移除任何扩展名
+        rule_name=${rule_name%.*}
         
         # 初始化变更行数变量
         local added_lines=0
         local removed_lines=0
         
-        # 尝试从git diff中获取变更行数
-        local diff_file=$(mktemp)
-        git diff --cached --no-color "$file" > "$diff_file"
-        
-        # 过滤掉更新时间的变化
-        local filtered_diff=$(mktemp)
-        awk '!/^[+-]# Update time:/' "$diff_file" > "$filtered_diff"
-        
-        # 计算变更行数
-        local add_count=0
-        local del_count=0
-        
-        if grep "^+" "$filtered_diff" | grep -v "^+++" > /dev/null; then
-            add_count=$(grep "^+" "$filtered_diff" | grep -v "^+++" | wc -l)
-        fi
-        
-        if grep "^-" "$filtered_diff" | grep -v "^---" > /dev/null; then
-            del_count=$(grep "^-" "$filtered_diff" | grep -v "^---" | wc -l)
-        fi
-        
-        # 从process_rule函数中获取的实际变更数
-        if [ -f "$file.tmp.log" ]; then
-            # 尝试从临时日志中获取实际的新增/移除规则数
-            local log_added=0
-            local log_removed=0
-            
-            if grep -oP "➕ 新增规则: \K[0-9]+" "$file.tmp.log" >/dev/null 2>&1; then
-                log_added=$(grep -oP "➕ 新增规则: \K[0-9]+" "$file.tmp.log")
-            fi
-            
-            if grep -oP "➖ 移除规则: \K[0-9]+" "$file.tmp.log" >/dev/null 2>&1; then
-                log_removed=$(grep -oP "➖ 移除规则: \K[0-9]+" "$file.tmp.log")
-            fi
-            
-            # 如果能找到日志中的数据，优先使用
-            if [ "$log_added" -gt 0 ] || [ "$log_removed" -gt 0 ]; then
-                added_lines=$log_added
-                removed_lines=$log_removed
-            else
-                added_lines=$add_count
-                removed_lines=$del_count
-            fi
+        # 优先使用从process_rule函数保存的变更信息
+        if [[ -v rule_line_changes["$file.added"] ]] && [[ -v rule_line_changes["$file.removed"] ]]; then
+          added_lines=${rule_line_changes["$file.added"]}
+          removed_lines=${rule_line_changes["$file.removed"]}
         else
-            added_lines=$add_count
-            removed_lines=$del_count
+          # 尝试从git diff中获取变更行数
+          local diff_file=$(mktemp)
+          git diff --cached --no-color "$file" > "$diff_file"
+          
+          # 移除注释空行，只统计规则行数
+          local counts=$(awk '
+            BEGIN { add=0; del=0; }
+            /^[+][^+]/ && !/^[+]#/ && !/^[+][[:space:]]*$/ { add++ }
+            /^[-][^-]/ && !/^[-]#/ && !/^[-][[:space:]]*$/ { del++ }
+            END { print add " " del }
+          ' "$diff_file")
+          
+          added_lines=$(echo $counts | cut -d " " -f 1)
+          removed_lines=$(echo $counts | cut -d " " -f 2)
+          
+          rm -f "$diff_file"
         fi
         
         # 更新变更摘要
@@ -403,8 +389,6 @@ main() {
         # 更新总计
         total_added=$((total_added + added_lines))
         total_removed=$((total_removed + removed_lines))
-        
-        rm -f "$filtered_diff" "$diff_file"
       fi
       
       echo "┃   ---------------------------"
