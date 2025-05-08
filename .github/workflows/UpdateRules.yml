@@ -90,12 +90,16 @@ jobs:
             local output_dir=$(dirname "$output_path")
             mkdir -p "$output_dir"
             
-            echo "开始处理规则集: $rule_name"
-            echo "保存位置: $output_path"
+            # 创建临时日志文件
+            local log_file="$output_path.tmp.log"
+            touch "$log_file"
+            
+            echo "开始处理规则集: $rule_name" | tee -a "$log_file"
+            echo "保存位置: $output_path" | tee -a "$log_file"
             
             local start_time=$SECONDS
             
-            echo "正在下载规则数据..."
+            echo "正在下载规则数据..." | tee -a "$log_file"
             
             local merged_file=$(mktemp)
             local cleaned_file=$(mktemp)
@@ -119,7 +123,7 @@ jobs:
               wait $pid
             done
             
-            echo "正在合并和清理规则数据..."
+            echo "正在合并和清理规则数据..." | tee -a "$log_file"
             
             cat "${tmp_dir}"/download_* > "$merged_file"
             
@@ -132,14 +136,14 @@ jobs:
                 "$merged_file" > "$cleaned_file"
             
             local cleaned_count=$(wc -l < "$cleaned_file")
-            echo "清理后的规则条数: $cleaned_count"
+            echo "清理后的规则条数: $cleaned_count" | tee -a "$log_file"
             
             if [[ -s "$cleaned_file" ]]; then
-              echo "正在对规则进行清洗..."
+              echo "正在对规则进行清洗..." | tee -a "$log_file"
               
               local final_file=$(mktemp)
               
-              echo "使用Python脚本进行规则清洗..."
+              echo "使用Python脚本进行规则清洗..." | tee -a "$log_file"
               
               script_path="${GITHUB_WORKSPACE}/Script/Workflow/process_rules.py"
               chmod +x "$script_path"
@@ -150,21 +154,21 @@ jobs:
               python_exit=$?
               
               if [ $python_exit -ne 0 ]; then
-                echo "Python脚本执行失败，使用基础清洗方法"
-                echo "错误信息: $(cat "$stats_file")"
+                echo "Python脚本执行失败，使用基础清洗方法" | tee -a "$log_file"
+                echo "错误信息: $(cat "$stats_file")" | tee -a "$log_file"
                 sort -u "$cleaned_file" > "$final_file"
               else
-                cat "$stats_file"
-                echo "规则清洗完成"
+                cat "$stats_file" | tee -a "$log_file"
+                echo "规则清洗完成" | tee -a "$log_file"
               fi
               
               rm -f "$stats_file"
               
               local final_count=$(wc -l < "$final_file")
               local removed_count=$((cleaned_count - final_count))
-              echo "去重后的规则条数: $final_count (减少了 $removed_count 条重复规则)"
+              echo "去重后的规则条数: $final_count (减少了 $removed_count 条重复规则)" | tee -a "$log_file"
               
-              echo "正在生成最终规则文件..."
+              echo "正在生成最终规则文件..." | tee -a "$log_file"
               
               local meta_file=$(mktemp)
               
@@ -184,14 +188,14 @@ jobs:
               local added_rules=0
               local removed_rules=0
               
-              echo "最新规则文件包含 $new_rules_count 条规则"
+              echo "最新规则文件包含 $new_rules_count 条规则" | tee -a "$log_file"
               
               if [ -f "$output_path" ]; then
                 local old_file=$(mktemp)
                 grep -v "^# Update time:" "$output_path" > "$old_file"
                 
                 old_rules_count=$(grep -v "^#" "$old_file" | wc -l)
-                echo "仓库中已有规则文件包含 $old_rules_count 条规则"
+                echo "仓库中已有规则文件包含 $old_rules_count 条规则" | tee -a "$log_file"
                 
                 # 比较实际规则内容而不是整个文件
                 local old_rules_content=$(mktemp)
@@ -218,37 +222,37 @@ jobs:
                   comm -13 "$new_rules" "$old_rules" > "$removed_rules_file"
                   removed_rules=$(wc -l < "$removed_rules_file")
                   
-                  echo "规则变化详情:"
-                  echo "- 新增规则: $added_rules 条"
-                  echo "- 移除规则: $removed_rules 条"
+                  echo "规则变化详情:" | tee -a "$log_file"
+                  echo "- 新增规则: $added_rules 条" | tee -a "$log_file"
+                  echo "- 移除规则: $removed_rules 条" | tee -a "$log_file"
                   
                   # 在日志中显示变化的规则（最多显示20条）
                   if [ $added_rules -gt 0 ]; then
                     if [ $added_rules -gt 20 ]; then
-                      echo "新增规则预览(前20条):"
-                      head -n 20 "$added_rules_file"
-                      echo "... 以及其他 $((added_rules - 20)) 条规则"
+                      echo "新增规则预览(前20条):" | tee -a "$log_file"
+                      head -n 20 "$added_rules_file" | tee -a "$log_file"
+                      echo "... 以及其他 $((added_rules - 20)) 条规则" | tee -a "$log_file"
                     else
-                      echo "新增规则列表:"
-                      cat "$added_rules_file"
+                      echo "新增规则列表:" | tee -a "$log_file"
+                      cat "$added_rules_file" | tee -a "$log_file"
                     fi
                   fi
                   
                   if [ $removed_rules -gt 0 ]; then
                     if [ $removed_rules -gt 20 ]; then
-                      echo "移除规则预览(前20条):"
-                      head -n 20 "$removed_rules_file"
-                      echo "... 以及其他 $((removed_rules - 20)) 条规则"
+                      echo "移除规则预览(前20条):" | tee -a "$log_file"
+                      head -n 20 "$removed_rules_file" | tee -a "$log_file"
+                      echo "... 以及其他 $((removed_rules - 20)) 条规则" | tee -a "$log_file"
                     else
-                      echo "移除规则列表:"
-                      cat "$removed_rules_file"
+                      echo "移除规则列表:" | tee -a "$log_file"
+                      cat "$removed_rules_file" | tee -a "$log_file"
                     fi
                   fi
                   
                   # 清理临时文件
                   rm -f "$old_rules_content" "$new_rules_content" "$added_rules_file" "$removed_rules_file"
                 else
-                  echo "规则对比: 内容完全相同，无需更新"
+                  echo "规则对比: 内容完全相同，无需更新" | tee -a "$log_file"
                   # 清理临时文件
                   rm -f "$old_rules_content" "$new_rules_content"
                 fi
@@ -256,38 +260,38 @@ jobs:
               else
                 changed=1
                 added_rules=$new_rules_count
-                echo "新建规则文件，共添加 $added_rules 条规则"
+                echo "新建规则文件，共添加 $added_rules 条规则" | tee -a "$log_file"
               fi
               
               # 总结规则状态
-              echo "规则更新摘要:"
-              echo "- 文件: $(basename "$output_path")"
-              echo "- 最新规则条数: $new_rules_count"
-              echo "- 原有规则条数: $old_rules_count"
-              echo "- 新增规则条数: $added_rules"
-              echo "- 移除规则条数: $removed_rules"
-              echo "- 是否有变更: $([ $changed -eq 1 ] && echo '是' || echo '否')"
+              echo "规则更新摘要:" | tee -a "$log_file"
+              echo "- 文件: $(basename "$output_path")" | tee -a "$log_file"
+              echo "- 最新规则条数: $new_rules_count" | tee -a "$log_file"
+              echo "- 原有规则条数: $old_rules_count" | tee -a "$log_file"
+              echo "- 新增规则条数: $added_rules" | tee -a "$log_file"
+              echo "- 移除规则条数: $removed_rules" | tee -a "$log_file"
+              echo "- 是否有变更: $([ $changed -eq 1 ] && echo '是' || echo '否')" | tee -a "$log_file"
               
               if [ $changed -eq 1 ]; then
                 {
                   echo "# 更新时间: $(date '+%Y-%m-%d %H:%M:%S')"
                   cat "$meta_file"
                 } > "$output_path"
-                echo "规则已成功更新"
+                echo "规则已成功更新" | tee -a "$log_file"
               else
-                echo "规则无变化，无需更新"
+                echo "规则无变化，无需更新" | tee -a "$log_file"
               fi
               
               rm -f "$final_file" "$meta_file"
             else
-              echo "警告: 没有找到有效内容，跳过处理"
+              echo "警告: 没有找到有效内容，跳过处理" | tee -a "$log_file"
             fi
             
             rm -f "$merged_file" "$cleaned_file"
             rm -rf "$tmp_dir"
             
             local duration=$((SECONDS - start_time))
-            echo "处理完成，用时: $duration 秒"
+            echo "处理完成，用时: $duration 秒" | tee -a "$log_file"
           }
 
           main() {
@@ -297,6 +301,8 @@ jobs:
             
             declare -A rule_configs
             declare -a rule_files
+            # 保存每个规则文件的变更状态
+            declare -A rule_changes
             
             get_rules_config rule_configs rule_files
             
@@ -317,6 +323,19 @@ jobs:
               echo "============================"
               process_rule "$rule_name" "$output_path" "$urls"
               echo "============================"
+              
+              # 记录规则文件的变更状态
+              if [ -f "$output_path" ]; then
+                # 读取process_rule函数中的changed变量，通过检查文件内容判断
+                # 如果文件中包含"是否有变更: 是"，则标记为已变更
+                if grep -q "是否有变更: 是" "$output_path.tmp.log" 2>/dev/null || \
+                   grep -q "规则已成功更新" "$output_path.tmp.log" 2>/dev/null; then
+                  rule_changes["$output_path"]=true
+                else
+                  rule_changes["$output_path"]=false
+                fi
+                rm -f "$output_path.tmp.log" 2>/dev/null || true
+              fi
             done
             
             local duration=$((SECONDS - start_time))
@@ -337,84 +356,56 @@ jobs:
             
             for file in "${rule_files[@]}"; do
               if [ -f "$file" ]; then
-                local diff_file=$(mktemp)
-                git diff --cached --no-color "$file" > "$diff_file"
+                local file_changed=${rule_changes["$file"]:-false}
                 
-                local file_changed=false
+                # 获取规则数量（不含注释）
+                local new_count_file=$(mktemp)
+                awk '!/^#/' "$file" > "$new_count_file"
+                local new_count=$(wc -l < "$new_count_file")
+                rm -f "$new_count_file"
                 
-                # 检查是否有非更新时间的变化
-                local filtered_diff=$(mktemp)
-                awk '!/^[+-]# Update time:/' "$diff_file" > "$filtered_diff"
-                if [ -s "$filtered_diff" ] && awk '/^[+-]/' "$filtered_diff" | head -1 > /dev/null; then
-                  file_changed=true
+                local basename=$(basename "$file")
+                
+                echo "文件: $basename"
+                echo "- 规则条数: $new_count"
+                echo "- 是否有变更: $([ "$file_changed" = "true" ] && echo "是" || echo "否")"
+                
+                # 如果有变更，从git diff中获取变更详情
+                if [ "$file_changed" = "true" ]; then
                   has_changes=true
-                  local basename=$(basename "$file")
-                  
-                  # 从文件中分离规则（不含注释）进行比较
-                  local new_rules_only=$(mktemp)
-                  local old_rules_only=$(mktemp)
-                  
-                  # 计算新文件中的规则
-                  awk '!/^#/' "$file" > "$new_rules_only"
-                  local new_count=$(wc -l < "$new_rules_only")
-                  
-                  # 获取暂存区的文件内容以计算旧文件中的规则
-                  local old_file_content=$(mktemp)
-                  git show HEAD:"$file" > "$old_file_content" 2>/dev/null || touch "$old_file_content"
-                  awk '!/^#/' "$old_file_content" > "$old_rules_only"
-                  local old_count=$(wc -l < "$old_rules_only")
-                  
-                  # 使用文件排序处理
-                  LC_ALL=C sort -u "$new_rules_only" -o "$new_rules_only"
-                  LC_ALL=C sort -u "$old_rules_only" -o "$old_rules_only"
-                  
-                  # 计算新增的规则
-                  local added_rules_file=$(mktemp)
-                  comm -23 "$new_rules_only" "$old_rules_only" > "$added_rules_file"
-                  local added_lines=$(wc -l < "$added_rules_file")
-                  
-                  # 计算删除的规则
-                  local removed_rules_file=$(mktemp)
-                  comm -13 "$new_rules_only" "$old_rules_only" > "$removed_rules_file"
-                  local removed_lines=$(wc -l < "$removed_rules_file")
-                  
-                  # 计算规则数量
-                  # local new_count=$(wc -l < "$new_rules_only")
-                  # local old_count=$(wc -l < "$old_rules_only")
-                  
-                  echo "文件: $basename"
-                  echo "- 最新规则条数: $new_count"
-                  echo "- 原有规则条数: $old_count"
-                  echo "- 新增规则条数: $added_lines"
-                  echo "- 移除规则条数: $removed_lines"
-                  echo "- 是否有变更: 是"
                   
                   # 提取规则类型名称 (去掉.list后缀)
                   local rule_name=$(basename "$file" .list)
+                  
+                  # 从process_rule函数中获取变更行数
+                  local added_lines=0
+                  local removed_lines=0
+                  
+                  # 尝试从git diff中获取变更行数
+                  local diff_file=$(mktemp)
+                  git diff --cached --no-color "$file" > "$diff_file"
+                  
+                  # 过滤掉更新时间的变化
+                  local filtered_diff=$(mktemp)
+                  awk '!/^[+-]# Update time:/' "$diff_file" > "$filtered_diff"
+                  
+                  # 计算变更行数
+                  local add_count=$(grep -c "^+" "$filtered_diff" || echo 0)
+                  local del_count=$(grep -c "^-" "$filtered_diff" || echo 0)
+                  
+                  # 如果无法从git diff获取，则使用默认值
+                  added_lines=$add_count
+                  removed_lines=$del_count
+                  
+                  # 更新变更摘要
                   change_summary="${change_summary}${rule_name}(+${added_lines}/-${removed_lines}) "
                   
+                  # 更新总计
                   total_added=$((total_added + added_lines))
                   total_removed=$((total_removed + removed_lines))
                   
-                  # 清理临时文件
-                  rm -f "$new_rules_only" "$old_rules_only" "$added_rules_file" "$removed_rules_file" "$old_file_content"
-                  rm -f "$filtered_diff"
-                else
-                  rm -f "$filtered_diff"
-                  # 没有变化的情况
-                  local new_count_file=$(mktemp)
-                  awk '!/^#/' "$file" > "$new_count_file"
-                  local new_count=$(wc -l < "$new_count_file")
-                  rm -f "$new_count_file"
-                  
-                  local basename=$(basename "$file")
-                  
-                  echo "文件: $basename"
-                  echo "- 规则条数: $new_count"
-                  echo "- 是否有变更: 否"
+                  rm -f "$filtered_diff" "$diff_file"
                 fi
-                
-                rm -f "$diff_file"
               fi
             done
             
