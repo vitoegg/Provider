@@ -192,14 +192,20 @@ jobs:
                 old_rules_count=$(grep -v "^#" "$old_file" | wc -l)
                 echo "仓库已有规则文件包含 $old_rules_count 条规则"
                 
-                if ! cmp -s "$old_file" "$meta_file"; then
+                # 比较实际规则内容而不是整个文件
+                local old_rules_content=$(mktemp)
+                local new_rules_content=$(mktemp)
+                
+                # 提取并排序规则内容进行比较
+                grep -v "^#" "$old_file" | sort > "$old_rules_content"
+                grep -v "^#" "$meta_file" | sort > "$new_rules_content"
+                
+                if ! cmp -s "$old_rules_content" "$new_rules_content"; then
                   changed=1
                   
                   # 创建临时文件存储规则 (不含注释)
-                  local old_rules=$(mktemp)
-                  local new_rules=$(mktemp)
-                  grep -v "^#" "$old_file" > "$old_rules"
-                  grep -v "^#" "$meta_file" > "$new_rules"
+                  local old_rules="$old_rules_content"
+                  local new_rules="$new_rules_content"
                   
                   # 计算新增的规则
                   local added_rules_file=$(mktemp)
@@ -226,9 +232,11 @@ jobs:
                   fi
                   
                   # 清理临时文件
-                  rm -f "$old_rules" "$new_rules" "$added_rules_file" "$removed_rules_file"
+                  rm -f "$old_rules_content" "$new_rules_content" "$added_rules_file" "$removed_rules_file"
                 else
                   echo "规则对比: 内容完全相同，无变化"
+                  # 清理临时文件
+                  rm -f "$old_rules_content" "$new_rules_content"
                 fi
                 rm -f "$old_file"
               else
@@ -306,6 +314,7 @@ jobs:
             local total_added=0
             local total_removed=0
             
+            # 将所有规则文件添加到暂存区以检查变化
             git add "${rule_files[@]}" 2>/dev/null || true
             
             echo "============================"
@@ -319,16 +328,37 @@ jobs:
                 
                 local file_changed=false
                 
+                # 检查是否有非更新时间的变化
                 if grep -v '^[+-]# Update time:' "$diff_file" | grep -q '^[+-]'; then
                   file_changed=true
                   has_changes=true
                   local basename=$(basename "$file")
                   
-                  local added_lines=$(grep -v '^[+-]# ' "$diff_file" | grep -c '^+' || echo 0)
-                  local removed_lines=$(grep -v '^[+-]# ' "$diff_file" | grep -c '^-' || echo 0)
+                  # 从文件中分离规则（不含注释）进行比较
+                  local new_rules_only=$(mktemp)
+                  local old_rules_only=$(mktemp)
                   
-                  local new_count=$(grep -v '^#' "$file" | wc -l)
-                  local old_count=$((new_count - added_lines + removed_lines))
+                  # 计算新文件中的规则
+                  grep -v '^#' "$file" | sort > "$new_rules_only"
+                  
+                  # 获取暂存区的文件内容以计算旧文件中的规则
+                  local old_file_content=$(mktemp)
+                  git show HEAD:"$file" > "$old_file_content" 2>/dev/null || touch "$old_file_content"
+                  grep -v '^#' "$old_file_content" | sort > "$old_rules_only"
+                  
+                  # 计算新增的规则
+                  local added_rules_file=$(mktemp)
+                  comm -23 "$new_rules_only" "$old_rules_only" > "$added_rules_file"
+                  local added_lines=$(wc -l < "$added_rules_file")
+                  
+                  # 计算删除的规则
+                  local removed_rules_file=$(mktemp)
+                  comm -13 "$new_rules_only" "$old_rules_only" > "$removed_rules_file"
+                  local removed_lines=$(wc -l < "$removed_rules_file")
+                  
+                  # 计算规则数量
+                  local new_count=$(wc -l < "$new_rules_only")
+                  local old_count=$(wc -l < "$old_rules_only")
                   
                   echo "文件: $basename"
                   echo "- 最新规则数量: $new_count"
@@ -343,7 +373,11 @@ jobs:
                   
                   total_added=$((total_added + added_lines))
                   total_removed=$((total_removed + removed_lines))
+                  
+                  # 清理临时文件
+                  rm -f "$new_rules_only" "$old_rules_only" "$added_rules_file" "$removed_rules_file" "$old_file_content"
                 else
+                  # 没有变化的情况
                   local new_count=$(grep -v '^#' "$file" | wc -l)
                   local basename=$(basename "$file")
                   
@@ -373,6 +407,7 @@ jobs:
               if [ -n "$GITHUB_OUTPUT" ]; then
                 echo "has_changes=false" >> $GITHUB_OUTPUT
               fi
+              # 如果没有变化，恢复暂存区
               git restore --staged "${rule_files[@]}" 2>/dev/null || true
             fi
           }
