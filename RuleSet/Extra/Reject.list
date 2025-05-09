@@ -1,8 +1,8 @@
-# 更新时间: 2025-05-09 15:16:57
+# 更新时间: 2025-05-09 15:28:42
 # 规则来源:
 # - https://https://ruleset.skk.moe/List/domainset/reject.conf
 # - https://https://ruleset.skk.moe/List/domainset/reject_extra.conf
-# - https://https://github.com/TG-Twilight/AWAvenue-Ads-Rule
+# - https://https://github.com/vitoegg/Provider
 
 .0.101tubeporn.com
 .0.clicks4me.fwh.is
@@ -21494,7 +21494,6 @@
 .cdn.wg.uproxx.com
 .cdn.wheelio-app.com
 .cdn.wolf-327b.com
-.cdn.wootric.com
 .cdn.wuyou.ca
 .cdn.wwfx.xyz
 .cdn.xbcpcn.com
@@ -27081,6 +27080,7 @@
 .cpanel12wh.bkk1.cloud.z.com
 .cpaoffers.network
 .cpatext.ru
+.cpatrk.net
 .cpauth0194.loginlink49.link
 .cpaway.com
 .cpays.com
@@ -47114,7 +47114,6 @@
 .go.padsdelivery.com
 .go.padstm.com
 .go.pagabet.org
-.go.pardot.com
 .go.paze.com
 .go.pcfaceshield.com
 .go.pearsonvue.com
@@ -47596,6 +47595,7 @@
 .googlesyndication-cn.com
 .googlesyndication.com
 .googletagmanager-cn.com
+.googletagmanager.com
 .googletagservices-cn.com
 .googletraveladservices.com
 .googlevads-cn.com
@@ -58750,6 +58750,7 @@
 .kissablepopsyv.click
 .kissedthetrain.com
 .kisshentai.net
+.kissmetrics.com
 .kissmyads.biz
 .kistured.com
 .kistutch.net
@@ -63859,7 +63860,6 @@
 .log.tosspayments.com
 .log.tpns.gz2.tencent.com
 .log.tpns.tencent.com
-.log.trackingio.com
 .log.ttbc-hcm.gov.vn
 .log.tv.zing.vn
 .log.tv360.vn
@@ -67445,7 +67445,6 @@
 .marketing.smartrg.com
 .marketing.smartvault.com
 .marketing.soberlink.com
-.marketing.socialbakers.com
 .marketing.soenergy.com
 .marketing.softwaresecure.com
 .marketing.soha.io
@@ -67853,6 +67852,7 @@
 .marketjavgg124.fun
 .marketland.me
 .marketleverage.com
+.marketo.com
 .marketo.net
 .marketplacepro.ru
 .marketresearch.jacksonhealthcare.com
@@ -67877,6 +67877,7 @@
 .marphezis.com
 .marriedbelief.com
 .marryingsakesarcastic.com
+.mars.jd.com
 .mars.msfin.at
 .marsads.com
 .marshagalea.com
@@ -73007,6 +73008,7 @@
 .mpanyinadi.info
 .mpanythathaveresultet.info
 .mpappy.fr
+.mparticle.com
 .mpau.biz
 .mpay1.info
 .mpay3.info
@@ -80609,6 +80611,7 @@
 .pardko.pricerunner.com
 .pardompus.ru
 .pardonpopular.com
+.pardot.com
 .pardyprofer.shop
 .paregospeltheir.com
 .parentlargevia.com
@@ -84068,6 +84071,7 @@
 .predataclient.b-cdn.net
 .predatasrv.com
 .predatoryrucksack.com
+.predic.io
 .predicta.net
 .predictad.com
 .predictfurioushindrance.com
@@ -90492,6 +90496,7 @@
 .rtbadsmenetwork.com
 .rtbadzesto.com
 .rtbanalytics.com
+.rtbasia.com
 .rtbbhub.com
 .rtbbnr.com
 .rtbbpowaq.com
@@ -92806,6 +92811,7 @@
 .score-feed.com
 .score.lumen.com
 .scoreaisle.com
+.scorecardresearch.com
 .scoredconnect.com
 .scoreheadingbabysitting.com
 .scormationwind.org
@@ -93064,7 +93070,6 @@
 .sdk.pulse.schibsted.com
 .sdk.qzbonline.com
 .sdk.starbolt.io
-.sdk.stats-locations.com
 .sdk.streamrail.com
 .sdk.zadn.vn
 .sdk4push.com
@@ -93078,7 +93083,6 @@
 .sdkl.info
 .sdklog.uu.cc
 .sdkoptedge.chinanetcenter.com
-.sdks.stats-locations.com
 .sdkserver-dra.op.hicloud.com
 .sdktmp.hubcloud.com.cn
 .sdkv2.imaginationunwired.com
@@ -93687,6 +93691,7 @@
 .seethisinaction.com
 .seetlittleofthe.org
 .seetron.net
+.seewhy.com
 .seezeit.fr
 .seezfull.com
 .sefeethameel.com
@@ -93694,8 +93699,10 @@
 .segment-api.goodrx.com
 .segment-api.inrix.com
 .segment-cdn.producthunt.com
+.segment.com
 .segment.io
 .segmenthub.com
+.segmentify.com
 .segmentor.snowfox-ai.com
 .segmetrics.io
 .segob.gob.mx
@@ -93917,6 +93924,7 @@
 .sentativesathya.info
 .sentenceinformedveil.com
 .senthg.prxperformance.com
+.sentiance.com
 .sentientfog.com
 .sentifi.com
 .sentiment.icis.com
@@ -97198,6 +97206,7 @@
 .smartlifeguides.com
 .smartlify.com
 .smartlnk.com
+.smartlook.com
 .smartlysquare.com
 .smartmetrics.co.uk
 .smartmining.net
@@ -97708,6 +97717,8 @@
 .social.forddirectdealers.com
 .social.lafranceagricole.fr
 .social.oomi.co.uk
+.socialannex.com
+.socialbakers.com
 .socialbars-web1.com
 .socialbitelabs.com
 .socialelective.com
@@ -101919,6 +101930,7 @@
 .stats-dev.brid.tv
 .stats-factory.digitregroup.io
 .stats-iobit-com.us-east-1.elasticbeanstalk.com
+.stats-locations.com
 .stats-messages.gifs.com
 .stats-newyork1.bloxcms.com
 .stats-proto.pandora.com
@@ -106350,6 +106362,7 @@
 .talkahead.com
 .talkfusion.com
 .talkingdata.com
+.talkingdata.net
 .talkstewmisjudge.com
 .talkto.comreal.com
 .talktomeplease.biz
@@ -106432,6 +106445,7 @@
 .taoyinbiacid.com
 .taozgpkjzpdtgr.com
 .tap-nexus.appspot.com
+.tapad.com
 .tapchibitcoin.care
 .tapdaq-adverts.global.ssl.fastly.net
 .tapdb.com
@@ -107048,7 +107062,6 @@
 .tds.vrcteam.ru
 .tds1.vivabox.be
 .tdsantcrazy.ru
-.tdsdk.cpatrk.net
 .tdspa.top
 .tdsshark.club
 .tdstats.com
@@ -113138,6 +113151,7 @@
 .trackinginternal.hcltech.com
 .trackinginternal.ti.com
 .trackinginternal.ti.com.cn
+.trackingio.com
 .trackinglabs.com
 .trackinglrus.wolterskluwer.com
 .trackingmembers.com
@@ -121840,6 +121854,7 @@
 .wetransfer.it.com
 .wetsireoverload.com
 .wetter24.fr
+.wetype.weixin.qq.com
 .wevbgr.vidaxl.it
 .wevrwqjqemkyj.top
 .wew.dushiwenxue.net
@@ -122803,6 +122818,7 @@
 .woosoosaim.com
 .woosyt.portalesardegna.com
 .wootmedia.net
+.wootric.com
 .woovoree.net
 .woowjy.desa.com.tr
 .wopsedoaltuwipp.com
@@ -127298,7 +127314,6 @@ adsview.qq.com
 adsview2.qq.com
 adsys.sinovision.net
 adsystem.wasu.tv
-adt.cpatrk.net
 adtrack.e.kuaishou.com
 adtrack.ucweb.com
 adv.app.qq.com
@@ -127350,7 +127365,6 @@ analytics.workos.com
 analytics3.dopool.com
 analytics3.starschina.com
 androidgo.duapp.com
-ap.cpatrk.net
 api-ad.kajicam.com
 api-ads.tiantianqutao.com
 api-analytics-cn.huami.com
@@ -127378,6 +127392,7 @@ api.yuedu.iqiyi.com
 api2.e.kuaishou.com
 apiv4-iyes.youku.com
 app-monitor.ele.me
+app-site-association.cdn-apple.com
 app.aplus.pptv.com
 app.migc.xiaomi.com
 app.starschina.com
@@ -127416,6 +127431,7 @@ biz.live.xunlei.com
 biz5.sandai.net
 bk01.hh.xiaomi.com
 bksoup.v.qq.com
+blackhole.m.jd.com
 blog.xiaomi.com
 bolt.jebe.renren.com
 browserkernel.baidu.com
@@ -127657,6 +127673,7 @@ hm.l.qq.com
 hm.xiaomi.com
 hot.m.shouji.360tpcdn.com
 hotchat-im.iqiyi.com
+http-inputs-notion.splunkcloud.com
 httpdns-api.aliyuncs.com
 httpdns-browser.platform.dbankcloud.cn
 httpdns-euex-push.heytapmobile.com
@@ -127727,7 +127744,6 @@ impservice.youdao.com
 in.vipliangmei.com
 info.analysis.kp.sec.miui.com
 info.sec.miui.com
-inside.rtbasia.com
 insights.samsung.com
 inst.360safe.com
 interest.mix.sina.com.cn
@@ -127799,7 +127815,6 @@ mclean.lato.cloud.360safe.com
 mclean.uk.cloud.360safe.com
 mclick.simba.taobao.com
 mdevstat.qqlive.qq.com
-me.cpatrk.net
 meihua.xiaomi.com
 mepodownload.mediatek.com
 metrics.brevo.com
@@ -127978,6 +127993,8 @@ s.w-x.co
 s3.pfp.sina.net
 sa.api.intl.miui.com
 sa.holopin.io
+safebrowsing.googleapis.com
+safebrowsing.urlsec.qq.com
 samsung-akcja.e-kei.pl
 samsung-klimatyzacja.pl
 samsung-produkcja.24.eu
@@ -128119,8 +128136,9 @@ topapi.cp12.ott.cibntv.net
 topapi.cp12.wasu.tv
 toutiao-frontier.snssdk.com
 tpns.qq.com
-trace2.rtbasia.com
 track.58.com
+track.tiara.daum.net
+track.tiara.kakao.com
 trackapp.guahao.cn
 tracker.didiglobal.com
 tracker.sns.iqiyi.com
