@@ -10,6 +10,15 @@
       ]
     },
     {
+      "name": "REJECT",
+      "path": "RuleSet/Extra/Reject.list",
+      "urls": [
+        "https://ruleset.skk.moe/List/domainset/reject.conf",
+        "https://ruleset.skk.moe/List/domainset/reject_extra.conf",
+        "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Surge.list"
+      ]
+    },
+    {
       "name": "APPLE",
       "path": "RuleSet/Apple/Service.list",
       "urls": [
@@ -19,13 +28,11 @@
       ]
     },
     {
-      "name": "REJECT",
-      "path": "RuleSet/Extra/Reject.list",
+      "name": "PRIVACY",
+      "path": "RuleSet/Extra/Privacy.list",
       "urls": [
-        "https://ruleset.skk.moe/List/domainset/reject.conf",
-        "https://ruleset.skk.moe/List/domainset/reject_extra.conf",
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Privacy.list",
-        "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Surge.list"
+        "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Surge.list",
+        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Privacy.list"
       ]
     }
   ]
