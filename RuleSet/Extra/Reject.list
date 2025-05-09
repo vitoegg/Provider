@@ -1,4 +1,4 @@
-# 更新时间: 2025-05-09 02:33:38
+# 更新时间: 2025-05-09 09:57:49
 # 规则来源:
 # - https://https://ruleset.skk.moe/List/domainset/reject.conf
 # - https://https://ruleset.skk.moe/List/domainset/reject_extra.conf
@@ -127432,6 +127432,7 @@ biz.live.xunlei.com
 biz5.sandai.net
 bk01.hh.xiaomi.com
 bksoup.v.qq.com
+blackhole.m.jd.com
 blog.xiaomi.com
 bolt.jebe.renren.com
 browserkernel.baidu.com
