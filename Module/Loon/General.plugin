@@ -55,8 +55,5 @@ DOMAIN,wxsnsdythumb.wxs.qq.com,REJECT
 ^https?:\/\/apapia-sqk\.manmanbuy\.com\/index_json\.ashx response-body-json-jq '. | walk(if type == "object" then with_entries(select(.key | (contains("AD") or contains("homeFloat") or contains("homeAlert") or contains("ad"))).key = "pass") else . end)'
 ^https?:\/\/apapia-common\.manmanbuy\.com\/v1\/config response-body-json-jq '. | walk(if type == "object" then with_entries(select(.key | (contains("ad"))).key = "pass") else . end)'
 
-# 小宇宙 - api.xiaoyuzhoufm.com
-^https:\/\/api\.xiaoyuzhoufm\.com\/v1\/flash-screen\/list reject-dict
-
 [Mitm]
-hostname = webappcfg.paas.cmbchina.com, s3gw.cmbimg.com, home.mi.com,app.zhoudamozi.com, apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com, m.ctrip.com, ucmp.sf-express.com, img.meituan.net,s3plus.meituan.net,flowplus.meituan.net,apimobile.meituan.com, m.360buyimg.com,ms.jr.jd.com, api.xueqiu.com,xqimg.imedao.com, api.xiaoyuzhoufm.com
+hostname = webappcfg.paas.cmbchina.com, s3gw.cmbimg.com, home.mi.com,app.zhoudamozi.com, apapia-sqk.manmanbuy.com,apapia-common.manmanbuy.com, m.ctrip.com, ucmp.sf-express.com, img.meituan.net,s3plus.meituan.net,flowplus.meituan.net,apimobile.meituan.com, m.360buyimg.com,ms.jr.jd.com, api.xueqiu.com,xqimg.imedao.com

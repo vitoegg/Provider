@@ -217,6 +217,7 @@ process_rule() {
     if [ $changed -eq 1 ]; then
       {
         echo "# 更新时间: $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "# 规则条数: $new_rules_count"
         cat "$meta_file"
       } > "$output_path"
       echo "┃ ✅ 规则已成功更新" | tee -a "$log_file"
