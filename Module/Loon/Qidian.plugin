@@ -2,13 +2,13 @@
 #!desc = 移除起点读书开屏广告、每日导读、各类弹窗、文末广告、搜索填充词，精简我的页面。
 #!author = KeLee
 #!icon = https://raw.githubusercontent.com/luestr/IconResource/main/App_icon/120px/QiDian.png
-#!date = 2025-05-11 22:06:30
+#!date = 2025-05-11 22:12:30
 
 [Rule]
 #放行每日福利
 #DOMAIN,adsmind.gdtimg.com,REJECT
-#DOMAIN,v.gdt.qq.com,REJECT
-#DOMAIN,v2.gdt.qq.com,REJECT
+DOMAIN,v.gdt.qq.com,REJECT
+DOMAIN,v2.gdt.qq.com,REJECT
 #DOMAIN-SUFFIX,gdt.qq.com,REJECT
 DOMAIN-SUFFIX,jpush.cn,REJECT
 #拦截其他广告
