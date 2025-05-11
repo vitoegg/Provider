@@ -12,7 +12,7 @@ DOMAIN,ios.bugly.qq.com,REJECT
 DOMAIN,pro.bugly.qq.com,REJECT
 DOMAIN,ios.video.mpush.qq.com,REJECT
 DOMAIN,us.l.qq.com,REJECT
-DOMAIN,otheve.beacon.qq.com,REJECT
+#DOMAIN,otheve.beacon.qq.com,REJECT
 DOMAIN,qzs.qq.com,REJECT
 DOMAIN,rmonitor.qq.com,REJECT
 DOMAIN,sdk.e.qq.com,REJECT
