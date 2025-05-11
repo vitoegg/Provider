@@ -2,7 +2,7 @@
 #!desc = 移除起点读书开屏广告、每日导读、各类弹窗、文末广告、搜索填充词，精简我的页面。
 #!author = KeLee
 #!icon = https://raw.githubusercontent.com/luestr/IconResource/main/App_icon/120px/QiDian.png
-#!date = 2025-05-11 21:31:30
+#!date = 2025-05-11 21:35:30
 
 [Rule]
 DOMAIN,huatuocode.huatuo.qq.com,REJECT
@@ -23,10 +23,6 @@ DOMAIN,tmeadcomm.y.qq.com,REJECT
 DOMAIN,tpns.qq.com,REJECT
 DOMAIN,wup.imtt.qq.com,REJECT
 DOMAIN,tpstelemetry.tencent.com,REJECT
-DOMAIN,ali-stats.jpush.cn,REJECT
-DOMAIN,ce3e75d5.jpush.cn,REJECT
-DOMAIN,config-junion.jpush.cn,REJECT
-DOMAIN,config.jpush.cn,REJECT
 DOMAIN,smartop-sdkapi.jiguang.cn,REJECT
 DOMAIN,sdk.verification.jiguang.cn,REJECT
 DOMAIN,adsmind.gdtimg.com,REJECT
@@ -44,7 +40,10 @@ DOMAIN,win.gdt.qq.com,REJECT
 #DOMAIN-SUFFIX,gdt.qq.com,REJECT
 DOMAIN-SUFFIX,l.qq.com,REJECT
 DOMAIN-SUFFIX,ugdtimg.com,REJECT
-DOMAIN-SUFFIX,jiguang.cn,REJECT
+DOMAIN,ce3e75d5.jpush.cn,REJECT
+DOMAIN,config-junion.jpush.cn,REJECT
+DOMAIN,config.jpush.cn,REJECT
+#DOMAIN,ali-stats.jpush.cn,REJECT
 DOMAIN,sis-ipv6.jpush.cn,REJECT
 DOMAIN,fcapi-ipv6.jpush.cn,REJECT
 DOMAIN,gd-stats.jpush.cn,REJECT
@@ -54,6 +53,7 @@ DOMAIN,tsis.jpush.cn,REJECT
 DOMAIN,user.jpush.cn,REJECT
 #DOMAIN-SUFFIX,jpush.cn,REJECT
 DOMAIN-SUFFIX,jpush.io,REJECT
+DOMAIN-SUFFIX,jiguang.cn,REJECT
 DOMAIN-KEYWORD,trace.qq.com,REJECT
 DOMAIN-KEYWORD,trace.video.qq.com,REJECT
 IP-CIDR,47.110.187.87/32,REJECT,no-resolve
