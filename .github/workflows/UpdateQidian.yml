@@ -8,79 +8,40 @@ on:
 jobs:
   update-qidian-plugin:
     runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.check_changes.outputs.has_changes }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        id: checkout
         with:
           fetch-depth: 1
 
       - name: Setup Timezone
         run: sudo timedatectl set-timezone "Asia/Shanghai"
+        id: timezone
 
-      - name: Fetch Qidian Plugin
-        id: fetch_plugin
-        run: |
-          echo "开始获取起点广告拦截插件..."
-          mkdir -p tmp
-          # 使用curl获取插件内容，指定UA为loon
-          curl -s -H "User-Agent: loon" "https://kelee.one/Tool/Loon/Plugin/QiDian_remove_ads.plugin" -o tmp/qidian_original.plugin
-          
-          # 检查是否成功获取到内容
-          if [ ! -s tmp/qidian_original.plugin ]; then
-            echo "获取插件内容失败"
-            exit 1
-          fi
-          
-          echo "成功获取起点广告拦截插件"
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+        id: python
 
-      - name: Process Plugin
-        id: process_plugin
+      - name: Update Qidian Plugin
+        id: check_changes
         run: |
-          echo "开始处理插件内容..."
-          # 移除包含gdt.qq.com的行
-          cat tmp/qidian_original.plugin | grep -v "gdt.qq.com" > tmp/qidian_processed.plugin
-          
-          # 确认Plugin目录存在
-          mkdir -p "${GITHUB_WORKSPACE}/Module/Loon"
-          
-          # 目标文件路径
-          PLUGIN_PATH="${GITHUB_WORKSPACE}/Module/Loon/Qidian.plugin"
-          
-          # 检查目标文件是否已存在
-          if [ -f "$PLUGIN_PATH" ]; then
-            echo "目标文件已存在，比较变化..."
-            # 将处理后的内容写入临时文件进行比较
-            cp tmp/qidian_processed.plugin "$PLUGIN_PATH.new"
-            
-            if diff -q "$PLUGIN_PATH" "$PLUGIN_PATH.new" > /dev/null; then
-              echo "has_changes=false" >> $GITHUB_OUTPUT
-              echo "未检测到变化，无需更新"
-              rm "$PLUGIN_PATH.new"
-            else
-              # 有变化，更新文件
-              mv "$PLUGIN_PATH.new" "$PLUGIN_PATH"
-              echo "has_changes=true" >> $GITHUB_OUTPUT
-              echo "检测到变化，需要更新"
-            fi
-          else
-            echo "目标文件不存在，创建新文件..."
-            # 将处理后的内容写入目标文件
-            cp tmp/qidian_processed.plugin "$PLUGIN_PATH"
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "创建新文件 Qidian.plugin"
-          fi
-          
-          # 显示文件内容确认
-          echo "文件内容预览（前5行）："
-          head -n 5 "$PLUGIN_PATH"
+          # 赋予脚本执行权限
+          chmod +x ${GITHUB_WORKSPACE}/Script/Workflow/update_qidian_plugin.sh
+          # 执行插件更新脚本
+          ${GITHUB_WORKSPACE}/Script/Workflow/update_qidian_plugin.sh
 
       - name: Commit and Push Changes
-        if: steps.process_plugin.outputs.has_changes == 'true'
+        if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add -f "${GITHUB_WORKSPACE}/Module/Loon/Qidian.plugin"
-          git commit -m "Update Qidian plugin: $(date '+%Y-%m-%d %H:%M:%S')"
+          git commit -m "Update Qidian plugin: ${{ steps.check_changes.outputs.change_summary }}"
           git push
         env:
           GITHUB_TOKEN: ${{ github.token }}
