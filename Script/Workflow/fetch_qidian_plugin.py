@@ -8,27 +8,31 @@ import re
 
 def fetch_qidian_plugin():
     """
-    获取起点广告拦截插件
+    获取起点广告拦截插件，精确模拟Loon的请求
     """
     print("开始获取起点广告拦截插件...")
     
     url = "https://kelee.one/Tool/Loon/Plugin/QiDian_remove_ads.plugin"
     
-    # 使用精确的Loon 3.0.7 UA
+    # 精确模拟Loon 3.3.0的请求头
     headers = {
-        "User-Agent": "Loon/3.0.7",
+        "User-Agent": "Loon/3.3.0",  # 使用精确的Loon 3.3.0版本
         "Accept": "*/*",
-        "Accept-Language": "zh-CN,zh;q=0.9",
-        "Connection": "keep-alive",
-        "Cache-Control": "no-cache"
+        "Accept-Language": "zh-cn",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive"
     }
+    
+    print(f"使用以下请求头访问 {url}:")
+    for key, value in headers.items():
+        print(f"  {key}: {value}")
     
     try:
         # 发送请求获取插件内容
-        response = requests.get(url, headers=headers, timeout=15)
+        response = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
         print(f"响应状态码: {response.status_code}")
         
-        # 打印部分响应头信息，便于调试
+        # 打印响应头信息，便于调试
         print("响应头信息:")
         for key, value in response.headers.items():
             print(f"  {key}: {value}")
@@ -100,7 +104,7 @@ def fetch_qidian_plugin():
                 return True, False  # 成功获取但无变化
         else:
             print(f"请求失败: HTTP {response.status_code}")
-            print(f"响应内容: {response.text[:200]}")
+            print(f"响应内容: {response.text[:200] if response.text else '无响应内容'}")
             return False, False
             
     except Exception as e:
