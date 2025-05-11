@@ -2,7 +2,7 @@
 #!desc = 移除起点读书开屏广告、每日导读、各类弹窗、文末广告、搜索填充词，精简我的页面。
 #!author = KeLee
 #!icon = https://raw.githubusercontent.com/luestr/IconResource/main/App_icon/120px/QiDian.png
-#!date = 2025-05-11 21:35:30
+#!date = 2025-05-11 21:37:30
 
 [Rule]
 DOMAIN,huatuocode.huatuo.qq.com,REJECT
@@ -25,7 +25,7 @@ DOMAIN,wup.imtt.qq.com,REJECT
 DOMAIN,tpstelemetry.tencent.com,REJECT
 DOMAIN,smartop-sdkapi.jiguang.cn,REJECT
 DOMAIN,sdk.verification.jiguang.cn,REJECT
-DOMAIN,adsmind.gdtimg.com,REJECT
+#DOMAIN,adsmind.gdtimg.com,REJECT
 DOMAIN,adsmind.ugdtimg.com,REJECT
 #DOMAIN,pgdt.gtimg.cn,REJECT
 DOMAIN,pgdt.ugdtimg.com,REJECT
