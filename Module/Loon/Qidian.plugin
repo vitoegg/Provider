@@ -2,7 +2,7 @@
 #!desc = 移除起点读书开屏广告、每日导读、各类弹窗、文末广告、搜索填充词，精简我的页面。
 #!author = KeLee
 #!icon = https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/General.png
-#!date = 2025-05-11 20:56:30
+#!date = 2025-05-11 21:02:30
 
 [Rule]
 DOMAIN,adsmind.gdtimg.com,REJECT
@@ -29,7 +29,7 @@ DOMAIN,tmead.y.qq.com,REJECT
 DOMAIN,tmeadbak.y.qq.com,REJECT
 DOMAIN,tmeadcomm.y.qq.com,REJECT
 DOMAIN,tpns.qq.com,REJECT
-DOMAIN,v.gdt.qq.com,REJECT
+#DOMAIN,v.gdt.qq.com,REJECT
 #DOMAIN,v2.gdt.qq.com,REJECT
 DOMAIN,win.gdt.qq.com,REJECT
 DOMAIN,wup.imtt.qq.com,REJECT
