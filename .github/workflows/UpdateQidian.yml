@@ -1,0 +1,76 @@
+name: Update Qidian Adblock Plugin
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'  # 每12小时运行一次
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  update-qidian-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Timezone
+        run: sudo timedatectl set-timezone "Asia/Shanghai"
+
+      - name: Fetch Qidian Plugin
+        id: fetch_plugin
+        run: |
+          echo "开始获取起点广告拦截插件..."
+          # 使用curl获取插件内容，指定UA为loon
+          RESPONSE=$(curl -s -H "User-Agent: loon" "https://kelee.one/Tool/Loon/Plugin/QiDian_remove_ads.plugin")
+          
+          # 检查是否成功获取到内容
+          if [ -z "$RESPONSE" ]; then
+            echo "获取插件内容失败"
+            exit 1
+          fi
+          
+          # 将获取到的内容保存到临时文件
+          echo "$RESPONSE" > qidian_original.plugin
+          echo "成功获取起点广告拦截插件"
+
+      - name: Process Plugin
+        id: process_plugin
+        run: |
+          echo "开始处理插件内容..."
+          # 移除包含gdt.qq.com的行
+          cat qidian_original.plugin | grep -v "gdt.qq.com" > qidian_processed.plugin
+          
+          # 确认Plugin目录存在
+          mkdir -p "${GITHUB_WORKSPACE}/Module/Loon"
+          
+          # 将处理后的内容写入目标文件
+          cp qidian_processed.plugin "${GITHUB_WORKSPACE}/Module/Loon/Qidian.plugin"
+          
+          # 检查文件是否变化
+          if git diff --quiet "${GITHUB_WORKSPACE}/Module/Loon/Qidian.plugin"; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "未检测到变化，无需更新"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "检测到变化，需要更新"
+          fi
+
+      - name: Commit and Push Changes
+        if: steps.process_plugin.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add "${GITHUB_WORKSPACE}/Module/Loon/Qidian.plugin"
+          git commit -m "Update Qidian adblock plugin: $(date '+%Y-%m-%d %H:%M:%S')"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Delete Workflow Runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 2 
