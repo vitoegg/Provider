@@ -2,5 +2,6 @@ payload:
   # HomeDirect
   - AND,((SRC-IP-CIDR,192.168.10.5/32),(DST-PORT,22/5168/10001-65535))
   - DST-PORT,500/4500
+  - SRC-PORT,4500
   # Emby
   - DOMAIN-SUFFIX,nanflix.net
