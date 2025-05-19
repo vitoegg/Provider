@@ -1,4 +1,4 @@
-# 更新时间: 2025-05-19 09:05:23
+# 更新时间: 2025-05-19 15:02:28
 # 规则条数: 135193
 # 规则来源:
 # - https://https://ruleset.skk.moe/List/domainset/reject.conf
@@ -81148,6 +81148,7 @@
 .notify.eset.com
 .notify.pray.com
 .notify.rocks
+.notify.sec.miui.com
 .notify6.com
 .notifyday.com
 .notifyerr.com
@@ -129474,7 +129475,6 @@
 .wmykyw.icu
 .wmzlbovlwrrok.top
 .wmzona.com
-.wn.x.jd.com
 .wn56y7ve57j12zuv7tyj.com
 .wn6y.cn
 .wnacug.georgiaboot.com
