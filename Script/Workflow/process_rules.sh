@@ -44,6 +44,24 @@ process_rule() {
     wait $pid
   done
   
+  # 检查所有下载文件是否都成功
+  local success_count=0
+  for ((i=0; i<download_count; i++)); do
+    if [ -s "${tmp_dir}/download_${i}" ]; then
+      success_count=$((success_count + 1))
+    fi
+  done
+
+  if [ "$success_count" -ne "$download_count" ]; then
+    echo "┃ ❌ 检测到有上游规则下载失败，本地规则未做任何更改，跳过本次更新" | tee -a "$log_file"
+    rm -f "$merged_file" "$cleaned_file"
+    rm -rf "$tmp_dir"
+    local duration=$((SECONDS - start_time))
+    echo "┃ ⏱️ 处理完成，用时: $duration 秒" | tee -a "$log_file"
+    echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | tee -a "$log_file"
+    return
+  fi
+  
   echo "┃ 🔄 正在合并和清理规则数据..." | tee -a "$log_file"
   
   cat "${tmp_dir}"/download_* > "$merged_file"
