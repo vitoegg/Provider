@@ -31,28 +31,22 @@ process_rule() {
   
   for url in $urls; do
     local tmp_file="${tmp_dir}/download_${download_count}"
+    local error_flag="${tmp_dir}/error_${download_count}"
     
     (curl -sL --fail --connect-timeout 10 --max-time 30 "$url" > "$tmp_file" && 
      echo "┃   ✅ 下载成功: $url" || 
-     echo "┃   ❌ 下载失败: $url") &
+     { echo "┃   ❌ 下载失败: $url"; touch "$error_flag"; }) &
     
     download_pids+=($!)
     download_count=$((download_count + 1))
   done
   
   for pid in "${download_pids[@]}"; do
-    wait $pid
+    wait $pid || true  # 使用 || true 避免因下载失败导致的非零退出码触发set -e
   done
   
-  # 检查所有下载文件是否都成功
-  local success_count=0
-  for ((i=0; i<download_count; i++)); do
-    if [ -s "${tmp_dir}/download_${i}" ]; then
-      success_count=$((success_count + 1))
-    fi
-  done
-
-  if [ "$success_count" -ne "$download_count" ]; then
+  # 检查是否有任何错误标记文件
+  if ls "${tmp_dir}"/error_* 1> /dev/null 2>&1; then
     echo "┃ ❌ 检测到有上游规则下载失败，本地规则未做任何更改，跳过本次更新" | tee -a "$log_file"
     rm -f "$merged_file" "$cleaned_file"
     rm -rf "$tmp_dir"
