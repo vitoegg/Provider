@@ -59,7 +59,7 @@ process_rule() {
     local duration=$((SECONDS - start_time))
     echo "┃ ⏱️ 处理完成，用时: $duration 秒" | tee -a "$log_file"
     echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | tee -a "$log_file"
-    return
+    return 0
   fi
   
   echo "┃ 🔄 正在合并和清理规则数据..." | tee -a "$log_file"
