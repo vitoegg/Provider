@@ -5,5 +5,7 @@ payload:
   - DOMAIN-SUFFIX,szbdyd.com
   - DOMAIN-SUFFIX,mcdn.bilivideo.cn
   - DOMAIN-SUFFIX,p2p.huya.com
+  # > Quic Reject
+  - AND,((DOMAIN-SUFFIX,googlevideo.com),(NETWORK,UDP))
   # > Telegram Pics
   - IP-CIDR,95.161.76.100/31,no-resolve
