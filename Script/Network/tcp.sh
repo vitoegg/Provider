@@ -197,8 +197,8 @@ net.ipv4.tcp_tw_reuse = 1
 net.ipv4.tcp_fin_timeout = 10
 net.ipv4.tcp_max_tw_buckets = 32768
 
-# Disable MTU probing
-net.ipv4.tcp_mtu_probing = 0
+# MTU discovery for path optimization
+net.ipv4.tcp_mtu_probing = 1
 
 # Reduce sensitivity to packet reordering (key for stability)
 net.ipv4.tcp_reordering = 12
