@@ -172,21 +172,30 @@ net.core.wmem_default = 65536
 net.ipv4.tcp_rmem = 4096 87380 ${Rmem}
 net.ipv4.tcp_wmem = 4096 65536 ${Wmem}
 
+# Queue and Buffer Management
+net.core.netdev_max_backlog = 2800
+net.core.somaxconn = 700
+
 # Enable automatic buffer tuning for sustained connections
 net.ipv4.tcp_moderate_rcvbuf = 1
 net.ipv4.tcp_window_scaling= 1
-net.ipv4.tcp_adv_win_scale= 1
+net.ipv4.tcp_adv_win_scale= 2
 # ------------------------------------------------------------------------------
 # Stability & Sustained Performance
 # ------------------------------------------------------------------------------
 # Enable selective acknowledgment for efficient recovery
 net.ipv4.tcp_sack = 1
 
+# Precise RTT measurement for optimal pacing
+net.ipv4.tcp_timestamps = 1
+
 # Disable Slow-Start Restart
 net.ipv4.tcp_slow_start_after_idle = 0
 
-# Precise RTT measurement for optimal pacing
-net.ipv4.tcp_timestamps = 1
+# Connection multiplexing and efficiency
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_fin_timeout = 10
+net.ipv4.tcp_max_tw_buckets = 32768
 
 # Disable MTU probing
 net.ipv4.tcp_mtu_probing = 0
