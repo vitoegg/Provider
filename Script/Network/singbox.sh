@@ -59,6 +59,20 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 ################################################################################
+# Cleanup function for temporary files
+################################################################################
+cleanup_temp_files() {
+    local temp_file="/tmp/sing-box.deb"
+    if [[ -f "$temp_file" ]]; then
+        rm -f "$temp_file"
+        log_info "Cleaned up temporary files on exit"
+    fi
+}
+
+# Set trap to cleanup on script exit
+trap cleanup_temp_files EXIT
+
+################################################################################
 # Global variables for configuration
 ################################################################################
 INSTALL_SHADOWTLS=false
@@ -189,14 +203,17 @@ install_packages() {
     local packages_needed=(wget dpkg jq openssl)
     
     if command -v apt-get >/dev/null 2>&1; then
-        log_info "Using apt package manager..."
-        apt-get update -qq
+        log_info "Updating package list..."
+        # Update package list silently
+        DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1
+        
         for pkg in "${packages_needed[@]}"; do
             if dpkg -s "$pkg" >/dev/null 2>&1; then
                 log_info "Dependency exists: $pkg"
             else
                 log_info "Installing dependency: $pkg"
-                apt-get install -y "$pkg" -qq
+                # Install packages silently with automatic yes and no prompts
+                DEBIAN_FRONTEND=noninteractive apt-get install -y "$pkg" -qq >/dev/null 2>&1
                 if [[ $? -eq 0 ]]; then
                     log_success "Installed dependency: $pkg"
                 else
@@ -281,14 +298,16 @@ install_singbox() {
     
     # Install package
     log_info "Installing sing-box package..."
-    if ! dpkg -i "$temp_file"; then
+    if ! DEBIAN_FRONTEND=noninteractive dpkg -i "$temp_file" >/dev/null 2>&1; then
         log_error "Failed to install sing-box package!"
+        # Clean up on failure
         rm -f "$temp_file"
         exit 1
     fi
     
-    # Clean up
+    # Clean up temporary file
     rm -f "$temp_file"
+    log_info "Cleaned up temporary files"
     
     log_success "sing-box installation completed"
 }
@@ -457,13 +476,13 @@ start_singbox_service() {
     print_header "Starting sing-box Service"
     
     log_info "Enabling sing-box service..."
-    if ! systemctl enable sing-box; then
+    if ! systemctl enable sing-box >/dev/null 2>&1; then
         log_error "Failed to enable sing-box service"
         exit 1
     fi
     
     log_info "Starting sing-box service..."
-    if ! systemctl start sing-box; then
+    if ! systemctl start sing-box >/dev/null 2>&1; then
         log_error "Failed to start sing-box service"
         exit 1
     fi
@@ -527,22 +546,22 @@ uninstall_service() {
     
     log_info "Stopping and disabling sing-box service..."
     if systemctl is-active --quiet sing-box 2>/dev/null; then
-        systemctl stop sing-box
+        systemctl stop sing-box >/dev/null 2>&1
         log_success "Service stopped"
     else
         log_info "Service is not running"
     fi
     
     if systemctl is-enabled --quiet sing-box 2>/dev/null; then
-        systemctl disable sing-box
+        systemctl disable sing-box >/dev/null 2>&1
         log_success "Service disabled"
     else
         log_info "Service is not enabled"
     fi
     
     log_info "Uninstalling sing-box package..."
-    if dpkg -l | grep -q sing-box; then
-        dpkg -r sing-box
+    if dpkg -l | grep -q sing-box 2>/dev/null; then
+        DEBIAN_FRONTEND=noninteractive dpkg -r sing-box >/dev/null 2>&1
         log_success "Package uninstalled"
     else
         log_info "Package is not installed"
