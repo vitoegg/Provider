@@ -268,12 +268,14 @@ install_singbox() {
     log_info "Installing sing-box version: $latest_version"
     
     # Download .deb package
-    local download_url="https://github.com/SagerNet/sing-box/releases/download/${latest_version}/sing-box-${latest_version#v}-linux-${ARCH}.deb"
+    local download_url="https://github.com/SagerNet/sing-box/releases/download/${latest_version}/sing-box_${latest_version#v}_linux_${ARCH}.deb"
     local temp_file="/tmp/sing-box.deb"
     
+    log_info "Download URL: $download_url"
     log_info "Downloading sing-box package..."
     if ! wget --no-check-certificate -q -O "$temp_file" "$download_url"; then
-        log_error "Failed to download sing-box!"
+        log_error "Failed to download sing-box from: $download_url"
+        log_error "Please check if the URL is correct and accessible"
         exit 1
     fi
     
