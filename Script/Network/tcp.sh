@@ -84,7 +84,7 @@ select_buffer_parameters() {
     echo "3. Custom Values"
     echo "================================"
     
-    read -p "Enter your choice (1-6): " buffer_choice
+    read -p "Enter your choice (1-3): " buffer_choice
     case $buffer_choice in
         1)
             Rmem=9699328
