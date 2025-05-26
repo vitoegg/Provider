@@ -88,31 +88,41 @@ TLS_DOMAIN=""
 # Command-line arguments parser
 ################################################################################
 parse_args() {
+    local has_shadowtls_params=false
+    local has_ss2022_params=false
+    local uninstall_requested=false
+    
     while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
             --tls-port)
                 TLS_PORT="$2"
+                has_shadowtls_params=true
                 shift 2
                 ;;
             --tls-password)
                 TLS_PASSWORD="$2"
+                has_shadowtls_params=true
                 shift 2
                 ;;
             --tls-domain)
                 TLS_DOMAIN="$2"
+                has_shadowtls_params=true
                 shift 2
                 ;;
             --ss-password)
                 SS_PASSWORD="$2"
+                has_shadowtls_params=true
                 shift 2
                 ;;
             --ss2022-port)
                 SS2022_PORT="$2"
+                has_ss2022_params=true
                 shift 2
                 ;;
             --ss2022-password)
                 SS2022_PASSWORD="$2"
+                has_ss2022_params=true
                 shift 2
                 ;;
             --install-shadowtls)
@@ -128,6 +138,10 @@ parse_args() {
                 INSTALL_SS2022=true
                 shift
                 ;;
+            --uninstall)
+                uninstall_requested=true
+                shift
+                ;;
             -h|--help)
                 show_usage
                 exit 0
@@ -139,6 +153,30 @@ parse_args() {
                 ;;
         esac
     done
+    
+    # Handle uninstall request
+    if [[ "$uninstall_requested" == true ]]; then
+        uninstall_service
+        exit 0
+    fi
+    
+    # Auto-detect services based on parameters
+    if [[ "$has_shadowtls_params" == true && "$INSTALL_SHADOWTLS" == false && "$INSTALL_SS2022" == false ]]; then
+        INSTALL_SHADOWTLS=true
+        log_info "Auto-detected ShadowTLS installation from parameters"
+    fi
+    
+    if [[ "$has_ss2022_params" == true && "$INSTALL_SHADOWTLS" == false && "$INSTALL_SS2022" == false ]]; then
+        INSTALL_SS2022=true
+        log_info "Auto-detected SS2022 installation from parameters"
+    fi
+    
+    # If both types of parameters are provided, install both services
+    if [[ "$has_shadowtls_params" == true && "$has_ss2022_params" == true && "$INSTALL_SHADOWTLS" == false && "$INSTALL_SS2022" == false ]]; then
+        INSTALL_SHADOWTLS=true
+        INSTALL_SS2022=true
+        log_info "Auto-detected both ShadowTLS and SS2022 installation from parameters"
+    fi
 }
 
 ################################################################################
@@ -147,22 +185,41 @@ parse_args() {
 show_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
-    echo "Options:"
+    echo "Installation Options:"
     echo "  --install-shadowtls     Install ShadowTLS service only"
     echo "  --install-ss2022        Install SS2022 service only"
     echo "  --install-both          Install both ShadowTLS and SS2022 services"
+    echo ""
+    echo "Configuration Options:"
     echo "  --tls-port PORT         Specify TLS port (50000-60000)"
     echo "  --tls-password PASS     Specify TLS password"
     echo "  --tls-domain DOMAIN     Specify TLS domain"
     echo "  --ss-password PASS      Specify Shadowsocks password for ShadowTLS"
     echo "  --ss2022-port PORT      Specify SS2022 port (20000-40000)"
     echo "  --ss2022-password PASS  Specify SS2022 password"
+    echo ""
+    echo "Other Options:"
+    echo "  --uninstall             Uninstall sing-box service and remove configuration"
     echo "  -h, --help              Show this help message"
     echo ""
+    echo "Smart Detection:"
+    echo "  The script can auto-detect which services to install based on parameters:"
+    echo "  - ShadowTLS parameters: --tls-port, --tls-password, --tls-domain, --ss-password"
+    echo "  - SS2022 parameters: --ss2022-port, --ss2022-password"
+    echo ""
     echo "Examples:"
+    echo "  # Explicit installation"
     echo "  $0 --install-shadowtls --tls-port 58568 --tls-password mypass"
     echo "  $0 --install-ss2022 --ss2022-port 31606"
     echo "  $0 --install-both"
+    echo ""
+    echo "  # Auto-detection (recommended)"
+    echo "  $0 --tls-port 58568 --tls-password mypass"
+    echo "  $0 --ss2022-port 31606 --ss2022-password mypass"
+    echo "  $0 --tls-port 58568 --ss2022-port 31606"
+    echo ""
+    echo "  # Uninstall"
+    echo "  $0 --uninstall"
 }
 
 ################################################################################
