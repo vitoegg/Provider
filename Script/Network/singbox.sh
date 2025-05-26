@@ -138,7 +138,7 @@ parse_args() {
                 INSTALL_SS2022=true
                 shift
                 ;;
-            --uninstall)
+            -u|--uninstall)
                 uninstall_requested=true
                 shift
                 ;;
@@ -160,22 +160,30 @@ parse_args() {
         exit 0
     fi
     
-    # Auto-detect services based on parameters
-    if [[ "$has_shadowtls_params" == true && "$INSTALL_SHADOWTLS" == false && "$INSTALL_SS2022" == false ]]; then
-        INSTALL_SHADOWTLS=true
-        log_info "Auto-detected ShadowTLS installation from parameters"
-    fi
-    
-    if [[ "$has_ss2022_params" == true && "$INSTALL_SHADOWTLS" == false && "$INSTALL_SS2022" == false ]]; then
-        INSTALL_SS2022=true
-        log_info "Auto-detected SS2022 installation from parameters"
-    fi
-    
-    # If both types of parameters are provided, install both services
-    if [[ "$has_shadowtls_params" == true && "$has_ss2022_params" == true && "$INSTALL_SHADOWTLS" == false && "$INSTALL_SS2022" == false ]]; then
-        INSTALL_SHADOWTLS=true
-        INSTALL_SS2022=true
-        log_info "Auto-detected both ShadowTLS and SS2022 installation from parameters"
+    # Auto-detect services based on parameters (only if no explicit install flags are set)
+    if [[ "$INSTALL_SHADOWTLS" == false && "$INSTALL_SS2022" == false ]]; then
+        log_info "Analyzing parameters for service detection..."
+        log_info "ShadowTLS parameters detected: $has_shadowtls_params"
+        log_info "SS2022 parameters detected: $has_ss2022_params"
+        
+        if [[ "$has_shadowtls_params" == true && "$has_ss2022_params" == true ]]; then
+            # Both types of parameters provided
+            INSTALL_SHADOWTLS=true
+            INSTALL_SS2022=true
+            log_info "Auto-detected both ShadowTLS and SS2022 installation from parameters"
+        elif [[ "$has_shadowtls_params" == true ]]; then
+            # Only ShadowTLS parameters provided
+            INSTALL_SHADOWTLS=true
+            log_info "Auto-detected ShadowTLS installation from parameters"
+        elif [[ "$has_ss2022_params" == true ]]; then
+            # Only SS2022 parameters provided
+            INSTALL_SS2022=true
+            log_info "Auto-detected SS2022 installation from parameters"
+        else
+            log_info "No service parameters detected, will show interactive menu"
+        fi
+    else
+        log_info "Explicit installation flags detected, skipping auto-detection"
     fi
 }
 
