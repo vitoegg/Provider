@@ -156,7 +156,6 @@ net.ipv4.tcp_congestion_control = bbr
 net.ipv4.tcp_fin_timeout = 15
 net.ipv4.tcp_keepalive_probes = 3
 net.ipv4.tcp_keepalive_intvl = 30
-
 # ------------------------------------------------------------------------------
 # Core Buffer Settings - Balanced for Sustained Performance
 # ------------------------------------------------------------------------------
@@ -465,6 +464,9 @@ handle_configuration_selection() {
     
     timestamped_echo "${Info} Selected configurations:$selected_configs"
     
+    # Store IPv6 disable status for later use
+    IPV6_DISABLED="$apply_ipv6_disable"
+    
     # Generate configuration files
     if [[ "$apply_ip_forwarding" == true ]]; then
         configure_ip_forwarding
@@ -495,13 +497,8 @@ handle_configuration_selection() {
 
 # Function: Clean up the script file itself
 clean_file() {
-    read -p "Do you want to delete this script file? (y/N): " delete_choice
-    if [[ "$delete_choice" =~ ^[Yy]$ ]]; then
-        rm -f "$(readlink -f "$0")"
-        timestamped_echo "${Info} Script file cleaned up."
-    else
-        timestamped_echo "${Info} Script file preserved."
-    fi
+    rm -f "$(readlink -f "$0")"
+    timestamped_echo "${Info} Script file cleaned up."
 }
 
 ################################################################################
@@ -513,6 +510,9 @@ timestamped_echo "${Info} Starting TCP configuration script..."
 
 # Check prerequisites
 check_root_privileges
+
+# Initialize IPv6 status variable
+IPV6_DISABLED=false
 
 # Main execution loop
 while true; do
@@ -526,7 +526,11 @@ done
 # Script completion
 timestamped_echo "${Info} Configuration completed successfully."
 timestamped_echo "${Tip} Some settings may require a system restart to take effect."
-timestamped_echo "${Tip} IPv6 has been disabled; if you need IPv6, please manually modify the /etc/sysctl.conf file."
+
+# Show IPv6 status based on actual configuration
+if [[ "$IPV6_DISABLED" == true ]]; then
+    timestamped_echo "${Tip} IPv6 has been disabled; if you need IPv6, please manually modify the /etc/sysctl.conf file."
+fi
 
 echo "================================"
 clean_file
