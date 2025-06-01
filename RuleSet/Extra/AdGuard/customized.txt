@@ -1,7 +1,7 @@
 !Title: Customized Ads Rule
 !--------------------------------------
 !Version: 1.0
-!Homepage: https://github.com/vitoegg/Provider/RuleSet/Extra/AdGuard
+!Homepage: https://github.com/vitoegg/Provider/tree/master/RuleSet/Extra/AdGuard
 !Update time: 2025-06-01 13:30:25 UTC+8
 
 ! Allow Home Device for Qidian
@@ -11,6 +11,9 @@
 
 ! Block Data Tracking
 ||browser-intake-datadoghq.com^
+||safebrowsing.googleapis.com^
+||safebrowsing.urlsec.qq.com^
+||spider-tracker.xiaohongshu.com^
 
 ! Block PTR
 ||0.in-addr.arpa^
