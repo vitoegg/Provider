@@ -2,7 +2,7 @@
 !--------------------------------------
 !Version: 1.0
 !Homepage: https://github.com/vitoegg/Provider/tree/master/RuleSet/Extra/AdGuard
-!Update time: 2025-06-01 13:30:25 UTC+8
+!Update time: 2025-06-01 18:18:18 UTC+8
 
 ! Allow Home Device for Qidian
 @@||gdt.qq.com^$client=192.168.10.143,important
@@ -11,9 +11,44 @@
 
 ! Block Data Tracking
 ||browser-intake-datadoghq.com^
+||data.microsoft.com^
 ||safebrowsing.googleapis.com^
 ||safebrowsing.urlsec.qq.com^
 ||spider-tracker.xiaohongshu.com^
+||mum.alibabachengdun.com^
+||log.aliyuncs.com^
+||loggw-ex.alipay.com^
+||loggw.alipaydns.com^
+||fourier.taobao.com^
+||analytics.oceanengine.com^
+||volceapplog.com^
+||easytomessage.com^
+||segment.io^
+||tianwenca.com^
+||pushservice.10010.com^
+||zztfly.com^
+||amplitude.com^
+||api.miwifi.com^
+||report.meituan.com^
+||yun-hl.3g.qq.com^
+||s.c-ctrip.com^
+||gator.volces.com^
+||apmplus.volces.com^
+||kuiniuca.com^
+||fp-it.fengkongcloud.com^
+||hw-sh-pcdn-*.biliapi.net^
+||data.bilibili.com^
+||nexusrules.officeapps.live.com^
+|cm.bilibili.com^
+|amdc-sibling.alipay.com.cn^
+|dns.wechat.com^
+|cc.map.qq.com^
+|im-x.jd.com^
+|newloc.map.n.shifen.com^
+|abtest.alibaba.com^
+|app-monitor.ele.me^
+/umeng/
+/doubleclick\./
 
 ! Block PTR
 ||0.in-addr.arpa^
@@ -101,5 +136,7 @@
 ||127.100.in-addr.arpa^
 ||2.0.192.in-addr.arpa^
 ||168.192.in-addr.arpa^
+||0.198.in-addr.arpa^
+||18.198.in-addr.arpa^
 ||255.255.255.255.in-addr.arpa^
 ||ip6.arpa^
