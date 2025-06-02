@@ -1,53 +1,72 @@
 !Title: Customized Ads Rule
 !--------------------------------------
-!Version: 1.0
+!Version: 1.1
 !Homepage: https://github.com/vitoegg/Provider/tree/master/RuleSet/Extra/AdGuard
-!Update time: 2025-06-01 18:18:18 UTC+8
+!Update time: 2025-06-02 11:11:11 UTC+8
 
 ! Allow Home Device for Qidian
 @@||gdt.qq.com^$client=192.168.10.143,important
 @@||adsmind.gdtimg.com^$client=192.168.10.143,important
 @@||pgdt.gtimg.cn^$client=192.168.10.143,important
 
-! Block Data Tracking
-||browser-intake-datadoghq.com^
-||data.microsoft.com^
-||safebrowsing.googleapis.com^
-||safebrowsing.urlsec.qq.com^
-||spider-tracker.xiaohongshu.com^
+! Alibaba Tracking
 ||mum.alibabachengdun.com^
 ||log.aliyuncs.com^
 ||loggw-ex.alipay.com^
 ||loggw.alipaydns.com^
 ||fourier.taobao.com^
-||analytics.oceanengine.com^
-||volceapplog.com^
-||easytomessage.com^
-||segment.io^
-||tianwenca.com^
-||pushservice.10010.com^
-||zztfly.com^
-||amplitude.com^
-||api.miwifi.com^
-||report.meituan.com^
-||yun-hl.3g.qq.com^
-||s.c-ctrip.com^
-||gator.volces.com^
-||apmplus.volces.com^
-||kuiniuca.com^
-||fp-it.fengkongcloud.com^
-||hw-sh-pcdn-*.biliapi.net^
-||data.bilibili.com^
-||nexusrules.officeapps.live.com^
-||firebaselogging.googleapis.com^
 |cm.bilibili.com^
-|amdc-sibling.alipay.com.cn^
-|dns.wechat.com^
-|cc.map.qq.com^
-|im-x.jd.com^
-|newloc.map.n.shifen.com^
 |abtest.alibaba.com^
 |app-monitor.ele.me^
+|amdc-sibling.alipay.com.cn^
+
+! Tencent Tracking
+||yun-hl.3g.qq.com^
+|dns.wechat.com^
+|cc.map.qq.com^
+
+! Bilibili Tracking
+||hw-sh-pcdn-*.biliapi.net^
+||data.bilibili.com^
+
+! Meituan Tracking
+||report.meituan.com^
+
+! Xiaomi Tracking
+||api.miwifi.com^
+
+! Xiaohongshu Tracking
+||spider-tracker.xiaohongshu.com^
+
+! Xiecheng Tracking
+||s.c-ctrip.com^
+
+! Deepseek Tracking
+||volceapplog.com^
+||gator.volces.com^
+||apmplus.volces.com^
+
+! JD Tracking
+|im-x.jd.com^
+
+! Baidu Tracking
+|newloc.map.n.shifen.com^
+
+! General Tracking
+||browser-intake-datadoghq.com^
+||segment.io^
+||analytics.oceanengine.com^
+||data.microsoft.com^
+||safebrowsing.googleapis.com^
+||safebrowsing.urlsec.qq.com^
+||safebrowsing.apple^
+||nexusrules.officeapps.live.com^
+||firebaselogging.googleapis.com^
+||easytomessage.com^
+||tianwenca.com^
+||zztfly.com^
+||amplitude.com^
+||kuiniuca.com^
 /umeng/
 /doubleclick\./
 

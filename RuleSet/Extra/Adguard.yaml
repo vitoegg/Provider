@@ -1014,6 +1014,7 @@ payload:
  - '+.zhihu-web-analytics.zhihu.com'
  - '+.zoomanalytics.co'
  - '+.browser-intake-datadoghq.com'
+ - '+.safebrowsing.apple'
 
  # > 精确匹配域名规则
  - 'analytics.slashdotmedia.com'
