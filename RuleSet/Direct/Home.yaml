@@ -7,4 +7,4 @@ payload:
   # NTP
   - AND,(AND,(DST-PORT,123),(NETWORK,UDP)),DIRECT
   # Emby
-  - DOMAIN-SUFFIX,nanflix.net
+  - DOMAIN-SUFFIX,recmata.net
