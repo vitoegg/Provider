@@ -8,3 +8,5 @@ payload:
   - AND,(AND,(DST-PORT,123),(NETWORK,UDP)),DIRECT
   # Emby
   - DOMAIN-SUFFIX,recmata.net
+  # DNS
+  - DOMAIN-SUFFIX,nxns.link
