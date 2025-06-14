@@ -10,3 +10,4 @@ payload:
   - DOMAIN-SUFFIX,recmata.net
   # DNS
   - DOMAIN-SUFFIX,nxns.link
+  - DOMAIN-SUFFIX,xns.one
