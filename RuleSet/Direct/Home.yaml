@@ -6,5 +6,3 @@ payload:
   - AND,(AND,(DST-PORT,4500),(NETWORK,UDP))
   # NTP
   - AND,(AND,(DST-PORT,123),(NETWORK,UDP))
-  # Emby
-  - DOMAIN-SUFFIX,recmata.net
