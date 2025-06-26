@@ -1,0 +1,15 @@
+#!name = 广告放行器
+#!desc = 对部分特定应用广告进行放行
+#!author = Vitoegg
+#!icon = https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/Allow.png
+#!date = 2025-06-26 10:50:10
+
+[Rule]
+
+# 放行QD每日福利
+DOMAIN,adsmind.gdtimg.com,DIRECT
+DOMAIN,pgdt.gtimg.cn,DIRECT
+DOMAIN-SUFFIX,gdt.qq.com,DIRECT
+
+[Mitm]
+hostname = -*.apple.com,-*.icloud.com

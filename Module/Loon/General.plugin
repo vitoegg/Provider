@@ -6,11 +6,6 @@
 
 [Rule]
 
-# 放行QD每日福利
-DOMAIN,adsmind.gdtimg.com,DIRECT
-DOMAIN,pgdt.gtimg.cn,DIRECT
-DOMAIN-SUFFIX,gdt.qq.com,DIRECT
-
 # 米家
 DOMAIN,sdkconfig.ad.xiaomi.com,REJECT
 DEST-PORT,5222,REJECT
