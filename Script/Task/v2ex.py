@@ -127,7 +127,7 @@ def v2ex_signin(cookie):
         )
         days = data[0] + "天" if data else "获取失败"
         
-        return f"用户信息：\n【用户名】：{username}\n【今日签到】：{today}\n【账户余额】：{total}\n【签到天数】：{days}"
+        return f"👤【用户名】：{username}\n🎯【今日签到】：{today}\n💰【账户余额】：{total}\n📅【签到天数】：{days}"
         
     except Exception as e:
         print("V2EX签到报错，错误信息: ", str(e))
@@ -166,8 +166,8 @@ if __name__ == "__main__":
     print("=========================正在推送V2EX签到信息=========================")
     
     try:
-        content = f"{signin_result}\n时间：{time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}"
-        message_push("「V2EX论坛签到」", content)
+        content = f"{signin_result}\n⏰ {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())}"
+        message_push("V2EX论坛签到", content)
     except Exception as e:
         print("推送失败，错误信息: ", str(e))
         print("请检查青龙系统设置-》通知设置-》是否配置。")
