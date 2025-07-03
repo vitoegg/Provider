@@ -5,7 +5,7 @@ V2EX论坛 - 自动签到Cookie版
 Version: 1.0.0
 Create Time: 2025-07-03 09:30:30
 Author: AI Assistant
-Description: 用于 V2EX 论坛的每日自动签到
+Description: 用于 V2EX 论坛的每日自动签到, 参考https://github.com/Sitoi/dailycheckin项目代码, 感谢Sitoi大佬
 """
 import os
 import re
