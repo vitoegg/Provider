@@ -261,6 +261,7 @@ log-level error
 bind :53
 server 1.1.1.1
 server 8.8.8.8
+server 185.222.222.222
 EOF
 
     if [ $USE_CUSTOM_DNS -eq 1 ]; then
@@ -326,8 +327,8 @@ uninstall_smartdns() {
     
     log_info "Restoring system DNS configuration..."
     chattr -i /etc/resolv.conf 2>/dev/null
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf
-    echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+    echo "nameserver 1.1.1.1" > /etc/resolv.conf
+    echo "nameserver 8.8.8.8" >> /etc/resolv.conf
     
     log_info "Removing SmartDNS files..."
     rm -rf /etc/smartdns
