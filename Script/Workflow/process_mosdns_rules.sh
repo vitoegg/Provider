@@ -142,28 +142,11 @@ process_mosdns_rule() {
     
     local meta_file=$(mktemp)
     
-    # 生成带有元数据的最终文件
-    {
-      echo "# Customized Ads Rule for MosDNS"
-      echo "# Version: 2.0"
-      echo "# Homepage: https://github.com/vitoegg/Provider/tree/master/RuleSet/Extra/MosDNS"
-      echo "# Update time: $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S UTC+8')"
-      echo "# Converted from AdGuard Home format"
-      echo ""
-      echo "# 规则来源:"
-      for url in $urls; do
-        repo_url=$(echo "$url" | sed -E 's|raw.githubusercontent.com/([^/]+/[^/]+).*|github.com/\1|')
-        echo "# - https://$repo_url"
-      done
-      echo ""
-      echo "# Note: Allow rules (@@) are not supported in MosDNS reject list"
-      echo "# These rules should be added to allow list instead"
-      echo ""
-      cat "$final_file"
-    } > "$meta_file"
+    # 生成纯规则文件，不包含任何注释
+    cat "$final_file" > "$meta_file"
     
     local changed=0
-    local new_rules_count=$(awk '!/^#/ && !/^[[:space:]]*$/' "$meta_file" | wc -l)
+    local new_rules_count=$(wc -l < "$meta_file")
     local old_rules_count=0
     local added_rules=0
     local removed_rules=0
@@ -171,18 +154,15 @@ process_mosdns_rule() {
     echo "┃ 📊 最新MosDNS规则文件包含 $new_rules_count 条规则" | tee -a "$log_file"
     
     if [ -f "$output_path" ]; then
-      local old_file=$(mktemp)
-      grep -v "^# Update time:" "$output_path" > "$old_file"
-      
-      old_rules_count=$(awk '!/^#/ && !/^[[:space:]]*$/' "$old_file" | wc -l)
+      old_rules_count=$(wc -l < "$output_path")
       echo "┃ 📊 仓库中已有规则文件包含 $old_rules_count 条规则" | tee -a "$log_file"
       
       # 比较实际规则内容
       local old_rules_content=$(mktemp)
       local new_rules_content=$(mktemp)
       
-      awk '!/^#/ && !/^[[:space:]]*$/' "$old_file" | sort > "$old_rules_content"
-      awk '!/^#/ && !/^[[:space:]]*$/' "$meta_file" | sort > "$new_rules_content"
+      sort "$output_path" > "$old_rules_content"
+      sort "$meta_file" > "$new_rules_content"
       
       if ! cmp -s "$old_rules_content" "$new_rules_content"; then
         changed=1
@@ -237,8 +217,6 @@ process_mosdns_rule() {
       else
         echo "┃ ✅ 规则内容无变化，跳过更新" | tee -a "$log_file"
       fi
-      
-      rm -f "$old_file"
     else
       changed=1
       added_rules=$new_rules_count
