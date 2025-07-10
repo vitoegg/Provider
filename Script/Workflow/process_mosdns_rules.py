@@ -16,23 +16,28 @@ import re
 from typing import Set, List, Tuple, Dict
 
 def is_regex_rule(rule: str) -> bool:
-    """检查规则是否为正则表达式规则"""
-    # 检查是否包含正则表达式特殊字符
-    regex_patterns = [
-        r'\*',      # 通配符
-        r'\^',      # 边界符
-        r'\$',      # 结束符
-        r'\|',      # 或操作符
-        r'[\[\]]',  # 方括号
-        r'[\(\)]',  # 圆括号
-        r'\\',      # 转义字符
-        r'\+',      # 加号
-        r'\?',      # 问号
-    ]
+    """检查MosDNS规则是否为正则表达式规则"""
+    # 检查MosDNS规则中是否包含正则表达式特殊字符
+    if rule.startswith('domain:') or rule.startswith('full:'):
+        domain_part = rule.split(':', 1)[1] if ':' in rule else rule
+        
+        # 检查域名部分是否包含正则表达式字符
+        regex_patterns = [
+            r'\*',      # 通配符
+            r'[\[\]]',  # 方括号
+            r'[\(\)]',  # 圆括号
+            r'\\',      # 转义字符
+            r'\+',      # 加号
+            r'\?',      # 问号
+            r'\^',      # 边界符（在域名中不应该出现）
+            r'\$',      # 结束符（在域名中不应该出现）
+            r'\|',      # 或操作符（在域名中不应该出现）
+        ]
+        
+        for pattern in regex_patterns:
+            if re.search(pattern, domain_part):
+                return True
     
-    for pattern in regex_patterns:
-        if re.search(pattern, rule):
-            return True
     return False
 
 def convert_adguard_to_mosdns(rule: str) -> Tuple[str, str]:
@@ -53,10 +58,6 @@ def convert_adguard_to_mosdns(rule: str) -> Tuple[str, str]:
     # 格式7: 已经是MosDNS格式 (domain:example.com 或 full:example.com)
     if original_rule.startswith('domain:') or original_rule.startswith('full:'):
         return original_rule, "mosdns"
-    
-    # 跳过正则表达式规则
-    if is_regex_rule(original_rule):
-        return "", "regex"
     
     # 处理不同格式的AdGuard规则
     domain = ""
@@ -110,8 +111,8 @@ def convert_adguard_to_mosdns(rule: str) -> Tuple[str, str]:
         if '?' in domain:
             domain = domain[:domain.index('?')]
         
-        # 验证域名格式
-        if not re.match(r'^[a-zA-Z0-9.-]+$', domain):
+        # 基本验证域名格式（允许一些特殊字符，后续再过滤）
+        if not re.match(r'^[a-zA-Z0-9._*+?^$|()\[\]\\-]+$', domain):
             return "", "invalid"
         
         # 转换为MosDNS格式
@@ -121,6 +122,22 @@ def convert_adguard_to_mosdns(rule: str) -> Tuple[str, str]:
             return f"domain:{domain}", "converted"
     
     return "", "unknown"
+
+def filter_regex_rules(rules: List[str]) -> Tuple[List[str], int]:
+    """
+    过滤掉正则表达式规则
+    返回: (过滤后的规则列表, 被过滤的数量)
+    """
+    filtered_rules = []
+    regex_count = 0
+    
+    for rule in rules:
+        if is_regex_rule(rule):
+            regex_count += 1
+        else:
+            filtered_rules.append(rule)
+    
+    return filtered_rules, regex_count
 
 def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
     """
@@ -168,12 +185,17 @@ def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
         domain_parts = domain.split('.')
         
         # 检查是否被已保留的更短域名覆盖
+        # 只有当父域名确实存在时才认为被覆盖
         for i in range(1, len(domain_parts)):
             parent_domain = '.'.join(domain_parts[i:])
             if parent_domain in kept_domains:
-                is_covered = True
-                stats["wildcard_covered"] += 1
-                break
+                # 确保父域名确实能覆盖当前域名
+                # 例如: example.com 可以覆盖 sub.example.com
+                # 但不能覆盖 notexample.com
+                if domain.endswith('.' + parent_domain):
+                    is_covered = True
+                    stats["wildcard_covered"] += 1
+                    break
         
         if not is_covered:
             kept_domains.add(domain)
@@ -243,18 +265,24 @@ def main():
                 else:
                     conversion_stats["unknown"] += 1
         
-        print(f"[2/4] 优化域名规则 ({len(converted_rules)} 条)...", file=sys.stderr)
+        print(f"[2/4] 过滤正则表达式规则 ({len(converted_rules)} 条)...", file=sys.stderr)
+        
+        # 过滤掉正则表达式规则
+        filtered_rules, regex_count = filter_regex_rules(converted_rules)
+        conversion_stats["regex_rules"] = regex_count # 更新统计信息
+        
+        print(f"[3/4] 优化域名规则 ({len(filtered_rules)} 条)...", file=sys.stderr)
         
         # 优化域名规则
-        final_rules, optimization_stats = optimize_domains(converted_rules)
+        final_rules, optimization_stats = optimize_domains(filtered_rules)
         
-        print(f"[3/4] 生成最终规则 ({len(final_rules)} 条)...", file=sys.stderr)
+        print(f"[4/4] 生成最终规则 ({len(final_rules)} 条)...", file=sys.stderr)
         
         # 输出最终规则
         for rule in final_rules:
             print(rule)
         
-        print("[4/4] 输出统计信息...", file=sys.stderr)
+        print("[5/5] 输出统计信息...", file=sys.stderr)
         
         # 输出统计信息
         end_time = time.time()
