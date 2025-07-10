@@ -111,7 +111,7 @@ process_mosdns_rule() {
     
     echo "┃   ▶️ 使用MosDNS专用Python脚本进行规则处理..." | tee -a "$log_file"
     
-    script_path="${GITHUB_WORKSPACE}/Provider/Script/Workflow/process_mosdns_rules.py"
+    script_path="${GITHUB_WORKSPACE}/Script/Workflow/process_mosdns_rules.py"
     chmod +x "$script_path"
     
     local stats_file=$(mktemp)
@@ -226,6 +226,9 @@ process_mosdns_rule() {
     if [ $changed -eq 1 ]; then
       cp "$meta_file" "$output_path"
       echo "┃ ✅ 规则文件已更新" | tee -a "$log_file"
+      
+      # 将更新的文件添加到git暂存区
+      git add "$output_path" 2>/dev/null || true
       
       # 设置输出变量 - 修改提交日志格式
       echo "has_changes=true" >> "$GITHUB_OUTPUT"
