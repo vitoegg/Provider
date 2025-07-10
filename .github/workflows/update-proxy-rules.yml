@@ -1,0 +1,57 @@
+name: Update Proxy Rules
+
+on:
+  schedule:
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+jobs:
+  update-rules:
+    runs-on: ubuntu-latest
+    outputs:
+      has_changes: ${{ steps.check_changes.outputs.has_changes }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        id: checkout
+        with:
+          fetch-depth: 1
+
+      - name: Setup Timezone
+        run: sudo timedatectl set-timezone "Asia/Shanghai"
+        id: timezone
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+        id: python
+        
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Update RuleSets
+        id: check_changes
+        run: |
+          # 赋予脚本执行权限
+          chmod +x ${GITHUB_WORKSPACE}/Script/Workflow/process_proxy_rules.sh
+          # 执行规则更新脚本
+          ${GITHUB_WORKSPACE}/Script/Workflow/process_proxy_rules.sh
+
+      - name: Commit and Push Changes
+        if: steps.check_changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git commit -m "Update rules: ${{ steps.check_changes.outputs.change_summary }}"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Delete Workflow Runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 2

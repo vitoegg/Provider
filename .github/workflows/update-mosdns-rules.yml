@@ -1,12 +1,12 @@
-name: Update Rules
+name: Update MosDNS Rules
 
 on:
   schedule:
-    - cron: '0 */12 * * *'
+    - cron: '0 3 * * *'  # 每天凌晨3点执行
   workflow_dispatch:
 
 jobs:
-  update-rules:
+  update-mosdns-rules:
     runs-on: ubuntu-latest
     outputs:
       has_changes: ${{ steps.check_changes.outputs.has_changes }}
@@ -27,23 +27,28 @@ jobs:
           python-version: '3.x'
         id: python
         
-      - name: Install jq
-        run: sudo apt-get install -y jq
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
 
-      - name: Update RuleSets
+      - name: Update MosDNS RuleSets
         id: check_changes
         run: |
           # 赋予脚本执行权限
-          chmod +x ${GITHUB_WORKSPACE}/Script/Workflow/process_rules.sh
-          # 执行规则更新脚本
-          ${GITHUB_WORKSPACE}/Script/Workflow/process_rules.sh
+          chmod +x ${GITHUB_WORKSPACE}/Script/Workflow/process_mosdns_rules.sh
+          chmod +x ${GITHUB_WORKSPACE}/Script/Workflow/process_mosdns_rules.py
+          
+          # 执行MosDNS规则更新脚本
+          ${GITHUB_WORKSPACE}/Script/Workflow/process_mosdns_rules.sh
 
       - name: Commit and Push Changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git commit -m "Update rules: ${{ steps.check_changes.outputs.change_summary }}"
+          git add RuleSet/Extra/MosDNS/reject.txt
+          git commit -m "Update MosDNS rules: ${{ steps.check_changes.outputs.change_summary }}"
           git push
         env:
           GITHUB_TOKEN: ${{ github.token }}

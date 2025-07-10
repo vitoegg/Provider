@@ -1,0 +1,68 @@
+# Customized Ads Rule for MosDNS
+# Version: 1.1
+# Homepage: https://github.com/vitoegg/Provider/tree/master/RuleSet/Extra/MosDNS
+# Update time: 2025-06-02 11:11:11 UTC+8
+# Converted from AdGuard Home format
+
+# Note: Allow rules (@@) are not supported in MosDNS reject list
+# These rules should be added to allow list instead:
+# - gdt.qq.com (for client 192.168.10.143)
+# - adsmind.gdtimg.com (for client 192.168.10.143)
+# - pgdt.gtimg.cn (for client 192.168.10.143)
+
+# Alibaba Tracking
+domain:mum.alibabachengdun.com
+domain:log.aliyuncs.com
+domain:loggw-ex.alipay.com
+domain:loggw.alipaydns.com
+domain:fourier.taobao.com
+full:cm.bilibili.com
+full:abtest.alibaba.com
+full:app-monitor.ele.me
+full:amdc-sibling.alipay.com.cn
+
+# Tencent Tracking
+domain:yun-hl.3g.qq.com
+full:dns.wechat.com
+full:cc.map.qq.com
+
+# Bilibili Tracking
+domain:mcdn.bilivideo.cn
+domain:data.bilibili.com
+
+# Meituan Tracking
+domain:report.meituan.com
+
+# Xiaomi Tracking
+domain:api.miwifi.com
+
+# Xiaohongshu Tracking
+domain:spider-tracker.xiaohongshu.com
+
+# Xiecheng Tracking
+domain:s.c-ctrip.com
+
+# Deepseek Tracking
+domain:volceapplog.com
+domain:gator.volces.com
+domain:apmplus.volces.com
+
+# JD Tracking
+full:im-x.jd.com
+
+# Baidu Tracking
+full:newloc.map.n.shifen.com
+
+# General Tracking
+domain:browser-intake-datadoghq.com
+domain:segment.io
+domain:analytics.oceanengine.com
+domain:data.microsoft.com
+domain:safebrowsing.urlsec.qq.com
+domain:nexusrules.officeapps.live.com
+domain:firebaselogging.googleapis.com
+domain:easytomessage.com
+domain:tianwenca.com
+domain:zztfly.com
+domain:amplitude.com
+domain:kuiniuca.com
