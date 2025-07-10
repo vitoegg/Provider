@@ -1,7 +1,7 @@
 # Customized Ads Rule for MosDNS
 # Version: 2.0
 # Homepage: https://github.com/vitoegg/Provider/tree/master/RuleSet/Extra/MosDNS
-# Update time: 2025-07-10 19:46:22 UTC+8
+# Update time: 2025-07-10 20:01:44 UTC+8
 # Converted from AdGuard Home format
 
 # 规则来源:
@@ -12,6 +12,7 @@
 # Note: Allow rules (@@) are not supported in MosDNS reject list
 # These rules should be added to allow list instead
 
+domain:1500020991.vodplayer.wxamedia.com
 domain:1500022744.vodplayer.wxamedia.com
 domain:1500026601.vodplayer.wxamedia.com
 domain:8le8le.com
