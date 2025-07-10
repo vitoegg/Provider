@@ -1,0 +1,19 @@
+{
+  "mosdns_rules": {
+    "reject": {
+      "name": "MOSDNS_REJECT",
+      "path": "RuleSet/Extra/MosDNS/reject.txt",
+      "description": "MosDNS 拦截规则集",
+      "urls": [
+        "https://raw.githubusercontent.com/miaoermua/AdguardFilter/main/rule.txt",
+        "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Mosdns_v5.txt",
+        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/MosDNS/reject.txt"
+      ]
+    }
+  },
+  "config_info": {
+    "version": "1.0",
+    "last_updated": "2025-07-10",
+    "description": "MosDNS 规则配置文件"
+  }
+} 

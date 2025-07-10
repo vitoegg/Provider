@@ -27,15 +27,6 @@
         "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt",
         "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt"
       ]
-    },
-    {
-      "name": "MOSDNS_REJECT",
-      "path": "RuleSet/Extra/MosDNS/reject.txt",
-      "urls": [
-        "https://raw.githubusercontent.com/miaoermua/AdguardFilter/main/rule.txt",
-        "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Mosdns_v5.txt",
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/MosDNS/reject.txt"
-      ]
     }
   ]
 } 

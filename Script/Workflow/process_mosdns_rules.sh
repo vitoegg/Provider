@@ -1,12 +1,12 @@
 #!/bin/bash
 set -eo pipefail
 
-# 从配置文件读取MosDNS规则配置
+# 从独立的MosDNS配置文件读取规则配置
 get_mosdns_config() {
-  local config_file="${GITHUB_WORKSPACE}/Script/Workflow/rules_config.json"
+  local config_file="${GITHUB_WORKSPACE}/Script/Workflow/mosdns_config.json"
   
   if [ ! -f "$config_file" ]; then
-    echo "错误: 配置文件 $config_file 不存在" >&2
+    echo "错误: MosDNS配置文件 $config_file 不存在" >&2
     exit 1
   fi
   
@@ -16,11 +16,11 @@ get_mosdns_config() {
     exit 1
   fi
   
-  # 提取MosDNS规则配置
-  local mosdns_config=$(jq -r '.rules[] | select(.name == "MOSDNS_REJECT")' "$config_file")
+  # 提取MosDNS拦截规则配置
+  local mosdns_config=$(jq -r '.mosdns_rules.reject' "$config_file")
   
   if [ -z "$mosdns_config" ] || [ "$mosdns_config" = "null" ]; then
-    echo "错误: 在配置文件中未找到MOSDNS_REJECT规则配置" >&2
+    echo "错误: 在MosDNS配置文件中未找到reject规则配置" >&2
     exit 1
   fi
   
@@ -111,7 +111,7 @@ process_mosdns_rule() {
     
     echo "┃   ▶️ 使用MosDNS专用Python脚本进行规则处理..." | tee -a "$log_file"
     
-    script_path="${GITHUB_WORKSPACE}/Script/Workflow/process_mosdns_rules.py"
+    script_path="${GITHUB_WORKSPACE}/Provider/Script/Workflow/process_mosdns_rules.py"
     chmod +x "$script_path"
     
     local stats_file=$(mktemp)
@@ -263,16 +263,17 @@ main() {
   echo "MosDNS规则更新日志 - $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S UTC+8')" > "${GITHUB_WORKSPACE}/mosdns_rules_update.log"
   echo "================================================================" >> "${GITHUB_WORKSPACE}/mosdns_rules_update.log"
   
-  # 从配置文件读取MosDNS规则配置
+  # 从独立的MosDNS配置文件读取规则配置
   local mosdns_config=$(get_mosdns_config)
   local rule_name=$(echo "$mosdns_config" | jq -r '.name')
   local output_path="${GITHUB_WORKSPACE}/$(echo "$mosdns_config" | jq -r '.path')"
   local rule_urls=$(echo "$mosdns_config" | jq -r '.urls | join(" ")')
   
-  echo "📋 从配置文件读取到的MosDNS规则配置:"
+  echo "📋 从独立MosDNS配置文件读取到的规则配置:"
   echo "  规则名称: $rule_name"
   echo "  输出路径: $output_path"
   echo "  规则源数量: $(echo "$mosdns_config" | jq -r '.urls | length')"
+  echo "  规则描述: $(echo "$mosdns_config" | jq -r '.description')"
   
   # 处理MosDNS规则
   process_mosdns_rule "MosDNS拦截规则" "$output_path" "$rule_urls"
