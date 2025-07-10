@@ -35,18 +35,14 @@ process_mosdns_rule() {
   local output_dir=$(dirname "$output_path")
   mkdir -p "$output_dir"
   
-  # 创建临时日志文件
-  local log_file="$output_path.tmp.log"
-  touch "$log_file"
-  
-  echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | tee -a "$log_file"
-  echo "┃ 🔄 MosDNS规则集处理: $rule_name" | tee -a "$log_file"
-  echo "┃ 📁 保存位置: $output_path" | tee -a "$log_file"
-  echo "┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | tee -a "$log_file"
+  echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "┃ 🔄 MosDNS规则集处理: $rule_name"
+  echo "┃ 📁 保存位置: $output_path"
+  echo "┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   
   local start_time=$SECONDS
   
-  echo "┃ ⬇️ 正在下载规则数据..." | tee -a "$log_file"
+  echo "┃ ⬇️ 正在下载规则数据..."
   
   local merged_file=$(mktemp)
   local cleaned_file=$(mktemp)
@@ -73,16 +69,16 @@ process_mosdns_rule() {
   
   # 检查是否有任何错误标记文件
   if ls "${tmp_dir}"/error_* 1> /dev/null 2>&1; then
-    echo "┃ ❌ 检测到有上游规则下载失败，本地规则未做任何更改，跳过本次更新" | tee -a "$log_file"
+    echo "┃ ❌ 检测到有上游规则下载失败，本地规则未做任何更改，跳过本次更新"
     rm -f "$merged_file" "$cleaned_file"
     rm -rf "$tmp_dir"
     local duration=$((SECONDS - start_time))
-    echo "┃ ⏱️ 处理完成，用时: $duration 秒" | tee -a "$log_file"
-    echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | tee -a "$log_file"
+    echo "┃ ⏱️ 处理完成，用时: $duration 秒"
+    echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     return 0
   fi
   
-  echo "┃ 🔄 正在合并规则数据..." | tee -a "$log_file"
+  echo "┃ 🔄 正在合并规则数据..."
   
   cat "${tmp_dir}"/download_* > "$merged_file"
   
@@ -102,14 +98,14 @@ process_mosdns_rule() {
   
   # 统计清理后的规则行数
   local cleaned_count=$(wc -l < "$cleaned_file")
-  echo "┃ 📊 清理后的规则条数: $cleaned_count" | tee -a "$log_file"
+  echo "┃ 📊 清理后的规则条数: $cleaned_count"
   
   if [[ -s "$cleaned_file" ]]; then
-    echo "┃ 🧹 正在对MosDNS规则进行专业清洗..." | tee -a "$log_file"
+    echo "┃ 🧹 正在对MosDNS规则进行专业清洗..."
     
     local final_file=$(mktemp)
     
-    echo "┃   ▶️ 使用MosDNS专用Python脚本进行规则处理..." | tee -a "$log_file"
+    echo "┃   ▶️ 使用MosDNS专用Python脚本进行规则处理..."
     
     script_path="${GITHUB_WORKSPACE}/Script/Workflow/process_mosdns_rules.py"
     chmod +x "$script_path"
@@ -120,15 +116,15 @@ process_mosdns_rule() {
     python_exit=$?
     
     if [ $python_exit -ne 0 ]; then
-      echo "┃   ⚠️ Python脚本执行失败，使用基础清洗方法" | tee -a "$log_file"
-      echo "┃   🔴 错误信息: $(cat "$stats_file")" | tee -a "$log_file"
+      echo "┃   ⚠️ Python脚本执行失败，使用基础清洗方法"
+      echo "┃   🔴 错误信息: $(cat "$stats_file")"
       sort -u "$cleaned_file" > "$final_file"
     else
-      echo "┃   📋 MosDNS规则处理统计:" | tee -a "$log_file"
+      echo "┃   📋 MosDNS规则处理统计:"
       while IFS= read -r line; do
-        echo "┃     $line" | tee -a "$log_file"
+        echo "┃     $line"
       done < "$stats_file"
-      echo "┃   ✅ MosDNS规则处理完成" | tee -a "$log_file"
+      echo "┃   ✅ MosDNS规则处理完成"
     fi
     
     rm -f "$stats_file"
@@ -136,9 +132,9 @@ process_mosdns_rule() {
     # 统计最终有效规则数量
     local final_count=$(wc -l < "$final_file")
     local removed_count=$((cleaned_count - final_count))
-    echo "┃ 📊 优化后的规则条数: $final_count (减少了 $removed_count 条)" | tee -a "$log_file"
+    echo "┃ 📊 优化后的规则条数: $final_count (减少了 $removed_count 条)"
     
-    echo "┃ 📝 正在生成最终MosDNS规则文件..." | tee -a "$log_file"
+    echo "┃ 📝 正在生成最终MosDNS规则文件..."
     
     local meta_file=$(mktemp)
     
@@ -151,11 +147,11 @@ process_mosdns_rule() {
     local added_rules=0
     local removed_rules=0
     
-    echo "┃ 📊 最新MosDNS规则文件包含 $new_rules_count 条规则" | tee -a "$log_file"
+    echo "┃ 📊 最新MosDNS规则文件包含 $new_rules_count 条规则"
     
     if [ -f "$output_path" ]; then
       old_rules_count=$(wc -l < "$output_path")
-      echo "┃ 📊 仓库中已有规则文件包含 $old_rules_count 条规则" | tee -a "$log_file"
+      echo "┃ 📊 仓库中已有规则文件包含 $old_rules_count 条规则"
       
       # 比较实际规则内容
       local old_rules_content=$(mktemp)
@@ -177,37 +173,37 @@ process_mosdns_rule() {
         comm -13 "$new_rules_content" "$old_rules_content" > "$removed_rules_file"
         removed_rules=$(wc -l < "$removed_rules_file")
         
-        echo "┃ 📋 MosDNS规则变化详情:" | tee -a "$log_file"
-        echo "┃   ➕ 新增规则: $added_rules 条" | tee -a "$log_file"
-        echo "┃   ➖ 移除规则: $removed_rules 条" | tee -a "$log_file"
+        echo "┃ 📋 MosDNS规则变化详情:"
+        echo "┃   ➕ 新增规则: $added_rules 条"
+        echo "┃   ➖ 移除规则: $removed_rules 条"
         
         # 显示变化的规则（最多显示15条）
         if [ $added_rules -gt 0 ]; then
           if [ $added_rules -gt 15 ]; then
-            echo "┃ 📋 新增规则预览(前15条):" | tee -a "$log_file"
+            echo "┃ 📋 新增规则预览(前15条):"
             while IFS= read -r line; do
-              echo "┃   + $line" | tee -a "$log_file"
+              echo "┃   + $line"
             done < <(head -n 15 "$added_rules_file")
-            echo "┃   ... 以及其他 $((added_rules - 15)) 条规则" | tee -a "$log_file"
+            echo "┃   ... 以及其他 $((added_rules - 15)) 条规则"
           else
-            echo "┃ 📋 新增规则列表:" | tee -a "$log_file"
+            echo "┃ 📋 新增规则列表:"
             while IFS= read -r line; do
-              echo "┃   + $line" | tee -a "$log_file"
+              echo "┃   + $line"
             done < "$added_rules_file"
           fi
         fi
         
         if [ $removed_rules -gt 0 ]; then
           if [ $removed_rules -gt 15 ]; then
-            echo "┃ 📋 移除规则预览(前15条):" | tee -a "$log_file"
+            echo "┃ 📋 移除规则预览(前15条):"
             while IFS= read -r line; do
-              echo "┃   - $line" | tee -a "$log_file"
+              echo "┃   - $line"
             done < <(head -n 15 "$removed_rules_file")
-            echo "┃   ... 以及其他 $((removed_rules - 15)) 条规则" | tee -a "$log_file"
+            echo "┃   ... 以及其他 $((removed_rules - 15)) 条规则"
           else
-            echo "┃ 📋 移除规则列表:" | tee -a "$log_file"
+            echo "┃ 📋 移除规则列表:"
             while IFS= read -r line; do
-              echo "┃   - $line" | tee -a "$log_file"
+              echo "┃   - $line"
             done < "$removed_rules_file"
           fi
         fi
@@ -215,17 +211,17 @@ process_mosdns_rule() {
         rm -f "$added_rules_file" "$removed_rules_file"
         rm -f "$old_rules_content" "$new_rules_content"
       else
-        echo "┃ ✅ 规则内容无变化，跳过更新" | tee -a "$log_file"
+        echo "┃ ✅ 规则内容无变化，跳过更新"
       fi
     else
       changed=1
       added_rules=$new_rules_count
-      echo "┃ 📝 首次创建MosDNS规则文件" | tee -a "$log_file"
+      echo "┃ 📝 首次创建MosDNS规则文件"
     fi
     
     if [ $changed -eq 1 ]; then
       cp "$meta_file" "$output_path"
-      echo "┃ ✅ 规则文件已更新" | tee -a "$log_file"
+      echo "┃ ✅ 规则文件已更新"
       
       # 将更新的文件添加到git暂存区
       git add "$output_path" 2>/dev/null || true
@@ -239,7 +235,7 @@ process_mosdns_rule() {
     
     rm -f "$meta_file" "$final_file"
   else
-    echo "┃ ⚠️ 清理后的规则文件为空，跳过处理" | tee -a "$log_file"
+    echo "┃ ⚠️ 清理后的规则文件为空，跳过处理"
     echo "has_changes=false" >> "$GITHUB_OUTPUT"
   fi
   
@@ -248,23 +244,13 @@ process_mosdns_rule() {
   rm -rf "$tmp_dir"
   
   local duration=$((SECONDS - start_time))
-  echo "┃ ⏱️ 处理完成，用时: $duration 秒" | tee -a "$log_file"
-  echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | tee -a "$log_file"
-  
-  # 将日志内容追加到主日志
-  if [ -f "$log_file" ]; then
-    cat "$log_file" >> "${GITHUB_WORKSPACE}/mosdns_rules_update.log"
-    rm -f "$log_file"
-  fi
+  echo "┃ ⏱️ 处理完成，用时: $duration 秒"
+  echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
 # 主函数
 main() {
   echo "🚀 开始更新MosDNS规则集..."
-  
-  # 创建主日志文件
-  echo "MosDNS规则更新日志 - $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S UTC+8')" > "${GITHUB_WORKSPACE}/mosdns_rules_update.log"
-  echo "================================================================" >> "${GITHUB_WORKSPACE}/mosdns_rules_update.log"
   
   # 从独立的MosDNS配置文件读取规则配置
   local mosdns_config=$(get_mosdns_config)
@@ -282,11 +268,6 @@ main() {
   process_mosdns_rule "MosDNS拦截规则" "$output_path" "$rule_urls"
   
   echo "✅ MosDNS规则集更新完成"
-  
-  # 显示完整日志
-  echo ""
-  echo "📋 完整处理日志:"
-  cat "${GITHUB_WORKSPACE}/mosdns_rules_update.log"
 }
 
 # 如果脚本直接运行，则执行主函数
