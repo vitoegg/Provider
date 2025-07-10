@@ -1,6 +1,32 @@
 #!/bin/bash
 set -eo pipefail
 
+# 从配置文件读取MosDNS规则配置
+get_mosdns_config() {
+  local config_file="${GITHUB_WORKSPACE}/Script/Workflow/rules_config.json"
+  
+  if [ ! -f "$config_file" ]; then
+    echo "错误: 配置文件 $config_file 不存在" >&2
+    exit 1
+  fi
+  
+  # 检查是否安装了jq
+  if ! command -v jq &> /dev/null; then
+    echo "错误: 需要安装jq来解析JSON配置文件" >&2
+    exit 1
+  fi
+  
+  # 提取MosDNS规则配置
+  local mosdns_config=$(jq -r '.rules[] | select(.name == "MOSDNS_REJECT")' "$config_file")
+  
+  if [ -z "$mosdns_config" ] || [ "$mosdns_config" = "null" ]; then
+    echo "错误: 在配置文件中未找到MOSDNS_REJECT规则配置" >&2
+    exit 1
+  fi
+  
+  echo "$mosdns_config"
+}
+
 process_mosdns_rule() {
   local rule_name="$1"
   local output_path="$2"
@@ -215,6 +241,7 @@ process_mosdns_rule() {
       rm -f "$old_file"
     else
       changed=1
+      added_rules=$new_rules_count
       echo "┃ 📝 首次创建MosDNS规则文件" | tee -a "$log_file"
     fi
     
@@ -222,9 +249,9 @@ process_mosdns_rule() {
       cp "$meta_file" "$output_path"
       echo "┃ ✅ 规则文件已更新" | tee -a "$log_file"
       
-      # 设置输出变量
+      # 设置输出变量 - 修改提交日志格式
       echo "has_changes=true" >> "$GITHUB_OUTPUT"
-      echo "change_summary=MosDNS规则更新: +$added_rules -$removed_rules (总计$new_rules_count条)" >> "$GITHUB_OUTPUT"
+      echo "change_summary=reject (+$added_rules -$removed_rules)" >> "$GITHUB_OUTPUT"
     else
       echo "has_changes=false" >> "$GITHUB_OUTPUT"
     fi
@@ -258,12 +285,19 @@ main() {
   echo "MosDNS规则更新日志 - $(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S UTC+8')" > "${GITHUB_WORKSPACE}/mosdns_rules_update.log"
   echo "================================================================" >> "${GITHUB_WORKSPACE}/mosdns_rules_update.log"
   
-  # 定义规则源和输出路径
-  local rule_sources="https://raw.githubusercontent.com/miaoermua/AdguardFilter/main/rule.txt https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Mosdns_v5.txt https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/MosDNS/reject.txt"
-  local output_path="${GITHUB_WORKSPACE}/RuleSet/Extra/MosDNS/reject.txt"
+  # 从配置文件读取MosDNS规则配置
+  local mosdns_config=$(get_mosdns_config)
+  local rule_name=$(echo "$mosdns_config" | jq -r '.name')
+  local output_path="${GITHUB_WORKSPACE}/$(echo "$mosdns_config" | jq -r '.path')"
+  local rule_urls=$(echo "$mosdns_config" | jq -r '.urls | join(" ")')
+  
+  echo "📋 从配置文件读取到的MosDNS规则配置:"
+  echo "  规则名称: $rule_name"
+  echo "  输出路径: $output_path"
+  echo "  规则源数量: $(echo "$mosdns_config" | jq -r '.urls | length')"
   
   # 处理MosDNS规则
-  process_mosdns_rule "MosDNS拦截规则" "$output_path" "$rule_sources"
+  process_mosdns_rule "MosDNS拦截规则" "$output_path" "$rule_urls"
   
   echo "✅ MosDNS规则集更新完成"
   
