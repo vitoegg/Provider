@@ -1,5 +1,5 @@
-# 更新时间: 2025-07-11 20:50:48
-# 规则条数: 141549
+# 更新时间: 2025-07-12 10:06:14
+# 规则条数: 141550
 # 规则来源:
 # - https://https://ruleset.skk.moe/List/domainset/reject.conf
 # - https://https://ruleset.skk.moe/List/domainset/reject_extra.conf
@@ -36171,6 +36171,7 @@
 .datacluster.club
 .datacollect.cisco.com
 .datacollection.adelaideuni.edu.au
+.datacollection.uve.weibo.com
 .datacygnal.io
 .datado.me
 .datadog-service.mvfglobal.com
