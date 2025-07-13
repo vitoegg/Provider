@@ -424,6 +424,7 @@ domain:event.tradplusad.com
 domain:events-drcn.op.dbankcloud.cn
 domain:events.reddit.com
 domain:events.redditmedia.com
+domain:exp.sug.browser.miui.com
 domain:fclog.baidu.com
 domain:feed-image.baidu.com
 domain:file.daihuo.qq.com
@@ -799,6 +800,7 @@ domain:sec.umeng.com
 domain:securemetrics.apple.com
 domain:segment.io
 domain:sensors-log.dongqiudi.com
+domain:sentry.d.xiaomi.net
 domain:sentry.music.163.com
 domain:service.changhong.upgrade2.huan.tv
 domain:service.vmos.cn
@@ -885,6 +887,7 @@ domain:trackbeat.xiachufang.com
 domain:tracker.ai.xiaomi.com
 domain:tracker.didistatic.com
 domain:tracker.gitee.com
+domain:tracker.xiaomixiaoai.com
 domain:tracking.miui.com
 domain:tracking.rus.miui.com
 domain:trc.adsage.com
