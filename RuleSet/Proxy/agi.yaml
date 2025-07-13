@@ -2,6 +2,7 @@ payload:
   # https://github.com/dler-io/Rules/blob/main/Clash/Provider/AI%20Suite.yaml
   # https://github.com/v2fly/domain-list-community/blob/master/data/openai
   
+  # OpenAI
   # > ChatGPT
   - '+.openai.com'
   - '+.chatgpt.com'
@@ -27,35 +28,81 @@ payload:
   - 'openaicom.imgix.net'
   - 'browser-intake-datadoghq.com'
 
-  # > Siri
+  # Siri
   - '+.apple-relay.apple.com'
   - 'guzzoni.smoot.apple.com'
  
-  # > Claude
+  # Claude
   - '+.anthropic.com'
   - '+.claude.ai'
   - '+.claudeusercontent.com'
   - 'cdn.usefathom.com'
   - 'servd-anthropic-website.b-cdn.net'
 
+  # Gemini
+  # > Google Generative Language API
+  - '+.generativelanguage.googleapis.com'
+  - '+.geller-pa.googleapis.com'
+  - '+.proactivebackend-pa.googleapis.com'
+  # > Google AI Studio
+  - '+.alkalimakersuite-pa.clients6.google.com'
+  - '+.aistudio.google.com'
+  - '+.makersuite.google.com'
+  - '+.generativeai.google'
+  - 'ai.google.dev'
+  - 'alkalicore-pa.clients6.google.com'
+  - 'waa-pa.clients6.google.com'
   # > Google Gemini
+  - '+.apis.google.com'
+  - '+.bard.google.com'
+  - '+.gemini.google.com'
+  # > Google NotebookLM
+  - '+.notebooklm.google'
+  - '+.notebooklm.google.com'
+  # > Google DeepMind
   - '+.deepmind.com'
   - '+.deepmind.google'
-  - '+.generativeai.google'
-  - '+.gemini.google.com'
-  - '+.aistudio.google.com'
-  - '+.generativelanguage.googleapis.com'
-  - '+.proactivebackend-pa.googleapis.com'
-  - 'ai.google.dev'
-  - 'makersuite.google.com'
-  - 'alkalicore-pa.clients6.google.com'
-  - 'alkalimakersuite-pa.clients6.google.com'
-  - 'geller-pa.googleapis.com'
 
-  # > Meta AI
-  - '+.meta.ai'
+  # Vibe Coding
+  # > Cursor
+  - '+.cursor.sh'
+  # > Windsurf
+  - '+.windsurf.com'
+  - '+.codeium.com'
+  - '+.codeiumdata.com'
+  # > Zed
+  - '+.zed.dev'
+  # > Copilot
+  - 'api.github.com'
+  - '+.githubcopilot.com'
+  - '+.microsoftonline.com'
+  - 'copilot.microsoft.com'
+  # > Augment
+  - '+.augment.com'
+  - '+.augmentcode.com'
 
-  # > Bing
+  # X(Grok)
+  - '+.x.ai'
+  - '+.grok.com'
+
+  # DIA
+  - '+.diabrowser.engineering'
+
+  # Perplexity AI
+  - '+.perplexity.ai'
+
+  # Poe
+  - '+.poe.com'
+  - '+.quora.com'
+
+  # OpenRouter
+  - '+.openrouter.ai'
+  # Cloudflare AI Gateway
+  - 'gateway.ai.cloudflare.com'
+  # Dify.AI
+  - '+.dify.ai'
+
+  # Bing
   - '+.bing.com'
   - '+.bingagencyawards.com'
   - '+.bingapistatistics.com'
@@ -75,16 +122,8 @@ payload:
   - 'sapphire.api.microsoftapp.net'
   - 'www.bingapis.com'
 
-  # > Poe
-  - '+.poe.com'
-  - '+.quora.com'
-
-  # > Perplexity AI
-  - '+.perplexity.ai'
-
-  # X(Grok)
-  - '+.x.ai'
-  - '+.grok.com'
+  # Meta AI
+  - '+.meta.ai'
 
   # ByteDance
   - '+.ciciai.com'
