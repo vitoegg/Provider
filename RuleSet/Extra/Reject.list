@@ -1,5 +1,5 @@
-# 更新时间: 2025-07-13 20:48:11
-# 规则条数: 141581
+# 更新时间: 2025-07-14 10:09:52
+# 规则条数: 141582
 # 规则来源:
 # - https://https://ruleset.skk.moe/List/domainset/reject.conf
 # - https://https://ruleset.skk.moe/List/domainset/reject_extra.conf
@@ -8447,6 +8447,7 @@
 .adstargets.com
 .adstarsmedia.co.id
 .adstat.4u.pl
+.adstat.izuiyou.com
 .adstatic.kozoom.com
 .adstatistics.av380.net
 .adstats.tencentmusic.com
@@ -29601,6 +29602,7 @@
 .craniumstippen.top
 .craniumunplait.shop
 .crankyderangeabound.com
+.crash2.zhihu.com
 .crashchance.com
 .crashesnittier.shop
 .crasheye.cn
@@ -56882,6 +56884,7 @@
 .hugupq.selency.fr
 .hugysoral.digital
 .huhcoldish.com
+.huichuan-mc.sm.cn
 .huichuan.sm.cn
 .huishenghuiying.com.cn
 .huiyuangang.cc
@@ -57399,6 +57402,7 @@
 .iaculturerpartment.org
 .iad.anm.co.uk
 .iad.apple.com
+.iad.g.163.com
 .iadcontent.apple.com
 .iadmoo.apple.com
 .iadnet.com
@@ -140647,7 +140651,6 @@ adslvseed.qq.com
 adsmind.apdcdn.tc.qq.com
 adsqqclick.qq.com
 adsrich.qq.com
-adstat.izuiyou.com
 adstextview.qq.com
 adsview.qq.com
 adsview2.qq.com
@@ -141061,7 +141064,6 @@ httpdns1.cc.cdnhwc5.com
 httpdnsvip.meituan.com
 httpsdns.baidu.com
 huawei.facebook.com
-huichuan-mc.sm.cn
 huodong.xiaomi.com
 huosai.xiaomi.com
 hw.zuimeitianqi.com
@@ -141070,7 +141072,6 @@ hxcav77.com
 hydra.alibaba.com
 i.xiaomi.com
 i1.services.social.microsoft.com
-iad.g.163.com
 iad0ssl.pcauto.com.cn
 iad0ssl.pconline.com.cn
 iadmat.nosdn.127.net
