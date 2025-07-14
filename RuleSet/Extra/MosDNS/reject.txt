@@ -149,6 +149,7 @@ domain:adsolution.imtt.qq.com
 domain:adsp.xunlei.com
 domain:adsqqclick.qq.com
 domain:adsrich.qq.com
+domain:adstat.izuiyou.com
 domain:adstats.tencentmusic.com
 domain:adstextview.qq.com
 domain:adstore-1252524079.file.myqcloud.com
@@ -242,6 +243,7 @@ domain:api-ad-product.huxiu.com
 domain:api-adservices.apple.com
 domain:api-env.dropbox-dns.com
 domain:api-gd.hiaiabc.com
+domain:api.anythinktech.com
 domain:api.e.kuaishou.com
 domain:api.htp.hubcloud.com.cn
 domain:api.hzsanjiaomao.com
@@ -352,6 +354,7 @@ domain:config.mobisage.cn
 domain:config.unityads.unity3d.com
 domain:cpc-service-square.aiclk.com
 domain:cpro.baidustatic.com
+domain:crash2.zhihu.com
 domain:crashlyticsreports-pa.googleapis.com
 domain:csjplatform.com
 domain:ctobsnssdk.com
@@ -359,6 +362,7 @@ domain:cws-cctv.conviva.com
 domain:cz15.now-dns.top
 domain:d.gdt.qq.com
 domain:d3g.qq.com
+domain:da.anythinktech.com
 domain:data-sdk-uuid-log.d.meituan.net
 domain:data.ads.oppomobile.com
 domain:data.bilibili.cn
@@ -512,6 +516,7 @@ domain:httpdns.yunxindns.com
 domain:httpdns1.cc.cdnhwc5.com
 domain:httpsdns.baidu.com
 domain:hugelog.fcbox.com
+domain:huichuan-mc.sm.cn
 domain:huichuan.sm.cn
 domain:hw-ot-ad.a.yximgs.com
 domain:hw-p2p-pull.video-voip.com
@@ -523,6 +528,7 @@ domain:hyt.comp.360os.com
 domain:i.l-new.inmobicdn.net
 domain:i.l.inmobicdn.net
 domain:iad.apple.com
+domain:iad.g.163.com
 domain:iadctest.qwapi.com
 domain:iadsdk.apple.com
 domain:iadworkbench.apple.com
@@ -681,6 +687,7 @@ domain:musicstun.p2p.qq.com
 domain:mws.adsage.com
 domain:my.adsmogo.com
 domain:nadvideo2.baidu.com
+domain:nex.163.com
 domain:nexusrules.officeapps.live.com
 domain:nmetrics.samsung.com
 domain:notes-analytics-events.apple.com
@@ -853,6 +860,7 @@ domain:tencent-dtv.m.cn.miaozhen.com
 domain:tianwenca.com
 domain:tj.b.qq.com
 domain:tj.video.qq.com
+domain:tk.anythinktech.com
 domain:tmead.y.qq.com
 domain:tmeadcomm.y.qq.com
 domain:tmfmazu-wangka.m.qq.com
@@ -999,6 +1007,7 @@ domain:youxi.baidu.com
 domain:ytx-file.110route.cn
 domain:yun-hl.3g.qq.com
 domain:zhihu-web-analytics.zhihu.com
+domain:zxid-m.mobileservice.cn
 domain:zztfly.com
 full:abtest.alibaba.com
 full:amdc-sibling.alipay.com.cn
