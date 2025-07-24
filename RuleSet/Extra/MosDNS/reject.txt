@@ -193,6 +193,7 @@ domain:adx.xiaodutv.com
 domain:adxlog-adnet.vivo.com.cn
 domain:adxserver.ad.cmvideo.cn
 domain:aegis.qq.com
+domain:aem.dentsuchina.cn
 domain:afd.baidu.com
 domain:afs.googlesyndication.com
 domain:ag.qq.com
@@ -200,6 +201,8 @@ domain:agn.aty.sohu.com
 domain:aiseet.aa.atianqi.com
 domain:ali-ad.a.yximgs.com
 domain:ali-p2p-v2.pull.yximgs.com
+domain:alicoccdncnc-xn.inter.71edge.com
+domain:alicoccdnct-xn.inter.71edge.com
 domain:alog-default.umeng.com
 domain:alog.umeng.com
 domain:alogs.umeng.com
@@ -285,6 +288,7 @@ domain:bdad.123pan.cn
 domain:bdapi-ads.realmemobile.com
 domain:bdapi-in-ads.realmemobile.com
 domain:bdapi.ads.oppomobile.com
+domain:bdcdncnc.inter.71edge.com
 domain:beacon-api.aliyuncs.com
 domain:beacon.qq.com
 domain:beaconcdn.qq.com
@@ -550,6 +554,7 @@ domain:img-c.heytapimage.com
 domain:img-x.jd.com
 domain:img.adnyg.com
 domain:img.adnyg.com.w.kunlungr.com
+domain:img2.360buyimg.com
 domain:impression-asia.chinaliftoff.io
 domain:impression-asia.liftoff.io
 domain:impression.appsflyer.com
@@ -636,6 +641,7 @@ domain:luimg.baidu.com
 domain:m-adnet.hiaiabc.com
 domain:m.ad.zhangyue.com
 domain:m.atm.youku.com
+domain:m.iqiyipic.com
 domain:m.kubiqq.com
 domain:m1.ad.10010.com
 domain:mapi.m.jd.com
@@ -833,6 +839,7 @@ domain:spider-tracker.xiaohongshu.com
 domain:staging-notify.sec.miui.com
 domain:stat.dongqiudi.com
 domain:stat.y.qq.com
+domain:static-s.iqiyi.com
 domain:static.ads-twitter.com
 domain:static.dns.qiyipic.iqiyi.com
 domain:statics.woozooo.com
@@ -1012,6 +1019,8 @@ domain:xlog.jd.com
 domain:xlviiirdr.com
 domain:xlviirdr.com
 domain:xycdn.com
+domain:yk-ssp-ad.cp31.ott.cibntv.net
+domain:ykad-data.cp31.ott.cibntv.net
 domain:ykad-data.youku.com
 domain:ykad-gateway.youku.com
 domain:youku-acs.m.taobao.com
