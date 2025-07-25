@@ -148,7 +148,6 @@ install_packages() {
     else
         log warn "Unknown package manager, please ensure tar and xz are installed"
     fi
-    install_dependency "openssl" "openssl"
     
     # Check mktemp availability
     if ! command_exists mktemp; then
@@ -170,6 +169,14 @@ generate_port() {
             break
         fi
     done
+}
+
+################################################################################
+# Generate random password using /dev/urandom
+################################################################################
+generate_password() {
+    # Generate a random password using /dev/urandom
+    tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16
 }
 
 ################################################################################
@@ -316,8 +323,8 @@ install_shadowsocks() {
 # Prepare for Configuration
 ################################################################################
 prepare_configuration() {
-    # Set encryption method to 2022-blake3-aes-128-gcm
-    ss_method="2022-blake3-aes-128-gcm"
+    # Set encryption method to aes-128-gcm
+    ss_method="aes-128-gcm"
     log info "Using encryption method: $ss_method"
 
     # Set or generate port
@@ -328,10 +335,10 @@ prepare_configuration() {
         log info "Using specified port: $ssport"
     fi
 
-    # Set or generate password using openssl
+    # Set or generate password using standard method
     if [ -z "$sspasswd" ]; then
-        sspasswd=$(openssl rand -base64 16)
-        log info "Generated random password using openssl"
+        sspasswd=$(generate_password)
+        log info "Generated random password"
     else
         log info "Using specified password"
     fi
@@ -376,7 +383,7 @@ WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    echo "Starting Shadowsocks service..."
+    log info "Starting Shadowsocks service..."
     systemctl enable shadowsocks.service >/dev/null 2>&1
     systemctl start shadowsocks.service
 
@@ -552,7 +559,7 @@ main() {
     fi
     
     # Display script version and execution environment information
-    log info "Shadowsocks installation script v1.1"
+    log info "Shadowsocks installation script v1.2"
     log info "Operating System: $(uname -s) $(uname -r)"
     log info "Architecture: $(uname -m)"
     
