@@ -16,8 +16,8 @@ BOLD='\033[1m'
 # Default port ranges
 DEFAULT_TLS_PORT_START=50000
 DEFAULT_TLS_PORT_END=60000
-DEFAULT_SS2022_PORT_START=20000
-DEFAULT_SS2022_PORT_END=40000
+DEFAULT_SS_PORT_START=20000
+DEFAULT_SS_PORT_END=40000
 
 # Preset domains for ShadowTLS
 PRESET_DOMAINS=(
@@ -76,12 +76,12 @@ trap cleanup_temp_files EXIT
 # Global variables for configuration
 ################################################################################
 INSTALL_SHADOWTLS=false
-INSTALL_SS2022=false
+INSTALL_SS=false
 TLS_PORT=""
 TLS_PASSWORD=""
 SS_PASSWORD=""
-SS2022_PORT=""
-SS2022_PASSWORD=""
+SS_PORT=""
+SS_STANDALONE_PASSWORD=""
 TLS_DOMAIN=""
 
 ################################################################################
@@ -89,7 +89,7 @@ TLS_DOMAIN=""
 ################################################################################
 parse_args() {
     local has_shadowtls_params=false
-    local has_ss2022_params=false
+    local has_ss_params=false
     local uninstall_requested=false
     
     while [[ $# -gt 0 ]]; do
@@ -115,27 +115,27 @@ parse_args() {
                 has_shadowtls_params=true
                 shift 2
                 ;;
-            --ss2022-port)
-                SS2022_PORT="$2"
-                has_ss2022_params=true
+            --ss-port)
+                SS_PORT="$2"
+                has_ss_params=true
                 shift 2
                 ;;
-            --ss2022-password)
-                SS2022_PASSWORD="$2"
-                has_ss2022_params=true
+            --ss-standalone-password)
+                SS_STANDALONE_PASSWORD="$2"
+                has_ss_params=true
                 shift 2
                 ;;
             --install-shadowtls)
                 INSTALL_SHADOWTLS=true
                 shift
                 ;;
-            --install-ss2022)
-                INSTALL_SS2022=true
+            --install-ss)
+                INSTALL_SS=true
                 shift
                 ;;
             --install-both)
                 INSTALL_SHADOWTLS=true
-                INSTALL_SS2022=true
+                INSTALL_SS=true
                 shift
                 ;;
             -u|--uninstall)
@@ -161,24 +161,24 @@ parse_args() {
     fi
     
     # Auto-detect services based on parameters (only if no explicit install flags are set)
-    if [[ "$INSTALL_SHADOWTLS" == false && "$INSTALL_SS2022" == false ]]; then
+    if [[ "$INSTALL_SHADOWTLS" == false && "$INSTALL_SS" == false ]]; then
         log_info "Analyzing parameters for service detection..."
         log_info "ShadowTLS parameters detected: $has_shadowtls_params"
-        log_info "SS2022 parameters detected: $has_ss2022_params"
+        log_info "Shadowsocks parameters detected: $has_ss_params"
         
-        if [[ "$has_shadowtls_params" == true && "$has_ss2022_params" == true ]]; then
+        if [[ "$has_shadowtls_params" == true && "$has_ss_params" == true ]]; then
             # Both types of parameters provided
             INSTALL_SHADOWTLS=true
-            INSTALL_SS2022=true
-            log_info "Auto-detected both ShadowTLS and SS2022 installation from parameters"
+            INSTALL_SS=true
+            log_info "Auto-detected both ShadowTLS and Shadowsocks installation from parameters"
         elif [[ "$has_shadowtls_params" == true ]]; then
             # Only ShadowTLS parameters provided
             INSTALL_SHADOWTLS=true
             log_info "Auto-detected ShadowTLS installation from parameters"
-        elif [[ "$has_ss2022_params" == true ]]; then
-            # Only SS2022 parameters provided
-            INSTALL_SS2022=true
-            log_info "Auto-detected SS2022 installation from parameters"
+        elif [[ "$has_ss_params" == true ]]; then
+            # Only Shadowsocks parameters provided
+            INSTALL_SS=true
+            log_info "Auto-detected Shadowsocks installation from parameters"
         else
             log_info "No service parameters detected, will show interactive menu"
         fi
@@ -195,16 +195,16 @@ show_usage() {
     echo ""
     echo "Installation Options:"
     echo "  --install-shadowtls     Install ShadowTLS service only"
-    echo "  --install-ss2022        Install SS2022 service only"
-    echo "  --install-both          Install both ShadowTLS and SS2022 services"
+    echo "  --install-ss            Install Shadowsocks service only"
+    echo "  --install-both          Install both ShadowTLS and Shadowsocks services"
     echo ""
     echo "Configuration Options:"
     echo "  --tls-port PORT         Specify TLS port (50000-60000)"
     echo "  --tls-password PASS     Specify TLS password"
     echo "  --tls-domain DOMAIN     Specify TLS domain"
     echo "  --ss-password PASS      Specify Shadowsocks password for ShadowTLS"
-    echo "  --ss2022-port PORT      Specify SS2022 port (20000-40000)"
-    echo "  --ss2022-password PASS  Specify SS2022 password"
+    echo "  --ss-port PORT          Specify Shadowsocks port (20000-40000)"
+    echo "  --ss-standalone-password PASS  Specify standalone Shadowsocks password"
     echo ""
     echo "Other Options:"
     echo "  --uninstall             Uninstall sing-box service and remove configuration"
@@ -213,18 +213,18 @@ show_usage() {
     echo "Smart Detection:"
     echo "  The script can auto-detect which services to install based on parameters:"
     echo "  - ShadowTLS parameters: --tls-port, --tls-password, --tls-domain, --ss-password"
-    echo "  - SS2022 parameters: --ss2022-port, --ss2022-password"
+    echo "  - Shadowsocks parameters: --ss-port, --ss-standalone-password"
     echo ""
     echo "Examples:"
     echo "  # Explicit installation"
     echo "  $0 --install-shadowtls --tls-port 58568 --tls-password mypass"
-    echo "  $0 --install-ss2022 --ss2022-port 31606"
+    echo "  $0 --install-ss --ss-port 31606"
     echo "  $0 --install-both"
     echo ""
     echo "  # Auto-detection (recommended)"
     echo "  $0 --tls-port 58568 --tls-password mypass"
-    echo "  $0 --ss2022-port 31606 --ss2022-password mypass"
-    echo "  $0 --tls-port 58568 --ss2022-port 31606"
+    echo "  $0 --ss-port 31606 --ss-standalone-password mypass"
+    echo "  $0 --tls-port 58568 --ss-port 31606"
     echo ""
     echo "  # Uninstall"
     echo "  $0 --uninstall"
@@ -415,20 +415,20 @@ generate_config_params() {
         fi
     fi
     
-    # Generate SS2022 parameters if needed
-    if [[ "$INSTALL_SS2022" == true ]]; then
-        if [[ -z "$SS2022_PORT" ]]; then
-            SS2022_PORT=$(generate_port "$DEFAULT_SS2022_PORT_START" "$DEFAULT_SS2022_PORT_END")
-            log_info "Generated SS2022 port: $SS2022_PORT"
+    # Generate Shadowsocks parameters if needed
+    if [[ "$INSTALL_SS" == true ]]; then
+        if [[ -z "$SS_PORT" ]]; then
+            SS_PORT=$(generate_port "$DEFAULT_SS_PORT_START" "$DEFAULT_SS_PORT_END")
+            log_info "Generated Shadowsocks port: $SS_PORT"
         else
-            log_info "Using specified SS2022 port: $SS2022_PORT"
+            log_info "Using specified Shadowsocks port: $SS_PORT"
         fi
         
-        if [[ -z "$SS2022_PASSWORD" ]]; then
-            SS2022_PASSWORD=$(openssl rand -base64 16)
-            log_info "Generated SS2022 password using openssl"
+        if [[ -z "$SS_STANDALONE_PASSWORD" ]]; then
+            SS_STANDALONE_PASSWORD=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
+            log_info "Generated Shadowsocks password"
         else
-            log_info "Using specified SS2022 password"
+            log_info "Using specified Shadowsocks password"
         fi
     fi
     
@@ -445,7 +445,7 @@ create_singbox_config() {
     local inbounds="[]"
     
     # Build inbounds array
-    if [[ "$INSTALL_SHADOWTLS" == true && "$INSTALL_SS2022" == true ]]; then
+    if [[ "$INSTALL_SHADOWTLS" == true && "$INSTALL_SS" == true ]]; then
         # Both services
         inbounds='[
     {
@@ -475,9 +475,9 @@ create_singbox_config() {
     {
       "type": "shadowsocks",
       "listen": "::",
-      "listen_port": '$SS2022_PORT',
-      "method": "2022-blake3-aes-128-gcm",
-      "password": "'$SS2022_PASSWORD'"
+      "listen_port": '$SS_PORT',
+      "method": "aes-128-gcm",
+      "password": "'$SS_STANDALONE_PASSWORD'"
     }
   ]'
     elif [[ "$INSTALL_SHADOWTLS" == true ]]; then
@@ -508,15 +508,15 @@ create_singbox_config() {
       "password": "'$SS_PASSWORD'"
     }
   ]'
-    elif [[ "$INSTALL_SS2022" == true ]]; then
-        # SS2022 only
+    elif [[ "$INSTALL_SS" == true ]]; then
+        # Shadowsocks only
         inbounds='[
     {
       "type": "shadowsocks",
       "listen": "::",
-      "listen_port": '$SS2022_PORT',
-      "method": "2022-blake3-aes-128-gcm",
-      "password": "'$SS2022_PASSWORD'"
+      "listen_port": '$SS_PORT',
+      "method": "aes-128-gcm",
+      "password": "'$SS_STANDALONE_PASSWORD'"
     }
   ]'
     fi
@@ -591,12 +591,12 @@ show_configuration() {
         printf "%-25s %s\n" "SS Method:" "aes-128-gcm"
     fi
     
-    if [[ "$INSTALL_SS2022" == true ]]; then
+    if [[ "$INSTALL_SS" == true ]]; then
         echo ""
-        echo -e "${BOLD}SS2022 Configuration:${NC}"
-        printf "%-25s %s\n" "SS2022 Port:" "$SS2022_PORT"
-        printf "%-25s %s\n" "SS2022 Password:" "$SS2022_PASSWORD"
-        printf "%-25s %s\n" "SS2022 Method:" "2022-blake3-aes-128-gcm"
+        echo -e "${BOLD}Shadowsocks Configuration:${NC}"
+        printf "%-25s %s\n" "SS Port:" "$SS_PORT"
+        printf "%-25s %s\n" "SS Password:" "$SS_STANDALONE_PASSWORD"
+        printf "%-25s %s\n" "SS Method:" "aes-128-gcm"
     fi
     
     echo "=================================="
@@ -664,8 +664,8 @@ show_menu() {
         clear
         print_header "Shadowsocks Unified Installation Script"
         echo "1. Install ShadowTLS only"
-        echo "2. Install SS2022 only"
-        echo "3. Install both ShadowTLS and SS2022"
+        echo "2. Install Shadowsocks only"
+        echo "3. Install both ShadowTLS and Shadowsocks"
         echo "4. Uninstall services"
         echo "5. Exit"
         echo -e "=====================================\n"
@@ -674,19 +674,19 @@ show_menu() {
         case $choice in
             1)
                 INSTALL_SHADOWTLS=true
-                INSTALL_SS2022=false
+                INSTALL_SS=false
                 run_installation
                 exit 0
                 ;;
             2)
                 INSTALL_SHADOWTLS=false
-                INSTALL_SS2022=true
+                INSTALL_SS=true
                 run_installation
                 exit 0
                 ;;
             3)
                 INSTALL_SHADOWTLS=true
-                INSTALL_SS2022=true
+                INSTALL_SS=true
                 run_installation
                 exit 0
                 ;;
@@ -718,7 +718,7 @@ main() {
     parse_args "$@"
     
     # If installation flags are set via command line, run installation
-    if [[ "$INSTALL_SHADOWTLS" == true || "$INSTALL_SS2022" == true ]]; then
+    if [[ "$INSTALL_SHADOWTLS" == true || "$INSTALL_SS" == true ]]; then
         run_installation
     else
         # Show interactive menu
