@@ -88,6 +88,10 @@ payload:
   # DIA
   - '+.diabrowser.engineering'
 
+  # Manus
+  - '+.manus.space'
+  - '+.manus.im'
+  
   # Perplexity AI
   - '+.perplexity.ai'
 
