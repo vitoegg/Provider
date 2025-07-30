@@ -190,8 +190,8 @@ net.ipv4.udp_wmem_min = 16384
 net.ipv4.udp_mem = 65536 131072 229376
 
 # TCP Buffer Parameters
-net.ipv4.tcp_rmem = 4096 87380 $RMEM_MAX
-net.ipv4.tcp_wmem = 4096 16384 $WMEM_MAX
+net.ipv4.tcp_rmem = 4096 262144 $RMEM_MAX
+net.ipv4.tcp_wmem = 4096 262144 $WMEM_MAX
 net.ipv4.tcp_mem = 65536 131072 229376
 
 # TCP Connection Parameters
@@ -201,24 +201,31 @@ net.ipv4.tcp_tw_reuse = 1
 net.ipv4.tcp_max_syn_backlog = 16384
 net.ipv4.tcp_max_tw_buckets = 6000
 net.ipv4.tcp_max_orphans = 131072
-net.ipv4.tcp_keepalive_time = 600
+net.ipv4.tcp_keepalive_time = 120
+net.ipv4.tcp_keepalive_intvl = 30
+net.ipv4.tcp_keepalive_probes = 5
+net.ipv4.tcp_fastopen = 3
 
 # TCP Performance Parameters
-net.ipv4.tcp_timestamps = 0
+net.ipv4.tcp_timestamps = 1
 net.ipv4.tcp_sack = 1
 net.ipv4.tcp_fack = 1
 net.ipv4.tcp_window_scaling = 1
-net.ipv4.tcp_adv_win_scale = 1
+net.ipv4.tcp_adv_win_scale = 2
 net.ipv4.tcp_moderate_rcvbuf = 1
-net.ipv4.tcp_notsent_lowat = 16384
+net.ipv4.tcp_notsent_lowat = 32768
 net.ipv4.tcp_no_metrics_save = 1
+net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_min_tso_segs = 2
+net.ipv4.tcp_early_retrans = 1
+net.ipv4.tcp_autocorking = 0
 
 # TCP Security Parameters
 net.ipv4.tcp_syn_retries = 1
 net.ipv4.tcp_synack_retries = 1
 net.ipv4.tcp_ecn = 0
 net.ipv4.tcp_frto = 0
-net.ipv4.tcp_mtu_probing = 0
+net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_rfc1337 = 0
 
 # IP Parameters
