@@ -80,6 +80,8 @@ payload:
   # > Augment
   - '+.augment.com'
   - '+.augmentcode.com'
+  # > Kiro
+  - '+.kiro.dev'
 
   # X(Grok)
   - '+.x.ai'
