@@ -82,6 +82,8 @@ payload:
   - '+.augmentcode.com'
   # > Kiro
   - '+.kiro.dev'
+  # > Chorus
+  - '+.chorus.sh'
 
   # X(Grok)
   - '+.x.ai'
