@@ -1,5 +1,5 @@
-# 更新时间: 2025-08-01 10:27:10
-# 规则条数: 121378
+# 更新时间: 2025-08-01 14:32:34
+# 规则条数: 121402
 # 规则来源:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/Loyalsoldier/surge-rules
@@ -120900,6 +120900,7 @@ beacons2.gvt2.com
 beacons3.gvt2.com
 bg.v4.a.dl.ws.microsoft.com
 bg4.v4.a.dl.ws.microsoft.com
+bj1.api.bing.com
 blzddist1-a.akamaihd.net
 bookkeeper.itunes.apple.com
 build.microsoft.com
@@ -120959,6 +120960,7 @@ cma.itunes.apple.com
 cn-smp-paymentservices.apple.com
 cn.download.nvidia.com
 cn.widevine.com
+cn.windowssearch.com
 cnappinstall.googleadapis.com
 communities.apple.com
 configuration.apple.com
@@ -120968,28 +120970,35 @@ content.googleadapis.com
 crashlyticsreports-pa.googleapis.com
 crl-lb.apple.com.akadns.net
 crl.apple.com
+crl.globalsign.net
 crl.pki.goog
 crls.pki.goog
 csi.gstatic.com
 cstat.apple.com
 cstat.cdn-apple.com
+ctldl.windowsupdate.com
 d9af5a60.edmonst.net
 dartsearch-cn.net
 dd-cdn.origin-apple.com.akadns.net
 dejavu.apple.com
+devblogs.microsoft.com
+developer.microsoft.com
 devimages-cdn.apple.com
 devstreaming-cdn.apple.com
 dg-meta.video.google.com
 discussionschinese.apple.com
 dl.google.com
 dl.l.google.com
+docs.microsoft.com
 doubleclick-cn.net
 doubleclick.net
 download.developer.apple.com
 download.jetbrains.com
+download.microsoft.com
 download.mlcc.google.com
 download.qatp1.net
 download.tensorflow.google.com
+download.visualstudio.microsoft.com
 downloaddispatch.itunes.apple.com
 e1.vdowowza.vip.hk1.tvb.com
 edge.music-choice-play-chaina1.top.comcast.net
@@ -121010,6 +121019,7 @@ fm983.cityfm.tw
 fontfiles.googleapis.com
 fonts.googleapis.com
 fonts.gstatic.com
+fs.microsoft.com
 g0.gstatic.com
 g1.gstatic.com
 g2.gstatic.com
@@ -121044,6 +121054,7 @@ gpb-hls.streamguys1.com
 gs-loc-cn.apple.com
 gs-loc.apple.com
 gsp10-ssl-cn.ls.apple.com
+gsp12-cn.ls.apple.com
 gsp13-cn.ls.apple.com
 gsp4-cn.ls.apple.com
 gsp4-cn.ls.apple.com.edgekey.net.globalredir.akadns.net
@@ -121115,6 +121126,7 @@ kut-hls.streamguys1.com
 kwmu-flash.streamguys1.com
 l2-uberproxy.corp.google.com
 lb.streaming.sk
+learn.microsoft.com
 live-350k.streamingfast.net
 live-echotv.cdnvideo.ru
 live.hnzzzzzdst.com
@@ -121163,6 +121175,7 @@ msgr.dlservice.microsoft.com
 msgruser.dlservice.microsoft.com
 music.apple.com
 myapp.itunes.apple.com
+myvs.download.prss.microsoft.com
 n18.rcs.revma.com
 necgokr2-724.acs.wecandeo.com
 nettvpro.live
@@ -121178,6 +121191,8 @@ ocsp.apple.com
 ocsp.pki.goog
 ocsp2-lb.apple.com.akadns.net
 ocsp2.apple.com
+oemsoc.download.prss.microsoft.com
+officecdn.microsoft.com
 origin-a.akamaihd.ne
 origin-a.akamaihd.net
 oscdn.apple.com
@@ -121209,6 +121224,7 @@ publicassets.cdn-apple.com
 qagpublic.qatp1.net
 qgadmin.qcpp1.net
 qh.dlservice.microsoft.com
+qiao-cn.com
 qpx.googleflights.net
 qqlivepull.seedata.top
 qualysapi.qatp1.net
@@ -121241,6 +121257,7 @@ safebrowsing-cache.google.com
 safebrowsing.googleapis.com
 scanservice1.qcpp1.net
 sdn-global-live-streaming-packager-cache-3qsdn.akamaized.net
+sdx.microsoft.com
 se-edge.itunes.apple.com
 se2.itunes.apple.com
 search.itunes.apple.com
@@ -121259,6 +121276,7 @@ slive.ytn.co.kr
 slupdate.dlservice.microsoft.com
 smp-device-content.apple.com
 sms.imagetasks.com
+software.download.prss.microsoft.com
 sp.itunes.apple.com
 ssl-google-analytics.l.google.com
 ssl.gstatic.com
@@ -121277,6 +121295,7 @@ store.apple.com.edgekey.net
 store.apple.com.edgekey.net.globalredir.akadns.net
 store.storeimages.apple.com.akadns.net
 store.storeimages.cdn-apple.com
+storeedgefd.dsx.mp.microsoft.com
 stream.dybtv.com
 stream.guihet.com
 stream.houstonpublicmedia.org
@@ -121340,7 +121359,9 @@ valid.origin-apple.com.akadns.net
 vip888.kuyun99.com
 voa-lh.akamaihd.net
 vod.qhdcm.com
+vscode.download.prss.microsoft.com
 vss.cbnmtv.com
+vz.download.prss.microsoft.com
 w3.wifijiangyin.com
 wcnc-lh.akamaihd.net
 wear.googleapis.com
@@ -121357,6 +121378,8 @@ wowza-stream.wbur.org
 wowza.montevideo.com.uy
 wowza.ner.gov.tw
 wpc.124ce.sigmacdn.net
+wscont1.apps.microsoft.com
+wscont2.apps.microsoft.com
 wuwm.streamguys1.com
 www-google-analytics.l.google.com
 www-googletagmanager.l.google.com
@@ -121366,6 +121389,7 @@ www.cbsnews.com
 www.destinationurl.com
 www.filmon.com
 www.gstatic.com
+www.microsoft.com
 www.pxcc.com
 www.pxitv.com
 www.recaptcha.net
