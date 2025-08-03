@@ -3,7 +3,7 @@
 #!category=Hub
 #!homepage=https://surge.qingr.moe
 #!reffer=https://github.com/zirawell/R-Store
-#!date=2025-06-10 18:37:01
+#!date=2025-08-03 13:01:01
 
 [Rule]
 # 米家
@@ -40,7 +40,7 @@ http-response-jq ^https?:\/\/api\.xiaoyuzhoufm\.com\/v1\/flash-screen\/list '.da
 
 [Map Local]
 # 米家  - home.mi.com,app.zhoudamozi.com
-^https:\/\/home\.mi\.com\/cgi-op\/api\/v1\/recommendation\/(?:banner|carousel\/banners|myTab|openingBanner) data-type=text data="{}" status-code=200 header="Content-Type:application/json"
+^https:\/\/home\.mi\.com\/cgi-op\/api\/v\d\/recommendation data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 ^http:\/\/app\.zhoudamozi\.com\/ad\/.+ data-type=text data="{}" status-code=200 header="Content-Type:application/json"
 
 # 招商银行 - webappcfg.paas.cmbchina.com,s3gw.cmbimg.com
