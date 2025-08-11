@@ -86,6 +86,10 @@ payload:
   - '+.chorus.sh'
   # > Cline
   - '+.cline.bot'
+  # > JetBrains
+  - '+.grazie.ai'
+  - '+.jetbrains.ai'
+  - '+.grazie.aws.intellij.net'
 
   # X(Grok)
   - '+.x.ai'
