@@ -94,6 +94,7 @@ payload:
   # X(Grok)
   - '+.x.ai'
   - '+.grok.com'
+  - '+.xai.chronosphere.io'
 
   # DIA
   - '+.diabrowser.engineering'
