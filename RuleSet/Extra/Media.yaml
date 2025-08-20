@@ -2,3 +2,5 @@ payload:
   # Emby
   - '+.recmata.net'
   - '+.cn2gias.uk'
+  # UHDNow RFCHost
+  - '+.uhdnow.com'
