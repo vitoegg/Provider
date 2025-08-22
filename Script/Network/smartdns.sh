@@ -121,6 +121,8 @@ DOMAIN_LISTS=(
     "https://mirror.1991991.xyz/RuleSet/DNS/OpenAI.conf"
     "https://mirror.1991991.xyz/RuleSet/DNS/Common.conf"
     "https://mirror.1991991.xyz/RuleSet/DNS/Media.conf"
+    "https://mirror.1991991.xyz/RuleSet/DNS/Google.conf"
+    "https://mirror.1991991.xyz/RuleSet/DNS/DMM.conf"
 )
 
 # Download selected domain lists
