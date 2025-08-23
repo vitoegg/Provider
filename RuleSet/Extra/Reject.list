@@ -1,5 +1,5 @@
-# 更新时间: 2025-08-23 09:49:06
-# 规则条数: 151601
+# 更新时间: 2025-08-23 20:44:00
+# 规则条数: 151602
 # 规则来源:
 # - https://https://ruleset.skk.moe/List/domainset/reject.conf
 # - https://https://ruleset.skk.moe/List/domainset/reject_extra.conf
@@ -13259,6 +13259,7 @@
 .ap.appl-er.com
 .ap.attainplatform.io
 .ap.delfi.ee
+.ap.dongdianqiu.com
 .ap.dongqiudi.com
 .ap.hibbett.com
 .ap.oasfile.aftenposten.no
