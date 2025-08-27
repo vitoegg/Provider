@@ -1,5 +1,5 @@
-# 更新时间: 2025-08-24 10:03:52
-# 规则条数: 121323
+# 更新时间: 2025-08-27 09:50:24
+# 规则条数: 121352
 # 规则来源:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/Loyalsoldier/surge-rules
@@ -29581,6 +29581,7 @@
 .delixidrive.com
 .deliyun.com
 .dell-alw.com
+.dell-brand.com
 .dell027.com
 .dellecs.com
 .dellemc-solution.com
@@ -37737,6 +37738,7 @@
 .functionads.com
 .functionaltextilesshanghai.com
 .functioncool.com
+.functiongraph.run
 .fund001.com
 .fundebug.com
 .fundebug.net
@@ -78634,6 +78636,7 @@
 .plateno.com
 .platenogroup.com
 .platform-cn.com
+.platform.dell.com
 .platinum-traveller.com
 .platinumchina.com
 .play-analytics.com
@@ -83645,6 +83648,7 @@
 .robam.com
 .robei.com
 .roboeyeai.com
+.robomaster.com
 .roboo.com
 .robook.com
 .robopeak.net
@@ -104677,7 +104681,6 @@
 .www.adobe.com
 .www.cg
 .www.com.my
-.www.dell-brand.com
 .www.dell.com
 .www.djivideos.com
 .www.gov.mo
@@ -120780,6 +120783,7 @@ adcdownload.apple.com
 adcdownload.apple.com.akadns.net
 admob-cn.com
 adservice.google.com
+afcs.dell.com
 aka-amd-njpwworld-hls-enlive.akamaized.net
 alibaba.cdn.steampipe.steamcontent.com
 aljazeera-eng-hd-live.hls.adaptive.level3.net
@@ -120876,6 +120880,7 @@ client-api.itunes.apple.com
 client.amplifi.com
 clientflow.apple.com
 clientflow.apple.com.akadns.net
+clientperipherals.dell.com
 clientservices.googleapis.com
 cma.itunes.apple.com
 cn-smp-paymentservices.apple.com
@@ -120898,9 +120903,11 @@ csi.gstatic.com
 cstat.apple.com
 cstat.cdn-apple.com
 ctldl.windowsupdate.com
+customization-cdn.dell.com
 d9af5a60.edmonst.net
 dartsearch-cn.net
 dd-cdn.origin-apple.com.akadns.net
+dds.dell.com
 dejavu.apple.com
 devblogs.microsoft.com
 developer.microsoft.com
@@ -120908,6 +120915,7 @@ devimages-cdn.apple.com
 devstreaming-cdn.apple.com
 dg-meta.video.google.com
 discussionschinese.apple.com
+dl.dell.com
 dl.google.com
 dl.l.google.com
 docs.microsoft.com
@@ -120922,6 +120930,9 @@ download.tensorflow.google.com
 download.visualstudio.microsoft.com
 downloaddispatch.itunes.apple.com
 e1.vdowowza.vip.hk1.tvb.com
+ea2cn-dev-outlet.dell.com
+ea2cn-prod-outlet.dell.com
+ea2cn-staging-outlet.dell.com
 edge.music-choice-play-chaina1.top.comcast.net
 emmapplecodevice.googleapis.com
 emoi-cncdn.bing.com
@@ -120929,6 +120940,7 @@ experiments.apple.com
 f.c2r.ts.cdn.office.net
 f24hls-i.akamaihd.net
 fash1043.cloudycdn.services
+fcs.dell.com
 fides-pol.apple.com
 file.mb.leshantv.net
 firebase-settings.crashlytics.com
@@ -120941,11 +120953,17 @@ fontfiles.googleapis.com
 fonts.googleapis.com
 fonts.gstatic.com
 fs.microsoft.com
+fta.dell.com
+ftaapj.dell.com
+ftaemea.dell.com
+ftasitapj.dell.com
 g0.gstatic.com
 g1.gstatic.com
 g2.gstatic.com
 g3.gstatic.com
 gayotv.net
+gbxgateway-dev.dell.com
+gbxgateway.dell.com
 go.corp.google.com
 gog-cdn-fastly.gog.com
 gog-cdn.akamaized.net
@@ -121006,6 +121024,7 @@ hls.qguiyang.com
 hls.qxtv0763.com
 hls.wlrn.mobi
 httpdvb.slave.ttcatv.tv
+i.dell.com
 i.pki.goog
 icecast-ruvr.cdnvideo.ru
 icloud-cdn.icloud.com.akadns.net
@@ -121100,6 +121119,7 @@ myvs.download.prss.microsoft.com
 n18.rcs.revma.com
 necgokr2-724.acs.wecandeo.com
 nettvpro.live
+nexus.dell.com
 nhkw-zh-hlscomp.akamaized.net
 nhkwlive-xjp.akamaized.net
 nis.stream.publicradio.org
@@ -121120,6 +121140,7 @@ oscdn.apple.com
 oscdn.origin-apple.com.akadns.net
 osxapps.itunes.apple.com
 ott-live.olympicchannel.com
+p.cdn.persaas.dell.com
 pagead-googlehosted.l.google.com
 pancake.apple.com
 pancake.cdn-apple.com.akadns.net
@@ -121177,6 +121198,7 @@ rtvcdn.com.au
 safebrowsing-cache.google.com
 safebrowsing.googleapis.com
 scanservice1.qcpp1.net
+scene7-cdn.dell.com
 sdn-global-live-streaming-packager-cache-3qsdn.akamaized.net
 sdx.microsoft.com
 se-edge.itunes.apple.com
@@ -121192,11 +121214,15 @@ sf-api-token-service.itunes.apple.com
 sh-pod2-smp-device.apple.com
 shazam-insights.cdn-apple.com
 shell.cdn.office.net
+si.cdn.dell.com
 silverlight.dlservice.microsoft.com
 slive.ytn.co.kr
 slupdate.dlservice.microsoft.com
+sm.dell.com
 smp-device-content.apple.com
 sms.imagetasks.com
+snp.cdn.dell.com
+snpi.dell.com
 software.download.prss.microsoft.com
 sp.itunes.apple.com
 ssl-google-analytics.l.google.com
@@ -121242,6 +121268,7 @@ sup.corp.google.com
 sup.l.google.com
 support-china.apple-support.akadns.net
 support.apple.com
+supportassist.dell.com
 surface.downloads.prss.microsoft.com
 swallow.apple.com
 swcatalog-cdn.apple.com.akadns.net
@@ -121302,11 +121329,13 @@ wpc.124ce.sigmacdn.net
 wscont1.apps.microsoft.com
 wscont2.apps.microsoft.com
 wuwm.streamguys1.com
+www-csb.dell.com
 www-google-analytics.l.google.com
 www-googletagmanager.l.google.com
 www.apple.com
 www.apple.com.edgekey.net.globalredir.akadns.net
 www.cbsnews.com
+www.dell.com
 www.destinationurl.com
 www.filmon.com
 www.gstatic.com
