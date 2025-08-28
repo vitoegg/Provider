@@ -123,7 +123,7 @@ def v2ex_signin(cookie):
         # 获取连续签到天数
         response = session.get(url="https://www.v2ex.com/mission/daily", verify=False)
         data = re.findall(
-            pattern=r"<div class=\"cell\">(.*?)天</div>", string=response.text
+            pattern=r"<span>.*?(\d+).*?天</span>", string=response.text
         )
         days = data[0] + "天" if data else "获取失败"
         
