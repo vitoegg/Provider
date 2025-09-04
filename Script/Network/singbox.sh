@@ -184,10 +184,6 @@ parse_args() {
     
     # Auto-detect services based on parameters (only if no explicit install flags are set)
     if [[ "$INSTALL_REALITY" == false && "$INSTALL_SS" == false ]]; then
-        log_info "Analyzing parameters for service detection..."
-        log_info "Reality parameters detected: $has_reality_params"
-        log_info "Shadowsocks parameters detected: $has_ss_params"
-        
         if [[ "$has_reality_params" == true && "$has_ss_params" == true ]]; then
             # Both types of parameters provided
             INSTALL_REALITY=true
@@ -201,11 +197,7 @@ parse_args() {
             # Only Shadowsocks parameters provided
             INSTALL_SS=true
             log_info "Auto-detected Shadowsocks installation from parameters"
-        else
-            log_info "No service parameters detected, will show interactive menu"
         fi
-    else
-        log_info "Explicit installation flags detected, skipping auto-detection"
     fi
 }
 
@@ -655,68 +647,6 @@ select_domain() {
     done
 }
 
-################################################################################
-# Validate configuration parameters
-################################################################################
-validate_config_params() {
-    log_info "Validating configuration parameters..."
-    
-    # Check Reality parameters if needed
-    if [[ "$INSTALL_REALITY" == true ]]; then
-        if [[ -z "$REALITY_PORT" || ! "$REALITY_PORT" =~ ^[0-9]+$ ]]; then
-            log_error "Invalid Reality port: '$REALITY_PORT'"
-            return 1
-        fi
-        
-        if [[ -z "$REALITY_UUID" || ${#REALITY_UUID} -ne 36 ]]; then
-            log_error "Invalid Reality UUID format: '$REALITY_UUID'"
-            return 1
-        fi
-        
-        if [[ -z "$REALITY_PRIVATE_KEY" ]]; then
-            log_error "Reality private key is empty"
-            return 1
-        fi
-        
-        if [[ -z "$REALITY_DOMAIN" ]]; then
-            log_error "Reality domain is empty"
-            return 1
-        fi
-        
-        # Check for problematic characters in Reality parameters
-        if [[ "$REALITY_UUID" =~ [[:space:]\n\r] ]]; then
-            log_warning "Reality UUID contains whitespace characters, cleaning..."
-            REALITY_UUID=$(echo "$REALITY_UUID" | tr -d '[:space:]\n\r')
-        fi
-        
-        if [[ "$REALITY_PRIVATE_KEY" =~ [[:space:]\n\r] ]]; then
-            log_warning "Reality private key contains whitespace characters, cleaning..."
-            REALITY_PRIVATE_KEY=$(echo "$REALITY_PRIVATE_KEY" | tr -d '[:space:]\n\r')
-        fi
-    fi
-    
-    # Check Shadowsocks parameters if needed
-    if [[ "$INSTALL_SS" == true ]]; then
-        if [[ -z "$SS_PORT" || ! "$SS_PORT" =~ ^[0-9]+$ ]]; then
-            log_error "Invalid Shadowsocks port: '$SS_PORT'"
-            return 1
-        fi
-        
-        if [[ -z "$SS_STANDALONE_PASSWORD" ]]; then
-            log_error "Shadowsocks password is empty"
-            return 1
-        fi
-        
-        # Check for problematic characters in SS password
-        if [[ "$SS_STANDALONE_PASSWORD" =~ [[:space:]\n\r] ]]; then
-            log_warning "Shadowsocks password contains whitespace characters, cleaning..."
-            SS_STANDALONE_PASSWORD=$(echo "$SS_STANDALONE_PASSWORD" | tr -d '[:space:]\n\r')
-        fi
-    fi
-    
-    log_success "Configuration parameters validated"
-    return 0
-}
 
 ################################################################################
 # Generate configuration parameters
@@ -728,16 +658,10 @@ generate_config_params() {
     if [[ "$INSTALL_REALITY" == true ]]; then
         if [[ -z "$REALITY_PORT" ]]; then
             REALITY_PORT=$(generate_port "$DEFAULT_REALITY_PORT_START" "$DEFAULT_REALITY_PORT_END")
-            log_info "Generated Reality port: $REALITY_PORT"
-        else
-            log_info "Using specified Reality port: $REALITY_PORT"
         fi
         
         if [[ -z "$REALITY_UUID" ]]; then
             REALITY_UUID=$(sing-box generate uuid)
-            log_info "Generated Reality UUID"
-        else
-            log_info "Using specified Reality UUID"
         fi
         
         if [[ -z "$REALITY_PRIVATE_KEY" ]]; then
@@ -747,16 +671,10 @@ generate_config_params() {
             if [[ -z "$REALITY_PUBLIC_KEY" ]]; then
                 REALITY_PUBLIC_KEY=$(echo "$keypair_output" | grep "PublicKey:" | awk '{print $2}')
             fi
-            log_info "Generated Reality key pair"
-        else
-            log_info "Using specified Reality private key"
         fi
         
         if [[ -z "$REALITY_SHORT_ID" ]]; then
             REALITY_SHORT_ID=$(generate_short_id)
-            log_info "Generated Reality short ID: $REALITY_SHORT_ID"
-        else
-            log_info "Using specified Reality short ID: $REALITY_SHORT_ID"
         fi
         
         if [[ -z "$REALITY_DOMAIN" ]]; then
@@ -767,10 +685,7 @@ generate_config_params() {
                 # Auto-select for batch installation
                 local random_index=$((RANDOM % ${#PRESET_DOMAINS[@]}))
                 REALITY_DOMAIN="${PRESET_DOMAINS[$random_index]}"
-                log_info "Auto-selected Reality domain: $REALITY_DOMAIN"
             fi
-        else
-            log_info "Using specified Reality domain: $REALITY_DOMAIN"
         fi
     fi
     
@@ -778,16 +693,10 @@ generate_config_params() {
     if [[ "$INSTALL_SS" == true ]]; then
         if [[ -z "$SS_PORT" ]]; then
             SS_PORT=$(generate_port "$DEFAULT_SS_PORT_START" "$DEFAULT_SS_PORT_END")
-            log_info "Generated Shadowsocks port: $SS_PORT"
-        else
-            log_info "Using specified Shadowsocks port: $SS_PORT"
         fi
         
         if [[ -z "$SS_STANDALONE_PASSWORD" ]]; then
             SS_STANDALONE_PASSWORD=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
-            log_info "Generated Shadowsocks password"
-        else
-            log_info "Using specified Shadowsocks password"
         fi
     fi
     
@@ -846,84 +755,12 @@ create_singbox_config() {
     local safe_reality_short_id=$(echo "$REALITY_SHORT_ID" | tr -d '\n\r' | sed 's/"/\\"/g')
     local safe_ss_password=$(echo "$SS_STANDALONE_PASSWORD" | tr -d '\n\r' | sed 's/"/\\"/g')
     
-    # Create configuration file using a more robust method
-    cat > "$config_file" << 'EOF'
-{
-  "log": {
-    "disabled": true
-  },
-  "inbounds": []
-}
-EOF
+    local inbounds_content=""
     
-    # Build inbounds configuration using jq for proper JSON handling
-    if command -v jq >/dev/null 2>&1; then
-        log_info "Using jq for JSON configuration generation..."
-        
-        # Initialize empty inbounds array
-        echo '{"log":{"disabled":true},"inbounds":[]}' > "$config_file"
-        
-        # Add Reality configuration if needed
-        if [[ "$INSTALL_REALITY" == true ]]; then
-            local reality_config
-            reality_config=$(cat << EOF
-{
-  "type": "vless",
-  "listen": "::",
-  "listen_port": $REALITY_PORT,
-  "users": [
-    {
-      "uuid": "$safe_reality_uuid",
-      "flow": "xtls-rprx-vision"
-    }
-  ],
-  "tls": {
-    "enabled": true,
-    "server_name": "$safe_reality_domain",
-    "reality": {
-      "enabled": true,
-      "handshake": {
-        "server": "$safe_reality_domain",
-        "server_port": 443
-      },
-      "private_key": "$safe_reality_private_key",
-      "short_id": [
-        "$safe_reality_short_id"
-      ]
-    }
-  }
-}
-EOF
-)
-            # Add Reality inbound to configuration
-            jq --argjson reality_config "$reality_config" '.inbounds += [$reality_config]' "$config_file" > "${config_file}.tmp" && mv "${config_file}.tmp" "$config_file"
-        fi
-        
-        # Add Shadowsocks configuration if needed
-        if [[ "$INSTALL_SS" == true ]]; then
-            local ss_config
-            ss_config=$(cat << EOF
-{
-  "type": "shadowsocks",
-  "listen": "::",
-  "listen_port": $SS_PORT,
-  "method": "aes-128-gcm",
-  "password": "$safe_ss_password"
-}
-EOF
-)
-            # Add Shadowsocks inbound to configuration
-            jq --argjson ss_config "$ss_config" '.inbounds += [$ss_config]' "$config_file" > "${config_file}.tmp" && mv "${config_file}.tmp" "$config_file"
-        fi
-    else
-        # Fallback method without jq - use direct substitution with proper escaping
-        log_warning "jq not available, using fallback configuration method"
-        
-        local inbounds_content=""
-        
-        if [[ "$INSTALL_REALITY" == true && "$INSTALL_SS" == true ]]; then
-            # Both services
-            inbounds_content="[
+    # Build inbounds configuration
+    if [[ "$INSTALL_REALITY" == true && "$INSTALL_SS" == true ]]; then
+        # Both services
+        inbounds_content="[
     {
       \"type\": \"vless\",
       \"listen\": \"::\",
@@ -958,9 +795,9 @@ EOF
       \"password\": \"$safe_ss_password\"
     }
   ]"
-        elif [[ "$INSTALL_REALITY" == true ]]; then
-            # Reality only
-            inbounds_content="[
+    elif [[ "$INSTALL_REALITY" == true ]]; then
+        # Reality only
+        inbounds_content="[
     {
       \"type\": \"vless\",
       \"listen\": \"::\",
@@ -988,9 +825,9 @@ EOF
       }
     }
   ]"
-        elif [[ "$INSTALL_SS" == true ]]; then
-            # Shadowsocks only
-            inbounds_content="[
+    elif [[ "$INSTALL_SS" == true ]]; then
+        # Shadowsocks only
+        inbounds_content="[
     {
       \"type\": \"shadowsocks\",
       \"listen\": \"::\",
@@ -999,12 +836,12 @@ EOF
       \"password\": \"$safe_ss_password\"
     }
   ]"
-        else
-            inbounds_content="[]"
-        fi
-        
-        # Write final configuration
-        cat > "$config_file" << EOF
+    else
+        inbounds_content="[]"
+    fi
+    
+    # Create configuration file
+    cat > "$config_file" << EOF
 {
   "log": {
     "disabled": true
@@ -1012,55 +849,22 @@ EOF
   "inbounds": $inbounds_content
 }
 EOF
-    fi
     
     # Set proper permissions for configuration file
     chmod 644 "$config_file" >/dev/null 2>&1
     
-    # Add debugging information
-    log_info "Configuration file size: $(wc -c < "$config_file") bytes"
-    log_info "Configuration preview (first 10 lines):"
-    head -10 "$config_file" | while IFS= read -r line; do
-        log_info "  $line"
-    done
-    
     # Validate configuration syntax
     log_info "Validating configuration syntax..."
     if command -v sing-box >/dev/null 2>&1; then
-        local syntax_check_output
-        syntax_check_output=$(sing-box check -c "$config_file" 2>&1)
-        if [[ $? -eq 0 ]]; then
+        if sing-box check -c "$config_file" >/dev/null 2>&1; then
             log_success "Configuration syntax is valid"
         else
             log_error "Configuration syntax validation failed!"
-            log_error "Validation output: $syntax_check_output"
             log_error "Please check the generated configuration at: $config_file"
-            
-            # Show problematic lines around the error
-            if [[ "$syntax_check_output" =~ row\ ([0-9]+) ]]; then
-                local error_line="${BASH_REMATCH[1]}"
-                log_error "Error detected around line $error_line:"
-                sed -n "$((error_line-2)),$((error_line+2))p" "$config_file" | nl -ba | while IFS= read -r line; do
-                    log_error "  $line"
-                done
-            fi
             return 1
         fi
     else
         log_warning "sing-box not found in PATH, skipping syntax validation"
-        # Basic JSON validation using python if available
-        if command -v python3 >/dev/null 2>&1; then
-            log_info "Attempting basic JSON validation with python3..."
-            if python3 -m json.tool "$config_file" >/dev/null 2>&1; then
-                log_success "Basic JSON syntax appears valid"
-            else
-                log_error "JSON syntax validation failed with python3"
-                python3 -m json.tool "$config_file" 2>&1 | head -5 | while IFS= read -r line; do
-                    log_error "  $line"
-                done
-                return 1
-            fi
-        fi
     fi
     
     log_success "Configuration file created: $config_file"
@@ -1153,33 +957,12 @@ show_configuration() {
     echo ""
 }
 
-################################################################################
-# Simple package manager check (removed complex health verification)
-################################################################################
-check_package_manager() {
-    log_info "Checking package manager availability..."
-    
-    # Simple check - just try to run dpkg
-    if ! command -v dpkg >/dev/null 2>&1; then
-        log_error "dpkg command not found. This system may not support .deb packages."
-        return 1
-    fi
-    
-    log_success "Package manager is available"
-    return 0
-}
 
 ################################################################################
 # Uninstall sing-box service
 ################################################################################
 uninstall_service() {
     print_header "Uninstalling sing-box"
-    
-    # Simple package manager check
-    if ! check_package_manager; then
-        log_error "Package manager not available"
-        exit 1
-    fi
     
     # Stop and disable service
     log_info "Stopping and disabling sing-box service..."
@@ -1289,13 +1072,6 @@ run_installation() {
     install_packages
     install_singbox
     generate_config_params
-    
-    # Validate parameters before creating config
-    if ! validate_config_params; then
-        log_error "Configuration parameter validation failed!"
-        exit 1
-    fi
-    
     create_singbox_config
     start_singbox_service
     show_configuration
