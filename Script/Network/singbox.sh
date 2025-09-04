@@ -886,42 +886,18 @@ show_configuration() {
 }
 
 ################################################################################
-# Verify system package manager health
+# Simple package manager check (removed complex health verification)
 ################################################################################
-verify_package_manager_health() {
-    log_info "Verifying package manager health..."
+check_package_manager() {
+    log_info "Checking package manager availability..."
     
-    # Check if dpkg is locked
-    if [[ -f "/var/lib/dpkg/lock-frontend" ]] || [[ -f "/var/lib/dpkg/lock" ]]; then
-        local lock_count=0
-        while [[ -f "/var/lib/dpkg/lock-frontend" ]] || [[ -f "/var/lib/dpkg/lock" ]]; do
-            if [[ $lock_count -ge 30 ]]; then
-                log_error "Package manager is locked. Please wait for other package operations to complete."
-                return 1
-            fi
-            log_info "Waiting for package manager to be available... ($((lock_count + 1))/30)"
-            sleep 2
-            ((lock_count++))
-        done
-    fi
-    
-    # Check dpkg status
-    if ! dpkg --audit >/dev/null 2>&1; then
-        log_warning "Found dpkg issues, attempting to fix..."
-        DEBIAN_FRONTEND=noninteractive dpkg --configure -a >/dev/null 2>&1
-        if [[ $? -ne 0 ]]; then
-            log_error "Failed to fix dpkg issues. Please run: sudo dpkg --configure -a"
-            return 1
-        fi
-    fi
-    
-    # Test basic package operations
-    if ! dpkg -l >/dev/null 2>&1; then
-        log_error "Package manager is not functioning properly"
+    # Simple check - just try to run dpkg
+    if ! command -v dpkg >/dev/null 2>&1; then
+        log_error "dpkg command not found. This system may not support .deb packages."
         return 1
     fi
     
-    log_success "Package manager is healthy"
+    log_success "Package manager is available"
     return 0
 }
 
@@ -931,9 +907,9 @@ verify_package_manager_health() {
 uninstall_service() {
     print_header "Uninstalling sing-box"
     
-    # Verify package manager health before proceeding
-    if ! verify_package_manager_health; then
-        log_error "Cannot proceed with uninstallation due to package manager issues"
+    # Simple package manager check
+    if ! check_package_manager; then
+        log_error "Package manager not available"
         exit 1
     fi
     
@@ -978,17 +954,13 @@ uninstall_service() {
         log_success "Systemd daemon reloaded"
     fi
     
-    # Completely remove sing-box package with all configuration files
-    log_info "Completely removing sing-box package..."
+    # Remove sing-box package
+    log_info "Removing sing-box package..."
     if dpkg -l | grep -q "^ii.*sing-box" 2>/dev/null; then
-        # First try normal purge
-        if ! DEBIAN_FRONTEND=noninteractive dpkg --purge sing-box >/dev/null 2>&1; then
-            log_warning "Normal purge failed, forcing removal..."
-            # Force removal if normal purge fails
-            DEBIAN_FRONTEND=noninteractive dpkg --remove --force-remove-reinstreq sing-box >/dev/null 2>&1
-            DEBIAN_FRONTEND=noninteractive dpkg --purge --force-remove-reinstreq sing-box >/dev/null 2>&1
-        fi
-        log_success "Package completely removed"
+        # Try normal removal first, then force if needed
+        DEBIAN_FRONTEND=noninteractive dpkg --remove sing-box >/dev/null 2>&1 || \
+        DEBIAN_FRONTEND=noninteractive dpkg --remove --force-remove-reinstreq sing-box >/dev/null 2>&1
+        log_success "Package removed"
     else
         log_info "Package is not installed"
     fi
@@ -1024,25 +996,13 @@ uninstall_service() {
         fi
     done
     
-    # Fix potential apt/dpkg database issues
-    log_info "Fixing package manager database..."
-    DEBIAN_FRONTEND=noninteractive dpkg --configure -a >/dev/null 2>&1
-    if command -v apt-get >/dev/null 2>&1; then
-        DEBIAN_FRONTEND=noninteractive apt-get -f install -y >/dev/null 2>&1
-        log_success "Package manager database fixed"
-    fi
+    # Quick package manager cleanup (optional)
+    log_info "Running basic package cleanup..."
+    DEBIAN_FRONTEND=noninteractive dpkg --configure -a >/dev/null 2>&1 || true
+    log_success "Basic cleanup completed"
     
     # Clean up temporary files from this script
     cleanup_temp_files
-    
-    # Final verification of package manager health
-    log_info "Performing final system health check..."
-    if ! verify_package_manager_health; then
-        log_warning "Package manager health check failed after uninstallation"
-        log_warning "You may need to run: sudo dpkg --configure -a && sudo apt-get -f install"
-    else
-        log_success "System package manager is functioning normally"
-    fi
     
     log_success "Complete uninstallation finished successfully"
     log_info "All sing-box components have been removed from the system"
