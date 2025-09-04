@@ -341,12 +341,26 @@ configure_service() {
             return 1
         fi
         # 正确解析 X25519 输出格式
-        # Xray x25519 输出格式：
-        # Private key: YNRNS69_2gKy33J4XcJ1Q2CWjLjKzovvSK4I6So7dWI
-        # Public key: abc123...
+        # Xray x25519 可能的输出格式：
+        # 格式1: Private key: YNRNS69_2gKy33J4XcJ1Q2CWjLjKzovvSK4I6So7dWI
+        # 格式2: PrivateKey: YNRNS69_2gKy33J4XcJ1Q2CWjLjKzovvSK4I6So7dWI
+        # 格式3: PrivateKey:YNRNS69_2gKy33J4XcJ1Q2CWjLjKzovvSK4I6So7dWI
         
-        private_key=$(echo "$keys" | grep "Private key:" | sed 's/Private key: //' | tr -d '\n\r\t' | sed 's/[[:space:]]*$//')
-        public_key=$(echo "$keys" | grep "Public key:" | sed 's/Public key: //' | tr -d '\n\r\t' | sed 's/[[:space:]]*$//')
+        # 尝试解析私钥 - 支持多种格式
+        private_key=""
+        if echo "$keys" | grep -q "Private key:"; then
+            private_key=$(echo "$keys" | grep "Private key:" | sed 's/Private key: //' | tr -d '\n\r\t' | sed 's/[[:space:]]*$//')
+        elif echo "$keys" | grep -q "PrivateKey:"; then
+            private_key=$(echo "$keys" | grep "PrivateKey:" | sed -E 's/PrivateKey:[[:space:]]*//' | tr -d '\n\r\t' | sed 's/[[:space:]]*$//')
+        fi
+        
+        # 尝试解析公钥 - 支持多种格式
+        public_key=""
+        if echo "$keys" | grep -q "Public key:"; then
+            public_key=$(echo "$keys" | grep "Public key:" | sed 's/Public key: //' | tr -d '\n\r\t' | sed 's/[[:space:]]*$//')
+        elif echo "$keys" | grep -q "PublicKey:"; then
+            public_key=$(echo "$keys" | grep "PublicKey:" | sed -E 's/PublicKey:[[:space:]]*//' | tr -d '\n\r\t' | sed 's/[[:space:]]*$//')
+        fi
         
         # 如果密钥为空，尝试其他可能的格式
         if [[ -z "$private_key" || -z "$public_key" ]]; then
