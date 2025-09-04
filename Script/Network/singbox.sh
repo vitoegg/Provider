@@ -656,6 +656,69 @@ select_domain() {
 }
 
 ################################################################################
+# Validate configuration parameters
+################################################################################
+validate_config_params() {
+    log_info "Validating configuration parameters..."
+    
+    # Check Reality parameters if needed
+    if [[ "$INSTALL_REALITY" == true ]]; then
+        if [[ -z "$REALITY_PORT" || ! "$REALITY_PORT" =~ ^[0-9]+$ ]]; then
+            log_error "Invalid Reality port: '$REALITY_PORT'"
+            return 1
+        fi
+        
+        if [[ -z "$REALITY_UUID" || ${#REALITY_UUID} -ne 36 ]]; then
+            log_error "Invalid Reality UUID format: '$REALITY_UUID'"
+            return 1
+        fi
+        
+        if [[ -z "$REALITY_PRIVATE_KEY" ]]; then
+            log_error "Reality private key is empty"
+            return 1
+        fi
+        
+        if [[ -z "$REALITY_DOMAIN" ]]; then
+            log_error "Reality domain is empty"
+            return 1
+        fi
+        
+        # Check for problematic characters in Reality parameters
+        if [[ "$REALITY_UUID" =~ [[:space:]\n\r] ]]; then
+            log_warning "Reality UUID contains whitespace characters, cleaning..."
+            REALITY_UUID=$(echo "$REALITY_UUID" | tr -d '[:space:]\n\r')
+        fi
+        
+        if [[ "$REALITY_PRIVATE_KEY" =~ [[:space:]\n\r] ]]; then
+            log_warning "Reality private key contains whitespace characters, cleaning..."
+            REALITY_PRIVATE_KEY=$(echo "$REALITY_PRIVATE_KEY" | tr -d '[:space:]\n\r')
+        fi
+    fi
+    
+    # Check Shadowsocks parameters if needed
+    if [[ "$INSTALL_SS" == true ]]; then
+        if [[ -z "$SS_PORT" || ! "$SS_PORT" =~ ^[0-9]+$ ]]; then
+            log_error "Invalid Shadowsocks port: '$SS_PORT'"
+            return 1
+        fi
+        
+        if [[ -z "$SS_STANDALONE_PASSWORD" ]]; then
+            log_error "Shadowsocks password is empty"
+            return 1
+        fi
+        
+        # Check for problematic characters in SS password
+        if [[ "$SS_STANDALONE_PASSWORD" =~ [[:space:]\n\r] ]]; then
+            log_warning "Shadowsocks password contains whitespace characters, cleaning..."
+            SS_STANDALONE_PASSWORD=$(echo "$SS_STANDALONE_PASSWORD" | tr -d '[:space:]\n\r')
+        fi
+    fi
+    
+    log_success "Configuration parameters validated"
+    return 0
+}
+
+################################################################################
 # Generate configuration parameters
 ################################################################################
 generate_config_params() {
@@ -775,114 +838,229 @@ create_singbox_config() {
     clean_sing_box_config
     
     local config_file="/etc/sing-box/config.json"
-    local inbounds="[]"
     
-    # Build inbounds array
-    if [[ "$INSTALL_REALITY" == true && "$INSTALL_SS" == true ]]; then
-        # Both services
-        inbounds='[
+    # Sanitize variables to prevent JSON injection and newline issues
+    local safe_reality_uuid=$(echo "$REALITY_UUID" | tr -d '\n\r' | sed 's/"/\\"/g')
+    local safe_reality_domain=$(echo "$REALITY_DOMAIN" | tr -d '\n\r' | sed 's/"/\\"/g')
+    local safe_reality_private_key=$(echo "$REALITY_PRIVATE_KEY" | tr -d '\n\r' | sed 's/"/\\"/g')
+    local safe_reality_short_id=$(echo "$REALITY_SHORT_ID" | tr -d '\n\r' | sed 's/"/\\"/g')
+    local safe_ss_password=$(echo "$SS_STANDALONE_PASSWORD" | tr -d '\n\r' | sed 's/"/\\"/g')
+    
+    # Create configuration file using a more robust method
+    cat > "$config_file" << 'EOF'
+{
+  "log": {
+    "disabled": true
+  },
+  "inbounds": []
+}
+EOF
+    
+    # Build inbounds configuration using jq for proper JSON handling
+    if command -v jq >/dev/null 2>&1; then
+        log_info "Using jq for JSON configuration generation..."
+        
+        # Initialize empty inbounds array
+        echo '{"log":{"disabled":true},"inbounds":[]}' > "$config_file"
+        
+        # Add Reality configuration if needed
+        if [[ "$INSTALL_REALITY" == true ]]; then
+            local reality_config
+            reality_config=$(cat << EOF
+{
+  "type": "vless",
+  "listen": "::",
+  "listen_port": $REALITY_PORT,
+  "users": [
     {
-      "type": "vless",
-      "listen": "::",
-      "listen_port": '$REALITY_PORT',
-      "users": [
+      "uuid": "$safe_reality_uuid",
+      "flow": "xtls-rprx-vision"
+    }
+  ],
+  "tls": {
+    "enabled": true,
+    "server_name": "$safe_reality_domain",
+    "reality": {
+      "enabled": true,
+      "handshake": {
+        "server": "$safe_reality_domain",
+        "server_port": 443
+      },
+      "private_key": "$safe_reality_private_key",
+      "short_id": [
+        "$safe_reality_short_id"
+      ]
+    }
+  }
+}
+EOF
+)
+            # Add Reality inbound to configuration
+            jq --argjson reality_config "$reality_config" '.inbounds += [$reality_config]' "$config_file" > "${config_file}.tmp" && mv "${config_file}.tmp" "$config_file"
+        fi
+        
+        # Add Shadowsocks configuration if needed
+        if [[ "$INSTALL_SS" == true ]]; then
+            local ss_config
+            ss_config=$(cat << EOF
+{
+  "type": "shadowsocks",
+  "listen": "::",
+  "listen_port": $SS_PORT,
+  "method": "aes-128-gcm",
+  "password": "$safe_ss_password"
+}
+EOF
+)
+            # Add Shadowsocks inbound to configuration
+            jq --argjson ss_config "$ss_config" '.inbounds += [$ss_config]' "$config_file" > "${config_file}.tmp" && mv "${config_file}.tmp" "$config_file"
+        fi
+    else
+        # Fallback method without jq - use direct substitution with proper escaping
+        log_warning "jq not available, using fallback configuration method"
+        
+        local inbounds_content=""
+        
+        if [[ "$INSTALL_REALITY" == true && "$INSTALL_SS" == true ]]; then
+            # Both services
+            inbounds_content="[
+    {
+      \"type\": \"vless\",
+      \"listen\": \"::\",
+      \"listen_port\": $REALITY_PORT,
+      \"users\": [
         {
-          "uuid": "'$REALITY_UUID'",
-          "flow": "xtls-rprx-vision"
+          \"uuid\": \"$safe_reality_uuid\",
+          \"flow\": \"xtls-rprx-vision\"
         }
       ],
-      "tls": {
-        "enabled": true,
-        "server_name": "'$REALITY_DOMAIN'",
-        "reality": {
-          "enabled": true,
-          "handshake": {
-            "server": "'$REALITY_DOMAIN'",
-            "server_port": 443
+      \"tls\": {
+        \"enabled\": true,
+        \"server_name\": \"$safe_reality_domain\",
+        \"reality\": {
+          \"enabled\": true,
+          \"handshake\": {
+            \"server\": \"$safe_reality_domain\",
+            \"server_port\": 443
           },
-          "private_key": "'$REALITY_PRIVATE_KEY'",
-          "short_id": [
-            "'$REALITY_SHORT_ID'"
+          \"private_key\": \"$safe_reality_private_key\",
+          \"short_id\": [
+            \"$safe_reality_short_id\"
           ]
         }
       }
     },
     {
-      "type": "shadowsocks",
-      "listen": "::",
-      "listen_port": '$SS_PORT',
-      "method": "aes-128-gcm",
-      "password": "'$SS_STANDALONE_PASSWORD'"
+      \"type\": \"shadowsocks\",
+      \"listen\": \"::\",
+      \"listen_port\": $SS_PORT,
+      \"method\": \"aes-128-gcm\",
+      \"password\": \"$safe_ss_password\"
     }
-  ]'
-    elif [[ "$INSTALL_REALITY" == true ]]; then
-        # Reality only
-        inbounds='[
+  ]"
+        elif [[ "$INSTALL_REALITY" == true ]]; then
+            # Reality only
+            inbounds_content="[
     {
-      "type": "vless",
-      "listen": "::",
-      "listen_port": '$REALITY_PORT',
-      "users": [
+      \"type\": \"vless\",
+      \"listen\": \"::\",
+      \"listen_port\": $REALITY_PORT,
+      \"users\": [
         {
-          "uuid": "'$REALITY_UUID'",
-          "flow": "xtls-rprx-vision"
+          \"uuid\": \"$safe_reality_uuid\",
+          \"flow\": \"xtls-rprx-vision\"
         }
       ],
-      "tls": {
-        "enabled": true,
-        "server_name": "'$REALITY_DOMAIN'",
-        "reality": {
-          "enabled": true,
-          "handshake": {
-            "server": "'$REALITY_DOMAIN'",
-            "server_port": 443
+      \"tls\": {
+        \"enabled\": true,
+        \"server_name\": \"$safe_reality_domain\",
+        \"reality\": {
+          \"enabled\": true,
+          \"handshake\": {
+            \"server\": \"$safe_reality_domain\",
+            \"server_port\": 443
           },
-          "private_key": "'$REALITY_PRIVATE_KEY'",
-          "short_id": [
-            "'$REALITY_SHORT_ID'"
+          \"private_key\": \"$safe_reality_private_key\",
+          \"short_id\": [
+            \"$safe_reality_short_id\"
           ]
         }
       }
     }
-  ]'
-    elif [[ "$INSTALL_SS" == true ]]; then
-        # Shadowsocks only
-        inbounds='[
+  ]"
+        elif [[ "$INSTALL_SS" == true ]]; then
+            # Shadowsocks only
+            inbounds_content="[
     {
-      "type": "shadowsocks",
-      "listen": "::",
-      "listen_port": '$SS_PORT',
-      "method": "aes-128-gcm",
-      "password": "'$SS_STANDALONE_PASSWORD'"
+      \"type\": \"shadowsocks\",
+      \"listen\": \"::\",
+      \"listen_port\": $SS_PORT,
+      \"method\": \"aes-128-gcm\",
+      \"password\": \"$safe_ss_password\"
     }
-  ]'
-    fi
-    
-    # Create configuration file
-    cat > "$config_file" << EOF
+  ]"
+        else
+            inbounds_content="[]"
+        fi
+        
+        # Write final configuration
+        cat > "$config_file" << EOF
 {
   "log": {
     "disabled": true
   },
-  "inbounds": $inbounds
+  "inbounds": $inbounds_content
 }
 EOF
+    fi
     
     # Set proper permissions for configuration file
     chmod 644 "$config_file" >/dev/null 2>&1
     
+    # Add debugging information
+    log_info "Configuration file size: $(wc -c < "$config_file") bytes"
+    log_info "Configuration preview (first 10 lines):"
+    head -10 "$config_file" | while IFS= read -r line; do
+        log_info "  $line"
+    done
+    
     # Validate configuration syntax
     log_info "Validating configuration syntax..."
     if command -v sing-box >/dev/null 2>&1; then
-        if sing-box check -c "$config_file" >/dev/null 2>&1; then
+        local syntax_check_output
+        syntax_check_output=$(sing-box check -c "$config_file" 2>&1)
+        if [[ $? -eq 0 ]]; then
             log_success "Configuration syntax is valid"
         else
             log_error "Configuration syntax validation failed!"
+            log_error "Validation output: $syntax_check_output"
             log_error "Please check the generated configuration at: $config_file"
+            
+            # Show problematic lines around the error
+            if [[ "$syntax_check_output" =~ row\ ([0-9]+) ]]; then
+                local error_line="${BASH_REMATCH[1]}"
+                log_error "Error detected around line $error_line:"
+                sed -n "$((error_line-2)),$((error_line+2))p" "$config_file" | nl -ba | while IFS= read -r line; do
+                    log_error "  $line"
+                done
+            fi
             return 1
         fi
     else
         log_warning "sing-box not found in PATH, skipping syntax validation"
+        # Basic JSON validation using python if available
+        if command -v python3 >/dev/null 2>&1; then
+            log_info "Attempting basic JSON validation with python3..."
+            if python3 -m json.tool "$config_file" >/dev/null 2>&1; then
+                log_success "Basic JSON syntax appears valid"
+            else
+                log_error "JSON syntax validation failed with python3"
+                python3 -m json.tool "$config_file" 2>&1 | head -5 | while IFS= read -r line; do
+                    log_error "  $line"
+                done
+                return 1
+            fi
+        fi
     fi
     
     log_success "Configuration file created: $config_file"
@@ -1111,6 +1289,13 @@ run_installation() {
     install_packages
     install_singbox
     generate_config_params
+    
+    # Validate parameters before creating config
+    if ! validate_config_params; then
+        log_error "Configuration parameter validation failed!"
+        exit 1
+    fi
+    
     create_singbox_config
     start_singbox_service
     show_configuration
