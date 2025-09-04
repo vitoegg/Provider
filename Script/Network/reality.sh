@@ -123,6 +123,11 @@ generate_shortid() {
     openssl rand -hex 4
 }
 
+# 清理字符串，移除可能导致JSON解析错误的字符
+clean_string() {
+    echo "$1" | tr -d '\n\r\t' | sed 's/[[:space:]]*$//'
+}
+
 # 生成 ShadowSocks 密码
 generate_ss_password() {
     tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16
@@ -148,6 +153,7 @@ select_domain() {
         log "INFO" "请选择一个域名作为 Reality 的目标："
         get_domain_list
         
+        local choice
         read -p "请输入选择 (1-4): " choice
         
         case $choice in
@@ -157,9 +163,16 @@ select_domain() {
             4) domain="www.japan.travel" ;;
             *)
                 log "ERROR" "无效选择，请输入 1-4"
+                echo ""  # 返回空字符串表示选择失败
                 return 1
                 ;;
         esac
+    fi
+    
+    # 确保域名不为空
+    if [[ -z "$domain" ]]; then
+        log "ERROR" "域名选择失败"
+        return 1
     fi
     
     echo "$domain"
@@ -167,12 +180,12 @@ select_domain() {
 
 # 生成 Reality 配置
 generate_reality_config() {
-    local uuid=$1
-    local private_key=$2
-    local public_key=$3
-    local short_id=$4
-    local port=$5
-    local domain=$6
+    local uuid=$(clean_string "$1")
+    local private_key=$(clean_string "$2")
+    local public_key=$(clean_string "$3")
+    local short_id=$(clean_string "$4")
+    local port=$(clean_string "$5")
+    local domain=$(clean_string "$6")
     
     cat << EOF
 {
@@ -221,14 +234,14 @@ EOF
 
 # 生成 Reality + ShadowSocks 配置
 generate_reality_ss_config() {
-    local reality_uuid=$1
-    local private_key=$2
-    local public_key=$3
-    local short_id=$4
-    local reality_port=$5
-    local domain=$6
-    local ss_password=$7
-    local ss_port=$8
+    local reality_uuid=$(clean_string "$1")
+    local private_key=$(clean_string "$2")
+    local public_key=$(clean_string "$3")
+    local short_id=$(clean_string "$4")
+    local reality_port=$(clean_string "$5")
+    local domain=$(clean_string "$6")
+    local ss_password=$(clean_string "$7")
+    local ss_port=$(clean_string "$8")
     
     cat << EOF
 {
@@ -327,8 +340,22 @@ configure_service() {
             log "ERROR" "X25519 密钥生成失败"
             return 1
         fi
-        private_key=$(echo "$keys" | grep "Private key:" | awk '{print $3}')
-        public_key=$(echo "$keys" | grep "Public key:" | awk '{print $3}')
+        # 正确解析 X25519 输出格式
+        private_key=$(clean_string "$(echo "$keys" | sed -n '1p')")
+        public_key=$(clean_string "$(echo "$keys" | sed -n '2p')")
+        
+        # 如果密钥为空，再次尝试不同的解析方法
+        if [[ -z "$private_key" || -z "$public_key" ]]; then
+            private_key=$(clean_string "$(echo "$keys" | grep -E "^[A-Za-z0-9+/=]{44}$" | head -1)")
+            public_key=$(clean_string "$(echo "$keys" | grep -E "^[A-Za-z0-9+/=]{44}$" | tail -1)")
+        fi
+        
+        # 最终验证密钥是否有效
+        if [[ -z "$private_key" || -z "$public_key" ]]; then
+            log "ERROR" "X25519 密钥解析失败"
+            log "DEBUG" "原始输出: $keys"
+            return 1
+        fi
     fi
     
     local short_id
@@ -339,8 +366,10 @@ configure_service() {
         short_id=$(generate_shortid)
     fi
     
-    local domain=$(select_domain)
-    if [[ -z "$domain" ]]; then
+    local domain
+    domain=$(select_domain)
+    if [[ $? -ne 0 || -z "$domain" ]]; then
+        log "ERROR" "域名选择失败，无法继续配置"
         return 1
     fi
     
