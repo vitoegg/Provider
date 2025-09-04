@@ -668,14 +668,8 @@ generate_config_params() {
         fi
         
         if [[ -z "$REALITY_DOMAIN" ]]; then
-            if [[ "$INSTALL_REALITY" == true && "$INSTALL_SS" == false ]]; then
-                # Interactive mode for Reality-only installation
-                REALITY_DOMAIN=$(select_domain)
-            else
-                # Auto-select for batch installation
-                local random_index=$((RANDOM % ${#PRESET_DOMAINS[@]}))
-                REALITY_DOMAIN="${PRESET_DOMAINS[$random_index]}"
-            fi
+            # Always use interactive mode when domain is not specified
+            REALITY_DOMAIN=$(select_domain)
         fi
     fi
     
@@ -928,6 +922,9 @@ show_configuration() {
         echo -e "${BOLD}Reality Configuration:${NC}"
         printf "%-25s %s\n" "Reality Port:" "$REALITY_PORT"
         printf "%-25s %s\n" "UUID:" "$REALITY_UUID"
+        if [[ -n "$REALITY_PRIVATE_KEY" ]]; then
+            printf "%-25s %s\n" "PrivateKey:" "$REALITY_PRIVATE_KEY"
+        fi
         if [[ -n "$REALITY_PUBLIC_KEY" ]]; then
             printf "%-25s %s\n" "PublicKey:" "$REALITY_PUBLIC_KEY"
         fi
