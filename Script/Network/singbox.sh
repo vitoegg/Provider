@@ -628,11 +628,11 @@ generate_short_id() {
 # Interactive domain selection
 ################################################################################
 select_domain() {
-    echo "Available domains for Reality:"
+    echo "Available domains for Reality:" >&2
     for i in "${!PRESET_DOMAINS[@]}"; do
-        echo "  $((i+1)). ${PRESET_DOMAINS[$i]}"
+        echo "  $((i+1)). ${PRESET_DOMAINS[$i]}" >&2
     done
-    echo ""  # Add blank line for better readability
+    echo "" >&2  # Add blank line for better readability
     
     while true; do
         read -p "Please select a domain (1-${#PRESET_DOMAINS[@]}): " choice
@@ -641,7 +641,7 @@ select_domain() {
             echo "$selected_domain"
             break
         else
-            echo "Invalid choice. Please enter a number between 1 and ${#PRESET_DOMAINS[@]}."
+            echo "Invalid choice. Please enter a number between 1 and ${#PRESET_DOMAINS[@]}." >&2
         fi
     done
 }
