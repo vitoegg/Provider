@@ -153,6 +153,12 @@ parse_args() {
                 uninstall_requested=true
                 shift
                 ;;
+            --force-reinstall)
+                log_info "Force reinstall requested - will uninstall first"
+                uninstall_service
+                # Continue with installation after uninstall
+                shift
+                ;;
             --update)
                 detect_arch
                 update_singbox
@@ -227,6 +233,7 @@ show_usage() {
     echo "Other Options:"
     echo "  --update                Update sing-box to latest version (preserves configuration)"
     echo "  --uninstall             Uninstall sing-box service and remove configuration"
+    echo "  --force-reinstall       Force uninstall and then reinstall (useful for switching protocols)"
     echo "  -h, --help              Show this help message"
     echo ""
     echo "Smart Detection:"
@@ -250,6 +257,9 @@ show_usage() {
     echo ""
     echo "  # Uninstall"
     echo "  $0 --uninstall"
+    echo ""
+    echo "  # Force reinstall (useful when switching from anytls to reality)"
+    echo "  $0 --force-reinstall --reality-port 58568 --reality-domain www.apple.com"
 }
 
 ################################################################################
@@ -566,8 +576,15 @@ install_singbox() {
     # Check if sing-box is already installed and running
     if systemctl is-active --quiet sing-box 2>/dev/null; then
         log_warning "sing-box service is already installed and running."
-        log_warning "If you want to reinstall, please uninstall first."
-        return 0
+        log_warning "Stopping service and cleaning configuration for fresh install..."
+        
+        # Stop service and clean configuration for fresh install
+        systemctl stop sing-box >/dev/null 2>&1
+        clean_sing_box_config
+    elif command -v sing-box >/dev/null 2>&1; then
+        # sing-box is installed but service is not running - clean config anyway
+        log_info "Found existing sing-box installation, cleaning old configuration..."
+        clean_sing_box_config
     fi
     
     # Get latest version
@@ -715,10 +732,47 @@ generate_config_params() {
 }
 
 ################################################################################
+# Clean sing-box configuration and related files
+################################################################################
+clean_sing_box_config() {
+    log_info "Cleaning existing sing-box configuration..."
+    
+    # Remove configuration directory and all its contents
+    if [[ -d "/etc/sing-box" ]]; then
+        rm -rf "/etc/sing-box" >/dev/null 2>&1
+        log_info "Removed configuration directory: /etc/sing-box"
+    fi
+    
+    # Remove any cached or temporary configuration files
+    local temp_configs=(
+        "/tmp/sing-box-config-backup.json"
+        "/var/lib/sing-box"
+        "/var/cache/sing-box"
+        "/run/sing-box"
+    )
+    
+    for config_path in "${temp_configs[@]}"; do
+        if [[ -e "$config_path" ]]; then
+            rm -rf "$config_path" >/dev/null 2>&1
+            log_info "Cleaned: $config_path"
+        fi
+    done
+    
+    # Ensure configuration directory exists with proper permissions
+    mkdir -p "/etc/sing-box" >/dev/null 2>&1
+    chmod 755 "/etc/sing-box" >/dev/null 2>&1
+    
+    log_success "Configuration cleanup completed"
+}
+
+################################################################################
 # Create sing-box configuration
 ################################################################################
 create_singbox_config() {
     print_header "Creating sing-box Configuration"
+    
+    # Ensure clean configuration environment
+    clean_sing_box_config
     
     local config_file="/etc/sing-box/config.json"
     local inbounds="[]"
@@ -814,6 +868,23 @@ create_singbox_config() {
 }
 EOF
     
+    # Set proper permissions for configuration file
+    chmod 644 "$config_file" >/dev/null 2>&1
+    
+    # Validate configuration syntax
+    log_info "Validating configuration syntax..."
+    if command -v sing-box >/dev/null 2>&1; then
+        if sing-box check -c "$config_file" >/dev/null 2>&1; then
+            log_success "Configuration syntax is valid"
+        else
+            log_error "Configuration syntax validation failed!"
+            log_error "Please check the generated configuration at: $config_file"
+            return 1
+        fi
+    else
+        log_warning "sing-box not found in PATH, skipping syntax validation"
+    fi
+    
     log_success "Configuration file created: $config_file"
 }
 
@@ -838,10 +909,26 @@ start_singbox_service() {
     # Wait a moment for service to start
     sleep 2
     
-    # Check service status
+    # Check service status with detailed error reporting
     if ! systemctl is-active --quiet sing-box; then
         log_error "sing-box service failed to start!"
-        log_error "Check logs with: journalctl -u sing-box"
+        
+        # Get detailed error information
+        log_error "Service status:"
+        systemctl status sing-box --no-pager --lines=10
+        
+        log_error "Recent logs:"
+        journalctl -u sing-box --no-pager --lines=20 --since="1 minute ago"
+        
+        log_error "Configuration check:"
+        if [[ -f "/etc/sing-box/config.json" ]]; then
+            sing-box check -c "/etc/sing-box/config.json" 2>&1 | head -10
+        fi
+        
+        log_error "Troubleshooting steps:"
+        log_error "1. Check logs with: journalctl -u sing-box"
+        log_error "2. Validate config with: sing-box check -c /etc/sing-box/config.json"
+        log_error "3. Try force reinstall with: $0 --force-reinstall [your-params]"
         exit 1
     fi
     
@@ -968,16 +1055,20 @@ uninstall_service() {
         log_info "Package is not installed"
     fi
     
-    # Clean up any remaining configuration files
-    log_info "Removing configuration files and directories..."
-    local config_paths=(
-        "/etc/sing-box"
-        "/var/lib/sing-box"
+    # Use the centralized configuration cleanup function
+    clean_sing_box_config
+    
+    # Clean up additional paths that might not be covered by the function
+    log_info "Removing additional configuration files and directories..."
+    local additional_paths=(
         "/var/log/sing-box"
-        "/run/sing-box"
+        "/etc/default/sing-box"
+        "/etc/sing-box.conf"
+        "/home/*/.sing-box"
+        "/root/.sing-box"
     )
     
-    for path in "${config_paths[@]}"; do
+    for path in "${additional_paths[@]}"; do
         if [[ -e "$path" ]]; then
             rm -rf "$path" >/dev/null 2>&1
             log_info "Removed: $path"
@@ -1036,10 +1127,11 @@ show_menu() {
         echo "2. Install Shadowsocks only"
         echo "3. Install both Reality and Shadowsocks"
         echo "4. Update sing-box to latest version"
-        echo "5. Uninstall services"
-        echo "6. Exit"
+        echo "5. Force reinstall (clean install, useful for switching protocols)"
+        echo "6. Uninstall services"
+        echo "7. Exit"
         echo -e "=====================================\n"
-        read -p "Please select an option (1-6): " choice
+        read -p "Please select an option (1-7): " choice
         
         case $choice in
             1)
@@ -1066,10 +1158,41 @@ show_menu() {
                 read -p "Press Enter to continue..."
                 ;;
             5)
+                log_info "Force reinstall selected - will clean install"
                 uninstall_service
+                echo ""
+                log_info "Now select what to install:"
+                echo "1. Reality only"
+                echo "2. Shadowsocks only"
+                echo "3. Both Reality and Shadowsocks"
+                read -p "Please select (1-3): " reinstall_choice
+                case $reinstall_choice in
+                    1)
+                        INSTALL_REALITY=true
+                        INSTALL_SS=false
+                        ;;
+                    2)
+                        INSTALL_REALITY=false
+                        INSTALL_SS=true
+                        ;;
+                    3)
+                        INSTALL_REALITY=true
+                        INSTALL_SS=true
+                        ;;
+                    *)
+                        log_error "Invalid choice, defaulting to Reality only"
+                        INSTALL_REALITY=true
+                        INSTALL_SS=false
+                        ;;
+                esac
+                run_installation
                 exit 0
                 ;;
             6)
+                uninstall_service
+                exit 0
+                ;;
+            7)
                 log_info "Exiting..."
                 exit 0
                 ;;
