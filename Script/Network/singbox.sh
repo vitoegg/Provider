@@ -153,12 +153,6 @@ parse_args() {
                 uninstall_requested=true
                 shift
                 ;;
-            --force-reinstall)
-                log_info "Force reinstall requested - will uninstall first"
-                uninstall_service
-                # Continue with installation after uninstall
-                shift
-                ;;
             --update)
                 detect_arch
                 update_singbox
@@ -225,7 +219,6 @@ show_usage() {
     echo "Other Options:"
     echo "  --update                Update sing-box to latest version (preserves configuration)"
     echo "  --uninstall             Uninstall sing-box service and remove configuration"
-    echo "  --force-reinstall       Force uninstall and then reinstall (useful for switching protocols)"
     echo "  -h, --help              Show this help message"
     echo ""
     echo "Smart Detection:"
@@ -250,8 +243,6 @@ show_usage() {
     echo "  # Uninstall"
     echo "  $0 --uninstall"
     echo ""
-    echo "  # Force reinstall (useful when switching from anytls to reality)"
-    echo "  $0 --force-reinstall --reality-port 58568 --reality-domain www.apple.com"
 }
 
 ################################################################################
@@ -1086,12 +1077,11 @@ show_menu() {
         echo "1. Install Reality only"
         echo "2. Install Shadowsocks only"
         echo "3. Install both Reality and Shadowsocks"
-        echo "4. Update sing-box to latest version"
-        echo "5. Force reinstall (clean install, useful for switching protocols)"
-        echo "6. Uninstall services"
-        echo "7. Exit"
+        echo "4. Update Singbox Service"
+        echo "5. Uninstall Singbox Service"
+        echo "6. Exit Script"
         echo -e "=====================================\n"
-        read -p "Please select an option (1-7): " choice
+        read -p "Please select an option (1-6): " choice
         
         case $choice in
             1)
@@ -1115,44 +1105,13 @@ show_menu() {
             4)
                 detect_arch
                 update_singbox
-                read -p "Press Enter to continue..."
+                exit 0
                 ;;
             5)
-                log_info "Force reinstall selected - will clean install"
                 uninstall_service
-                echo ""
-                log_info "Now select what to install:"
-                echo "1. Reality only"
-                echo "2. Shadowsocks only"
-                echo "3. Both Reality and Shadowsocks"
-                read -p "Please select (1-3): " reinstall_choice
-                case $reinstall_choice in
-                    1)
-                        INSTALL_REALITY=true
-                        INSTALL_SS=false
-                        ;;
-                    2)
-                        INSTALL_REALITY=false
-                        INSTALL_SS=true
-                        ;;
-                    3)
-                        INSTALL_REALITY=true
-                        INSTALL_SS=true
-                        ;;
-                    *)
-                        log_error "Invalid choice, defaulting to Reality only"
-                        INSTALL_REALITY=true
-                        INSTALL_SS=false
-                        ;;
-                esac
-                run_installation
                 exit 0
                 ;;
             6)
-                uninstall_service
-                exit 0
-                ;;
-            7)
                 log_info "Exiting..."
                 exit 0
                 ;;
