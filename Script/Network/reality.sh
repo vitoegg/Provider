@@ -341,13 +341,24 @@ configure_service() {
             return 1
         fi
         # 正确解析 X25519 输出格式
-        private_key=$(clean_string "$(echo "$keys" | sed -n '1p')")
-        public_key=$(clean_string "$(echo "$keys" | sed -n '2p')")
+        # Xray x25519 输出格式：
+        # Private key: YNRNS69_2gKy33J4XcJ1Q2CWjLjKzovvSK4I6So7dWI
+        # Public key: abc123...
         
-        # 如果密钥为空，再次尝试不同的解析方法
+        private_key=$(echo "$keys" | grep "Private key:" | sed 's/Private key: //' | tr -d '\n\r\t' | sed 's/[[:space:]]*$//')
+        public_key=$(echo "$keys" | grep "Public key:" | sed 's/Public key: //' | tr -d '\n\r\t' | sed 's/[[:space:]]*$//')
+        
+        # 如果密钥为空，尝试其他可能的格式
         if [[ -z "$private_key" || -z "$public_key" ]]; then
-            private_key=$(clean_string "$(echo "$keys" | grep -E "^[A-Za-z0-9+/=]{44}$" | head -1)")
-            public_key=$(clean_string "$(echo "$keys" | grep -E "^[A-Za-z0-9+/=]{44}$" | tail -1)")
+            # 尝试直接按行解析（某些版本可能没有标签）
+            private_key=$(clean_string "$(echo "$keys" | sed -n '1p')")
+            public_key=$(clean_string "$(echo "$keys" | sed -n '2p')")
+            
+            # 如果还是为空，尝试正则匹配
+            if [[ -z "$private_key" || -z "$public_key" ]]; then
+                private_key=$(clean_string "$(echo "$keys" | grep -E "^[A-Za-z0-9+/=_-]{44}$" | head -1)")
+                public_key=$(clean_string "$(echo "$keys" | grep -E "^[A-Za-z0-9+/=_-]{44}$" | tail -1)")
+            fi
         fi
         
         # 最终验证密钥是否有效
