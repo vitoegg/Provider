@@ -628,7 +628,7 @@ generate_short_id() {
 # Interactive domain selection
 ################################################################################
 select_domain() {
-    log_info "Available domains for Reality:"
+    echo "Available domains for Reality:"
     for i in "${!PRESET_DOMAINS[@]}"; do
         echo "  $((i+1)). ${PRESET_DOMAINS[$i]}"
     done
@@ -638,7 +638,6 @@ select_domain() {
         read -p "Please select a domain (1-${#PRESET_DOMAINS[@]}): " choice
         if [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le ${#PRESET_DOMAINS[@]} ]]; then
             local selected_domain="${PRESET_DOMAINS[$((choice-1))]}"
-            log_info "Selected Reality domain: $selected_domain"
             echo "$selected_domain"
             break
         else
