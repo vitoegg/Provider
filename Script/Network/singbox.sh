@@ -619,15 +619,18 @@ generate_short_id() {
 # Interactive domain selection
 ################################################################################
 select_domain() {
-    echo "Available domains for Reality:"
+    log_info "Available domains for Reality:"
     for i in "${!PRESET_DOMAINS[@]}"; do
         echo "  $((i+1)). ${PRESET_DOMAINS[$i]}"
     done
+    echo ""  # Add blank line for better readability
     
     while true; do
         read -p "Please select a domain (1-${#PRESET_DOMAINS[@]}): " choice
         if [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le ${#PRESET_DOMAINS[@]} ]]; then
-            echo "${PRESET_DOMAINS[$((choice-1))]}"
+            local selected_domain="${PRESET_DOMAINS[$((choice-1))]}"
+            log_info "Selected Reality domain: $selected_domain"
+            echo "$selected_domain"
             break
         else
             echo "Invalid choice. Please enter a number between 1 and ${#PRESET_DOMAINS[@]}."
@@ -684,8 +687,8 @@ generate_config_params() {
                 # Auto-select for batch installation
                 local random_index=$((RANDOM % ${#PRESET_DOMAINS[@]}))
                 REALITY_DOMAIN="${PRESET_DOMAINS[$random_index]}"
+                log_info "Auto-selected Reality domain: $REALITY_DOMAIN"
             fi
-            log_info "Selected Reality domain: $REALITY_DOMAIN"
         else
             log_info "Using specified Reality domain: $REALITY_DOMAIN"
         fi
