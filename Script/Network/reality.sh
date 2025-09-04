@@ -557,65 +557,15 @@ install_function() {
     log "SUCCESS" "安装完成！"
 }
 
-# 检查版本
-check_version() {
-    log "INFO" "检查 Xray 版本..."
-    
-    local version_info
-    version_info=$(bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ check 2>&1)
-    
-    if [[ $? -eq 0 ]]; then
-        echo "$version_info"
-        
-        # 提取当前版本和最新版本
-        local current_version=$(echo "$version_info" | grep "The current version of Xray is" | sed 's/.*is \(.*\)\./\1/')
-        local latest_version=$(echo "$version_info" | grep "The latest release version of Xray is" | sed 's/.*is \(.*\)\./\1/')
-        
-        if [[ "$current_version" != "$latest_version" ]]; then
-            log "INFO" "发现新版本: $latest_version (当前版本: $current_version)"
-            return 1  # 需要更新
-        else
-            log "SUCCESS" "已是最新版本: $current_version"
-            return 0  # 无需更新
-        fi
-    else
-        log "ERROR" "版本检查失败"
-        return 2  # 检查失败
-    fi
-}
-
 # 更新功能
 update_function() {
-    log "INFO" "开始更新检查..."
+    log "INFO" "开始更新 Xray..."
     
-    check_version
-    local check_result=$?
-    
-    if [[ $check_result -eq 1 ]]; then
-        # 发现新版本，直接更新
-        log "INFO" "发现新版本，开始更新 Xray..."
-        
-        if bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install --without-geodata; then
-            log "SUCCESS" "Xray 更新成功"
-            
-            # 重启服务
-            if restart_service; then
-                log "SUCCESS" "更新完成！"
-            else
-                log "ERROR" "服务重启失败，请检查配置"
-                return 1
-            fi
-        else
-            log "ERROR" "Xray 更新失败"
-            return 1
-        fi
-    elif [[ $check_result -eq 0 ]]; then
-        # 已是最新版本
-        log "INFO" "当前已是最新版本，无需更新"
-        return 0
+    # 执行更新命令（会自动检查版本并更新）
+    if bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ check; then
+        log "SUCCESS" "Xray 更新完成"
     else
-        log "ERROR" "版本检查失败，无法进行更新"
-        return 1
+        log "ERROR" "Xray 更新失败"
     fi
 }
 
