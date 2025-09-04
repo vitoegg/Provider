@@ -400,10 +400,10 @@ compare_versions() {
 }
 
 ################################################################################
-# Update sing-box to the latest version while preserving configuration
+# Update sing-box to the latest version using binary replacement (optimized)
 ################################################################################
 update_singbox() {
-    print_header "Updating sing-box"
+    print_header "Updating sing-box (Binary Replacement)"
     
     # Check if sing-box is installed
     if ! command -v sing-box >/dev/null 2>&1; then
@@ -448,21 +448,6 @@ update_singbox() {
             ;;
     esac
     
-    # Backup current configuration
-    local config_backup="/tmp/sing-box-config-backup.json"
-    if [[ -f "/etc/sing-box/config.json" ]]; then
-        log_info "Backing up current configuration..."
-        cp "/etc/sing-box/config.json" "$config_backup"
-        if [[ $? -eq 0 ]]; then
-            log_success "Configuration backed up to: $config_backup"
-        else
-            log_error "Failed to backup configuration"
-            return 1
-        fi
-    else
-        log_warning "No existing configuration found to backup"
-    fi
-    
     # Stop sing-box service
     local service_was_running=false
     if systemctl is-active --quiet sing-box 2>/dev/null; then
@@ -475,13 +460,27 @@ update_singbox() {
         log_success "Service stopped"
     fi
     
-    # Download and install new version
-    local download_url="https://github.com/SagerNet/sing-box/releases/download/${latest_version}/sing-box_${latest_version#v}_linux_${ARCH}.deb"
-    local temp_file="/tmp/sing-box-update.deb"
+    # Backup current binary
+    local binary_backup="/tmp/sing-box-binary-backup"
+    if [[ -f "/usr/bin/sing-box" ]]; then
+        log_info "Backing up current binary..."
+        cp "/usr/bin/sing-box" "$binary_backup"
+        if [[ $? -eq 0 ]]; then
+            log_success "Binary backed up to: $binary_backup"
+        else
+            log_error "Failed to backup binary"
+            return 1
+        fi
+    fi
     
-    log_info "Downloading sing-box $latest_version..."
+    # Download binary archive
+    local download_url="https://github.com/SagerNet/sing-box/releases/download/${latest_version}/sing-box-${latest_version#v}-linux-${ARCH}.tar.gz"
+    local temp_archive="/tmp/sing-box-update.tar.gz"
+    local temp_dir="/tmp/sing-box-update"
+    
+    log_info "Downloading sing-box binary $latest_version..."
     log_info "Download URL: $download_url"
-    if ! wget --no-check-certificate -q -O "$temp_file" "$download_url"; then
+    if ! wget --no-check-certificate -q -O "$temp_archive" "$download_url"; then
         log_error "Failed to download sing-box from: $download_url"
         # Restore service if it was running
         if [[ "$service_was_running" == true ]]; then
@@ -490,32 +489,56 @@ update_singbox() {
         return 1
     fi
     
-    log_info "Installing updated sing-box package..."
-    if ! DEBIAN_FRONTEND=noninteractive dpkg -i "$temp_file" >/dev/null 2>&1; then
-        log_error "Failed to install updated sing-box package"
+    # Extract and replace binary
+    log_info "Extracting and installing binary..."
+    mkdir -p "$temp_dir" >/dev/null 2>&1
+    if ! tar -xzf "$temp_archive" -C "$temp_dir" >/dev/null 2>&1; then
+        log_error "Failed to extract sing-box archive"
         # Clean up and restore service
-        rm -f "$temp_file"
+        rm -rf "$temp_archive" "$temp_dir"
         if [[ "$service_was_running" == true ]]; then
             systemctl start sing-box >/dev/null 2>&1
         fi
         return 1
     fi
     
-    # Clean up download file
-    rm -f "$temp_file"
-    
-    # Restore configuration
-    if [[ -f "$config_backup" ]]; then
-        log_info "Restoring configuration..."
-        cp "$config_backup" "/etc/sing-box/config.json"
-        if [[ $? -eq 0 ]]; then
-            log_success "Configuration restored"
-            rm -f "$config_backup"
-        else
-            log_error "Failed to restore configuration from backup"
-            log_warning "Backup file preserved at: $config_backup"
+    # Find and install the binary
+    local binary_file
+    binary_file=$(find "$temp_dir" -name "sing-box" -type f | head -n1)
+    if [[ -z "$binary_file" ]]; then
+        log_error "sing-box binary not found in archive"
+        # Clean up and restore service
+        rm -rf "$temp_archive" "$temp_dir"
+        if [[ "$service_was_running" == true ]]; then
+            systemctl start sing-box >/dev/null 2>&1
         fi
+        return 1
     fi
+    
+    # Replace binary
+    log_info "Replacing sing-box binary..."
+    if ! cp "$binary_file" "/usr/bin/sing-box"; then
+        log_error "Failed to replace sing-box binary"
+        # Restore backup if available
+        if [[ -f "$binary_backup" ]]; then
+            cp "$binary_backup" "/usr/bin/sing-box"
+            log_warning "Restored original binary from backup"
+        fi
+        # Clean up and restore service
+        rm -rf "$temp_archive" "$temp_dir"
+        if [[ "$service_was_running" == true ]]; then
+            systemctl start sing-box >/dev/null 2>&1
+        fi
+        return 1
+    fi
+    
+    # Set proper permissions
+    chmod +x "/usr/bin/sing-box" >/dev/null 2>&1
+    log_success "Binary replaced successfully"
+    
+    # Clean up temporary files
+    rm -rf "$temp_archive" "$temp_dir" "$binary_backup"
+    log_info "Cleaned up temporary files"
     
     # Restart service if it was running
     if [[ "$service_was_running" == true ]]; then
@@ -541,6 +564,7 @@ update_singbox() {
     new_version=$(get_current_version)
     if [[ "$new_version" == "${latest_version#v}" ]]; then
         log_success "sing-box successfully updated to version $new_version"
+        log_info "Update method: Binary replacement (faster and more efficient)"
         return 0
     else
         log_error "Update verification failed. Expected: ${latest_version#v}, Got: $new_version"
