@@ -1,7 +1,7 @@
 #!/bin/bash
 ################################################################################
 # Unified Shadowsocks Installation Script
-# This script installs and manages Reality and SS2022 services using sing-box.
+# This script installs and manages ShadowTLS and SS2022 services using sing-box.
 # It supports selective installation and provides friendly output messages.
 ################################################################################
 
@@ -14,16 +14,17 @@ NC='\033[0m'     # No Color
 BOLD='\033[1m'
 
 # Default port ranges
-DEFAULT_REALITY_PORT_START=50000
-DEFAULT_REALITY_PORT_END=60000
+DEFAULT_TLS_PORT_START=50000
+DEFAULT_TLS_PORT_END=60000
 DEFAULT_SS_PORT_START=20000
 DEFAULT_SS_PORT_END=40000
 
-# Preset domains for Reality
+# Preset domains for ShadowTLS
 PRESET_DOMAINS=(
-    "www.1991991.xyz"
-    "blog.hypai.org"
-    "buylite.tv.apple.com"
+    "publicassets.cdn-apple.com"
+    "s0.awsstatic.com"
+    "p11.douyinpic.com"
+    "sns-video-hw.xhscdn.com"
 )
 
 ################################################################################
@@ -74,56 +75,44 @@ trap cleanup_temp_files EXIT
 ################################################################################
 # Global variables for configuration
 ################################################################################
-INSTALL_REALITY=false
+INSTALL_SHADOWTLS=false
 INSTALL_SS=false
-REALITY_PORT=""
-REALITY_UUID=""
-REALITY_PRIVATE_KEY=""
-REALITY_PUBLIC_KEY=""
-REALITY_SHORT_ID=""
-REALITY_DOMAIN=""
+TLS_PORT=""
+TLS_PASSWORD=""
+SS_PASSWORD=""
 SS_PORT=""
 SS_STANDALONE_PASSWORD=""
+TLS_DOMAIN=""
 
 ################################################################################
 # Command-line arguments parser
 ################################################################################
 parse_args() {
-    local has_reality_params=false
+    local has_shadowtls_params=false
     local has_ss_params=false
     local uninstall_requested=false
     
     while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
-            --reality-port)
-                REALITY_PORT="$2"
-                has_reality_params=true
+            --tls-port)
+                TLS_PORT="$2"
+                has_shadowtls_params=true
                 shift 2
                 ;;
-            --reality-uuid)
-                REALITY_UUID="$2"
-                has_reality_params=true
+            --tls-password)
+                TLS_PASSWORD="$2"
+                has_shadowtls_params=true
                 shift 2
                 ;;
-            --reality-private-key)
-                REALITY_PRIVATE_KEY="$2"
-                has_reality_params=true
+            --tls-domain)
+                TLS_DOMAIN="$2"
+                has_shadowtls_params=true
                 shift 2
                 ;;
-            --reality-public-key)
-                REALITY_PUBLIC_KEY="$2"
-                has_reality_params=true
-                shift 2
-                ;;
-            --reality-short-id)
-                REALITY_SHORT_ID="$2"
-                has_reality_params=true
-                shift 2
-                ;;
-            --reality-domain)
-                REALITY_DOMAIN="$2"
-                has_reality_params=true
+            --ss-password)
+                SS_PASSWORD="$2"
+                has_shadowtls_params=true
                 shift 2
                 ;;
             --ss-port)
@@ -136,8 +125,8 @@ parse_args() {
                 has_ss_params=true
                 shift 2
                 ;;
-            --install-reality)
-                INSTALL_REALITY=true
+            --install-shadowtls)
+                INSTALL_SHADOWTLS=true
                 shift
                 ;;
             --install-ss)
@@ -145,7 +134,7 @@ parse_args() {
                 shift
                 ;;
             --install-both)
-                INSTALL_REALITY=true
+                INSTALL_SHADOWTLS=true
                 INSTALL_SS=true
                 shift
                 ;;
@@ -154,7 +143,6 @@ parse_args() {
                 shift
                 ;;
             --update)
-                detect_arch
                 update_singbox
                 exit $?
                 ;;
@@ -177,21 +165,29 @@ parse_args() {
     fi
     
     # Auto-detect services based on parameters (only if no explicit install flags are set)
-    if [[ "$INSTALL_REALITY" == false && "$INSTALL_SS" == false ]]; then
-        if [[ "$has_reality_params" == true && "$has_ss_params" == true ]]; then
+    if [[ "$INSTALL_SHADOWTLS" == false && "$INSTALL_SS" == false ]]; then
+        log_info "Analyzing parameters for service detection..."
+        log_info "ShadowTLS parameters detected: $has_shadowtls_params"
+        log_info "Shadowsocks parameters detected: $has_ss_params"
+        
+        if [[ "$has_shadowtls_params" == true && "$has_ss_params" == true ]]; then
             # Both types of parameters provided
-            INSTALL_REALITY=true
+            INSTALL_SHADOWTLS=true
             INSTALL_SS=true
-            log_info "Auto-detected both Reality and Shadowsocks installation from parameters"
-        elif [[ "$has_reality_params" == true ]]; then
-            # Only Reality parameters provided
-            INSTALL_REALITY=true
-            log_info "Auto-detected Reality installation from parameters"
+            log_info "Auto-detected both ShadowTLS and Shadowsocks installation from parameters"
+        elif [[ "$has_shadowtls_params" == true ]]; then
+            # Only ShadowTLS parameters provided
+            INSTALL_SHADOWTLS=true
+            log_info "Auto-detected ShadowTLS installation from parameters"
         elif [[ "$has_ss_params" == true ]]; then
             # Only Shadowsocks parameters provided
             INSTALL_SS=true
             log_info "Auto-detected Shadowsocks installation from parameters"
+        else
+            log_info "No service parameters detected, will show interactive menu"
         fi
+    else
+        log_info "Explicit installation flags detected, skipping auto-detection"
     fi
 }
 
@@ -202,47 +198,42 @@ show_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
     echo "Installation Options:"
-    echo "  --install-reality       Install Reality service only"
+    echo "  --install-shadowtls     Install ShadowTLS service only"
     echo "  --install-ss            Install Shadowsocks service only"
-    echo "  --install-both          Install both Reality and Shadowsocks services"
+    echo "  --install-both          Install both ShadowTLS and Shadowsocks services"
     echo ""
     echo "Configuration Options:"
-    echo "  --reality-port PORT     Specify Reality port (50000-60000)"
-    echo "  --reality-uuid UUID     Specify Reality UUID"
-    echo "  --reality-private-key KEY  Specify Reality private key"
-    echo "  --reality-public-key KEY   Specify Reality public key (optional)"
-    echo "  --reality-short-id ID   Specify Reality short ID"
-    echo "  --reality-domain DOMAIN Specify Reality domain"
+    echo "  --tls-port PORT         Specify TLS port (50000-60000)"
+    echo "  --tls-password PASS     Specify TLS password"
+    echo "  --tls-domain DOMAIN     Specify TLS domain"
+    echo "  --ss-password PASS      Specify Shadowsocks password for ShadowTLS"
     echo "  --ss-port PORT          Specify Shadowsocks port (20000-40000)"
     echo "  --ss-standalone-password PASS  Specify standalone Shadowsocks password"
     echo ""
     echo "Other Options:"
-    echo "  --update                Update sing-box to latest version (preserves configuration)"
     echo "  --uninstall             Uninstall sing-box service and remove configuration"
+    echo "  --update                Update sing-box to the latest version"
     echo "  -h, --help              Show this help message"
     echo ""
     echo "Smart Detection:"
     echo "  The script can auto-detect which services to install based on parameters:"
-    echo "  - Reality parameters: --reality-port, --reality-uuid, --reality-domain, etc."
+    echo "  - ShadowTLS parameters: --tls-port, --tls-password, --tls-domain, --ss-password"
     echo "  - Shadowsocks parameters: --ss-port, --ss-standalone-password"
     echo ""
     echo "Examples:"
     echo "  # Explicit installation"
-    echo "  $0 --install-reality --reality-port 58568 --reality-domain www.microsoft.com"
+    echo "  $0 --install-shadowtls --tls-port 58568 --tls-password mypass"
     echo "  $0 --install-ss --ss-port 31606"
     echo "  $0 --install-both"
     echo ""
     echo "  # Auto-detection (recommended)"
-    echo "  $0 --reality-port 58568 --reality-domain www.apple.com"
+    echo "  $0 --tls-port 58568 --tls-password mypass"
     echo "  $0 --ss-port 31606 --ss-standalone-password mypass"
-    echo "  $0 --reality-port 58568 --ss-port 31606"
+    echo "  $0 --tls-port 58568 --ss-port 31606"
     echo ""
-    echo "  # Update"
+    echo "  # Update and Uninstall"
     echo "  $0 --update"
-    echo ""
-    echo "  # Uninstall"
     echo "  $0 --uninstall"
-    echo ""
 }
 
 ################################################################################
@@ -340,67 +331,112 @@ get_ipv4_address() {
 }
 
 ################################################################################
-# Get current installed sing-box version
+# Get current sing-box version
 ################################################################################
 get_current_version() {
     if command -v sing-box >/dev/null 2>&1; then
-        local version_output
-        version_output=$(sing-box version 2>/dev/null | head -n1)
-        if [[ -n "$version_output" ]]; then
-            # Extract version number from output like "sing-box version 1.8.0"
-            echo "$version_output" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1
-        else
-            echo ""
-        fi
+        sing-box version 2>/dev/null | head -n1 | awk '{print $3}' | sed 's/^v//'
     else
         echo ""
     fi
 }
 
 ################################################################################
-# Compare two version strings (only numeric parts)
-# Returns: 0 if equal, 1 if first > second, 2 if first < second
+# Compare two version strings
+# Returns: 0 if equal, 1 if version1 > version2, 2 if version1 < version2
 ################################################################################
 compare_versions() {
     local version1="$1"
     local version2="$2"
     
-    # Remove any non-numeric prefixes (like 'v')
-    version1=$(echo "$version1" | sed 's/^v//')
-    version2=$(echo "$version2" | sed 's/^v//')
+    # Remove 'v' prefix if present
+    version1="${version1#v}"
+    version2="${version2#v}"
     
-    # Extract only numeric version parts (x.y.z format)
-    local v1_clean
-    local v2_clean
-    v1_clean=$(echo "$version1" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
-    v2_clean=$(echo "$version2" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
-    
-    # If either version is empty, handle it
-    if [[ -z "$v1_clean" || -z "$v2_clean" ]]; then
+    if [[ "$version1" == "$version2" ]]; then
         return 0
     fi
     
     # Split versions into arrays
-    IFS='.' read -ra V1 <<< "$v1_clean"
-    IFS='.' read -ra V2 <<< "$v2_clean"
+    IFS='.' read -ra ver1_parts <<< "$version1"
+    IFS='.' read -ra ver2_parts <<< "$version2"
     
     # Compare each part
-    for i in {0..2}; do
-        local num1=${V1[i]:-0}
-        local num2=${V2[i]:-0}
+    local max_parts=$((${#ver1_parts[@]} > ${#ver2_parts[@]} ? ${#ver1_parts[@]} : ${#ver2_parts[@]}))
+    
+    for ((i=0; i<max_parts; i++)); do
+        local part1=${ver1_parts[i]:-0}
+        local part2=${ver2_parts[i]:-0}
         
-        if (( num1 > num2 )); then
-            return 1  # version1 > version2
-        elif (( num1 < num2 )); then
-            return 2  # version1 < version2
+        # Extract numeric part (handle pre-release versions)
+        part1=$(echo "$part1" | sed 's/[^0-9].*//')
+        part2=$(echo "$part2" | sed 's/[^0-9].*//')
+        
+        if [[ $part1 -gt $part2 ]]; then
+            return 1
+        elif [[ $part1 -lt $part2 ]]; then
+            return 2
         fi
     done
     
-    return 0  # versions are equal
+    return 0
+}
+
+
+
+################################################################################
+# Download and install sing-box
+################################################################################
+install_singbox() {
+    print_header "Installing sing-box"
+    
+    # Check if sing-box is already installed and running
+    if systemctl is-active --quiet sing-box 2>/dev/null; then
+        log_warning "sing-box service is already installed and running."
+        log_warning "If you want to reinstall, please uninstall first."
+        return 0
+    fi
+    
+    # Get latest version
+    local latest_version
+    latest_version=$(wget -qO- --timeout=10 --tries=3 https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null | jq -r .tag_name)
+    if [[ -z "$latest_version" ]]; then
+        log_error "Failed to retrieve sing-box release version"
+        exit 1
+    fi
+    
+    log_info "Installing sing-box version: $latest_version"
+    
+    # Download .deb package
+    local download_url="https://github.com/SagerNet/sing-box/releases/download/${latest_version}/sing-box_${latest_version#v}_linux_${ARCH}.deb"
+    local temp_file="/tmp/sing-box.deb"
+    
+    log_info "Download URL: $download_url"
+    log_info "Downloading sing-box package..."
+    if ! wget --no-check-certificate -q -O "$temp_file" "$download_url"; then
+        log_error "Failed to download sing-box from: $download_url"
+        log_error "Please check if the URL is correct and accessible"
+        exit 1
+    fi
+    
+    # Install package
+    log_info "Installing sing-box package..."
+    if ! DEBIAN_FRONTEND=noninteractive dpkg -i "$temp_file" >/dev/null 2>&1; then
+        log_error "Failed to install sing-box package!"
+        # Clean up on failure
+        rm -f "$temp_file"
+        exit 1
+    fi
+    
+    # Clean up temporary file
+    rm -f "$temp_file"
+    log_info "Cleaned up temporary files"
+    
+    log_success "sing-box installation completed"
 }
 
 ################################################################################
-# Update sing-box to the latest version using binary replacement (optimized)
+# Update sing-box (Binary Replacement)
 ################################################################################
 update_singbox() {
     print_header "Updating sing-box (Binary Replacement)"
@@ -572,128 +608,41 @@ update_singbox() {
     fi
 }
 
-
-
-################################################################################
-# Download and install sing-box
-################################################################################
-install_singbox() {
-    print_header "Installing sing-box"
-    
-    # Check if sing-box is already installed and running
-    if systemctl is-active --quiet sing-box 2>/dev/null; then
-        log_warning "sing-box service is already installed and running."
-        log_warning "Stopping service and cleaning configuration for fresh install..."
-        
-        # Stop service and clean configuration for fresh install
-        systemctl stop sing-box >/dev/null 2>&1
-        clean_sing_box_config
-    elif command -v sing-box >/dev/null 2>&1; then
-        # sing-box is installed but service is not running - clean config anyway
-        log_info "Found existing sing-box installation, cleaning old configuration..."
-        clean_sing_box_config
-    fi
-    
-    # Get latest version
-    local latest_version
-    latest_version=$(wget -qO- --timeout=10 --tries=3 https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null | jq -r .tag_name)
-    if [[ -z "$latest_version" ]]; then
-        log_error "Failed to retrieve sing-box release version"
-        exit 1
-    fi
-    
-    log_info "Installing sing-box version: $latest_version"
-    
-    # Download .deb package
-    local download_url="https://github.com/SagerNet/sing-box/releases/download/${latest_version}/sing-box_${latest_version#v}_linux_${ARCH}.deb"
-    local temp_file="/tmp/sing-box.deb"
-    
-    log_info "Download URL: $download_url"
-    log_info "Downloading sing-box package..."
-    if ! wget --no-check-certificate -q -O "$temp_file" "$download_url"; then
-        log_error "Failed to download sing-box from: $download_url"
-        log_error "Please check if the URL is correct and accessible"
-        exit 1
-    fi
-    
-    # Install package
-    log_info "Installing sing-box package..."
-    if ! DEBIAN_FRONTEND=noninteractive dpkg -i "$temp_file" >/dev/null 2>&1; then
-        log_error "Failed to install sing-box package!"
-        # Clean up on failure
-        rm -f "$temp_file"
-        exit 1
-    fi
-    
-    # Clean up temporary file
-    rm -f "$temp_file"
-    log_info "Cleaned up temporary files"
-    
-    log_success "sing-box installation completed"
-}
-
-################################################################################
-# Generate 8-character hex string for short_id
-################################################################################
-generate_short_id() {
-    printf "%08x" $((RANDOM * RANDOM))
-}
-
-################################################################################
-# Interactive domain selection
-################################################################################
-select_domain() {
-    echo "Available domains for Reality:" >&2
-    for i in "${!PRESET_DOMAINS[@]}"; do
-        echo "  $((i+1)). ${PRESET_DOMAINS[$i]}" >&2
-    done
-    echo "" >&2  # Add blank line for better readability
-    
-    while true; do
-        read -p "Please select a domain (1-${#PRESET_DOMAINS[@]}): " choice
-        if [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le ${#PRESET_DOMAINS[@]} ]]; then
-            local selected_domain="${PRESET_DOMAINS[$((choice-1))]}"
-            echo "$selected_domain"
-            break
-        else
-            echo "Invalid choice. Please enter a number between 1 and ${#PRESET_DOMAINS[@]}." >&2
-        fi
-    done
-}
-
-
 ################################################################################
 # Generate configuration parameters
 ################################################################################
 generate_config_params() {
     print_header "Generating Configuration Parameters"
     
-    # Generate Reality parameters if needed
-    if [[ "$INSTALL_REALITY" == true ]]; then
-        if [[ -z "$REALITY_PORT" ]]; then
-            REALITY_PORT=$(generate_port "$DEFAULT_REALITY_PORT_START" "$DEFAULT_REALITY_PORT_END")
+    # Generate ShadowTLS parameters if needed
+    if [[ "$INSTALL_SHADOWTLS" == true ]]; then
+        if [[ -z "$TLS_PORT" ]]; then
+            TLS_PORT=$(generate_port "$DEFAULT_TLS_PORT_START" "$DEFAULT_TLS_PORT_END")
+            log_info "Generated TLS port: $TLS_PORT"
+        else
+            log_info "Using specified TLS port: $TLS_PORT"
         fi
         
-        if [[ -z "$REALITY_UUID" ]]; then
-            REALITY_UUID=$(sing-box generate uuid)
+        if [[ -z "$TLS_PASSWORD" ]]; then
+            TLS_PASSWORD=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
+            log_info "Generated TLS password"
+        else
+            log_info "Using specified TLS password"
         fi
         
-        if [[ -z "$REALITY_PRIVATE_KEY" ]]; then
-            local keypair_output
-            keypair_output=$(sing-box generate reality-keypair)
-            REALITY_PRIVATE_KEY=$(echo "$keypair_output" | grep "PrivateKey:" | awk '{print $2}')
-            if [[ -z "$REALITY_PUBLIC_KEY" ]]; then
-                REALITY_PUBLIC_KEY=$(echo "$keypair_output" | grep "PublicKey:" | awk '{print $2}')
-            fi
+        if [[ -z "$TLS_DOMAIN" ]]; then
+            local random_index=$((RANDOM % ${#PRESET_DOMAINS[@]}))
+            TLS_DOMAIN="${PRESET_DOMAINS[$random_index]}"
+            log_info "Selected TLS domain: $TLS_DOMAIN"
+        else
+            log_info "Using specified TLS domain: $TLS_DOMAIN"
         fi
         
-        if [[ -z "$REALITY_SHORT_ID" ]]; then
-            REALITY_SHORT_ID=$(generate_short_id)
-        fi
-        
-        if [[ -z "$REALITY_DOMAIN" ]]; then
-            # Always use interactive mode when domain is not specified
-            REALITY_DOMAIN=$(select_domain)
+        if [[ -z "$SS_PASSWORD" ]]; then
+            SS_PASSWORD=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
+            log_info "Generated Shadowsocks password for ShadowTLS"
+        else
+            log_info "Using specified Shadowsocks password for ShadowTLS"
         fi
     fi
     
@@ -701,10 +650,16 @@ generate_config_params() {
     if [[ "$INSTALL_SS" == true ]]; then
         if [[ -z "$SS_PORT" ]]; then
             SS_PORT=$(generate_port "$DEFAULT_SS_PORT_START" "$DEFAULT_SS_PORT_END")
+            log_info "Generated Shadowsocks port: $SS_PORT"
+        else
+            log_info "Using specified Shadowsocks port: $SS_PORT"
         fi
         
         if [[ -z "$SS_STANDALONE_PASSWORD" ]]; then
             SS_STANDALONE_PASSWORD=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
+            log_info "Generated Shadowsocks password"
+        else
+            log_info "Using specified Shadowsocks password"
         fi
     fi
     
@@ -712,7 +667,178 @@ generate_config_params() {
 }
 
 ################################################################################
-# Clean sing-box configuration and related files
+# Create sing-box configuration
+################################################################################
+create_singbox_config() {
+    print_header "Creating sing-box Configuration"
+    
+    # Clean existing configuration before creating new one
+    clean_sing_box_config
+    
+    local config_file="/etc/sing-box/config.json"
+    local inbounds="[]"
+    
+    # Build inbounds array
+    if [[ "$INSTALL_SHADOWTLS" == true && "$INSTALL_SS" == true ]]; then
+        # Both services
+        inbounds='[
+    {
+      "type": "shadowtls",
+      "listen": "::",
+      "listen_port": '$TLS_PORT',
+      "version": 3,
+      "users": [
+        {
+          "name": "Cloud",
+          "password": "'$TLS_PASSWORD'"
+        }
+      ],
+      "handshake": {
+        "server": "'$TLS_DOMAIN'",
+        "server_port": 443
+      },
+      "detour": "shadowsocks-in"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "shadowsocks-in",
+      "listen": "127.0.0.1",
+      "method": "aes-128-gcm",
+      "password": "'$SS_PASSWORD'"
+    },
+    {
+      "type": "shadowsocks",
+      "listen": "::",
+      "listen_port": '$SS_PORT',
+      "method": "aes-128-gcm",
+      "password": "'$SS_STANDALONE_PASSWORD'"
+    }
+  ]'
+    elif [[ "$INSTALL_SHADOWTLS" == true ]]; then
+        # ShadowTLS only
+        inbounds='[
+    {
+      "type": "shadowtls",
+      "listen": "::",
+      "listen_port": '$TLS_PORT',
+      "version": 3,
+      "users": [
+        {
+          "name": "Cloud",
+          "password": "'$TLS_PASSWORD'"
+        }
+      ],
+      "handshake": {
+        "server": "'$TLS_DOMAIN'",
+        "server_port": 443
+      },
+      "detour": "shadowsocks-in"
+    },
+    {
+      "type": "shadowsocks",
+      "tag": "shadowsocks-in",
+      "listen": "127.0.0.1",
+      "method": "aes-128-gcm",
+      "password": "'$SS_PASSWORD'"
+    }
+  ]'
+    elif [[ "$INSTALL_SS" == true ]]; then
+        # Shadowsocks only
+        inbounds='[
+    {
+      "type": "shadowsocks",
+      "listen": "::",
+      "listen_port": '$SS_PORT',
+      "method": "aes-128-gcm",
+      "password": "'$SS_STANDALONE_PASSWORD'"
+    }
+  ]'
+    fi
+    
+    # Create configuration file
+    cat > "$config_file" << EOF
+{
+  "log": {
+    "disabled": true
+  },
+  "inbounds": $inbounds
+}
+EOF
+    
+    log_success "Configuration file created: $config_file"
+}
+
+################################################################################
+# Start and enable sing-box service
+################################################################################
+start_singbox_service() {
+    print_header "Starting sing-box Service"
+    
+    log_info "Enabling sing-box service..."
+    if ! systemctl enable sing-box >/dev/null 2>&1; then
+        log_error "Failed to enable sing-box service"
+        exit 1
+    fi
+    
+    log_info "Starting sing-box service..."
+    if ! systemctl start sing-box >/dev/null 2>&1; then
+        log_error "Failed to start sing-box service"
+        exit 1
+    fi
+    
+    # Wait a moment for service to start
+    sleep 2
+    
+    # Check service status
+    if ! systemctl is-active --quiet sing-box; then
+        log_error "sing-box service failed to start!"
+        log_error "Check logs with: journalctl -u sing-box"
+        exit 1
+    fi
+    
+    log_success "sing-box service started successfully"
+}
+
+################################################################################
+# Display configuration information
+################################################################################
+show_configuration() {
+    print_header "Installation Status"
+    echo "------------------------------------"
+    echo -e "${BOLD}sing-box Service Status:${NC}"
+    systemctl status sing-box --no-pager
+    echo "------------------------------------"
+
+    print_header "Configuration Details"
+    local server_ip
+    server_ip=$(get_ipv4_address)
+    
+    printf "%-25s %s\n" "Server IP:" "$server_ip"
+    
+    if [[ "$INSTALL_SHADOWTLS" == true ]]; then
+        echo ""
+        echo -e "${BOLD}ShadowTLS Configuration:${NC}"
+        printf "%-25s %s\n" "TLS Port:" "$TLS_PORT"
+        printf "%-25s %s\n" "TLS Password:" "$TLS_PASSWORD"
+        printf "%-25s %s\n" "TLS Domain:" "$TLS_DOMAIN"
+        printf "%-25s %s\n" "SS Password:" "$SS_PASSWORD"
+        printf "%-25s %s\n" "SS Method:" "aes-128-gcm"
+    fi
+    
+    if [[ "$INSTALL_SS" == true ]]; then
+        echo ""
+        echo -e "${BOLD}Shadowsocks Configuration:${NC}"
+        printf "%-25s %s\n" "SS Port:" "$SS_PORT"
+        printf "%-25s %s\n" "SS Password:" "$SS_STANDALONE_PASSWORD"
+        printf "%-25s %s\n" "SS Method:" "aes-128-gcm"
+    fi
+    
+    echo "=================================="
+    echo ""
+}
+
+################################################################################
+# Clean sing-box configuration files and directories
 ################################################################################
 clean_sing_box_config() {
     log_info "Cleaning existing sing-box configuration..."
@@ -744,230 +870,6 @@ clean_sing_box_config() {
     
     log_success "Configuration cleanup completed"
 }
-
-################################################################################
-# Create sing-box configuration
-################################################################################
-create_singbox_config() {
-    print_header "Creating sing-box Configuration"
-    
-    # Ensure clean configuration environment
-    clean_sing_box_config
-    
-    local config_file="/etc/sing-box/config.json"
-    
-    # Sanitize variables to prevent JSON injection and newline issues
-    local safe_reality_uuid=$(echo "$REALITY_UUID" | tr -d '\n\r' | sed 's/"/\\"/g')
-    local safe_reality_domain=$(echo "$REALITY_DOMAIN" | tr -d '\n\r' | sed 's/"/\\"/g')
-    local safe_reality_private_key=$(echo "$REALITY_PRIVATE_KEY" | tr -d '\n\r' | sed 's/"/\\"/g')
-    local safe_reality_short_id=$(echo "$REALITY_SHORT_ID" | tr -d '\n\r' | sed 's/"/\\"/g')
-    local safe_ss_password=$(echo "$SS_STANDALONE_PASSWORD" | tr -d '\n\r' | sed 's/"/\\"/g')
-    
-    local inbounds_content=""
-    
-    # Build inbounds configuration
-    if [[ "$INSTALL_REALITY" == true && "$INSTALL_SS" == true ]]; then
-        # Both services
-        inbounds_content="[
-    {
-      \"type\": \"vless\",
-      \"listen\": \"::\",
-      \"listen_port\": $REALITY_PORT,
-      \"users\": [
-        {
-          \"uuid\": \"$safe_reality_uuid\",
-          \"flow\": \"xtls-rprx-vision\"
-        }
-      ],
-      \"tls\": {
-        \"enabled\": true,
-        \"server_name\": \"$safe_reality_domain\",
-        \"reality\": {
-          \"enabled\": true,
-          \"handshake\": {
-            \"server\": \"$safe_reality_domain\",
-            \"server_port\": 443
-          },
-          \"private_key\": \"$safe_reality_private_key\",
-          \"short_id\": [
-            \"$safe_reality_short_id\"
-          ]
-        }
-      }
-    },
-    {
-      \"type\": \"shadowsocks\",
-      \"listen\": \"::\",
-      \"listen_port\": $SS_PORT,
-      \"method\": \"aes-128-gcm\",
-      \"password\": \"$safe_ss_password\"
-    }
-  ]"
-    elif [[ "$INSTALL_REALITY" == true ]]; then
-        # Reality only
-        inbounds_content="[
-    {
-      \"type\": \"vless\",
-      \"listen\": \"::\",
-      \"listen_port\": $REALITY_PORT,
-      \"users\": [
-        {
-          \"uuid\": \"$safe_reality_uuid\",
-          \"flow\": \"xtls-rprx-vision\"
-        }
-      ],
-      \"tls\": {
-        \"enabled\": true,
-        \"server_name\": \"$safe_reality_domain\",
-        \"reality\": {
-          \"enabled\": true,
-          \"handshake\": {
-            \"server\": \"$safe_reality_domain\",
-            \"server_port\": 443
-          },
-          \"private_key\": \"$safe_reality_private_key\",
-          \"short_id\": [
-            \"$safe_reality_short_id\"
-          ]
-        }
-      }
-    }
-  ]"
-    elif [[ "$INSTALL_SS" == true ]]; then
-        # Shadowsocks only
-        inbounds_content="[
-    {
-      \"type\": \"shadowsocks\",
-      \"listen\": \"::\",
-      \"listen_port\": $SS_PORT,
-      \"method\": \"aes-128-gcm\",
-      \"password\": \"$safe_ss_password\"
-    }
-  ]"
-    else
-        inbounds_content="[]"
-    fi
-    
-    # Create configuration file
-    cat > "$config_file" << EOF
-{
-  "log": {
-    "disabled": true
-  },
-  "inbounds": $inbounds_content
-}
-EOF
-    
-    # Set proper permissions for configuration file
-    chmod 644 "$config_file" >/dev/null 2>&1
-    
-    # Validate configuration syntax
-    log_info "Validating configuration syntax..."
-    if command -v sing-box >/dev/null 2>&1; then
-        if sing-box check -c "$config_file" >/dev/null 2>&1; then
-            log_success "Configuration syntax is valid"
-        else
-            log_error "Configuration syntax validation failed!"
-            log_error "Please check the generated configuration at: $config_file"
-            return 1
-        fi
-    else
-        log_warning "sing-box not found in PATH, skipping syntax validation"
-    fi
-    
-    log_success "Configuration file created: $config_file"
-}
-
-################################################################################
-# Start and enable sing-box service
-################################################################################
-start_singbox_service() {
-    print_header "Starting sing-box Service"
-    
-    log_info "Enabling sing-box service..."
-    if ! systemctl enable sing-box >/dev/null 2>&1; then
-        log_error "Failed to enable sing-box service"
-        exit 1
-    fi
-    
-    log_info "Starting sing-box service..."
-    if ! systemctl start sing-box >/dev/null 2>&1; then
-        log_error "Failed to start sing-box service"
-        exit 1
-    fi
-    
-    # Wait a moment for service to start
-    sleep 2
-    
-    # Check service status with detailed error reporting
-    if ! systemctl is-active --quiet sing-box; then
-        log_error "sing-box service failed to start!"
-        
-        # Get detailed error information
-        log_error "Service status:"
-        systemctl status sing-box --no-pager --lines=10
-        
-        log_error "Recent logs:"
-        journalctl -u sing-box --no-pager --lines=20 --since="1 minute ago"
-        
-        log_error "Configuration check:"
-        if [[ -f "/etc/sing-box/config.json" ]]; then
-            sing-box check -c "/etc/sing-box/config.json" 2>&1 | head -10
-        fi
-        
-        log_error "Troubleshooting steps:"
-        log_error "1. Check logs with: journalctl -u sing-box"
-        log_error "2. Validate config with: sing-box check -c /etc/sing-box/config.json"
-        log_error "3. Try force reinstall with: $0 --force-reinstall [your-params]"
-        exit 1
-    fi
-    
-    log_success "sing-box service started successfully"
-}
-
-################################################################################
-# Display configuration information
-################################################################################
-show_configuration() {
-    print_header "Installation Status"
-    echo "------------------------------------"
-    echo -e "${BOLD}sing-box Service Status:${NC}"
-    systemctl status sing-box --no-pager
-    echo "------------------------------------"
-
-    print_header "Configuration Details"
-    local server_ip
-    server_ip=$(get_ipv4_address)
-    
-    printf "%-25s %s\n" "Server IP:" "$server_ip"
-    
-    if [[ "$INSTALL_REALITY" == true ]]; then
-        echo ""
-        echo -e "${BOLD}Reality Configuration:${NC}"
-        printf "%-25s %s\n" "Reality Port:" "$REALITY_PORT"
-        printf "%-25s %s\n" "UUID:" "$REALITY_UUID"
-        if [[ -n "$REALITY_PRIVATE_KEY" ]]; then
-            printf "%-25s %s\n" "PrivateKey:" "$REALITY_PRIVATE_KEY"
-        fi
-        if [[ -n "$REALITY_PUBLIC_KEY" ]]; then
-            printf "%-25s %s\n" "PublicKey:" "$REALITY_PUBLIC_KEY"
-        fi
-        printf "%-25s %s\n" "Short ID:" "$REALITY_SHORT_ID"
-        printf "%-25s %s\n" "Domain:" "$REALITY_DOMAIN"
-    fi
-    
-    if [[ "$INSTALL_SS" == true ]]; then
-        echo ""
-        echo -e "${BOLD}Shadowsocks Configuration:${NC}"
-        printf "%-25s %s\n" "SS Port:" "$SS_PORT"
-        printf "%-25s %s\n" "SS Password:" "$SS_STANDALONE_PASSWORD"
-        printf "%-25s %s\n" "SS Method:" "aes-128-gcm"
-    fi
-    
-    echo "=================================="
-    echo ""
-}
-
 
 ################################################################################
 # Uninstall sing-box service
@@ -1095,36 +997,35 @@ show_menu() {
     while true; do
         clear
         print_header "Shadowsocks Unified Installation Script"
-        echo "1. Install Reality only"
+        echo "1. Install ShadowTLS only"
         echo "2. Install Shadowsocks only"
-        echo "3. Install both Reality and Shadowsocks"
-        echo "4. Update Singbox Service"
-        echo "5. Uninstall Singbox Service"
+        echo "3. Install both ShadowTLS and Shadowsocks"
+        echo "4. Update Singbox service"
+        echo "5. Uninstall Singbox service"
         echo "6. Exit Script"
         echo -e "=====================================\n"
         read -p "Please select an option (1-6): " choice
         
         case $choice in
             1)
-                INSTALL_REALITY=true
+                INSTALL_SHADOWTLS=true
                 INSTALL_SS=false
                 run_installation
                 exit 0
                 ;;
             2)
-                INSTALL_REALITY=false
+                INSTALL_SHADOWTLS=false
                 INSTALL_SS=true
                 run_installation
                 exit 0
                 ;;
             3)
-                INSTALL_REALITY=true
+                INSTALL_SHADOWTLS=true
                 INSTALL_SS=true
                 run_installation
                 exit 0
                 ;;
             4)
-                detect_arch
                 update_singbox
                 exit 0
                 ;;
@@ -1156,7 +1057,7 @@ main() {
     parse_args "$@"
     
     # If installation flags are set via command line, run installation
-    if [[ "$INSTALL_REALITY" == true || "$INSTALL_SS" == true ]]; then
+    if [[ "$INSTALL_SHADOWTLS" == true || "$INSTALL_SS" == true ]]; then
         run_installation
     else
         # Show interactive menu
@@ -1164,4 +1065,4 @@ main() {
     fi
 }
 
-main "$@" 
+main "$@"
