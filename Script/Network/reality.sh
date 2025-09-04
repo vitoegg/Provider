@@ -530,28 +530,14 @@ restart_service() {
 
 # 安装功能
 install_function() {
-    log "INFO" "开始安装过程..."
+    local install_type="$1"
     
-    # 选择安装类型
-    local install_type=""
-    if [[ -n "$INSTALL_TYPE" ]]; then
-        install_type="$INSTALL_TYPE"
-    else
-        echo ""
-        echo "请选择安装类型："
-        echo "1) 仅安装 Reality"
-        echo "2) 安装 Reality + ShadowSocks"
-        read -p "请输入选择 (1-2): " choice
-        
-        case $choice in
-            1) install_type="reality_only" ;;
-            2) install_type="reality_ss" ;;
-            *)
-                log "ERROR" "无效选择"
-                return 1
-                ;;
-        esac
+    if [[ -z "$install_type" ]]; then
+        log "ERROR" "安装类型参数缺失"
+        return 1
     fi
+    
+    log "INFO" "开始安装过程..."
     
     # 安装 Xray
     if ! install_xray; then
@@ -606,29 +592,25 @@ update_function() {
     local check_result=$?
     
     if [[ $check_result -eq 1 ]]; then
-        # 发现新版本，询问用户是否更新
-        read -p "是否更新到最新版本？(y/n): " update_choice
+        # 发现新版本，直接更新
+        log "INFO" "发现新版本，开始更新 Xray..."
         
-        if [[ "$update_choice" =~ ^[Yy]$ ]]; then
-            log "INFO" "开始更新 Xray..."
+        if bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install --without-geodata; then
+            log "SUCCESS" "Xray 更新成功"
             
-            if bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install --without-geodata; then
-                log "SUCCESS" "Xray 更新成功"
-                
-                # 重启服务
-                if restart_service; then
-                    log "SUCCESS" "更新完成！"
-                else
-                    log "ERROR" "服务重启失败，请检查配置"
-                fi
+            # 重启服务
+            if restart_service; then
+                log "SUCCESS" "更新完成！"
             else
-                log "ERROR" "Xray 更新失败"
+                log "ERROR" "服务重启失败，请检查配置"
+                return 1
             fi
         else
-            log "INFO" "用户取消更新"
+            log "ERROR" "Xray 更新失败"
+            return 1
         fi
     elif [[ $check_result -eq 0 ]]; then
-        # 已是最新版本，直接退出
+        # 已是最新版本
         log "INFO" "当前已是最新版本，无需更新"
         return 0
     else
@@ -661,10 +643,10 @@ show_menu() {
     echo "=============================================="
     echo "           Reality Xray 管理脚本"
     echo "=============================================="
-    echo "1) 安装"
-    echo "2) 更新"
-    echo "3) 卸载"
-    echo "4) 退出"
+    echo "1) 安装 Reality + ShadowSocks"
+    echo "2) 仅安装 Reality"
+    echo "3) 更新内核"
+    echo "4) 卸载服务"
     echo "=============================================="
 }
 
@@ -821,7 +803,7 @@ main() {
     if [[ -n "$ACTION" ]]; then
         case "$ACTION" in
             "install")
-                install_function
+                install_function "$INSTALL_TYPE"
                 ;;
             "update")
                 update_function
@@ -833,33 +815,35 @@ main() {
         exit 0
     fi
     
-    # 显示菜单循环
-    while true; do
-        show_menu
-        read -p "请选择操作 (1-4): " choice
-        
-        case $choice in
-            1)
-                install_function
-                ;;
-            2)
-                update_function
-                ;;
-            3)
-                uninstall_function
-                ;;
-            4)
-                log "INFO" "退出脚本"
-                exit 0
-                ;;
-            *)
-                log "ERROR" "无效选择，请重新输入"
-                ;;
-        esac
-        
-        echo ""
-        read -p "按任意键继续..." -n 1
-    done
+    # 显示菜单
+    show_menu
+    read -p "请选择操作 (1-4): " choice
+    
+    case $choice in
+        1)
+            log "INFO" "开始安装 Reality + ShadowSocks..."
+            install_function "reality_ss"
+            ;;
+        2)
+            log "INFO" "开始安装 Reality..."
+            install_function "reality_only"
+            ;;
+        3)
+            log "INFO" "开始更新内核..."
+            update_function
+            ;;
+        4)
+            log "INFO" "开始卸载服务..."
+            uninstall_function
+            ;;
+        *)
+            log "ERROR" "无效选择，请输入 1-4"
+            exit 1
+            ;;
+    esac
+    
+    # 操作完成后直接退出
+    exit 0
 }
 
 # 执行主函数
