@@ -83,6 +83,7 @@ SS_PASSWORD=""
 SS_PORT=""
 SS_STANDALONE_PASSWORD=""
 TLS_DOMAIN=""
+SINGBOX_VERSION=""
 
 ################################################################################
 # Command-line arguments parser
@@ -123,6 +124,10 @@ parse_args() {
             --ss-standalone-password)
                 SS_STANDALONE_PASSWORD="$2"
                 has_ss_params=true
+                shift 2
+                ;;
+            --version)
+                SINGBOX_VERSION="$2"
                 shift 2
                 ;;
             --install-shadowtls)
@@ -209,6 +214,7 @@ show_usage() {
     echo "  --ss-password PASS      Specify Shadowsocks password for ShadowTLS"
     echo "  --ss-port PORT          Specify Shadowsocks port (20000-40000)"
     echo "  --ss-standalone-password PASS  Specify standalone Shadowsocks password"
+    echo "  --version VERSION       Specify sing-box version to install (e.g., v1.8.0 or 1.8.0)"
     echo ""
     echo "Other Options:"
     echo "  --uninstall             Uninstall sing-box service and remove configuration"
@@ -230,6 +236,10 @@ show_usage() {
     echo "  $0 --tls-port 58568 --tls-password mypass"
     echo "  $0 --ss-port 31606 --ss-standalone-password mypass"
     echo "  $0 --tls-port 58568 --ss-port 31606"
+    echo ""
+    echo "  # Version specific installation"
+    echo "  $0 --install-ss --version v1.8.0"
+    echo "  $0 --tls-port 58568 --version 1.7.8"
     echo ""
     echo "  # Update and Uninstall"
     echo "  $0 --update"
@@ -397,18 +407,31 @@ install_singbox() {
         return 0
     fi
     
-    # Get latest version
-    local latest_version
-    latest_version=$(wget -qO- --timeout=10 --tries=3 https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null | jq -r .tag_name)
-    if [[ -z "$latest_version" ]]; then
-        log_error "Failed to retrieve sing-box release version"
-        exit 1
+    # Determine version to install
+    local target_version
+    if [[ -n "$SINGBOX_VERSION" ]]; then
+        # Use specified version
+        target_version="$SINGBOX_VERSION"
+        # Ensure version starts with 'v' prefix for consistency
+        if [[ ! "$target_version" =~ ^v ]]; then
+            target_version="v$target_version"
+        fi
+        log_info "Using specified version: $target_version"
+    else
+        # Get latest version online
+        log_info "Fetching latest version from GitHub..."
+        target_version=$(wget -qO- --timeout=10 --tries=3 https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null | jq -r .tag_name)
+        if [[ -z "$target_version" ]]; then
+            log_error "Failed to retrieve sing-box release version"
+            exit 1
+        fi
+        log_info "Latest available version: $target_version"
     fi
     
-    log_info "Installing sing-box version: $latest_version"
+    log_info "Installing sing-box version: $target_version"
     
     # Download .deb package
-    local download_url="https://github.com/SagerNet/sing-box/releases/download/${latest_version}/sing-box_${latest_version#v}_linux_${ARCH}.deb"
+    local download_url="https://github.com/SagerNet/sing-box/releases/download/${target_version}/sing-box_${target_version#v}_linux_${ARCH}.deb"
     local temp_file="/tmp/sing-box.deb"
     
     log_info "Download URL: $download_url"
