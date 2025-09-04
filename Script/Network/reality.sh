@@ -418,13 +418,6 @@ configure_service() {
         reality_port=$(generate_port 50000 60000)
     fi
     
-    log "INFO" "生成的配置信息："
-    log "INFO" "UUID: $uuid"
-    log "INFO" "Private Key: $private_key"
-    log "INFO" "Public Key: $public_key"
-    log "INFO" "Short ID: $short_id"
-    log "INFO" "Domain: $domain"
-    log "INFO" "Reality Port: $reality_port"
     
     # 写入配置文件
     if [[ "$config_type" == "reality_only" ]]; then
@@ -432,18 +425,13 @@ configure_service() {
         generate_reality_config "$uuid" "$private_key" "$public_key" "$short_id" "$reality_port" "$domain" > "$CONFIG_FILE"
         log "SUCCESS" "Reality 配置已写入 $CONFIG_FILE"
         
-        # 输出客户端配置信息
-        echo ""
-        log "SUCCESS" "===== Reality 客户端配置信息 ====="
-        echo "服务器IP: $(curl -s ipinfo.io/ip)"
-        echo "端口: $reality_port"
-        echo "协议: vless"
-        echo "UUID: $uuid"
-        echo "目标域名: $domain"
-        echo "私钥: $private_key"
-        echo "公钥: $public_key"
-        echo "短ID: $short_id"
-        log "SUCCESS" "================================="
+        # 保存配置信息到全局变量，供后续输出使用
+        REALITY_UUID="$uuid"
+        REALITY_PRIVATE_KEY="$private_key"
+        REALITY_PUBLIC_KEY="$public_key"
+        REALITY_SHORT_ID="$short_id"
+        REALITY_PORT="$reality_port"
+        REALITY_DOMAIN="$domain"
         
     elif [[ "$config_type" == "reality_ss" ]]; then
         # Reality + ShadowSocks 配置
@@ -461,36 +449,68 @@ configure_service() {
             ss_port=$(generate_port 20000 30000)
         fi
         
-        log "INFO" "ShadowSocks Password: $ss_password"
-        log "INFO" "ShadowSocks Port: $ss_port"
         
         generate_reality_ss_config "$uuid" "$private_key" "$public_key" "$short_id" "$reality_port" "$domain" "$ss_password" "$ss_port" > "$CONFIG_FILE"
         log "SUCCESS" "Reality + ShadowSocks 配置已写入 $CONFIG_FILE"
         
-        # 输出客户端配置信息
-        echo ""
-        log "SUCCESS" "===== Reality 客户端配置信息 ====="
-        echo "服务器IP: $(curl -s ipinfo.io/ip)"
-        echo "端口: $reality_port"
-        echo "协议: vless"
-        echo "UUID: $uuid"
-        echo "目标域名: $domain"
-        echo "私钥: $private_key"
-        echo "公钥: $public_key"
-        echo "短ID: $short_id"
-        log "SUCCESS" "================================="
-        
-        echo ""
-        log "SUCCESS" "===== ShadowSocks 客户端配置信息 ====="
-        echo "服务器IP: $(curl -s ipinfo.io/ip)"
-        echo "端口: $ss_port"
-        echo "协议: shadowsocks"
-        echo "加密方式: aes-128-gcm"
-        echo "密码: $ss_password"
-        log "SUCCESS" "===================================="
+        # 保存配置信息到全局变量，供后续输出使用
+        REALITY_UUID="$uuid"
+        REALITY_PRIVATE_KEY="$private_key"
+        REALITY_PUBLIC_KEY="$public_key"
+        REALITY_SHORT_ID="$short_id"
+        REALITY_PORT="$reality_port"
+        REALITY_DOMAIN="$domain"
+        SS_PASSWORD_GENERATED="$ss_password"
+        SS_PORT_GENERATED="$ss_port"
     fi
     
     return 0
+}
+
+# 输出客户端配置信息
+output_config_info() {
+    local config_type="$1"
+    local server_ip
+    
+    # 获取服务器IP
+    server_ip=$(curl -s ipinfo.io/ip)
+    
+    if [[ "$config_type" == "reality_only" ]]; then
+        # 仅输出 Reality 配置信息
+        echo ""
+        echo "===== Reality 客户端配置信息 ====="
+        echo "服务器IP: $server_ip"
+        echo "端口: $REALITY_PORT"
+        echo "协议: vless"
+        echo "UUID: $REALITY_UUID"
+        echo "目标域名: $REALITY_DOMAIN"
+        echo "私钥: $REALITY_PRIVATE_KEY"
+        echo "公钥: $REALITY_PUBLIC_KEY"
+        echo "短ID: $REALITY_SHORT_ID"
+        echo "================================="
+        
+    elif [[ "$config_type" == "reality_ss" ]]; then
+        # 输出合并的配置信息（服务器IP只显示一次）
+        echo ""
+        echo "===== 客户端配置信息 ====="
+        echo "服务器IP: $server_ip"
+        echo ""
+        echo "Reality 配置:"
+        echo "  端口: $REALITY_PORT"
+        echo "  协议: vless"
+        echo "  UUID: $REALITY_UUID"
+        echo "  目标域名: $REALITY_DOMAIN"
+        echo "  私钥: $REALITY_PRIVATE_KEY"
+        echo "  公钥: $REALITY_PUBLIC_KEY"
+        echo "  短ID: $REALITY_SHORT_ID"
+        echo ""
+        echo "ShadowSocks 配置:"
+        echo "  端口: $SS_PORT_GENERATED"
+        echo "  协议: shadowsocks"
+        echo "  加密方式: aes-128-gcm"
+        echo "  密码: $SS_PASSWORD_GENERATED"
+        echo "========================="
+    fi
 }
 
 # 重启并检查服务状态
@@ -554,7 +574,9 @@ install_function() {
         return 1
     fi
     
-    log "SUCCESS" "安装完成！"
+    # 输出配置信息
+    output_config_info "$install_type"
+    
 }
 
 # 更新功能
