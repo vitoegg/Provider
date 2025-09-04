@@ -118,6 +118,41 @@ generate_x25519() {
     fi
 }
 
+# 解析 X25519 密钥对输出
+# 输入格式示例：
+# PrivateKey: kIuyOXiZKK7Df55LHWy9NPiDIJaV5tIC11A-ahu_yWI
+# Password: fSAqw6z5z5u_xTSpYeh88vM6uE8er4uu-R8ZZyqUF0A
+# Hash32: NZHORApg6jPiPoLLUVFINMW1OexvcpRZHXZaKHiNQk8
+parse_x25519_keys() {
+    local raw="$1"
+    local private_key=""
+    local public_key=""
+    
+    # 解析私钥
+    private_key=$(echo "$raw" | grep -iE "(private|privatekey)" | awk -F ':' '{print $2}' | tr -d ' \r\n\t' || true)
+    
+    # 解析公钥，优先级：Password优先，然后Public
+    public_key=$(echo "$raw" | grep -iE "password" | awk -F ':' '{print $2}' | tr -d ' \r\n\t' || true)
+    
+    # 如果没有Password字段，尝试Public字段
+    if [[ -z "$public_key" ]]; then
+        public_key=$(echo "$raw" | grep -iE "(public|publickey)" | awk -F ':' '{print $2}' | tr -d ' \r\n\t' || true)
+    fi
+    
+    # 验证密钥是否有效（X25519密钥通常是44字符的Base64编码）
+    if [[ -z "$private_key" || -z "$public_key" ]]; then
+        log "ERROR" "密钥解析失败"
+        log "DEBUG" "原始输出: $raw"
+        log "DEBUG" "解析到的私钥: '$private_key'"
+        log "DEBUG" "解析到的公钥: '$public_key'"
+        return 1
+    fi
+    
+    # 输出解析结果（用特定分隔符分隔）
+    echo "${private_key}|${public_key}"
+    return 0
+}
+
 # 生成 8 位 16 进制 shortId
 generate_shortid() {
     openssl rand -hex 4
@@ -335,50 +370,28 @@ configure_service() {
         public_key="$CUSTOM_PUBLIC_KEY"
         log "INFO" "使用指定的密钥对"
     else
+        # 生成 X25519 密钥对
         local keys=$(generate_x25519)
         if [[ -z "$keys" ]]; then
             log "ERROR" "X25519 密钥生成失败"
             return 1
         fi
-        # 正确解析 X25519 输出格式
-        # Xray x25519 可能的输出格式：
-        # 格式1: Private key: YNRNS69_2gKy33J4XcJ1Q2CWjLjKzovvSK4I6So7dWI
-        # 格式2: PrivateKey: YNRNS69_2gKy33J4XcJ1Q2CWjLjKzovvSK4I6So7dWI
-        # 格式3: PrivateKey:YNRNS69_2gKy33J4XcJ1Q2CWjLjKzovvSK4I6So7dWI
         
-        # 尝试解析私钥 - 支持多种格式
-        private_key=""
-        if echo "$keys" | grep -q "Private key:"; then
-            private_key=$(echo "$keys" | grep "Private key:" | sed 's/Private key: //' | tr -d '\n\r\t' | sed 's/[[:space:]]*$//')
-        elif echo "$keys" | grep -q "PrivateKey:"; then
-            private_key=$(echo "$keys" | grep "PrivateKey:" | sed -E 's/PrivateKey:[[:space:]]*//' | tr -d '\n\r\t' | sed 's/[[:space:]]*$//')
-        fi
-        
-        # 尝试解析公钥 - 支持多种格式
-        public_key=""
-        if echo "$keys" | grep -q "Public key:"; then
-            public_key=$(echo "$keys" | grep "Public key:" | sed 's/Public key: //' | tr -d '\n\r\t' | sed 's/[[:space:]]*$//')
-        elif echo "$keys" | grep -q "PublicKey:"; then
-            public_key=$(echo "$keys" | grep "PublicKey:" | sed -E 's/PublicKey:[[:space:]]*//' | tr -d '\n\r\t' | sed 's/[[:space:]]*$//')
-        fi
-        
-        # 如果密钥为空，尝试其他可能的格式
-        if [[ -z "$private_key" || -z "$public_key" ]]; then
-            # 尝试直接按行解析（某些版本可能没有标签）
-            private_key=$(clean_string "$(echo "$keys" | sed -n '1p')")
-            public_key=$(clean_string "$(echo "$keys" | sed -n '2p')")
-            
-            # 如果还是为空，尝试正则匹配
-            if [[ -z "$private_key" || -z "$public_key" ]]; then
-                private_key=$(clean_string "$(echo "$keys" | grep -E "^[A-Za-z0-9+/=_-]{44}$" | head -1)")
-                public_key=$(clean_string "$(echo "$keys" | grep -E "^[A-Za-z0-9+/=_-]{44}$" | tail -1)")
-            fi
-        fi
-        
-        # 最终验证密钥是否有效
-        if [[ -z "$private_key" || -z "$public_key" ]]; then
+        # 使用新的解析函数解析密钥对
+        local parsed_keys
+        parsed_keys=$(parse_x25519_keys "$keys")
+        if [[ $? -ne 0 || -z "$parsed_keys" ]]; then
             log "ERROR" "X25519 密钥解析失败"
-            log "DEBUG" "原始输出: $keys"
+            return 1
+        fi
+        
+        # 分解解析结果
+        private_key=$(echo "$parsed_keys" | cut -d'|' -f1)
+        public_key=$(echo "$parsed_keys" | cut -d'|' -f2)
+        
+        # 验证解析结果
+        if [[ -z "$private_key" || -z "$public_key" ]]; then
+            log "ERROR" "X25519 密钥解析结果无效"
             return 1
         fi
     fi
