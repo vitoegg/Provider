@@ -147,14 +147,14 @@ select_domain() {
     
     if [[ -n "$DOMAIN" ]]; then
         domain="$DOMAIN"
-        log "INFO" "使用指定域名: $domain"
+        log "INFO" "使用指定域名: $domain" >&2
     else
-        echo ""
-        log "INFO" "请选择一个域名作为 Reality 的目标："
-        get_domain_list
+        echo "" >&2
+        log "INFO" "请选择一个域名作为 Reality 的目标：" >&2
+        get_domain_list >&2
         
         local choice
-        read -p "请输入选择 (1-4): " choice
+        read -p "请输入选择 (1-4): " choice >&2
         
         case $choice in
             1) domain="www.1991991.xyz" ;;
@@ -162,8 +162,7 @@ select_domain() {
             3) domain="blog.hypai.org" ;;
             4) domain="www.japan.travel" ;;
             *)
-                log "ERROR" "无效选择，请输入 1-4"
-                echo ""  # 返回空字符串表示选择失败
+                log "ERROR" "无效选择，请输入 1-4" >&2
                 return 1
                 ;;
         esac
@@ -171,10 +170,11 @@ select_domain() {
     
     # 确保域名不为空
     if [[ -z "$domain" ]]; then
-        log "ERROR" "域名选择失败"
+        log "ERROR" "域名选择失败" >&2
         return 1
     fi
     
+    # 只输出域名到标准输出
     echo "$domain"
 }
 
