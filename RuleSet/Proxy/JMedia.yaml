@@ -1,0 +1,14 @@
+payload:
+  # >Movie
+  - '+.mini4k.com'
+  # >Comic
+  - '+.18comic.vip'
+  - '+.18comic.ink'
+  # >Video
+  - '+.javbus.com'
+  - '+.javlibrary.com'
+  - '+.javdb.com'
+  - '+.jdbstatic.com'
+  - '+.jinfan-keji.com'
+  - '+.mgstage.com'
+
