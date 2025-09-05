@@ -170,10 +170,14 @@ generate_ss_password() {
 
 # 域名列表
 get_domain_list() {
-    echo "1) www.1991991.xyz"
-    echo "2) www.lovelive-anime.jp"
-    echo "3) blog.hypai.org"
-    echo "4) www.japan.travel"
+    echo "1) www.gotokyo.org (Tokyo JP)"
+    echo "2) www.metro.tokyo.lg.jp (Amazon JP)"
+    echo "3) www.geigeki.jp (Amazon JP)"
+    echo "4) www.tokyodisneyresort.jp (Akamai JP)"
+    echo "5) blog.hypai.org (Vercel JP)"
+    echo "6) www.ehealth.gov.hk (Tencent HK)"
+    echo "7) www.hkgourmet.com.hk (Imperva HK)"
+    echo "8) www.visitcalifornia.com (Sucuri US)"
 }
 
 # 选择域名
@@ -189,15 +193,19 @@ select_domain() {
         get_domain_list >&2
         
         local choice
-        read -p "请输入选择 (1-4): " choice >&2
+        read -p "请输入选择 (1-8): " choice >&2
         
         case $choice in
-            1) domain="www.1991991.xyz" ;;
-            2) domain="www.lovelive-anime.jp" ;;
-            3) domain="blog.hypai.org" ;;
-            4) domain="www.japan.travel" ;;
+            1) domain="www.gotokyo.org" ;;
+            2) domain="www.metro.tokyo.lg.jp" ;;
+            3) domain="www.geigeki.jp" ;;
+            4) domain="www.tokyodisneyresort.jp" ;;
+            5) domain="blog.hypai.org" ;;
+            6) domain="www.ehealth.gov.hk" ;;
+            7) domain="www.hkgourmet.com.hk" ;;
+            8) domain="www.visitcalifornia.com" ;;
             *)
-                log "ERROR" "无效选择，请输入 1-4" >&2
+                log "ERROR" "无效选择，请输入 1-8" >&2
                 return 1
                 ;;
         esac
