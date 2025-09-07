@@ -170,11 +170,11 @@ generate_ss_password() {
 
 # 域名列表
 get_domain_list() {
-    echo "1) www.gotokyo.org (Tokyo JP)"
-    echo "2) www.metro.tokyo.lg.jp (Amazon JP)"
-    echo "3) www.geigeki.jp (Amazon JP)"
-    echo "4) www.tokyodisneyresort.jp (Akamai JP)"
-    echo "5) blog.hypai.org (Vercel JP)"
+    echo "1) store.disney.co.jp (Akamai JP)"
+    echo "2) www.westjr.co.jp (Akamai JP)"
+    echo "3) www.jreast.co.jp (Akamai JP)"
+    echo "4) www.knt.co.jp (Akamai JP)"
+    echo "5) www.tokyodisneyresort.jp (Akamai JP)"
     echo "6) www.ehealth.gov.hk (Tencent HK)"
     echo "7) www.hkgourmet.com.hk (Imperva HK)"
     echo "8) www.visitcalifornia.com (Sucuri US)"
@@ -196,11 +196,11 @@ select_domain() {
         read -p "请输入选择 (1-8): " choice >&2
         
         case $choice in
-            1) domain="www.gotokyo.org" ;;
-            2) domain="www.metro.tokyo.lg.jp" ;;
-            3) domain="www.geigeki.jp" ;;
-            4) domain="www.tokyodisneyresort.jp" ;;
-            5) domain="blog.hypai.org" ;;
+            1) domain="store.disney.co.jp" ;;
+            2) domain="www.westjr.co.jp" ;;
+            3) domain="www.jreast.co.jp" ;;
+            4) domain="www.knt.co.jp" ;;
+            5) domain="www.tokyodisneyresort.jp" ;;
             6) domain="www.ehealth.gov.hk" ;;
             7) domain="www.hkgourmet.com.hk" ;;
             8) domain="www.visitcalifornia.com" ;;
