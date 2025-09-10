@@ -3,3 +3,5 @@ payload:
   - AND,((SRC-IP-CIDR,192.168.10.5/32),(DST-PORT,1-79/81-442/444-2051/2054-2094/2097-3477/3479-4069/4071-5227/5229-65535))
   # Turkey Giftcard
   - DOMAIN-SUFFIX,oyunfor.com
+  # Lily Emby(CDN)
+  - DOMAIN-SUFFIX,cdn.lilyemby.my
