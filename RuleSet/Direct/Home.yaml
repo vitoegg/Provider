@@ -5,3 +5,5 @@ payload:
   - DOMAIN-SUFFIX,oyunfor.com
   # Lily Emby(CDN)
   - DOMAIN-SUFFIX,cdn.lilyemby.my
+  # Zimuku
+  - DOMAIN-SUFFIX,zimuku.org
