@@ -1,6 +1,7 @@
 payload:
-  # Emby
+  # General Emby
   - '+.recmata.net'
   - '+.cn2gias.uk'
-  # UHDNow RFCHost
+  - '+.lilyemby.my'
+  # UHDNow Emby
   - '+.uhdnow.com'
