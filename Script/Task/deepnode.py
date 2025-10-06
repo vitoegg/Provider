@@ -1,8 +1,8 @@
 # cron:5 0 * * *
-# new Env('NS&DF每日签到');
+# new Env('NS+DF每日签到');
 """
 Version: 1.0.0
-Updated Time: 2025-10-06 16:21:43
+Updated Time: 2025-10-06 22:01:09
 Reference: https://github.com/wugeng20/NodeSeekSignin
 """
 import os
@@ -207,8 +207,8 @@ def send_notification(forum_name, sign_result):
         return
 
     # 构造通知内容
-    title = f"🎯 {forum_name} 签到通知"
-    content = f"{sign_result['message']}\n🕐 操作时间：{get_current_time()}"
+    title = f"{forum_name} 每日签到"
+    content = f"{sign_result['message']}\n🕐 签到时间：{get_current_time()}"
 
     try:
         QLAPI(title, content)
