@@ -113,15 +113,15 @@ class BaseForum:
         return {
             "Accept": "*/*",
             "Accept-Encoding": "gzip, deflate, br, zstd",
-            "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
             "Origin": f"{self.base_url}",
-            "Sec-CH-UA": '"Chromium";v="140", "Not:A-Brand";v="24", "Google Chrome";v="140"',
+            "Sec-CH-UA": '"Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"',
             "Sec-CH-UA-Mobile": "?0",
-            "Sec-CH-UA-Platform": '"macOS"',
+            "Sec-CH-UA-Platform": '"Windows"',
             "Sec-Fetch-Dest": "empty",
             "Sec-Fetch-Mode": "cors",
             "Sec-Fetch-Site": "same-origin",
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
         }
 
     def sign_in(self):
