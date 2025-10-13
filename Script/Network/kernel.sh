@@ -37,6 +37,40 @@ log_status() {
     echo -e "${BLUE}[STATUS]${NC} ${BLUE}$1${NC}"
 }
 
+# Default qdisc value
+DEFAULT_QDISC="fq"
+
+# Parse command line arguments
+while getopts "q:" opt; do
+    case $opt in
+        q)
+            QDISC="$OPTARG"
+            ;;
+        \?)
+            log_error "Invalid option: -$OPTARG"
+            echo "Usage: $0 [-q qdisc]"
+            echo "  -q: Specify qdisc algorithm (fq, fq_pie, or cake). Default: fq"
+            exit 1
+            ;;
+    esac
+done
+
+# Validate and set qdisc
+if [ -n "$QDISC" ]; then
+    case "$QDISC" in
+        fq|fq_pie|cake)
+            log_config "Using specified qdisc: $QDISC"
+            ;;
+        *)
+            log_warning "Invalid qdisc '$QDISC'. Valid options: fq, fq_pie, cake. Using default: $DEFAULT_QDISC"
+            QDISC="$DEFAULT_QDISC"
+            ;;
+    esac
+else
+    QDISC="$DEFAULT_QDISC"
+    log_config "Using default qdisc: $QDISC"
+fi
+
 # Check root privileges
 if [ "$(id -u)" != "0" ]; then
     log_error "Root privileges required"
@@ -252,9 +286,9 @@ log_info "Configuring BBR congestion control..."
 
 if modprobe tcp_bbr 2>/dev/null; then
     if grep -wq bbr /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
-        echo "net.core.default_qdisc = fq" >> /etc/sysctl.conf
+        echo "net.core.default_qdisc = $QDISC" >> /etc/sysctl.conf
         echo "net.ipv4.tcp_congestion_control = bbr" >> /etc/sysctl.conf
-        log_success "BBR enabled successfully"
+        log_success "BBR enabled successfully with qdisc: $QDISC"
     else
         log_warning "BBR not available"
     fi
