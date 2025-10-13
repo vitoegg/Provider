@@ -122,6 +122,7 @@ DOMAIN_LISTS=(
     "https://mirror.1991991.xyz/RuleSet/DNS/Common.conf"
     "https://mirror.1991991.xyz/RuleSet/DNS/Media.conf"
     "https://mirror.1991991.xyz/RuleSet/DNS/Google.conf"
+    "https://mirror.1991991.xyz/RuleSet/DNS/YouTube.conf"
     "https://mirror.1991991.xyz/RuleSet/DNS/DMM.conf"
 )
 
@@ -264,6 +265,7 @@ bind :53
 server 1.1.1.1
 server 8.8.8.8
 server 9.9.9.9
+server 208.67.222.222
 EOF
 
     if [ $USE_CUSTOM_DNS -eq 1 ]; then
