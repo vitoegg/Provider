@@ -590,13 +590,46 @@ install_function() {
 
 # 更新功能
 update_function() {
-    log "INFO" "开始更新 Xray..."
+    log "INFO" "正在检查 Xray 版本..."
     
-    # 执行更新命令（会自动检查版本并更新）
-    if bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ check; then
-        log "SUCCESS" "Xray 更新完成"
+    # 执行版本检查，捕获输出
+    local check_output
+    check_output=$(bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ check 2>&1)
+    local check_status=$?
+    
+    # 提取当前版本和最新版本（只匹配关键词，避免匹配到 pre-release 版本）
+    local current_version=$(echo "$check_output" | grep "current version" | grep -oP "v[0-9]+\.[0-9]+\.[0-9]+")
+    local latest_version=$(echo "$check_output" | grep "latest release version" | grep -oP "v[0-9]+\.[0-9]+\.[0-9]+")
+    
+    # 检查是否成功获取版本信息
+    if [[ -z "$current_version" || -z "$latest_version" ]]; then
+        log "ERROR" "无法获取版本信息"
+        log "DEBUG" "检查输出: $check_output"
+        return 1
+    fi
+    
+    # 比较版本
+    if [[ "$current_version" == "$latest_version" ]]; then
+        log "SUCCESS" "当前已经是最新版本: $current_version"
     else
-        log "ERROR" "Xray 更新失败"
+        log "INFO" "发现新版本: $current_version -> $latest_version"
+        log "INFO" "开始更新 Xray..."
+        
+        # 执行更新
+        if bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install --without-geodata; then
+            log "SUCCESS" "Xray 已成功从 $current_version 更新到 $latest_version"
+            
+            # 重启服务
+            log "INFO" "重启 Xray 服务..."
+            if systemctl restart xray; then
+                log "SUCCESS" "Xray 服务重启成功"
+            else
+                log "WARN" "Xray 服务重启失败，请手动重启"
+            fi
+        else
+            log "ERROR" "Xray 更新失败"
+            return 1
+        fi
     fi
 }
 
