@@ -309,6 +309,7 @@ generate_reality_ss_config() {
                 "network": "raw",
                 "security": "reality",
                 "realitySettings": {
+                    "fingerprint": "ios",
                     "target": "$domain:443",
                     "serverNames": [
                         "$domain"
