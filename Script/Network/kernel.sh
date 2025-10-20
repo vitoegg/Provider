@@ -195,6 +195,10 @@ root  hard   memlock   unlimited
 root  soft   memlock   unlimited
 EOF
 
+# Enable TLS module
+echo tls >> /usr/lib/modules-load.d/tls-loader.conf
+log_success "TLS module enabled"
+
 # Enable PAM limits module
 if [ -f /etc/pam.d/common-session ]; then
     echo "session required pam_limits.so" >> /etc/pam.d/common-session
