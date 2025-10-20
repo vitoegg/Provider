@@ -11,9 +11,6 @@ payload:
   - '+.chatgpt.livekit.cloud'
   - '+.host.livekit.cloud'
   - '+.turn.livekit.cloud'
-  # > Siri
-  - '+.apple-relay.apple.com'
-  - 'guzzoni.smoot.apple.com'
   # > Chat GPT API & CDN
   - '+.oaistatic.com'
   - '+.oaiusercontent.com'
