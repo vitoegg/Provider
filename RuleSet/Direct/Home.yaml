@@ -5,6 +5,8 @@ payload:
   - DOMAIN-SUFFIX,oyunfor.com
   # Zimuku
   - DOMAIN-SUFFIX,zimuku.org
+  # VPS Service
+  - DOMAIN-SUFFIX,greencloudvps.com
   # Direct Emby
   # > Lily Emby
   - DOMAIN-SUFFIX,cdn.lilyemby.my
