@@ -28,8 +28,10 @@ openaicom.imgix.net
 browser-intake-datadoghq.com
 
 # Siri
-.apple-relay.apple.com
+apple-relay.apple.com
+apple-relay.cloudflare.com
 guzzoni.smoot.apple.com
+gspe1-ssl.ls.apple.com
  
 # Claude
 .anthropic.com
@@ -38,7 +40,7 @@ guzzoni.smoot.apple.com
 cdn.usefathom.com
 servd-anthropic-website.b-cdn.net
 
-# Gemini
+# Google AI
 # > Google Generative Language API
 .generativelanguage.googleapis.com
 .geller-pa.googleapis.com
@@ -55,6 +57,8 @@ waa-pa.clients6.google.com
 .apis.google.com
 .bard.google.com
 .gemini.google.com
+.aisandbox-pa.googleapis.com
+.robinfrontend-pa.googleapis.com
 # > Google NotebookLM
 .notebooklm.google
 .notebooklm.google.com
