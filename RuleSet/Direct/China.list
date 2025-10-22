@@ -1,5 +1,5 @@
-# 更新时间: 2025-10-21 09:51:43
-# 规则条数: 120159
+# 更新时间: 2025-10-22 09:54:52
+# 规则条数: 120153
 # 规则来源:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/Loyalsoldier/surge-rules
@@ -24140,6 +24140,7 @@
 .cn-zhongrui.com
 .cn.bing.com
 .cn.bing.net
+.cn.eset.com
 .cn.mm.bing.net
 .cn.net
 .cn.online.standardchartered.com
@@ -119916,8 +119917,6 @@ ml.cdn-apple.com
 mobile.ccdntech.com
 monitoring.qpdp1.net
 movie.mcas.jp
-msgr.dlservice.microsoft.com
-msgruser.dlservice.microsoft.com
 music.apple.com
 myapp.itunes.apple.com
 myvs.download.prss.microsoft.com
@@ -119970,7 +119969,6 @@ proxyconfig.corp.google.com
 publicassets.cdn-apple.com
 qagpublic.qatp1.net
 qgadmin.qcpp1.net
-qh.dlservice.microsoft.com
 qiao-cn.com
 qpx.googleflights.net
 qqlivepull.seedata.top
@@ -120020,9 +120018,7 @@ sh-pod2-smp-device.apple.com
 shazam-insights.cdn-apple.com
 shell.cdn.office.net
 si.cdn.dell.com
-silverlight.dlservice.microsoft.com
 slive.ytn.co.kr
-slupdate.dlservice.microsoft.com
 sm.dell.com
 smart.uhdnow.com
 smp-device-content.apple.com
@@ -120127,7 +120123,6 @@ weather-map.apple.com
 weather-map2.apple.com
 weatherkit.apple.com
 weizhiyundong.list
-wl.dlservice.microsoft.com
 wosu.streamguys1.com
 wowza-stream.wbur.org
 wowza.montevideo.com.uy
@@ -120155,7 +120150,6 @@ www.support.apple.com
 www.szmgiptv.com
 www.yxssp.com
 www4-static.gog-statics.com
-xb.dlservice.microsoft.com
 xn--flw351e.com
 xp.apple.com
 youku.cdn2-youku.com
