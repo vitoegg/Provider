@@ -28,11 +28,16 @@ payload:
   - 'openaicom.imgix.net'
   - 'browser-intake-datadoghq.com'
 
-  # Siri
+  # Apple AI
+  # https://support.apple.com/en-us/101555
+  # > Siri and Search
+  - '+.smoot.apple.com'
+  - 'guzzoni.apple.com'
+  # > Apple Intelligence
   - 'apple-relay.apple.com'
+  - 'apple-relay.fastly-edge.com'
   - 'apple-relay.cloudflare.com'
-  - 'guzzoni.smoot.apple.com'
-  - 'gspe1-ssl.ls.apple.com'
+  - 'cp4.cloudflare.com'
 
   # Claude
   - '+.anthropic.com'
