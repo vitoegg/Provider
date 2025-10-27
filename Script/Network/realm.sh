@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 # Realm TCP/UDP Forwarding Management Script
-# Version: 2.4
-# Description: Install, configure and manage Realm forwarding service with multiple endpoints support
+# Version: 3.0
+# Description: Command-line tool to manage Realm forwarding service with batch operations support
 # Requirements: Root privileges only
-# Improvements: Added placeholder endpoint structure to ensure service can start without active rules
+# Changes: Refactored to CLI-based operation, removed interactive menu, improved stability
 
 # Check root privileges immediately
 if [[ $EUID -ne 0 ]]; then
@@ -71,6 +71,176 @@ print_divider() {
     echo -e "${YELLOW}──────────────────────────────${NC}" >&2
 }
 
+# Display usage information
+usage() {
+    cat << EOF
+Realm TCP/UDP Forwarding Management Tool
+
+Usage:
+    $(basename $0) --add RULE [--add RULE...]      添加转发规则（未安装时自动安装）
+    $(basename $0) --remove PORT [--remove PORT...] 删除指定端口的规则
+    $(basename $0) --remove-all                     删除所有规则
+    $(basename $0) --list                           列出当前所有规则
+    $(basename $0) --status                         查看服务运行状态
+    $(basename $0) --uninstall                      卸载服务
+    $(basename $0) --help, -h                       显示此帮助信息
+
+规则格式: "监听端口:目标地址:目标端口"
+
+示例:
+    $(basename $0) --add "8080:example.com:80"
+    $(basename $0) --add "8080:example.com:80" --add "3306:db.example.com:3306"
+    $(basename $0) --remove "8080" --remove "3306"
+    $(basename $0) --list
+    $(basename $0) --status
+
+选项说明:
+    --add RULE          添加转发规则（可多次使用以批量添加）
+    --remove PORT       删除指定端口的规则（可多次使用）
+    --remove-all        删除所有规则
+    --list              列出当前所有规则
+    --status            查看服务运行状态
+    --uninstall         卸载 Realm 服务
+    --help, -h          显示此帮助信息
+
+注意:
+    - 所有操作需要 root 权限
+    - 端口范围: 1024-65535（排除 65534 保留端口）
+    - 添加规则时会自动检查端口冲突和规则重复
+    - 首次添加规则时会自动安装 Realm 服务
+
+EOF
+}
+
+# Validate port number
+validate_port() {
+    local port="$1"
+    if [[ ! "$port" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+    if [ "$port" -lt 1024 ] || [ "$port" -gt 65535 ]; then
+        return 1
+    fi
+    if [ "$port" -eq 65534 ]; then
+        return 1
+    fi
+    return 0
+}
+
+# Validate address (IP or domain)
+validate_address() {
+    local addr="$1"
+    if [[ -z "$addr" ]]; then
+        return 1
+    fi
+    # Basic validation: alphanumeric, dots, hyphens, colons (for IPv6)
+    if [[ ! "$addr" =~ ^[a-zA-Z0-9][a-zA-Z0-9\.\-:]*$ ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# Validate rule format
+validate_rule_format() {
+    local rule="$1"
+    
+    # Check if rule contains exactly 2 colons
+    local colon_count=$(echo "$rule" | grep -o ":" | wc -l)
+    if [ "$colon_count" -ne 2 ]; then
+        log_error "Invalid rule format: '$rule' (expected format: port:address:port)"
+        return 1
+    fi
+    
+    local IFS=':'
+    read -r listen_port remote_addr remote_port <<< "$rule"
+    
+    if ! validate_port "$listen_port"; then
+        log_error "Invalid listen port: $listen_port (must be 1024-65535, excluding reserved port 65534)"
+        return 1
+    fi
+    
+    if ! validate_address "$remote_addr"; then
+        log_error "Invalid remote address: $remote_addr"
+        return 1
+    fi
+    
+    if ! validate_port "$remote_port"; then
+        log_error "Invalid remote port: $remote_port (must be 1024-65535, excluding reserved port 65534)"
+        return 1
+    fi
+    
+    return 0
+}
+
+# Check if port is listening on the system (conflict detection)
+check_port_conflict() {
+    local port="$1"
+    
+    # Try ss first (modern tool)
+    if command -v ss >/dev/null 2>&1; then
+        if ss -tuln | grep -q ":${port} "; then
+            return 0
+        fi
+    # Fallback to netstat
+    elif command -v netstat >/dev/null 2>&1; then
+        if netstat -tuln | grep -q ":${port} "; then
+            return 0
+        fi
+    fi
+    
+    return 1
+}
+
+# Parse existing rules from configuration file
+parse_existing_rules() {
+    if [[ ! -f "$CONF_FILE" ]]; then
+        return 0
+    fi
+    
+    local rules=()
+    while IFS= read -r line; do
+        if [[ "$line" =~ listen\ =\ \"0\.0\.0\.0:([0-9]+)\" ]]; then
+            local listen_port="${BASH_REMATCH[1]}"
+            read -r next_line
+            if [[ "$next_line" =~ remote\ =\ \"(.+)\" ]]; then
+                local remote="${BASH_REMATCH[1]}"
+                rules+=("$listen_port|$remote")
+            fi
+        fi
+    done < <(grep -A1 "listen = " "$CONF_FILE")
+    
+    printf '%s\n' "${rules[@]}"
+}
+
+# Backup configuration file
+backup_config() {
+    if [[ -f "$CONF_FILE" ]]; then
+        local backup_file="${CONF_FILE}.backup.$(date +%Y%m%d_%H%M%S)"
+        if cp "$CONF_FILE" "$backup_file"; then
+            log_debug "Configuration backed up to: $backup_file"
+            echo "$backup_file"
+            return 0
+        else
+            log_warn "Failed to backup configuration"
+            return 1
+        fi
+    fi
+    return 0
+}
+
+# Restore configuration from backup
+restore_config() {
+    local backup_file="$1"
+    if [[ -n "$backup_file" && -f "$backup_file" ]]; then
+        if cp "$backup_file" "$CONF_FILE"; then
+            log_info "Configuration restored from backup"
+            rm -f "$backup_file"
+            return 0
+        fi
+    fi
+    return 1
+}
+
 # Unified download function, prioritize curl, fallback to wget
 download_file() {
     local url="$1"
@@ -94,64 +264,63 @@ download_file() {
     return 1
 }
 
-# Simplified tool installation function
+# Check and install only essential tools
 install_required_tools() {
     log_info "Checking required tools..."
     
-    # Check if download tool exists
+    local tools_needed=()
+    
+    # Check if download tool exists (curl or wget)
     if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
-        log_warn "No download tool found, installing curl..."
-        
-        # Detect package manager and install curl
-        if command -v apt >/dev/null 2>&1; then
-            apt update -y && apt install -y curl
-        elif command -v yum >/dev/null 2>&1; then
-            yum install -y curl
-        elif command -v dnf >/dev/null 2>&1; then
-            dnf install -y curl
-        else
-            log_error "Cannot identify package manager. Please install curl or wget manually"
-            exit 1
-        fi
-        
-        # Verify installation
-        if ! command -v curl >/dev/null 2>&1; then
-            log_error "Failed to install curl"
-            exit 1
-        fi
-        
-        log_success "curl installed successfully"
+        tools_needed+=("curl")
     fi
     
-    # Check tar tool
+    # Check tar tool (required for extraction)
     if ! command -v tar >/dev/null 2>&1; then
-        log_warn "tar not found, installing..."
-        
-        if command -v apt >/dev/null 2>&1; then
-            apt install -y tar
-        elif command -v yum >/dev/null 2>&1; then
-            yum install -y tar
-        elif command -v dnf >/dev/null 2>&1; then
-            dnf install -y tar
-        else
-            log_error "Cannot install tar. Please install it manually"
-            exit 1
-        fi
-        
-        if ! command -v tar >/dev/null 2>&1; then
-            log_error "Failed to install tar"
-            exit 1
-        fi
-        
-        log_success "tar installed successfully"
+        tools_needed+=("tar")
     fi
     
-    log_success "All required tools are available"
+    # If no tools needed, exit early
+    if [ ${#tools_needed[@]} -eq 0 ]; then
+        log_success "All required tools are available"
+        return 0
+    fi
+    
+    # Install missing tools
+    log_info "Installing missing tools: ${tools_needed[*]}"
+    
+    # Detect package manager and install
+    if command -v apt-get >/dev/null 2>&1; then
+        apt-get update -qq && apt-get install -y -qq "${tools_needed[@]}" >/dev/null 2>&1
+    elif command -v yum >/dev/null 2>&1; then
+        yum install -y -q "${tools_needed[@]}" >/dev/null 2>&1
+    elif command -v dnf >/dev/null 2>&1; then
+        dnf install -y -q "${tools_needed[@]}" >/dev/null 2>&1
+    else
+        log_error "Cannot identify package manager"
+        log_error "Please manually install: ${tools_needed[*]}"
+        exit 1
+    fi
+    
+    # Verify installation
+    local failed_tools=()
+    for tool in "${tools_needed[@]}"; do
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            failed_tools+=("$tool")
+        fi
+    done
+    
+    if [ ${#failed_tools[@]} -gt 0 ]; then
+        log_error "Failed to install: ${failed_tools[*]}"
+        exit 1
+    fi
+    
+    log_success "Required tools installed successfully"
 }
 
 # Check if Realm is installed
 is_realm_installed() {
-    [[ -f "$BINARY_PATH" && -f "$CONF_FILE" ]]
+    [[ -f "$BINARY_PATH" && -f "$SYSTEMD_PATH" ]]
 }
 
 # Detect system architecture
@@ -286,6 +455,80 @@ EOF
     log_success "Systemd service created"
 }
 
+# Check service health
+check_service_health() {
+    if ! systemctl is-active --quiet realm; then
+        return 1
+    fi
+    
+    # Wait a moment for service to stabilize
+    sleep 1
+    
+    # Check if service is still active after brief wait
+    if ! systemctl is-active --quiet realm; then
+        return 1
+    fi
+    
+    # Verify that configured ports are listening
+    local rules=$(parse_existing_rules)
+    if [[ -n "$rules" ]]; then
+        while IFS='|' read -r port remote; do
+            # Give service time to bind ports
+            sleep 0.5
+            if command -v ss >/dev/null 2>&1; then
+                if ! ss -tuln | grep -q ":${port} "; then
+                    log_warn "Port $port is not listening yet"
+                fi
+            fi
+        done <<< "$rules"
+    fi
+    
+    return 0
+}
+
+# Unified service restart with health check and rollback
+restart_service_with_validation() {
+    local backup_file="$1"
+    
+    log_info "Restarting Realm service..."
+    
+    # Reload systemd configuration
+    systemctl daemon-reload
+    
+    # Restart service
+    if ! systemctl restart realm; then
+        log_error "Failed to restart Realm service"
+        if [[ -n "$backup_file" ]]; then
+            log_info "Attempting to restore previous configuration..."
+            restore_config "$backup_file"
+            systemctl restart realm
+        fi
+        return 1
+    fi
+    
+    # Check service health
+    sleep 2
+    if ! check_service_health; then
+        log_error "Service health check failed"
+        log_info "Check logs with: journalctl -u realm -n 50"
+        if [[ -n "$backup_file" ]]; then
+            log_info "Attempting to restore previous configuration..."
+            restore_config "$backup_file"
+            systemctl restart realm
+        fi
+        return 1
+    fi
+    
+    log_success "Realm service restarted successfully"
+    
+    # Remove backup if successful
+    if [[ -n "$backup_file" && -f "$backup_file" ]]; then
+        rm -f "$backup_file"
+    fi
+    
+    return 0
+}
+
 # Start and enable service
 start_realm_service() {
     log_info "Starting Realm service..."
@@ -302,83 +545,61 @@ start_realm_service() {
     # Start service
     if ! systemctl start realm; then
         log_error "Failed to start Realm service"
+        log_info "Check logs with: journalctl -u realm -n 50"
         exit 1
     fi
     
-    # Verify service status
+    # Check service health
     sleep 2
-    if systemctl is-active --quiet realm; then
-        log_success "Realm service started successfully"
-    else
-        log_error "Realm service failed to start properly"
-        log_info "Check logs with: journalctl -u realm -f"
+    if ! check_service_health; then
+        log_error "Service health check failed"
+        log_info "Check logs with: journalctl -u realm -n 50"
         exit 1
     fi
+    
+    log_success "Realm service started successfully"
 }
 
-# Get user input for forwarding rule configuration
-get_forwarding_rule() {
-    local port=""
-    local remote_address=""
+# Check if rule already exists in configuration
+check_rule_exists() {
+    local listen_port="$1"
+    local remote_address="$2"
+    local remote_port="$3"
     
-    # Get port (will be used for both listening and remote)
-    while true; do
-        read -p "Enter port (1024-65535) or 'cancel' to abort: " port
-        
-        # Check if user wants to cancel
-        if [[ "$port" == "cancel" ]]; then
-            return 1
+    if [[ ! -f "$CONF_FILE" ]]; then
+        return 1
+    fi
+    
+    # Check if exact rule exists
+    local rules=$(parse_existing_rules)
+    while IFS='|' read -r port remote; do
+        if [[ "$port" == "$listen_port" && "$remote" == "${remote_address}:${remote_port}" ]]; then
+            return 0
         fi
-        if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1024 ] && [ "$port" -le 65535 ]; then
-            # Check if port is already in use
-            if check_port_in_use "$port"; then
-                log_error "Port $port is already in use in configuration"
-                continue
-            fi
-            break
-        else
-            log_error "Invalid port. Please enter a number between 1024-65535"
-        fi
-    done
-
-    # Get remote server address
-    while true; do
-        read -p "Enter remote server address (IP or domain) or 'cancel' to abort: " remote_address
-        
-        # Check if user wants to cancel
-        if [[ "$remote_address" == "cancel" ]]; then
-            return 1
-        fi
-        if [[ -n "$remote_address" ]]; then
-            break
-        else
-            log_error "Remote address cannot be empty"
-        fi
-    done
-
-    # Return configuration info (port is used for both listening and remote)
-    echo "$port|$remote_address|$port"
+    done <<< "$rules"
+    
+    return 1
 }
 
 # Check if port is already in use in configuration file
-check_port_in_use() {
+check_port_in_config() {
     local port="$1"
     if [[ -f "$CONF_FILE" ]]; then
-        # Check for real endpoints (0.0.0.0), not placeholder (127.0.0.1)
+        # Check if port is already configured
         grep -q "listen = \"0.0.0.0:$port\"" "$CONF_FILE"
     else
         return 1
     fi
 }
 
-# Generate base configuration file (with placeholder endpoint structure)
+# Generate initial configuration file (without rules)
 generate_base_configuration() {
-    log_info "Generating base configuration file..."
+    log_info "Creating configuration file..."
     
     # Create configuration directory
     mkdir -p "$(dirname "$CONF_FILE")"
     
-    # Generate base configuration with placeholder endpoint structure
+    # Generate base configuration without endpoints
     cat > "$CONF_FILE" << EOF
 [log]
 level = "warn"
@@ -388,12 +609,6 @@ output = "$LOG_FILE"
 no_tcp = false
 use_udp = true
 
-# Placeholder endpoint - will be replaced when adding first rule
-# This ensures the service can start even without active forwarding rules
-[[endpoints]]
-listen = "127.0.0.1:65534"
-remote = "127.0.0.1:65535"
-
 EOF
     
     if [[ $? -ne 0 ]]; then
@@ -401,7 +616,7 @@ EOF
         exit 1
     fi
     
-    log_success "Base configuration file created at $CONF_FILE"
+    log_success "Configuration file created at $CONF_FILE"
 }
 
 # Add forwarding rule to configuration file
@@ -410,229 +625,27 @@ add_endpoint_to_config() {
     local remote_address="$2"
     local remote_port="$3"
     
-    log_info "Adding forwarding rule: $listen_port -> $remote_address:$remote_port"
+    log_debug "Adding endpoint: $listen_port -> $remote_address:$remote_port"
     
     # If configuration file doesn't exist, create base configuration
     if [[ ! -f "$CONF_FILE" ]]; then
         generate_base_configuration
     fi
     
-    # Check if this is the first real rule (replacing placeholder)
-    local has_placeholder=false
-    if grep -q "listen = \"127.0.0.1:65534\"" "$CONF_FILE" 2>/dev/null; then
-        has_placeholder=true
-    fi
-    
-    if [[ "$has_placeholder" == true ]]; then
-        # Replace placeholder with first real rule
-        log_info "Replacing placeholder configuration with first real rule"
-        
-        # Create temporary file with new configuration
-        local temp_file=$(mktemp)
-        
-        # Copy everything except the placeholder endpoint
-        awk '
-        /^\[\[endpoints\]\]$/ { 
-            in_placeholder = 1
-            next
-        }
-        /^listen = "127\.0\.0\.1:65534"$/ && in_placeholder { 
-            next
-        }
-        /^remote = "127\.0\.0\.1:65535"$/ && in_placeholder { 
-            in_placeholder = 0
-            next
-        }
-        /^$/ && in_placeholder {
-            in_placeholder = 0
-            next
-        }
-        { 
-            if (!in_placeholder) print
-        }
-        ' "$CONF_FILE" > "$temp_file"
-        
-        # Add the new real endpoint
-        cat >> "$temp_file" << EOF
+    # Add endpoint to configuration
+    cat >> "$CONF_FILE" << EOF
 [[endpoints]]
 listen = "0.0.0.0:${listen_port}"
 remote = "${remote_address}:${remote_port}"
 
 EOF
-        
-        # Replace original file
-        if mv "$temp_file" "$CONF_FILE"; then
-            log_success "Placeholder configuration replaced with real forwarding rule"
-        else
-            rm -f "$temp_file"
-            log_error "Failed to replace placeholder configuration"
-            exit 1
-        fi
-    else
-        # Add new endpoint to existing configuration
-        cat >> "$CONF_FILE" << EOF
-[[endpoints]]
-listen = "0.0.0.0:${listen_port}"
-remote = "${remote_address}:${remote_port}"
-
-EOF
-        
-        if [[ $? -ne 0 ]]; then
-            log_error "Failed to add endpoint to configuration file"
-            exit 1
-        fi
-        
-        log_success "Forwarding rule added successfully"
-    fi
-}
-
-# Display current forwarding rules
-show_current_rules() {
-    print_header "Current Forwarding Rules"
     
-    if [[ ! -f "$CONF_FILE" ]]; then
-        log_warn "Configuration file not found. No rules configured."
-        return
-    fi
-    
-    # Extract all endpoints
-    local rules=()
-    local count=0
-    
-    # Use awk to parse endpoints in TOML file, excluding placeholder
-    while IFS= read -r line; do
-        if [[ "$line" =~ listen\ =\ \"0\.0\.0\.0:([0-9]+)\" ]]; then
-            local listen_port="${BASH_REMATCH[1]}"
-            # Read next line to get remote
-            read -r next_line
-            if [[ "$next_line" =~ remote\ =\ \"(.+)\" ]]; then
-                local remote="${BASH_REMATCH[1]}"
-                count=$((count + 1))
-                rules+=("$count. Port: $listen_port -> Destination: $remote")
-            fi
-        fi
-    done < <(grep -A1 "listen = " "$CONF_FILE" | grep -v "127.0.0.1:65534")
-    
-    if [[ ${#rules[@]} -eq 0 ]]; then
-        log_warn "No forwarding rules found in configuration"
-        return
-    fi
-    
-    echo -e "${CYAN}Found ${#rules[@]} forwarding rule(s):${NC}"
-    echo ""
-    for rule in "${rules[@]}"; do
-        echo -e "  ${GREEN}$rule${NC}"
-    done
-    echo ""
-    
-    # Display service status
-    if is_realm_running; then
-        echo -e "${GREEN}✓ Realm service is running${NC}"
-    else
-        echo -e "${RED}✗ Realm service is not running${NC}"
-    fi
-}
-
-# Get list of forwarding rules for removal
-get_rule_list() {
-    if [[ ! -f "$CONF_FILE" ]]; then
+    if [[ $? -ne 0 ]]; then
+        log_error "Failed to add endpoint to configuration file"
         return 1
     fi
     
-    local rules=()
-    local count=0
-    
-    # Use awk to parse endpoints in TOML file, excluding placeholder
-    while IFS= read -r line; do
-        if [[ "$line" =~ listen\ =\ \"0\.0\.0\.0:([0-9]+)\" ]]; then
-            local listen_port="${BASH_REMATCH[1]}"
-            # Read next line to get remote
-            read -r next_line
-            if [[ "$next_line" =~ remote\ =\ \"(.+)\" ]]; then
-                local remote="${BASH_REMATCH[1]}"
-                count=$((count + 1))
-                rules+=("$listen_port|$remote")
-            fi
-        fi
-    done < <(grep -A1 "listen = " "$CONF_FILE" | grep -v "127.0.0.1:65534")
-    
-    if [[ ${#rules[@]} -eq 0 ]]; then
-        return 1
-    fi
-    
-    # Print rules for selection
-    echo -e "${CYAN}Current forwarding rules:${NC}"
-    echo ""
-    for i in "${!rules[@]}"; do
-        IFS='|' read -r port remote <<< "${rules[$i]}"
-        echo -e "  ${GREEN}$((i+1))${NC}. Port: ${YELLOW}$port${NC} -> Destination: ${YELLOW}$remote${NC}"
-    done
-    echo ""
-    
-    echo "${#rules[@]}"
-}
-
-# Remove forwarding rule by index
-remove_rule_by_index() {
-    local rule_index="$1"
-    
-    if [[ ! -f "$CONF_FILE" ]]; then
-        log_error "Configuration file not found"
-        return 1
-    fi
-    
-    # Create temporary file
-    local temp_file=$(mktemp)
-    local current_index=0
-    local in_target_endpoint=false
-    local skip_next=false
-    local rule_found=false
-    
-    while IFS= read -r line; do
-        if [[ "$line" =~ ^\[\[endpoints\]\]$ ]]; then
-            current_index=$((current_index + 1))
-            if [[ $current_index -eq $rule_index ]]; then
-                in_target_endpoint=true
-                skip_next=true
-                rule_found=true
-                continue
-            fi
-            in_target_endpoint=false
-        elif [[ "$line" =~ ^listen\ = ]]; then
-            if [[ $in_target_endpoint == true ]]; then
-                skip_next=true
-                continue
-            fi
-        elif [[ "$line" =~ ^remote\ = ]]; then
-            if [[ $in_target_endpoint == true ]]; then
-                in_target_endpoint=false
-                skip_next=false
-                continue
-            fi
-        elif [[ "$line" =~ ^$ ]]; then
-            # Empty line
-            if [[ $skip_next == true ]]; then
-                skip_next=false
-                continue
-            fi
-        fi
-        
-        echo "$line" >> "$temp_file"
-    done < "$CONF_FILE"
-    
-    # Check if rule was found and removed
-    if [[ "$rule_found" == false ]]; then
-        rm -f "$temp_file"
-        return 1
-    fi
-    
-    # Replace original file
-    if mv "$temp_file" "$CONF_FILE"; then
-        return 0
-    else
-        rm -f "$temp_file"
-        return 1
-    fi
+    return 0
 }
 
 # Complete installation process
@@ -653,473 +666,600 @@ install_realm() {
     # Download and install
     download_and_install_realm "$arch" "$version"
     
-    # Create base configuration file
-    generate_base_configuration
-    
     # Create systemd service
     create_systemd_service
     
-    # Start and enable service for auto-start
-    start_realm_service
-    
     log_success "Realm installed successfully"
+    log_info "Service will start when first rule is added"
 }
 
-# Add forwarding rule (with installation check)
-add_forwarding_rule() {
-    print_header "Add Forwarding Rule"
+# Add multiple forwarding rules (batch operation)
+add_rules() {
+    local rules=("$@")
+    
+    if [ ${#rules[@]} -eq 0 ]; then
+        log_error "No rules provided"
+        echo "Usage: $(basename $0) --add \"port:address:port\" [--add \"port:address:port\" ...]"
+        return 1
+    fi
+    
+    print_header "Adding Forwarding Rules"
     
     # Check if Realm is installed, if not, install it first
     if ! is_realm_installed; then
         log_info "Realm is not installed. Installing now..."
-        
-        # Ask user for confirmation before installing
-        read -p "Do you want to install Realm now? (y/n): " install_confirm
-        if [[ "$install_confirm" != "y" && "$install_confirm" != "Y" ]]; then
-            log_info "Installation cancelled by user"
-            return
-        fi
-        
         install_realm
         
         # Check if installation was successful
         if ! is_realm_installed; then
-            log_error "Realm installation failed. Cannot proceed with adding forwarding rule."
-            return
+            log_error "Realm installation failed. Cannot proceed with adding forwarding rules"
+            return 1
         fi
     fi
     
-    # Get user input
-    local rule_config=$(get_forwarding_rule)
+    # Validate all rules first
+    log_info "Validating ${#rules[@]} rule(s)..."
+    local valid_rules=()
+    local has_errors=false
     
-    # Check if user cancelled the operation
-    if [[ $? -ne 0 ]]; then
-        log_info "Operation cancelled by user"
-        return
+    for rule in "${rules[@]}"; do
+        if ! validate_rule_format "$rule"; then
+            has_errors=true
+            continue
+        fi
+        
+        local IFS=':'
+        read -r listen_port remote_addr remote_port <<< "$rule"
+        
+        # Check for port conflict with system services
+        if check_port_conflict "$listen_port"; then
+            log_error "Port $listen_port is already in use by another service"
+            has_errors=true
+            continue
+        fi
+        
+        # Check for duplicate rule in configuration
+        if check_rule_exists "$listen_port" "$remote_addr" "$remote_port"; then
+            log_warn "Rule already exists: $listen_port -> $remote_addr:$remote_port (skipping)"
+            continue
+        fi
+        
+        # Check for port conflict in configuration
+        if check_port_in_config "$listen_port"; then
+            log_error "Port $listen_port is already configured with a different destination"
+            has_errors=true
+            continue
+        fi
+        
+        valid_rules+=("$rule")
+    done
+    
+    if [ ${#valid_rules[@]} -eq 0 ]; then
+        if [ "$has_errors" = true ]; then
+            log_error "No valid rules to add due to validation errors"
+            return 1
+        else
+            log_info "No new rules to add (all rules already exist)"
+            return 0
+        fi
     fi
     
-    IFS='|' read -r port remote_address remote_port <<< "$rule_config"
+    log_success "Validated ${#valid_rules[@]} rule(s)"
     
-    # Display configuration summary
-    print_divider
-    echo -e "${CYAN}Rule Configuration:${NC}"
-    echo -e "  Listen Port: ${YELLOW}$port${NC}"
-    echo -e "  Remote Server: ${YELLOW}$remote_address${NC}"
-    echo -e "  Remote Port: ${YELLOW}$remote_port${NC}"
-    print_divider
+    # Backup configuration
+    local backup_file=$(backup_config)
     
-    # Add rule to configuration file
-    add_endpoint_to_config "$port" "$remote_address" "$remote_port"
+    # Add all valid rules
+    log_info "Adding ${#valid_rules[@]} rule(s) to configuration..."
+    for rule in "${valid_rules[@]}"; do
+        local IFS=':'
+        read -r listen_port remote_addr remote_port <<< "$rule"
+        
+        echo -e "${CYAN}  Adding: ${YELLOW}$listen_port${NC} -> ${YELLOW}$remote_addr:$remote_port${NC}"
+        add_endpoint_to_config "$listen_port" "$remote_addr" "$remote_port"
+    done
     
-    # Restart service to apply new configuration
+    log_success "Rules added to configuration"
+    
+    # Restart service to apply changes
     if is_realm_running; then
-        log_info "Restarting Realm service to apply changes..."
-        if systemctl restart realm; then
-            log_success "Realm service restarted successfully"
-        else
-            log_error "Failed to restart Realm service"
-            log_info "Check logs with: journalctl -u realm -f"
+        if ! restart_service_with_validation "$backup_file"; then
+            log_error "Failed to apply new rules"
+            return 1
         fi
     else
-        log_info "Starting and enabling Realm service..."
-        
-        # Ensure service is enabled for auto-start
-        if ! systemctl is-enabled --quiet realm; then
-            if systemctl enable realm; then
-                log_success "Realm service enabled for auto-start"
-            else
-                log_error "Failed to enable Realm service"
-                log_info "Check logs with: journalctl -u realm -f"
-                return
-            fi
+        log_info "Starting Realm service..."
+        if ! systemctl enable realm; then
+            log_error "Failed to enable Realm service"
+            restore_config "$backup_file"
+            return 1
         fi
         
-        # Start the service
-        if systemctl start realm; then
-            log_success "Realm service started successfully"
-        else
+        if ! systemctl start realm; then
             log_error "Failed to start Realm service"
-            log_info "Check logs with: journalctl -u realm -f"
+            log_info "Check logs with: journalctl -u realm -n 50"
+            restore_config "$backup_file"
+            return 1
+        fi
+        
+        sleep 2
+        if ! check_service_health; then
+            log_error "Service health check failed"
+            log_info "Check logs with: journalctl -u realm -n 50"
+            restore_config "$backup_file"
+            return 1
+        fi
+        
+        log_success "Realm service started successfully"
+        
+        # Remove backup if successful
+        if [[ -n "$backup_file" && -f "$backup_file" ]]; then
+            rm -f "$backup_file"
         fi
     fi
     
-    log_success "Forwarding rule added and service updated"
+    log_success "Successfully added ${#valid_rules[@]} forwarding rule(s)"
+    
+    # Display added rules
+    echo ""
+    echo -e "${GREEN}Added rules:${NC}"
+    for rule in "${valid_rules[@]}"; do
+        local IFS=':'
+        read -r listen_port remote_addr remote_port <<< "$rule"
+        echo -e "  ${GREEN}✓${NC} Port ${YELLOW}$listen_port${NC} -> ${YELLOW}$remote_addr:$remote_port${NC}"
+    done
+    
+    return 0
 }
 
-# Remove forwarding rule
-remove_forwarding_rule() {
-    print_header "Remove Forwarding Rule"
+# Remove forwarding rules by port (batch operation)
+remove_rules() {
+    local ports=("$@")
+    
+    if [ ${#ports[@]} -eq 0 ]; then
+        log_error "No ports provided"
+        echo "Usage: $(basename $0) --remove PORT [--remove PORT ...]"
+        return 1
+    fi
+    
+    print_header "Removing Forwarding Rules"
     
     # Check if configuration file exists
     if [[ ! -f "$CONF_FILE" ]]; then
-        log_error "Configuration file not found. No rules to remove."
-        return
+        log_error "Configuration file not found. No rules to remove"
+        return 1
     fi
     
-    # Get all rules and build arrays
-    local rules=()
-    local ports=()
-    local remotes=()
-    local count=0
+    # Parse existing rules
+    local existing_rules=$(parse_existing_rules)
+    if [[ -z "$existing_rules" ]]; then
+        log_warn "No forwarding rules found in configuration"
+        return 1
+    fi
     
-    # Parse configuration file to get all rules, excluding placeholder
-    while IFS= read -r line; do
-        if [[ "$line" =~ listen\ =\ \"0\.0\.0\.0:([0-9]+)\" ]]; then
-            local listen_port="${BASH_REMATCH[1]}"
-            # Read next line to get remote
-            read -r next_line
-            if [[ "$next_line" =~ remote\ =\ \"(.+)\" ]]; then
-                local remote="${BASH_REMATCH[1]}"
-                count=$((count + 1))
-                ports+=("$listen_port")
-                remotes+=("$remote")
-                rules+=("$count. Port: $listen_port -> Destination: $remote")
-            fi
+    # Validate ports and find matching rules
+    log_info "Validating ${#ports[@]} port(s)..."
+    local valid_ports=()
+    local has_errors=false
+    
+    for port in "${ports[@]}"; do
+        if ! validate_port "$port"; then
+            log_error "Invalid port: $port"
+            has_errors=true
+            continue
         fi
-    done < <(grep -A1 "listen = " "$CONF_FILE" | grep -v "127.0.0.1:65534")
-    
-    # Check if any rules found
-    if [[ ${#rules[@]} -eq 0 ]]; then
-        log_warn "No forwarding rules found to remove"
-        return
-    fi
-    
-    # Display all rules with numbers
-    echo -e "${CYAN}Current forwarding rules:${NC}"
-    echo ""
-    for rule in "${rules[@]}"; do
-        echo -e "  ${GREEN}$rule${NC}"
+        
+        # Check if port exists in configuration
+        if ! check_port_in_config "$port"; then
+            log_warn "Port $port not found in configuration (skipping)"
+            continue
+        fi
+        
+        valid_ports+=("$port")
     done
-    echo -e "  ${YELLOW}0. Return to main menu${NC}"
-    echo ""
     
-    # Get user selection
-    while true; do
-        read -p "Enter rule number(s) to remove (1-$count), use comma/space/plus to separate multiple: " selection
-        
-        # Check if user wants to return to main menu
-        if [[ "$selection" == "0" ]]; then
-            log_info "Returning to main menu"
-            return
+    if [ ${#valid_ports[@]} -eq 0 ]; then
+        if [ "$has_errors" = true ]; then
+            log_error "No valid ports to remove due to validation errors"
+            return 1
+        else
+            log_info "No matching rules found to remove"
+            return 0
         fi
-        
-        # Parse selection (support comma, space, plus as separators)
-        local selected_indices=()
-        local invalid_selection=false
-        
-        # Replace separators with spaces and split
-        local normalized_selection=$(echo "$selection" | sed 's/[,+]/ /g')
-        
-        # Convert to array
-        for num in $normalized_selection; do
-            # Validate each number
-            if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le "$count" ]; then
-                selected_indices+=("$num")
-            else
-                log_error "Invalid selection: $num. Please enter numbers between 1-$count"
-                invalid_selection=true
+    fi
+    
+    log_success "Found ${#valid_ports[@]} rule(s) to remove"
+    
+    # Backup configuration
+    local backup_file=$(backup_config)
+    
+    # Remove rules by port
+    log_info "Removing ${#valid_ports[@]} rule(s) from configuration..."
+    for port in "${valid_ports[@]}"; do
+        # Find the rule details for display
+        local rule_dest=""
+        while IFS='|' read -r rule_port rule_remote; do
+            if [[ "$rule_port" == "$port" ]]; then
+                rule_dest="$rule_remote"
                 break
             fi
-        done
+        done <<< "$existing_rules"
         
-        # If invalid selection, continue loop
-        if [[ "$invalid_selection" == true ]]; then
-            continue
-        fi
+        echo -e "${CYAN}  Removing: ${YELLOW}$port${NC} -> ${YELLOW}$rule_dest${NC}"
         
-        # Remove duplicates and sort
-        selected_indices=($(printf '%s\n' "${selected_indices[@]}" | sort -n | uniq))
-        
-        # If no valid selections, continue loop
-        if [[ ${#selected_indices[@]} -eq 0 ]]; then
-            log_error "No valid selections provided"
-            continue
-        fi
-        
-        # Display selected rules for confirmation
-        echo ""
-        echo -e "${YELLOW}Selected rules to remove:${NC}"
-        for index in "${selected_indices[@]}"; do
-            echo -e "  ${RED}${rules[$((index-1))]}${NC}"
-        done
-        echo ""
-        
-        # Remove selected rules (process in reverse order to maintain indices)
-        local rules_removed=0
-        for ((i=${#selected_indices[@]}-1; i>=0; i--)); do
-            local rule_index="${selected_indices[$i]}"
-            
-            # Remove the rule
-            if remove_rule_by_index "$rule_index"; then
-                rules_removed=$((rules_removed + 1))
-                log_success "Removed rule #$rule_index"
-            else
-                log_error "Failed to remove rule #$rule_index"
-            fi
-        done
-        
-        # Restart service if any rules were removed
-        if [[ $rules_removed -gt 0 ]]; then
-            # Check if all real rules were removed, if so, add placeholder back
-            local remaining_rules=$(grep -c "listen = \"0.0.0.0:" "$CONF_FILE" 2>/dev/null || echo "0")
-            if [[ $remaining_rules -eq 0 ]]; then
-                log_info "All forwarding rules removed, adding placeholder configuration..."
-                cat >> "$CONF_FILE" << EOF
-
-# Placeholder endpoint - ensures service can start without active rules
-[[endpoints]]
-listen = "127.0.0.1:65534"
-remote = "127.0.0.1:65535"
-
-EOF
-                log_success "Placeholder configuration added"
-            fi
-            
-            if is_realm_running; then
-                log_info "Restarting Realm service to apply changes..."
-                if systemctl restart realm; then
-                    log_success "Realm service restarted successfully"
-                else
-                    log_error "Failed to restart Realm service"
-                    log_info "Check logs with: journalctl -u realm -f"
-                fi
-            fi
-            
-            log_success "$rules_removed forwarding rule(s) removed and service updated"
-        fi
-        
-        break
+        # Remove the rule by filtering out the endpoint
+        remove_rule_by_port "$port"
     done
+    
+    # Check if all rules were removed
+    local remaining_rules=$(grep -c "listen = \"0.0.0.0:" "$CONF_FILE" 2>/dev/null || echo "0")
+    
+    log_success "Rules removed from configuration"
+    
+    # If all rules removed, stop the service
+    if [[ $remaining_rules -eq 0 ]]; then
+        log_info "All forwarding rules removed"
+        if is_realm_running; then
+            log_info "Stopping Realm service (no rules configured)..."
+            systemctl stop realm 2>/dev/null && log_success "Service stopped" || log_warn "Failed to stop service"
+        fi
+        # Remove backup if successful
+        if [[ -n "$backup_file" && -f "$backup_file" ]]; then
+            rm -f "$backup_file"
+        fi
+    else
+        # Restart service to apply changes
+        if is_realm_running; then
+            if ! restart_service_with_validation "$backup_file"; then
+                log_error "Failed to apply changes"
+                return 1
+            fi
+        else
+            # Remove backup if successful
+            if [[ -n "$backup_file" && -f "$backup_file" ]]; then
+                rm -f "$backup_file"
+            fi
+        fi
+    fi
+    
+    log_success "Successfully removed ${#valid_ports[@]} forwarding rule(s)"
+    
+    return 0
+}
+
+# Remove all forwarding rules
+remove_all_rules() {
+    print_header "Removing All Forwarding Rules"
+    
+    # Check if configuration file exists
+    if [[ ! -f "$CONF_FILE" ]]; then
+        log_error "Configuration file not found. No rules to remove"
+        return 1
+    fi
+    
+    # Parse existing rules
+    local existing_rules=$(parse_existing_rules)
+    if [[ -z "$existing_rules" ]]; then
+        log_warn "No forwarding rules found in configuration"
+        return 0
+    fi
+    
+    # Count rules
+    local rule_count=$(echo "$existing_rules" | wc -l)
+    log_info "Found $rule_count forwarding rule(s)"
+    
+    # Backup configuration
+    local backup_file=$(backup_config)
+    
+    # Regenerate base configuration (without endpoints)
+    log_info "Removing all forwarding rules..."
+    generate_base_configuration
+    
+    log_success "All rules removed from configuration"
+    
+    # Stop service since no rules configured
+    if is_realm_running; then
+        log_info "Stopping Realm service (no rules configured)..."
+        systemctl stop realm 2>/dev/null && log_success "Service stopped" || log_warn "Failed to stop service"
+    fi
+    
+    # Remove backup if successful
+    if [[ -n "$backup_file" && -f "$backup_file" ]]; then
+        rm -f "$backup_file"
+    fi
+    
+    log_success "Successfully removed all $rule_count forwarding rule(s)"
+    
+    return 0
+}
+
+# Remove rule by port (helper function)
+remove_rule_by_port() {
+    local target_port="$1"
+    
+    if [[ ! -f "$CONF_FILE" ]]; then
+        return 1
+    fi
+    
+    local temp_file=$(mktemp)
+    local in_target_endpoint=false
+    local skip_line=false
+    
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^\[\[endpoints\]\]$ ]]; then
+            in_target_endpoint=false
+            skip_line=false
+        elif [[ "$line" =~ ^listen\ =\ \"0\.0\.0\.0:([0-9]+)\" ]]; then
+            if [[ "${BASH_REMATCH[1]}" == "$target_port" ]]; then
+                in_target_endpoint=true
+                skip_line=true
+                continue
+            fi
+        fi
+        
+        if [[ "$in_target_endpoint" == true ]]; then
+            if [[ "$line" =~ ^remote\ = || "$line" =~ ^$ ]]; then
+                if [[ "$line" =~ ^$ && "$skip_line" == true ]]; then
+                    in_target_endpoint=false
+                    skip_line=false
+                fi
+                continue
+            fi
+        fi
+        
+        if [[ "$skip_line" == false ]]; then
+            echo "$line" >> "$temp_file"
+        fi
+    done < "$CONF_FILE"
+    
+    mv "$temp_file" "$CONF_FILE"
+    return 0
+}
+
+# List forwarding rules
+list_rules() {
+    print_header "Current Forwarding Rules"
+    
+    if [[ ! -f "$CONF_FILE" ]]; then
+        log_warn "Configuration file not found. No rules configured"
+        return 1
+    fi
+    
+    # Parse existing rules
+    local rules=$(parse_existing_rules)
+    
+    if [[ -z "$rules" ]]; then
+        log_warn "No forwarding rules configured"
+        return 0
+    fi
+    
+    # Count and display rules
+    local count=0
+    echo ""
+    while IFS='|' read -r port remote; do
+        count=$((count + 1))
+        echo -e "  ${GREEN}$count${NC}. Port ${YELLOW}$port${NC} -> ${YELLOW}$remote${NC}"
+    done <<< "$rules"
+    
+    echo ""
+    echo -e "${CYAN}Total: $count rule(s)${NC}"
+    
+    # Display service status
+    if is_realm_running; then
+        echo -e "${GREEN}✓ Realm service is running${NC}"
+    else
+        echo -e "${RED}✗ Realm service is not running${NC}"
+    fi
+    
+    return 0
+}
+
+# Show service status
+show_status() {
+    print_header "Realm Service Status"
+    
+    if ! is_realm_installed; then
+        log_warn "Realm is not installed"
+        return 1
+    fi
+    
+    echo ""
+    echo -e "${CYAN}Service Status:${NC}"
+    
+    if is_realm_running; then
+        echo -e "  ${GREEN}✓ Running${NC}"
+    else
+        echo -e "  ${RED}✗ Stopped${NC}"
+    fi
+    
+    echo ""
+    echo -e "${CYAN}Systemd Status:${NC}"
+    systemctl status realm --no-pager -l 2>&1 | head -20
+    
+    echo ""
+    echo -e "${CYAN}Configuration:${NC}"
+    echo -e "  Binary: ${YELLOW}$BINARY_PATH${NC}"
+    echo -e "  Config: ${YELLOW}$CONF_FILE${NC}"
+    echo -e "  Log: ${YELLOW}$LOG_FILE${NC}"
+    
+    # Show forwarding rules count
+    if [[ -f "$CONF_FILE" ]]; then
+        local rules=$(parse_existing_rules)
+        if [[ -n "$rules" ]]; then
+            local rule_count=$(echo "$rules" | wc -l)
+            echo ""
+            echo -e "${CYAN}Forwarding Rules: ${YELLOW}$rule_count${NC}"
+        fi
+    fi
+    
+    return 0
 }
 
 # Uninstall Realm service
 uninstall_realm() {
     print_header "Realm Uninstallation"
     
-    # Display current status before uninstallation
-    log_info "Checking current Realm installation status..."
-    
     # Check if Realm is installed
     if ! is_realm_installed; then
         log_warn "Realm is not installed on this system"
-        echo -e "${YELLOW}Nothing to uninstall.${NC}"
-        echo ""
-        read -p "Press Enter to exit..."
-        exit 0
+        return 0
     fi
     
-    # Display what will be removed
-    echo -e "${CYAN}The following components will be removed:${NC}"
-    echo -e "  ${YELLOW}• Realm service${NC}"
-    echo -e "  ${YELLOW}• Configuration file: $CONF_FILE${NC}"
-    echo -e "  ${YELLOW}• Binary file: $BINARY_PATH${NC}"
-    echo -e "  ${YELLOW}• Service file: $SYSTEMD_PATH${NC}"
-    echo -e "  ${YELLOW}• Log file: $LOG_FILE${NC}"
-    echo ""
-    
-    # Check service status
-    if is_realm_running; then
-        echo -e "${GREEN}✓ Realm service is currently running${NC}"
-    else
-        echo -e "${RED}✗ Realm service is not running${NC}"
-    fi
-    
-    # Show current forwarding rules
-    if [[ -f "$CONF_FILE" ]]; then
-        local rule_count=$(grep -c "listen = " "$CONF_FILE" 2>/dev/null || echo "0")
-        echo -e "${CYAN}Current forwarding rules: $rule_count${NC}"
-    fi
-    
-    echo ""
-    print_divider
-    
-    # Confirm uninstallation
-    read -p "Are you sure you want to uninstall Realm? This will remove all configurations. (y/n): " confirm
-    if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
-        log_info "Operation cancelled by user"
-        return
-    fi
-    
-    echo ""
     log_info "Starting Realm uninstallation process..."
-    print_divider
     
     # Step 1: Stop and disable service
-    log_info "Step 1/6: Stopping Realm service..."
-    if command -v systemctl >/dev/null 2>&1; then
-        if systemctl is-active --quiet realm.service; then
-            if systemctl stop realm.service; then
-                log_success "Realm service stopped successfully"
-            else
-                log_warn "Failed to stop Realm service (may already be stopped)"
-            fi
-        else
-            log_info "Realm service is not running"
-        fi
-        
-        log_info "Disabling Realm service..."
-        if systemctl is-enabled --quiet realm.service; then
-            if systemctl disable realm.service; then
-                log_success "Realm service disabled successfully"
-            else
-                log_warn "Failed to disable Realm service"
-            fi
-        else
-            log_info "Realm service is not enabled"
-        fi
-    else
-        log_info "Using legacy service management..."
-        service realm stop 2>/dev/null && log_success "Service stopped" || log_info "Service was not running"
+    log_info "Stopping Realm service..."
+    if systemctl is-active --quiet realm.service 2>/dev/null; then
+        systemctl stop realm.service 2>/dev/null && log_success "Service stopped" || log_warn "Failed to stop service"
+    fi
+    
+    if systemctl is-enabled --quiet realm.service 2>/dev/null; then
+        systemctl disable realm.service 2>/dev/null && log_success "Service disabled" || log_warn "Failed to disable service"
     fi
     
     # Step 2: Remove service file
-    log_info "Step 2/6: Removing systemd service file..."
+    log_info "Removing systemd service file..."
     if [[ -f "$SYSTEMD_PATH" ]]; then
-        if rm -f "$SYSTEMD_PATH"; then
-            log_success "Service file removed: $SYSTEMD_PATH"
-        else
-            log_error "Failed to remove service file: $SYSTEMD_PATH"
-        fi
-    else
-        log_info "Service file not found: $SYSTEMD_PATH"
+        rm -f "$SYSTEMD_PATH" && log_success "Service file removed" || log_error "Failed to remove service file"
     fi
     
     # Step 3: Remove configuration directory
-    log_info "Step 3/6: Removing configuration directory..."
+    log_info "Removing configuration directory..."
     local config_dir="$(dirname "$CONF_FILE")"
     if [[ -d "$config_dir" ]]; then
-        if rm -rf "$config_dir"; then
-            log_success "Configuration directory removed: $config_dir"
-        else
-            log_error "Failed to remove configuration directory: $config_dir"
-        fi
-    else
-        log_info "Configuration directory not found: $config_dir"
+        rm -rf "$config_dir" && log_success "Configuration removed" || log_error "Failed to remove configuration"
     fi
     
     # Step 4: Remove binary file
-    log_info "Step 4/6: Removing binary file..."
+    log_info "Removing binary file..."
     if [[ -f "$BINARY_PATH" ]]; then
-        if rm -f "$BINARY_PATH"; then
-            log_success "Binary file removed: $BINARY_PATH"
-        else
-            log_error "Failed to remove binary file: $BINARY_PATH"
-        fi
-    else
-        log_info "Binary file not found: $BINARY_PATH"
+        rm -f "$BINARY_PATH" && log_success "Binary removed" || log_error "Failed to remove binary"
     fi
     
     # Step 5: Remove log file
-    log_info "Step 5/6: Removing log file..."
+    log_info "Removing log file..."
     if [[ -f "$LOG_FILE" ]]; then
-        if rm -f "$LOG_FILE"; then
-            log_success "Log file removed: $LOG_FILE"
-        else
-            log_error "Failed to remove log file: $LOG_FILE"
-        fi
-    else
-        log_info "Log file not found: $LOG_FILE"
+        rm -f "$LOG_FILE" && log_success "Log file removed" || log_warn "Failed to remove log file"
     fi
     
     # Step 6: Reload systemd configuration
-    log_info "Step 6/6: Reloading systemd configuration..."
+    log_info "Reloading systemd configuration..."
     if command -v systemctl >/dev/null 2>&1; then
-        if systemctl daemon-reload; then
-            log_success "Systemd configuration reloaded"
-        else
-            log_warn "Failed to reload systemd configuration"
-        fi
-        
-        if systemctl reset-failed; then
-            log_success "Systemd failed units reset"
-        else
-            log_warn "Failed to reset systemd failed units"
-        fi
-    else
-        log_info "Systemd not available, skipping reload"
+        systemctl daemon-reload 2>/dev/null
+        systemctl reset-failed 2>/dev/null
+        log_success "Systemd configuration reloaded"
     fi
     
-    print_divider
-    log_success "Realm uninstallation completed successfully!"
-    echo ""
-    echo -e "${GREEN}All Realm components have been removed from your system.${NC}"
-    echo -e "${CYAN}Thank you for using Realm Management Script!${NC}"
-    echo ""
+    log_success "Realm uninstallation completed successfully"
     
-    # Exit the script completely
-    exit 0
+    return 0
 }
 
-# Display main menu
-show_main_menu() {
-    echo ""
-    echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}║        Realm Management Script       ║${NC}"
-    echo -e "${BLUE}╠══════════════════════════════════════╣${NC}"
-    echo -e "${BLUE}║                                      ║${NC}"
-    echo -e "${BLUE}║  ${GREEN}1${NC}) Add forwarding rule              ${BLUE}║${NC}"
-    echo -e "${BLUE}║  ${RED}2${NC}) Remove forwarding rule           ${BLUE}║${NC}"
-    echo -e "${BLUE}║  ${CYAN}3${NC}) View forwarding rules            ${BLUE}║${NC}"
-    echo -e "${BLUE}║  ${YELLOW}4${NC}) Uninstall forwarding service     ${BLUE}║${NC}"
-    echo -e "${BLUE}║  ${YELLOW}5${NC}) Exit                             ${BLUE}║${NC}"
-    echo -e "${BLUE}║                                      ║${NC}"
-    echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
-    echo ""
-}
-
-# Main program entry point
+# Main program entry point - Parse command-line arguments
 main() {
-    # Root permission check is already done at the beginning of the script
+    # Check if any arguments provided
+    if [ $# -eq 0 ]; then
+        usage
+        exit 1
+    fi
     
-    # Display welcome message
-    echo -e "${CYAN}Welcome to Realm Management Script!${NC}"
-    echo -e "${YELLOW}This script helps you manage TCP/UDP forwarding rules using Realm.${NC}"
+    # Arrays to collect multiple operations
+    local rules_to_add=()
+    local ports_to_remove=()
+    local operation=""
     
-    # Display initial main menu
-    show_main_menu
-    
-    # Main menu loop
-    while true; do
-        read -p "Select an option [1-5]: " choice
-        echo ""  # Add a blank line after the selection
-        
-        case "$choice" in
-            1)
-                add_forwarding_rule
-                echo ""  # Add a divider after the operation
-                print_divider
-                echo -e "${CYAN}Operation completed. Returning to main menu...${NC}"
-                show_main_menu
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --add)
+                if [[ -z "$2" || "$2" == --* ]]; then
+                    log_error "Option --add requires an argument"
+                    echo "Format: --add \"port:address:port\""
+                    exit 1
+                fi
+                rules_to_add+=("$2")
+                operation="add"
+                shift 2
                 ;;
-            2)
-                remove_forwarding_rule
-                echo ""  # Add a divider after the operation
-                print_divider
-                echo -e "${CYAN}Operation completed. Returning to main menu...${NC}"
-                show_main_menu
+            --remove)
+                if [[ -z "$2" || "$2" == --* ]]; then
+                    log_error "Option --remove requires an argument"
+                    echo "Format: --remove PORT"
+                    exit 1
+                fi
+                ports_to_remove+=("$2")
+                operation="remove"
+                shift 2
                 ;;
-            3)
-                show_current_rules
-                echo ""  # Add a divider after the operation
-                print_divider
-                echo -e "${CYAN}Operation completed. Returning to main menu...${NC}"
-                show_main_menu
+            --remove-all)
+                operation="remove-all"
+                shift
                 ;;
-            4)
-                uninstall_realm
-                # This line should never be reached as uninstall_realm exits
+            --list)
+                operation="list"
+                shift
                 ;;
-            5)
-                echo -e "${GREEN}Goodbye!${NC}"
+            --status)
+                operation="status"
+                shift
+                ;;
+            --uninstall)
+                operation="uninstall"
+                shift
+                ;;
+            --help|-h)
+                usage
                 exit 0
                 ;;
             *)
-                log_error "Invalid selection. Please choose 1-5"
+                log_error "Unknown option: $1"
                 echo ""
-                show_main_menu
+                usage
+                exit 1
                 ;;
         esac
     done
+    
+    # Execute operations based on collected arguments
+    case "$operation" in
+        add)
+            if [ ${#rules_to_add[@]} -eq 0 ]; then
+                log_error "No rules provided for --add operation"
+                exit 1
+            fi
+            add_rules "${rules_to_add[@]}"
+            exit $?
+            ;;
+        remove)
+            if [ ${#ports_to_remove[@]} -eq 0 ]; then
+                log_error "No ports provided for --remove operation"
+                exit 1
+            fi
+            remove_rules "${ports_to_remove[@]}"
+            exit $?
+            ;;
+        remove-all)
+            remove_all_rules
+            exit $?
+            ;;
+        list)
+            list_rules
+            exit $?
+            ;;
+        status)
+            show_status
+            exit $?
+            ;;
+        uninstall)
+            uninstall_realm
+            exit $?
+            ;;
+        *)
+            log_error "No valid operation specified"
+            usage
+            exit 1
+            ;;
+    esac
 }
 
 # Execute main function
