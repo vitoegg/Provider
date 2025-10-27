@@ -814,8 +814,40 @@ function delete_rule() {
         fi
     fi
     
-    # Save the changes to the config file
-    nft list ruleset > "$CONFIG_FILE"
+    # Save the changes to the config file by removing the specific rules
+    # Instead of overwriting with nft list ruleset, we delete the specific lines from config file
+    if [ "$selected_type" = "remote" ]; then
+        # Delete TCP rule from config if it was deleted
+        if [[ "$selected_protocol" == *"TCP"* ]] && [ -n "$tcp_handle" ]; then
+            sed -i "/tcp dport ${selected_port} dnat to ${selected_dest}/d" "$CONFIG_FILE"
+            log_debug "Removed TCP rule from config file"
+        fi
+        
+        # Delete UDP rule from config if it was deleted
+        if [[ "$selected_protocol" == *"UDP"* ]] && [ -n "$udp_handle" ]; then
+            sed -i "/udp dport ${selected_port} dnat to ${selected_dest}/d" "$CONFIG_FILE"
+            log_debug "Removed UDP rule from config file"
+        fi
+    else
+        # Delete local TCP rule from config if it was deleted
+        if [[ "$selected_protocol" == *"TCP"* ]] && [ -n "$local_tcp_handle" ]; then
+            sed -i "/tcp dport ${selected_port} dnat to ${selected_dest}/d" "$CONFIG_FILE"
+            log_debug "Removed local TCP rule from config file"
+        fi
+        
+        # Delete local UDP rule from config if it was deleted
+        if [[ "$selected_protocol" == *"UDP"* ]] && [ -n "$local_udp_handle" ]; then
+            sed -i "/udp dport ${selected_port} dnat to ${selected_dest}/d" "$CONFIG_FILE"
+            log_debug "Removed local UDP rule from config file"
+        fi
+    fi
+    
+    # Delete masquerade rule from config if it was deleted
+    if [ -n "$masq_handle" ]; then
+        sed -i "/ip daddr ${selected_ip} masquerade/d" "$CONFIG_FILE"
+        log_debug "Removed masquerade rule from config file"
+    fi
+    
     log_info "Port forwarding rule deleted successfully"
     
     # Verify deletion by listing current rules
