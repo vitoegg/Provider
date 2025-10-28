@@ -255,6 +255,7 @@ generate_reality_config() {
                 "network": "raw",
                 "security": "reality",
                 "realitySettings": {
+                    "fingerprint": "ios",
                     "target": "$domain:443",
                     "serverNames": [
                         "$domain"
