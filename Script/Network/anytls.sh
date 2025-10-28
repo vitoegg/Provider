@@ -1,8 +1,8 @@
 #!/bin/bash
 ################################################################################
-# Unified Shadowsocks Installation Script
-# This script installs and manages ShadowTLS and SS2022 services using sing-box.
-# It supports selective installation and provides friendly output messages.
+# AnyTLS Installation Script
+# This script installs and manages AnyTLS service using Singbox.
+# It provides friendly output messages and supports both CLI and interactive modes.
 ################################################################################
 
 # Color definitions
@@ -13,19 +13,9 @@ BLUE='\033[0;34m'
 NC='\033[0m'     # No Color
 BOLD='\033[1m'
 
-# Default port ranges
-DEFAULT_TLS_PORT_START=50000
-DEFAULT_TLS_PORT_END=60000
-DEFAULT_SS_PORT_START=20000
-DEFAULT_SS_PORT_END=40000
-
-# Preset domains for ShadowTLS
-PRESET_DOMAINS=(
-    "publicassets.cdn-apple.com"
-    "s0.awsstatic.com"
-    "p11.douyinpic.com"
-    "sns-video-hw.xhscdn.com"
-)
+# Default port range
+DEFAULT_PORT_START=50000
+DEFAULT_PORT_END=60000
 
 ################################################################################
 # Logging functions with timestamp and category
@@ -75,73 +65,35 @@ trap cleanup_temp_files EXIT
 ################################################################################
 # Global variables for configuration
 ################################################################################
-INSTALL_SHADOWTLS=false
-INSTALL_SS=false
-TLS_PORT=""
-TLS_PASSWORD=""
-SS_PASSWORD=""
-SS_PORT=""
-SS_STANDALONE_PASSWORD=""
-TLS_DOMAIN=""
+PORT=""
+PASSWORD=""
+DOMAIN=""
 SINGBOX_VERSION=""
 
 ################################################################################
 # Command-line arguments parser
 ################################################################################
 parse_args() {
-    local has_shadowtls_params=false
-    local has_ss_params=false
     local uninstall_requested=false
     
     while [[ $# -gt 0 ]]; do
         key="$1"
         case $key in
-            --tls-port)
-                TLS_PORT="$2"
-                has_shadowtls_params=true
+            --port)
+                PORT="$2"
                 shift 2
                 ;;
-            --tls-password)
-                TLS_PASSWORD="$2"
-                has_shadowtls_params=true
+            --password)
+                PASSWORD="$2"
                 shift 2
                 ;;
-            --tls-domain)
-                TLS_DOMAIN="$2"
-                has_shadowtls_params=true
-                shift 2
-                ;;
-            --ss-password)
-                SS_PASSWORD="$2"
-                has_shadowtls_params=true
-                shift 2
-                ;;
-            --ss-port)
-                SS_PORT="$2"
-                has_ss_params=true
-                shift 2
-                ;;
-            --ss-standalone-password)
-                SS_STANDALONE_PASSWORD="$2"
-                has_ss_params=true
+            --domain)
+                DOMAIN="$2"
                 shift 2
                 ;;
             --version)
                 SINGBOX_VERSION="$2"
                 shift 2
-                ;;
-            --install-shadowtls)
-                INSTALL_SHADOWTLS=true
-                shift
-                ;;
-            --install-ss)
-                INSTALL_SS=true
-                shift
-                ;;
-            --install-both)
-                INSTALL_SHADOWTLS=true
-                INSTALL_SS=true
-                shift
                 ;;
             -u|--uninstall)
                 uninstall_requested=true
@@ -168,32 +120,6 @@ parse_args() {
         uninstall_service
         exit 0
     fi
-    
-    # Auto-detect services based on parameters (only if no explicit install flags are set)
-    if [[ "$INSTALL_SHADOWTLS" == false && "$INSTALL_SS" == false ]]; then
-        log_info "Analyzing parameters for service detection..."
-        log_info "ShadowTLS parameters detected: $has_shadowtls_params"
-        log_info "Shadowsocks parameters detected: $has_ss_params"
-        
-        if [[ "$has_shadowtls_params" == true && "$has_ss_params" == true ]]; then
-            # Both types of parameters provided
-            INSTALL_SHADOWTLS=true
-            INSTALL_SS=true
-            log_info "Auto-detected both ShadowTLS and Shadowsocks installation from parameters"
-        elif [[ "$has_shadowtls_params" == true ]]; then
-            # Only ShadowTLS parameters provided
-            INSTALL_SHADOWTLS=true
-            log_info "Auto-detected ShadowTLS installation from parameters"
-        elif [[ "$has_ss_params" == true ]]; then
-            # Only Shadowsocks parameters provided
-            INSTALL_SS=true
-            log_info "Auto-detected Shadowsocks installation from parameters"
-        else
-            log_info "No service parameters detected, will show interactive menu"
-        fi
-    else
-        log_info "Explicit installation flags detected, skipping auto-detection"
-    fi
 }
 
 ################################################################################
@@ -202,48 +128,34 @@ parse_args() {
 show_usage() {
     echo "Usage: $0 [OPTIONS]"
     echo ""
-    echo "Installation Options:"
-    echo "  --install-shadowtls     Install ShadowTLS service only"
-    echo "  --install-ss            Install Shadowsocks service only"
-    echo "  --install-both          Install both ShadowTLS and Shadowsocks services"
-    echo ""
     echo "Configuration Options:"
-    echo "  --tls-port PORT         Specify TLS port (50000-60000)"
-    echo "  --tls-password PASS     Specify TLS password"
-    echo "  --tls-domain DOMAIN     Specify TLS domain"
-    echo "  --ss-password PASS      Specify Shadowsocks password for ShadowTLS"
-    echo "  --ss-port PORT          Specify Shadowsocks port (20000-40000)"
-    echo "  --ss-standalone-password PASS  Specify standalone Shadowsocks password"
-    echo "  --version VERSION       Specify sing-box version to install (e.g., v1.8.0 or 1.8.0)"
+    echo "  --port PORT             Specify AnyTLS port (default: auto-generated 50000-60000)"
+    echo "  --password PASS         Specify AnyTLS password (default: auto-generated)"
+    echo "  --domain DOMAIN         Specify domain name (required if not provided interactively)"
+    echo "  --version VERSION       Specify Singbox version to install (e.g., v1.8.0 or 1.8.0)"
     echo ""
-    echo "Other Options:"
-    echo "  --uninstall             Uninstall sing-box service and remove configuration"
-    echo "  --update                Update sing-box to the latest version"
+    echo "Management Options:"
+    echo "  --update                Update Singbox to the latest version"
+    echo "  -u, --uninstall         Uninstall Singbox service and remove configuration"
     echo "  -h, --help              Show this help message"
     echo ""
-    echo "Smart Detection:"
-    echo "  The script can auto-detect which services to install based on parameters:"
-    echo "  - ShadowTLS parameters: --tls-port, --tls-password, --tls-domain, --ss-password"
-    echo "  - Shadowsocks parameters: --ss-port, --ss-standalone-password"
-    echo ""
     echo "Examples:"
-    echo "  # Explicit installation"
-    echo "  $0 --install-shadowtls --tls-port 58568 --tls-password mypass"
-    echo "  $0 --install-ss --ss-port 31606"
-    echo "  $0 --install-both"
+    echo "  # Install with all parameters specified"
+    echo "  $0 --port 52555 --password mypass123 --domain listen.example.com"
     echo ""
-    echo "  # Auto-detection (recommended)"
-    echo "  $0 --tls-port 58568 --tls-password mypass"
-    echo "  $0 --ss-port 31606 --ss-standalone-password mypass"
-    echo "  $0 --tls-port 58568 --ss-port 31606"
+    echo "  # Install with partial parameters (others will be auto-generated or prompted)"
+    echo "  $0 --domain listen.example.com"
+    echo "  $0 --port 52555 --domain listen.example.com"
     echo ""
-    echo "  # Version specific installation"
-    echo "  $0 --install-ss --version v1.8.0"
-    echo "  $0 --tls-port 58568 --version 1.7.8"
+    echo "  # Install with specific version"
+    echo "  $0 --domain listen.example.com --version v1.8.0"
     echo ""
-    echo "  # Update and Uninstall"
+    echo "  # Update or Uninstall"
     echo "  $0 --update"
     echo "  $0 --uninstall"
+    echo ""
+    echo "  # Interactive mode (no parameters)"
+    echo "  $0"
 }
 
 ################################################################################
@@ -395,14 +307,14 @@ compare_versions() {
 
 
 ################################################################################
-# Download and install sing-box
+# Download and install Singbox
 ################################################################################
 install_singbox() {
-    print_header "Installing sing-box"
+    print_header "Installing Singbox"
     
-    # Check if sing-box is already installed and running
+    # Check if Singbox is already installed and running
     if systemctl is-active --quiet sing-box 2>/dev/null; then
-        log_warning "sing-box service is already installed and running."
+        log_warning "Singbox service is already installed and running."
         log_warning "If you want to reinstall, please uninstall first."
         return 0
     fi
@@ -422,30 +334,30 @@ install_singbox() {
         log_info "Fetching latest version from GitHub..."
         target_version=$(wget -qO- --timeout=10 --tries=3 https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null | jq -r .tag_name)
         if [[ -z "$target_version" ]]; then
-            log_error "Failed to retrieve sing-box release version"
+            log_error "Failed to retrieve Singbox release version"
             exit 1
         fi
         log_info "Latest available version: $target_version"
     fi
     
-    log_info "Installing sing-box version: $target_version"
+    log_info "Installing Singbox version: $target_version"
     
     # Download .deb package
     local download_url="https://github.com/SagerNet/sing-box/releases/download/${target_version}/sing-box_${target_version#v}_linux_${ARCH}.deb"
     local temp_file="/tmp/sing-box.deb"
     
     log_info "Download URL: $download_url"
-    log_info "Downloading sing-box package..."
+    log_info "Downloading Singbox package..."
     if ! wget --no-check-certificate -q -O "$temp_file" "$download_url"; then
-        log_error "Failed to download sing-box from: $download_url"
+        log_error "Failed to download Singbox from: $download_url"
         log_error "Please check if the URL is correct and accessible"
         exit 1
     fi
     
     # Install package
-    log_info "Installing sing-box package..."
+    log_info "Installing Singbox package..."
     if ! DEBIAN_FRONTEND=noninteractive dpkg -i "$temp_file" >/dev/null 2>&1; then
-        log_error "Failed to install sing-box package!"
+        log_error "Failed to install Singbox package!"
         # Clean up on failure
         rm -f "$temp_file"
         exit 1
@@ -455,18 +367,18 @@ install_singbox() {
     rm -f "$temp_file"
     log_info "Cleaned up temporary files"
     
-    log_success "sing-box installation completed"
+    log_success "Singbox installation completed"
 }
 
 ################################################################################
-# Update sing-box (Binary Replacement)
+# Update Singbox (Binary Replacement)
 ################################################################################
 update_singbox() {
-    print_header "Updating sing-box (Binary Replacement)"
+    print_header "Updating Singbox (Binary Replacement)"
     
-    # Check if sing-box is installed
+    # Check if Singbox is installed
     if ! command -v sing-box >/dev/null 2>&1; then
-        log_error "sing-box is not installed. Please install it first."
+        log_error "Singbox is not installed. Please install it first."
         return 1
     fi
     
@@ -474,7 +386,7 @@ update_singbox() {
     local current_version
     current_version=$(get_current_version)
     if [[ -z "$current_version" ]]; then
-        log_error "Failed to get current sing-box version"
+        log_error "Failed to get current Singbox version"
         return 1
     fi
     log_info "Current version: $current_version"
@@ -483,7 +395,7 @@ update_singbox() {
     local latest_version
     latest_version=$(wget -qO- --timeout=10 --tries=3 https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null | jq -r .tag_name)
     if [[ -z "$latest_version" ]]; then
-        log_error "Failed to retrieve latest sing-box version"
+        log_error "Failed to retrieve latest Singbox version"
         return 1
     fi
     log_info "Latest version: $latest_version"
@@ -494,7 +406,7 @@ update_singbox() {
     
     case $comparison_result in
         0)
-            log_info "sing-box is already up to date (version $current_version)"
+            log_info "Singbox is already up to date (version $current_version)"
             return 0
             ;;
         2)
@@ -507,13 +419,13 @@ update_singbox() {
             ;;
     esac
     
-    # Stop sing-box service
+    # Stop Singbox service
     local service_was_running=false
     if systemctl is-active --quiet sing-box 2>/dev/null; then
         service_was_running=true
-        log_info "Stopping sing-box service for update..."
+        log_info "Stopping Singbox service for update..."
         if ! systemctl stop sing-box >/dev/null 2>&1; then
-            log_error "Failed to stop sing-box service"
+            log_error "Failed to stop Singbox service"
             return 1
         fi
         log_success "Service stopped"
@@ -537,10 +449,10 @@ update_singbox() {
     local temp_archive="/tmp/sing-box-update.tar.gz"
     local temp_dir="/tmp/sing-box-update"
     
-    log_info "Downloading sing-box binary $latest_version..."
+    log_info "Downloading Singbox binary $latest_version..."
     log_info "Download URL: $download_url"
     if ! wget --no-check-certificate -q -O "$temp_archive" "$download_url"; then
-        log_error "Failed to download sing-box from: $download_url"
+        log_error "Failed to download Singbox from: $download_url"
         # Restore service if it was running
         if [[ "$service_was_running" == true ]]; then
             systemctl start sing-box >/dev/null 2>&1
@@ -552,7 +464,7 @@ update_singbox() {
     log_info "Extracting and installing binary..."
     mkdir -p "$temp_dir" >/dev/null 2>&1
     if ! tar -xzf "$temp_archive" -C "$temp_dir" >/dev/null 2>&1; then
-        log_error "Failed to extract sing-box archive"
+        log_error "Failed to extract Singbox archive"
         # Clean up and restore service
         rm -rf "$temp_archive" "$temp_dir"
         if [[ "$service_was_running" == true ]]; then
@@ -565,7 +477,7 @@ update_singbox() {
     local binary_file
     binary_file=$(find "$temp_dir" -name "sing-box" -type f | head -n1)
     if [[ -z "$binary_file" ]]; then
-        log_error "sing-box binary not found in archive"
+        log_error "Singbox binary not found in archive"
         # Clean up and restore service
         rm -rf "$temp_archive" "$temp_dir"
         if [[ "$service_was_running" == true ]]; then
@@ -575,9 +487,9 @@ update_singbox() {
     fi
     
     # Replace binary
-    log_info "Replacing sing-box binary..."
+    log_info "Replacing Singbox binary..."
     if ! cp "$binary_file" "/usr/bin/sing-box"; then
-        log_error "Failed to replace sing-box binary"
+        log_error "Failed to replace Singbox binary"
         # Restore backup if available
         if [[ -f "$binary_backup" ]]; then
             cp "$binary_backup" "/usr/bin/sing-box"
@@ -601,9 +513,9 @@ update_singbox() {
     
     # Restart service if it was running
     if [[ "$service_was_running" == true ]]; then
-        log_info "Starting sing-box service..."
+        log_info "Starting Singbox service..."
         if ! systemctl start sing-box >/dev/null 2>&1; then
-            log_error "Failed to start sing-box service after update"
+            log_error "Failed to start Singbox service after update"
             log_error "Check logs with: journalctl -u sing-box"
             return 1
         fi
@@ -611,7 +523,7 @@ update_singbox() {
         # Wait a moment and check service status
         sleep 2
         if ! systemctl is-active --quiet sing-box; then
-            log_error "sing-box service failed to start after update"
+            log_error "Singbox service failed to start after update"
             log_error "Check logs with: journalctl -u sing-box"
             return 1
         fi
@@ -622,7 +534,7 @@ update_singbox() {
     local new_version
     new_version=$(get_current_version)
     if [[ "$new_version" == "${latest_version#v}" ]]; then
-        log_success "sing-box successfully updated to version $new_version"
+        log_success "Singbox successfully updated to version $new_version"
         log_info "Update method: Binary replacement (faster and more efficient)"
         return 0
     else
@@ -637,154 +549,90 @@ update_singbox() {
 generate_config_params() {
     print_header "Generating Configuration Parameters"
     
-    # Generate ShadowTLS parameters if needed
-    if [[ "$INSTALL_SHADOWTLS" == true ]]; then
-        if [[ -z "$TLS_PORT" ]]; then
-            TLS_PORT=$(generate_port "$DEFAULT_TLS_PORT_START" "$DEFAULT_TLS_PORT_END")
-            log_info "Generated TLS port: $TLS_PORT"
-        else
-            log_info "Using specified TLS port: $TLS_PORT"
-        fi
-        
-        if [[ -z "$TLS_PASSWORD" ]]; then
-            TLS_PASSWORD=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
-            log_info "Generated TLS password"
-        else
-            log_info "Using specified TLS password"
-        fi
-        
-        if [[ -z "$TLS_DOMAIN" ]]; then
-            local random_index=$((RANDOM % ${#PRESET_DOMAINS[@]}))
-            TLS_DOMAIN="${PRESET_DOMAINS[$random_index]}"
-            log_info "Selected TLS domain: $TLS_DOMAIN"
-        else
-            log_info "Using specified TLS domain: $TLS_DOMAIN"
-        fi
-        
-        if [[ -z "$SS_PASSWORD" ]]; then
-            SS_PASSWORD=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
-            log_info "Generated Shadowsocks password for ShadowTLS"
-        else
-            log_info "Using specified Shadowsocks password for ShadowTLS"
-        fi
+    # Generate port if not specified
+    if [[ -z "$PORT" ]]; then
+        PORT=$(generate_port "$DEFAULT_PORT_START" "$DEFAULT_PORT_END")
+        log_info "Generated port: $PORT"
+    else
+        log_info "Using specified port: $PORT"
     fi
     
-    # Generate Shadowsocks parameters if needed
-    if [[ "$INSTALL_SS" == true ]]; then
-        if [[ -z "$SS_PORT" ]]; then
-            SS_PORT=$(generate_port "$DEFAULT_SS_PORT_START" "$DEFAULT_SS_PORT_END")
-            log_info "Generated Shadowsocks port: $SS_PORT"
-        else
-            log_info "Using specified Shadowsocks port: $SS_PORT"
+    # Generate password if not specified
+    if [[ -z "$PASSWORD" ]]; then
+        PASSWORD=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
+        log_info "Generated password"
+    else
+        log_info "Using specified password"
+    fi
+    
+    # Prompt for domain if not specified
+    if [[ -z "$DOMAIN" ]]; then
+        echo ""
+        read -p "Please enter your domain name: " DOMAIN
+        if [[ -z "$DOMAIN" ]]; then
+            log_error "Domain name is required!"
+            exit 1
         fi
-        
-        if [[ -z "$SS_STANDALONE_PASSWORD" ]]; then
-            SS_STANDALONE_PASSWORD=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
-            log_info "Generated Shadowsocks password"
-        else
-            log_info "Using specified Shadowsocks password"
-        fi
+        log_info "Using domain: $DOMAIN"
+    else
+        log_info "Using specified domain: $DOMAIN"
     fi
     
     log_success "Configuration parameters ready"
 }
 
 ################################################################################
-# Create sing-box configuration
+# Create Singbox configuration
 ################################################################################
 create_singbox_config() {
-    print_header "Creating sing-box Configuration"
+    print_header "Creating Singbox Configuration"
     
     # Clean existing configuration before creating new one
     clean_sing_box_config
     
     local config_file="/etc/sing-box/config.json"
-    local inbounds="[]"
     
-    # Build inbounds array
-    if [[ "$INSTALL_SHADOWTLS" == true && "$INSTALL_SS" == true ]]; then
-        # Both services
-        inbounds='[
-    {
-      "type": "shadowtls",
-      "listen": "::",
-      "listen_port": '$TLS_PORT',
-      "version": 3,
-      "users": [
-        {
-          "name": "Cloud",
-          "password": "'$TLS_PASSWORD'"
-        }
-      ],
-      "handshake": {
-        "server": "'$TLS_DOMAIN'",
-        "server_port": 443
-      },
-      "detour": "shadowsocks-in"
-    },
-    {
-      "type": "shadowsocks",
-      "tag": "shadowsocks-in",
-      "listen": "127.0.0.1",
-      "method": "aes-128-gcm",
-      "password": "'$SS_PASSWORD'"
-    },
-    {
-      "type": "shadowsocks",
-      "listen": "::",
-      "listen_port": '$SS_PORT',
-      "method": "aes-128-gcm",
-      "password": "'$SS_STANDALONE_PASSWORD'"
-    }
-  ]'
-    elif [[ "$INSTALL_SHADOWTLS" == true ]]; then
-        # ShadowTLS only
-        inbounds='[
-    {
-      "type": "shadowtls",
-      "listen": "::",
-      "listen_port": '$TLS_PORT',
-      "version": 3,
-      "users": [
-        {
-          "name": "Cloud",
-          "password": "'$TLS_PASSWORD'"
-        }
-      ],
-      "handshake": {
-        "server": "'$TLS_DOMAIN'",
-        "server_port": 443
-      },
-      "detour": "shadowsocks-in"
-    },
-    {
-      "type": "shadowsocks",
-      "tag": "shadowsocks-in",
-      "listen": "127.0.0.1",
-      "method": "aes-128-gcm",
-      "password": "'$SS_PASSWORD'"
-    }
-  ]'
-    elif [[ "$INSTALL_SS" == true ]]; then
-        # Shadowsocks only
-        inbounds='[
-    {
-      "type": "shadowsocks",
-      "listen": "::",
-      "listen_port": '$SS_PORT',
-      "method": "aes-128-gcm",
-      "password": "'$SS_STANDALONE_PASSWORD'"
-    }
-  ]'
-    fi
-    
-    # Create configuration file
+    # Create AnyTLS configuration file
     cat > "$config_file" << EOF
 {
   "log": {
     "disabled": true
   },
-  "inbounds": $inbounds
+  "inbounds": [
+    {
+      "type": "anytls",
+      "tag": "anytls-in",
+      "listen": "::",
+      "listen_port": $PORT,
+      "users": [
+        {
+          "name": "AnyCloud",
+          "password": "$PASSWORD"
+        }
+      ],
+      "padding_scheme": [
+        "stop=3",
+        "0=30-30",
+        "1=100-400",
+        "2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000"
+      ],
+      "tls": {
+        "enabled": true,
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ],
+        "server_name": "$DOMAIN",
+        "acme": {
+          "domain": [
+            "$DOMAIN"
+          ],
+          "email": "admin@cert.eu.org",
+          "provider": "letsencrypt"
+        }
+      }
+    }
+  ]
 }
 EOF
     
@@ -792,20 +640,20 @@ EOF
 }
 
 ################################################################################
-# Start and enable sing-box service
+# Start and enable Singbox service
 ################################################################################
 start_singbox_service() {
-    print_header "Starting sing-box Service"
+    print_header "Starting Singbox Service"
     
-    log_info "Enabling sing-box service..."
+    log_info "Enabling Singbox service..."
     if ! systemctl enable sing-box >/dev/null 2>&1; then
-        log_error "Failed to enable sing-box service"
+        log_error "Failed to enable Singbox service"
         exit 1
     fi
     
-    log_info "Starting sing-box service..."
+    log_info "Starting Singbox service..."
     if ! systemctl start sing-box >/dev/null 2>&1; then
-        log_error "Failed to start sing-box service"
+        log_error "Failed to start Singbox service"
         exit 1
     fi
     
@@ -814,12 +662,12 @@ start_singbox_service() {
     
     # Check service status
     if ! systemctl is-active --quiet sing-box; then
-        log_error "sing-box service failed to start!"
+        log_error "Singbox service failed to start!"
         log_error "Check logs with: journalctl -u sing-box"
         exit 1
     fi
     
-    log_success "sing-box service started successfully"
+    log_success "Singbox service started successfully"
 }
 
 ################################################################################
@@ -828,7 +676,7 @@ start_singbox_service() {
 show_configuration() {
     print_header "Installation Status"
     echo "------------------------------------"
-    echo -e "${BOLD}sing-box Service Status:${NC}"
+    echo -e "${BOLD}Singbox Service Status:${NC}"
     systemctl status sing-box --no-pager
     echo "------------------------------------"
 
@@ -836,35 +684,22 @@ show_configuration() {
     local server_ip
     server_ip=$(get_ipv4_address)
     
+    echo ""
+    echo -e "${BOLD}AnyTLS Configuration:${NC}"
     printf "%-25s %s\n" "Server IP:" "$server_ip"
-    
-    if [[ "$INSTALL_SHADOWTLS" == true ]]; then
-        echo ""
-        echo -e "${BOLD}ShadowTLS Configuration:${NC}"
-        printf "%-25s %s\n" "TLS Port:" "$TLS_PORT"
-        printf "%-25s %s\n" "TLS Password:" "$TLS_PASSWORD"
-        printf "%-25s %s\n" "TLS Domain:" "$TLS_DOMAIN"
-        printf "%-25s %s\n" "SS Password:" "$SS_PASSWORD"
-        printf "%-25s %s\n" "SS Method:" "aes-128-gcm"
-    fi
-    
-    if [[ "$INSTALL_SS" == true ]]; then
-        echo ""
-        echo -e "${BOLD}Shadowsocks Configuration:${NC}"
-        printf "%-25s %s\n" "SS Port:" "$SS_PORT"
-        printf "%-25s %s\n" "SS Password:" "$SS_STANDALONE_PASSWORD"
-        printf "%-25s %s\n" "SS Method:" "aes-128-gcm"
-    fi
+    printf "%-25s %s\n" "Port:" "$PORT"
+    printf "%-25s %s\n" "Password:" "$PASSWORD"
+    printf "%-25s %s\n" "Domain:" "$DOMAIN"
     
     echo "=================================="
     echo ""
 }
 
 ################################################################################
-# Clean sing-box configuration files and directories
+# Clean Singbox configuration files and directories
 ################################################################################
 clean_sing_box_config() {
-    log_info "Cleaning existing sing-box configuration..."
+    log_info "Cleaning existing Singbox configuration..."
     
     # Remove configuration directory and all its contents
     if [[ -d "/etc/sing-box" ]]; then
@@ -895,16 +730,16 @@ clean_sing_box_config() {
 }
 
 ################################################################################
-# Uninstall sing-box service
+# Uninstall Singbox service
 ################################################################################
 uninstall_service() {
-    print_header "Uninstalling sing-box"
+    print_header "Uninstalling Singbox"
     
     # Stop and disable service
-    log_info "Stopping and disabling sing-box service..."
+    log_info "Stopping and disabling Singbox service..."
     if systemctl is-active --quiet sing-box 2>/dev/null; then
         if ! systemctl stop sing-box >/dev/null 2>&1; then
-            log_warning "Failed to stop sing-box service gracefully, forcing stop..."
+            log_warning "Failed to stop Singbox service gracefully, forcing stop..."
             systemctl kill sing-box >/dev/null 2>&1
         fi
         log_success "Service stopped"
@@ -941,8 +776,8 @@ uninstall_service() {
         log_success "Systemd daemon reloaded"
     fi
     
-    # Remove sing-box package
-    log_info "Removing sing-box package..."
+    # Remove Singbox package
+    log_info "Removing Singbox package..."
     if dpkg -l | grep -q "^ii.*sing-box" 2>/dev/null; then
         # Try normal removal first, then force if needed
         DEBIAN_FRONTEND=noninteractive dpkg --remove sing-box >/dev/null 2>&1 || \
@@ -972,8 +807,8 @@ uninstall_service() {
         fi
     done
     
-    # Clean up any sing-box binary if it still exists
-    log_info "Removing sing-box binary..."
+    # Clean up any Singbox binary if it still exists
+    log_info "Removing Singbox binary..."
     local binary_paths=(
         "/usr/bin/sing-box"
         "/usr/local/bin/sing-box"
@@ -996,7 +831,7 @@ uninstall_service() {
     cleanup_temp_files
     
     log_success "Complete uninstallation finished successfully"
-    log_info "All sing-box components have been removed from the system"
+    log_info "All Singbox components have been removed from the system"
     log_info "The system is ready for normal package operations"
 }
 
@@ -1019,44 +854,28 @@ run_installation() {
 show_menu() {
     while true; do
         clear
-        print_header "Shadowsocks Unified Installation Script"
-        echo "1. Install ShadowTLS only"
-        echo "2. Install Shadowsocks only"
-        echo "3. Install both ShadowTLS and Shadowsocks"
-        echo "4. Update Singbox service"
-        echo "5. Uninstall Singbox service"
-        echo "6. Exit Script"
+        print_header "AnyTLS Installation Script"
+        echo "1. Install AnyTLS service"
+        echo "2. Update Singbox"
+        echo "3. Uninstall Singbox service"
+        echo "4. Exit Script"
         echo -e "=====================================\n"
-        read -p "Please select an option (1-6): " choice
+        read -p "Please select an option (1-4): " choice
         
         case $choice in
             1)
-                INSTALL_SHADOWTLS=true
-                INSTALL_SS=false
                 run_installation
                 exit 0
                 ;;
             2)
-                INSTALL_SHADOWTLS=false
-                INSTALL_SS=true
-                run_installation
-                exit 0
-                ;;
-            3)
-                INSTALL_SHADOWTLS=true
-                INSTALL_SS=true
-                run_installation
-                exit 0
-                ;;
-            4)
                 update_singbox
                 exit 0
                 ;;
-            5)
+            3)
                 uninstall_service
                 exit 0
                 ;;
-            6)
+            4)
                 log_info "Exiting..."
                 exit 0
                 ;;
@@ -1072,15 +891,15 @@ show_menu() {
 # Main execution
 ################################################################################
 main() {
-    log_info "Shadowsocks Unified Installation Script v1.0"
+    log_info "AnyTLS Installation Script v1.0"
     log_info "Operating System: $(uname -s) $(uname -r)"
     log_info "Architecture: $(uname -m)"
     
     # Parse command line arguments
     parse_args "$@"
     
-    # If installation flags are set via command line, run installation
-    if [[ "$INSTALL_SHADOWTLS" == true || "$INSTALL_SS" == true ]]; then
+    # If any configuration parameters are provided, run installation
+    if [[ -n "$PORT" || -n "$PASSWORD" || -n "$DOMAIN" ]]; then
         run_installation
     else
         # Show interactive menu
