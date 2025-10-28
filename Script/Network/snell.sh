@@ -231,7 +231,7 @@ create_config() {
 [snell-server]
 listen = 0.0.0.0:${port}
 psk = ${psk}
-ipv6 = false
+ipv6 = true
 EOF
     print_message "success" "Configuration file created"
 }
