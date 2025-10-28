@@ -193,7 +193,7 @@ detect_arch() {
 ################################################################################
 install_packages() {
     print_header "Installing Required Packages"
-    local packages_needed=(wget dpkg jq openssl)
+    local packages_needed=(wget dpkg jq openssl tar)
     
     if command -v apt-get >/dev/null 2>&1; then
         log_info "Updating package list..."
@@ -382,6 +382,12 @@ update_singbox() {
         return 1
     fi
     
+    # Detect architecture
+    detect_arch
+    
+    # Ensure required packages are installed
+    install_packages
+    
     # Get current version
     local current_version
     current_version=$(get_current_version)
@@ -511,36 +517,72 @@ update_singbox() {
     rm -rf "$temp_archive" "$temp_dir" "$binary_backup"
     log_info "Cleaned up temporary files"
     
-    # Restart service if it was running
-    if [[ "$service_was_running" == true ]]; then
-        log_info "Starting Singbox service..."
-        if ! systemctl start sing-box >/dev/null 2>&1; then
-            log_error "Failed to start Singbox service after update"
-            log_error "Check logs with: journalctl -u sing-box"
-            return 1
-        fi
-        
-        # Wait a moment and check service status
-        sleep 2
-        if ! systemctl is-active --quiet sing-box; then
-            log_error "Singbox service failed to start after update"
-            log_error "Check logs with: journalctl -u sing-box"
-            return 1
-        fi
-        log_success "Service restarted successfully"
-    fi
-    
-    # Verify update
+    # Verify binary version before starting service
+    print_header "Verifying Update"
     local new_version
     new_version=$(get_current_version)
-    if [[ "$new_version" == "${latest_version#v}" ]]; then
-        log_success "Singbox successfully updated to version $new_version"
-        log_info "Update method: Binary replacement (faster and more efficient)"
-        return 0
-    else
-        log_error "Update verification failed. Expected: ${latest_version#v}, Got: $new_version"
+    if [[ -z "$new_version" ]]; then
+        log_error "Failed to get new Singbox version"
         return 1
     fi
+    
+    if [[ "$new_version" != "${latest_version#v}" ]]; then
+        log_error "Version mismatch. Expected: ${latest_version#v}, Got: $new_version"
+        return 1
+    fi
+    log_success "Binary version verified: $new_version"
+    
+    # Ensure service is started (regardless of previous state)
+    log_info "Starting Singbox service..."
+    if systemctl is-active --quiet sing-box 2>/dev/null; then
+        log_info "Service is already running, restarting..."
+        if ! systemctl restart sing-box >/dev/null 2>&1; then
+            log_error "Failed to restart Singbox service"
+            log_error "Check logs with: journalctl -u sing-box"
+            return 1
+        fi
+    else
+        if ! systemctl start sing-box >/dev/null 2>&1; then
+            log_error "Failed to start Singbox service"
+            log_error "Check logs with: journalctl -u sing-box"
+            return 1
+        fi
+    fi
+    
+    # Wait for service to stabilize
+    log_info "Waiting for service to stabilize..."
+    sleep 3
+    
+    # Verify service status
+    if ! systemctl is-active --quiet sing-box; then
+        log_error "Singbox service is not running after update"
+        log_error "Check logs with: journalctl -u sing-box"
+        return 1
+    fi
+    log_success "Service is running"
+    
+    # Final verification: Check running service version
+    log_info "Verifying running service version..."
+    local running_version
+    running_version=$(sing-box version 2>/dev/null | head -n1 | awk '{print $3}' | sed 's/^v//')
+    
+    if [[ -z "$running_version" ]]; then
+        log_warning "Could not verify running version, but service is active"
+    elif [[ "$running_version" == "${latest_version#v}" ]]; then
+        log_success "Running version confirmed: $running_version"
+    else
+        log_warning "Running version ($running_version) differs from expected (${latest_version#v}), but service is active"
+    fi
+    
+    # Display service status
+    echo ""
+    systemctl status sing-box --no-pager --lines=5
+    echo ""
+    
+    log_success "Update completed successfully"
+    log_success "Singbox updated from $current_version to $new_version"
+    log_info "Update method: Binary replacement"
+    return 0
 }
 
 ################################################################################
