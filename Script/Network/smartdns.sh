@@ -287,7 +287,7 @@ serve-expired-prefetch-time 21600
 cache-persist yes
 cache-file /etc/smartdns/smartdns.cache
 cache-checkpoint-time 86400
-dualstack-ip-selection yes
+force-AAAA-SOA yes
 force-qtype-SOA 65
 EOF
 
