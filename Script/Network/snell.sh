@@ -229,7 +229,7 @@ create_config() {
     print_message "info" "Creating configuration file..."
     cat > "${CONF}" << EOF
 [snell-server]
-listen = 0.0.0.0:${port}
+listen = ::0:${port}
 psk = ${psk}
 ipv6 = true
 EOF
