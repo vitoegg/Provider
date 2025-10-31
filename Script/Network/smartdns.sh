@@ -261,7 +261,7 @@ configure_smartdns() {
     cat > /etc/smartdns/smartdns.conf << EOF
 server-name smartdns
 log-level error
-bind :53
+bind [::]:53
 server 1.1.1.1
 server 8.8.8.8
 server 9.9.9.9
@@ -287,7 +287,7 @@ serve-expired-prefetch-time 21600
 cache-persist yes
 cache-file /etc/smartdns/smartdns.cache
 cache-checkpoint-time 86400
-force-AAAA-SOA yes
+dualstack-ip-selection yes
 force-qtype-SOA 65
 EOF
 
