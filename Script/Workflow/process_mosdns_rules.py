@@ -15,29 +15,14 @@ import os
 import re
 from typing import Set, List, Tuple, Dict
 
+# 编译正则模式以提升性能
+REGEX_PATTERN = re.compile(r'[\*\[\]\(\)\\+\?\^\$\|]')
+
 def is_regex_rule(rule: str) -> bool:
     """检查MosDNS规则是否为正则表达式规则"""
-    # 检查MosDNS规则中是否包含正则表达式特殊字符
     if rule.startswith('domain:') or rule.startswith('full:'):
-        domain_part = rule.split(':', 1)[1] if ':' in rule else rule
-        
-        # 检查域名部分是否包含正则表达式字符
-        regex_patterns = [
-            r'\*',      # 通配符
-            r'[\[\]]',  # 方括号
-            r'[\(\)]',  # 圆括号
-            r'\\',      # 转义字符
-            r'\+',      # 加号
-            r'\?',      # 问号
-            r'\^',      # 边界符（在域名中不应该出现）
-            r'\$',      # 结束符（在域名中不应该出现）
-            r'\|',      # 或操作符（在域名中不应该出现）
-        ]
-        
-        for pattern in regex_patterns:
-            if re.search(pattern, domain_part):
-                return True
-    
+        domain_part = rule.split(':', 1)[1]
+        return bool(REGEX_PATTERN.search(domain_part))
     return False
 
 def convert_adguard_to_mosdns(rule: str) -> Tuple[str, str]:
@@ -54,6 +39,10 @@ def convert_adguard_to_mosdns(rule: str) -> Tuple[str, str]:
     # 跳过允许规则（@@开头）
     if original_rule.startswith('@@'):
         return "", "allow"
+    
+    # 跳过 keyword: 和 regexp: 类型规则
+    if original_rule.startswith('keyword:') or original_rule.startswith('regexp:'):
+        return "", "keyword_or_regexp"
     
     # 格式7: 已经是MosDNS格式 (domain:example.com 或 full:example.com)
     if original_rule.startswith('domain:') or original_rule.startswith('full:'):
@@ -148,7 +137,7 @@ def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
         "total": len(rules),
         "duplicates": 0,
         "wildcard_covered": 0,
-        "exact_covered": 0,
+        "domain_covered_full": 0,
         "kept": 0
     }
     
@@ -161,7 +150,7 @@ def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
         if rule.startswith('domain:'):
             domain_rules.append(rule[7:])  # 去掉 domain: 前缀
         elif rule.startswith('full:'):
-            full_rules.append(rule)
+            full_rules.append(rule[5:])  # 去掉 full: 前缀
         else:
             other_rules.append(rule)
     
@@ -173,25 +162,20 @@ def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
     
     stats["duplicates"] = original_count - len(domain_rules) - len(full_rules) - len(other_rules)
     
-    # 优化domain规则
-    optimized_domains = []
-    
-    # 按域名长度排序，短的在前
+    # 优化domain规则 - 按域名长度排序，短的在前
     sorted_domains = sorted(domain_rules, key=lambda x: (len(x.split('.')), x))
     
+    # 使用集合进行高效查找
     kept_domains = set()
     for domain in sorted_domains:
         is_covered = False
         domain_parts = domain.split('.')
         
         # 检查是否被已保留的更短域名覆盖
-        # 只有当父域名确实存在时才认为被覆盖
         for i in range(1, len(domain_parts)):
             parent_domain = '.'.join(domain_parts[i:])
             if parent_domain in kept_domains:
                 # 确保父域名确实能覆盖当前域名
-                # 例如: example.com 可以覆盖 sub.example.com
-                # 但不能覆盖 notexample.com
                 if domain.endswith('.' + parent_domain):
                     is_covered = True
                     stats["wildcard_covered"] += 1
@@ -199,10 +183,32 @@ def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
         
         if not is_covered:
             kept_domains.add(domain)
-            optimized_domains.append(f"domain:{domain}")
     
-    # 合并所有优化后的规则
-    final_rules = optimized_domains + full_rules + other_rules
+    # 处理 full 规则 - 检查是否被 domain 规则覆盖
+    kept_full_rules = []
+    for full_domain in full_rules:
+        is_covered = False
+        
+        # 检查 full 域名本身是否在 domain 集合中
+        if full_domain in kept_domains:
+            is_covered = True
+            stats["domain_covered_full"] += 1
+        else:
+            # 检查 full 域名的任何父域名是否在 domain 集合中
+            domain_parts = full_domain.split('.')
+            for i in range(1, len(domain_parts)):
+                parent_domain = '.'.join(domain_parts[i:])
+                if parent_domain in kept_domains:
+                    is_covered = True
+                    stats["domain_covered_full"] += 1
+                    break
+        
+        if not is_covered:
+            kept_full_rules.append(f"full:{full_domain}")
+    
+    # 组装最终规则
+    optimized_domains = [f"domain:{d}" for d in kept_domains]
+    final_rules = optimized_domains + kept_full_rules + other_rules
     stats["kept"] = len(final_rules)
     
     return sorted(final_rules), stats
@@ -225,6 +231,7 @@ def main():
         "total_lines": 0,
         "comments": 0,
         "allow_rules": 0,
+        "keyword_or_regexp_rules": 0,
         "regex_rules": 0,
         "converted": 0,
         "mosdns_format": 0,
@@ -252,6 +259,8 @@ def main():
                     conversion_stats["comments"] += 1
                 elif rule_type == "allow":
                     conversion_stats["allow_rules"] += 1
+                elif rule_type == "keyword_or_regexp":
+                    conversion_stats["keyword_or_regexp_rules"] += 1
                 elif rule_type == "regex":
                     conversion_stats["regex_rules"] += 1
                 elif rule_type == "converted":
@@ -290,13 +299,15 @@ def main():
         print(f"总行数: {conversion_stats['total_lines']}", file=sys.stderr)
         print(f"注释行: {conversion_stats['comments']}", file=sys.stderr)
         print(f"允许规则: {conversion_stats['allow_rules']}", file=sys.stderr)
+        print(f"Keyword/Regexp规则: {conversion_stats['keyword_or_regexp_rules']}", file=sys.stderr)
         print(f"正则规则: {conversion_stats['regex_rules']}", file=sys.stderr)
         print(f"转换规则: {conversion_stats['converted']}", file=sys.stderr)
         print(f"MosDNS格式: {conversion_stats['mosdns_format']}", file=sys.stderr)
         print(f"无效规则: {conversion_stats['invalid']}", file=sys.stderr)
         print(f"未知格式: {conversion_stats['unknown']}", file=sys.stderr)
         print(f"重复规则: {optimization_stats['duplicates']}", file=sys.stderr)
-        print(f"被覆盖规则: {optimization_stats['wildcard_covered']}", file=sys.stderr)
+        print(f"被父域名覆盖: {optimization_stats['wildcard_covered']}", file=sys.stderr)
+        print(f"被domain规则覆盖的full规则: {optimization_stats['domain_covered_full']}", file=sys.stderr)
         print(f"最终保留: {optimization_stats['kept']}", file=sys.stderr)
         
     except Exception as e:

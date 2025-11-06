@@ -42,11 +42,19 @@ process_mosdns_rule() {
   
   local start_time=$SECONDS
   
-  echo "┃ ⬇️ 正在下载规则数据..."
-  
+  # 创建临时文件和目录
   local merged_file=$(mktemp)
   local cleaned_file=$(mktemp)
   local tmp_dir=$(mktemp -d)
+  
+  # 设置清理函数，确保临时文件被清理
+  cleanup_temp_files() {
+    rm -f "$merged_file" "$cleaned_file"
+    rm -rf "$tmp_dir"
+  }
+  trap cleanup_temp_files RETURN
+  
+  echo "┃ ⬇️ 正在下载规则数据..."
   
   local download_count=0
   local download_pids=()
@@ -67,11 +75,9 @@ process_mosdns_rule() {
     wait $pid || true
   done
   
-  # 检查是否有任何错误标记文件
-  if ls "${tmp_dir}"/error_* 1> /dev/null 2>&1; then
+  # 检查是否有下载失败
+  if compgen -G "${tmp_dir}/error_*" > /dev/null; then
     echo "┃ ❌ 检测到有上游规则下载失败，本地规则未做任何更改，跳过本次更新"
-    rm -f "$merged_file" "$cleaned_file"
-    rm -rf "$tmp_dir"
     local duration=$((SECONDS - start_time))
     echo "┃ ⏱️ 处理完成，用时: $duration 秒"
     echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -239,10 +245,7 @@ process_mosdns_rule() {
     echo "has_changes=false" >> "$GITHUB_OUTPUT"
   fi
   
-  # 清理临时文件
-  rm -f "$merged_file" "$cleaned_file"
-  rm -rf "$tmp_dir"
-  
+  # 临时文件将由 trap 清理
   local duration=$((SECONDS - start_time))
   echo "┃ ⏱️ 处理完成，用时: $duration 秒"
   echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
