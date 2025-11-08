@@ -176,9 +176,8 @@ get_domain_list() {
     echo "4) www.knt.co.jp (Akamai JP)"
     echo "5) www.tokyodisneyresort.jp (Akamai JP)"
     echo "6) video.dmm.jp.co.jp (Google JP)"
-    echo "7) www.ehealth.gov.hk (Tencent HK)"
-    echo "8) www.hkgourmet.com.hk (Imperva HK)"
-    echo "9) www.visitcalifornia.com (Sucuri US)"
+    echo "7) www.hkgourmet.com.hk (Imperva HK)"
+    echo "8) amp-api.podcasts.apple.com (Fastly US)"
 }
 
 # 选择域名
@@ -203,9 +202,8 @@ select_domain() {
             4) domain="www.knt.co.jp" ;;
             5) domain="www.tokyodisneyresort.jp" ;;
             6) domain="video.dmm.jp.co.jp" ;;
-            7) domain="www.ehealth.gov.hk" ;;
-            8) domain="www.hkgourmet.com.hk" ;;
-            9) domain="www.visitcalifornia.com" ;;
+            7) domain="www.hkgourmet.com.hk" ;;
+            8) domain="amp-api.podcasts.apple.com" ;;
             *)
                 log "ERROR" "无效选择，请输入 1-9" >&2
                 return 1
