@@ -61,6 +61,14 @@ payload:
   - '+.deepmind.com'
   - '+.deepmind.google'
 
+  # Grok
+  - '+.x.ai'
+  - '+.grok.com'
+  - '+.xai.chronosphere.io'
+
+  # Perplexity
+  - '+.perplexity.ai'
+
   # Vibe Coding
   # > Cursor
   - '+.cursor.sh'
@@ -89,55 +97,33 @@ payload:
   - '+.jetbrains.ai'
   - '+.grazie.aws.intellij.net'
 
-  # X(Grok)
-  - '+.x.ai'
-  - '+.grok.com'
-  - '+.xai.chronosphere.io'
-
-  # DIA
-  - '+.diabrowser.engineering'
-
-  # Manus
+  # AI Gateway
+  # > OpenRouter
+  - '+.openrouter.ai'
+  # > Cloudflare
+  - 'gateway.ai.cloudflare.com'
+  # > Vercel
+  - 'ai-gateway.vercel.sh'
+  
+  # AI Tools
+  # > Manus
   - '+.manus.space'
   - '+.manus.im'
-  
-  # Perplexity AI
-  - '+.perplexity.ai'
-
-  # Poe
+  # > DIA
+  - '+.diabrowser.engineering'
+  # > Poe
   - '+.poe.com'
-  - '+.quora.com'
-
-  # OpenRouter
-  - '+.openrouter.ai'
-  # Cloudflare AI Gateway
-  - 'gateway.ai.cloudflare.com'
-  # Dify.AI
+  # > Dify
   - '+.dify.ai'
-
-  # Bing
-  - '+.bing.com'
-  - '+.bingagencyawards.com'
-  - '+.bingapistatistics.com'
-  - '+.bingsandbox.com'
-  - '+.bingvisualsearch.com'
-  - '+.bingworld.com'
-  - '+.copilot.microsoft.com'
-  - 'api.msn.com'
-  - 'assets.msn.com'
-  - 'dealczars.bing-shopping.microsoft-falcon.io'
-  - 'gateway.bingviz.microsoftapp.net'
-  - 'location.microsoft.com'
-  - 'login.microsoftonline.com'
-  - 'self.events.data.microsoft.com'
-  - 'services.bingapis.com'
-  - 'shopping.bing-shopping.microsoft-falcon.io'
-  - 'sapphire.api.microsoftapp.net'
-  - 'www.bingapis.com'
-
-  # Meta AI
-  - '+.meta.ai'
-
-  # ByteDance
+  # > OpenArt
+  - '+.openart.ai'
+  # > Jasper
+  - '+.clipdrop.co'
+  - '+.jasper.ai'
+  # > Groq
+  - '+.groq.com'
+  # > ByteDance
   - '+.ciciai.com'
   - '+.coze.com'
+  # > Meta AI
+  - '+.meta.ai'
