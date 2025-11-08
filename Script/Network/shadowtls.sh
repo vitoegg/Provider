@@ -434,9 +434,9 @@ get_tls_config() {
     # TLS domain: if not defined, randomly pick from preset list.
     PRESET_DOMAINS=(
         "publicassets.cdn-apple.com"
+        "play-edge.itunes.apple.com"
+        "vod-ak-aoc.tv.apple.com"
         "s0.awsstatic.com"
-        "p11.douyinpic.com"
-        "sns-video-hw.xhscdn.com"
     )
     if [[ -z "$domain" ]]; then
         local random_index=$((RANDOM % ${#PRESET_DOMAINS[@]}))
