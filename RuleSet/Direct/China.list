@@ -1,5 +1,5 @@
-# 更新时间: 2025-11-06 23:11:35
-# 规则条数: 117428
+# 更新时间: 2025-11-08 20:43:38
+# 规则条数: 117432
 # 规则来源:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/vitoegg/Provider
@@ -40026,6 +40026,7 @@
 .green12306.com
 .greencharm.com
 .greenchengjian.com
+.greencloudvps.com
 .greencompute.org
 .greendh.com
 .greenism.net
@@ -70401,7 +70402,6 @@
 .nanfang-pump.com
 .nanfangfood.com
 .nanfen.com
-.nanflix.net
 .nanfu.com
 .nanguache.com
 .nanguakexue.biz
@@ -74420,6 +74420,7 @@
 .oyoumo.com
 .oyqqan.xyz
 .oysd.com
+.oyunfor.com
 .oywtv.com
 .oyxdwx.com
 .oyya.com
@@ -114745,6 +114746,7 @@
 .zimufy.com
 .zimuism.com
 .zimujiang.com
+.zimuku.org
 .zimuzu.com
 .zimuzu.io
 .zimuzu.tv
@@ -117208,6 +117210,7 @@ cdn.angruo.com
 cdn.globalsigncdn.com.cdn.cloudflare.net
 cdn.hkdtmb.com
 cdn.lilyemby.com
+cdn.lilyemby.my
 cdn.marketplaceimages.windowsphone.com
 cgntv-glive.ofsdelivery.net
 channellive.leshantv.net
@@ -117418,6 +117421,7 @@ www-csb.dell.com
 www.cbsnews.com
 www.destinationurl.com
 www.filmon.com
+www.lilyemby.my
 www.pxcc.com
 www.pxitv.com
 www.recaptcha.net
