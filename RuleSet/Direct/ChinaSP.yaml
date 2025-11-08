@@ -1,0 +1,13 @@
+payload:
+  # SSH Direct
+  - DST-PORT,22/5168
+  # Turkey Giftcard
+  - DOMAIN-SUFFIX,oyunfor.com
+  # Zimuku
+  - DOMAIN-SUFFIX,zimuku.org
+  # Cloud Service
+  - DOMAIN-SUFFIX,greencloudvps.com
+  # Direct Emby
+  # > Lily Emby
+  - DOMAIN-SUFFIX,cdn.lilyemby.my
+  - DOMAIN-SUFFIX,www.lilyemby.my
