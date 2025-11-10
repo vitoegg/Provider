@@ -1,0 +1,128 @@
+# https://github.com/dler-io/Rules/blob/main/Clash/Provider/AI%20Suite.yaml
+# https://github.com/v2fly/domain-list-community/blob/master/data/openai
+
+# OpenAI
+# > ChatGPT
+.openai.com
+.chatgpt.com
+# > Sora
+.sora.com
+# > Advanced Voice
+.chatgpt.livekit.cloud
+.host.livekit.cloud
+.turn.livekit.cloud
+# > Chat GPT API & CDN
+.oaistatic.com
+.oaiusercontent.com
+.webpubsub.azure.com
+chat.openai.com.cdn.cloudflare.net
+openaiapi-site.azureedge.net
+openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net
+openaicomproductionae4b.blob.core.windows.net
+production-openaicom-storage.azureedge.net
+client-api.arkoselabs.com
+openai-api.arkoselabs.com
+# > Tracking
+.o33249.ingest.sentry.io
+openaicom.imgix.net
+browser-intake-datadoghq.com
+ 
+# Claude
+.anthropic.com
+.claude.ai
+.claudeusercontent.com
+cdn.usefathom.com
+servd-anthropic-website.b-cdn.net
+
+# Google AI
+# > Google Generative Language API
+.generativelanguage.googleapis.com
+.geller-pa.googleapis.com
+.proactivebackend-pa.googleapis.com
+# > Google AI Studio
+.alkalimakersuite-pa.clients6.google.com
+.aistudio.google.com
+.makersuite.google.com
+.generativeai.google
+ai.google.dev
+alkalicore-pa.clients6.google.com
+waa-pa.clients6.google.com
+# > Google Gemini
+.apis.google.com
+.bard.google.com
+.gemini.google.com
+.aisandbox-pa.googleapis.com
+.robinfrontend-pa.googleapis.com
+# > Google NotebookLM
+.notebooklm.google
+.notebooklm.google.com
+# > Google DeepMind
+.deepmind.com
+.deepmind.google
+
+# Grok
+.x.ai
+.grok.com
+.xai.chronosphere.io
+
+# Perplexity AI
+.perplexity.ai
+
+# Vibe Coding
+# > Cursor
+.cursor.sh
+# > Windsurf
+.windsurf.com
+.codeium.com
+.codeiumdata.com
+# > Zed
+.zed.dev
+# > Copilot
+api.github.com
+.githubcopilot.com
+.microsoftonline.com
+copilot.microsoft.com
+# > Augment
+.augment.com
+.augmentcode.com
+# > Kiro
+.kiro.dev
+# > Chorus
+.chorus.sh
+# > Cline
+.cline.bot
+# > JetBrains
+.grazie.ai
+.jetbrains.ai
+.grazie.aws.intellij.net
+
+# AI Gateway
+# > OpenRouter
+.openrouter.ai
+# > Cloudflare
+gateway.ai.cloudflare.com
+# > Vercel
+ai-gateway.vercel.sh
+  
+# AI Tools
+# > Manus
+.manus.space
+.manus.im
+# > DIA
+.diabrowser.engineering
+# > Poe
+.poe.com
+# > Dify
+.dify.ai
+# > OpenArt
+.openart.ai
+# > Jasper
+.clipdrop.co
+.jasper.ai
+# > Groq
+.groq.com
+# > ByteDance
+.ciciai.com
+.coze.com
+# > Meta AI
+.meta.ai
