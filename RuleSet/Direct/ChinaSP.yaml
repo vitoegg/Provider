@@ -10,3 +10,6 @@ payload:
   # Direct Emby
   # > Lily Emby
   - DOMAIN,cdn.lilyemby.my
+  - DOMAIN,www.lilyemby.my
+  # > Recmata Emby
+  - DOMAIN,vision.recmata.net
