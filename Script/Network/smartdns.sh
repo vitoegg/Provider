@@ -115,50 +115,8 @@ get_latest_version() {
     return 0
 }
 
-# Domain list configuration
-DOMAIN_LISTS=(
-    "https://mirror.1991991.xyz/RuleSet/DNS/AGI.conf"
-    "https://mirror.1991991.xyz/RuleSet/DNS/OpenAI.conf"
-    "https://mirror.1991991.xyz/RuleSet/DNS/Common.conf"
-    "https://mirror.1991991.xyz/RuleSet/DNS/Media.conf"
-    "https://mirror.1991991.xyz/RuleSet/DNS/Google.conf"
-    "https://mirror.1991991.xyz/RuleSet/DNS/YouTube.conf"
-    "https://mirror.1991991.xyz/RuleSet/DNS/DMM.conf"
-)
-
-# Download selected domain lists
-download_domain_lists() {
-    local selection=$1
-    local group_name=$2
-    local merged_file="/etc/smartdns/${group_name}.conf"
-    
-    log_info "Downloading selected domain lists..."
-    mkdir -p "/etc/smartdns"
-    > "$merged_file"
-    
-    IFS=',' read -ra SELECTED <<< "$selection"
-    for num in "${SELECTED[@]}"; do
-        if [ "$num" -ge 1 ] && [ "$num" -le "${#DOMAIN_LISTS[@]}" ]; then
-            local index=$((num-1))
-            local url="${DOMAIN_LISTS[$index]}"
-            wget -qO- "$url" >> "$merged_file" || {
-                log_error "Failed to download domain list: $url"
-                return 1
-            }
-        else
-            log_error "Invalid selection number: $num"
-            return 1
-        fi
-    done
-    log_info "Domain lists downloaded and merged successfully"
-    return 0
-}
-
 # Parse command line arguments
 parse_args() {
-    USE_CUSTOM_DNS=0
-    CUSTOM_DNS_SERVER=""
-    DOMAIN_SELECTION=""
     UNINSTALL=0
     
     # If no arguments provided, use default installation
@@ -169,35 +127,13 @@ parse_args() {
     
     while [[ $# -gt 0 ]]; do
         case $1 in
-            -d|--dns)
-                if [ -z "$2" ]; then
-                    log_error "DNS server IP is required with -d option"
-                    echo "Usage: $0 [-d|--dns <Custom DNS Server IP>] [-u|--uninstall]"
-                    echo "       $0 (no parameters for default installation)"
-                    exit 1
-                fi
-                USE_CUSTOM_DNS=1
-                CUSTOM_DNS_SERVER="$2"
-                shift 2
-                
-                log_info "Available domain lists:"
-                for i in "${!DOMAIN_LISTS[@]}"; do
-                    echo "$(($i+1)). ${DOMAIN_LISTS[$i]}"
-                done
-                
-                read -p "Enter the numbers of domain lists to use (comma-separated, e.g., 1,2): " DOMAIN_SELECTION
-                if [ -z "$DOMAIN_SELECTION" ]; then
-                    log_error "Domain list selection is required when using custom DNS"
-                    exit 1
-                fi
-                ;;
             -u|--uninstall)
                 UNINSTALL=1
                 shift
                 ;;
             *)
                 log_error "Unknown parameter: $1"
-                echo "Usage: $0 [-d|--dns <Custom DNS Server IP>] [-u|--uninstall]"
+                echo "Usage: $0 [-u|--uninstall]"
                 echo "       $0 (no parameters for default installation)"
                 exit 1
                 ;;
@@ -206,9 +142,6 @@ parse_args() {
 
     if [ $UNINSTALL -eq 1 ]; then
         log_info "Preparing to uninstall SmartDNS..."
-    elif [ $USE_CUSTOM_DNS -eq 1 ]; then
-        log_info "Custom DNS server enabled: $CUSTOM_DNS_SERVER"
-        log_info "Selected domain lists: $DOMAIN_SELECTION"
     else
         log_info "Proceeding with default installation"
     fi
@@ -250,13 +183,6 @@ install_smartdns() {
 # Configure SmartDNS
 configure_smartdns() {
     mkdir -p /etc/smartdns
-    
-    if [ $USE_CUSTOM_DNS -eq 1 ]; then
-        if ! download_domain_lists "$DOMAIN_SELECTION" "custom_domains"; then
-            log_error "Failed to configure domain lists"
-            exit 1
-        fi
-    fi
 
     cat > /etc/smartdns/smartdns.conf << EOF
 server-name smartdns
@@ -266,17 +192,6 @@ server 1.1.1.1
 server 8.8.8.8
 server 9.9.9.9
 server 208.67.222.222
-EOF
-
-    if [ $USE_CUSTOM_DNS -eq 1 ]; then
-        cat >> /etc/smartdns/smartdns.conf << EOF
-server ${CUSTOM_DNS_SERVER} -group custom -exclude-default-group
-domain-set -name custom -file /etc/smartdns/custom_domains.conf
-domain-rules /domain-set:custom/ -nameserver custom
-EOF
-    fi
-
-    cat >> /etc/smartdns/smartdns.conf << EOF
 speed-check-mode ping,tcp:80,tcp:443
 cache-size 32768
 serve-expired yes
@@ -287,7 +202,7 @@ serve-expired-prefetch-time 21600
 cache-persist yes
 cache-file /etc/smartdns/smartdns.cache
 cache-checkpoint-time 86400
-dualstack-ip-selection yes
+force-AAAA-SOA yes
 force-qtype-SOA 65
 EOF
 
