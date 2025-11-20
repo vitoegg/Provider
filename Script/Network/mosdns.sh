@@ -18,8 +18,8 @@ INTERACTIVE_MODE=0
 
 # Domain list configuration
 DOMAIN_LISTS=(
-    "https:///mirror.1991991.xyz/RuleSet/Extra/MosDNS/google.txt|Google"
-    "https:///mirror.1991991.xyz/RuleSet/Extra/MosDNS/openai.txt|OpenAI"
+    "https://mirror.1991991.xyz/RuleSet/Extra/MosDNS/google.txt|Google"
+    "https://mirror.1991991.xyz/RuleSet/Extra/MosDNS/openai.txt|OpenAI"
 )
 
 # Logging functions
