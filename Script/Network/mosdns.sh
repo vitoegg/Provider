@@ -455,22 +455,18 @@ parse_args() {
     
     while [[ $# -gt 0 ]]; do
         case $1 in
+            -i|--install)
+                log_info "快速安装模式：使用默认配置"
+                shift
+                ;;
             -d|--dns)
                 if [ -z "$2" ]; then
                     log_error "使用 -d 选项需要提供DNS服务器地址"
-                    echo "用法: $0 [-d <DNS服务器地址>] [-l <列表编号>] [-u]"
+                    echo "用法: $0 [-i] [-d <DNS服务器地址>] [-u]"
                     exit 1
                 fi
                 USE_CUSTOM_DNS=1
                 CUSTOM_DNS_SERVER="$2"
-                shift 2
-                ;;
-            -l|--list)
-                if [ -z "$2" ]; then
-                    log_error "使用 -l 选项需要提供列表编号"
-                    exit 1
-                fi
-                DOMAIN_SELECTION="$2"
                 shift 2
                 ;;
             -u|--uninstall)
@@ -479,13 +475,13 @@ parse_args() {
                 ;;
             *)
                 log_error "未知参数: $1"
-                echo "用法: $0 [-d <DNS服务器地址>] [-l <列表编号>] [-u]"
+                echo "用法: $0 [-i] [-d <DNS服务器地址>] [-u]"
                 exit 1
                 ;;
         esac
     done
     
-    # Validate parameters
+    # Validate parameters and prompt for domain list selection if needed
     if [ $USE_CUSTOM_DNS -eq 1 ] && [ -z "$DOMAIN_SELECTION" ]; then
         log_info "检测到自定义DNS配置，需要选择域名列表"
         echo ""
@@ -503,6 +499,7 @@ parse_args() {
         fi
     fi
     
+    # Display operation summary
     if [ $UNINSTALL -eq 1 ]; then
         log_info "准备卸载 mosdns..."
     elif [ $USE_CUSTOM_DNS -eq 1 ]; then
