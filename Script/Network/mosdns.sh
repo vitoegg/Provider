@@ -246,7 +246,10 @@ EOF
       concurrent: 2
       upstreams:
         - addr: "udp://8.8.8.8"
-        - addr: "udp://1.1.1.1"
+        - addr: "tls://1.1.1.1:853"
+          bootstrap: "1.0.0.1"
+          enable_pipeline: true
+          idle_timeout: 60
 
   - tag: fallback_dns
     type: "forward"
@@ -275,7 +278,7 @@ EOF
     args:
       primary: main_dns
       secondary: fallback_dns
-      threshold: 500
+      threshold: 200
       always_standby: true
 
   - tag: main_sequence
