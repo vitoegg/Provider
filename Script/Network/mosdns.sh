@@ -15,6 +15,16 @@ CUSTOM_DNS_SERVER=""
 DOMAIN_SELECTION=""
 UNINSTALL=0
 INTERACTIVE_MODE=0
+ECS_LOCATION="TYO"
+ECS_IP=""
+
+# ECS location to IP mapping
+declare -A ECS_MAP=(
+    ["HK"]="42.2.2.2"
+    ["TYO"]="106.152.210.210"
+    ["LA"]="107.119.53.53"
+    ["SEA"]="68.86.93.93"
+)
 
 # Domain list configuration
 DOMAIN_LISTS=(
@@ -159,6 +169,28 @@ get_latest_version() {
     log_info "最新版本: $MOSDNS_VERSION"
 }
 
+# Set ECS IP based on location
+set_ecs_ip() {
+    local location=$1
+    
+    if [ -z "$location" ]; then
+        location="TYO"
+    fi
+    
+    location=$(echo "$location" | tr '[:lower:]' '[:upper:]')
+    
+    if [ -n "${ECS_MAP[$location]}" ]; then
+        ECS_LOCATION="$location"
+        ECS_IP="${ECS_MAP[$location]}"
+        log_info "ECS位置: $ECS_LOCATION ($ECS_IP)"
+    else
+        log_warn "无效的ECS位置: $location，使用默认位置 TYO"
+        ECS_LOCATION="TYO"
+        ECS_IP="${ECS_MAP[TYO]}"
+        log_info "ECS位置: $ECS_LOCATION ($ECS_IP)"
+    fi
+}
+
 # Download selected domain lists
 download_domain_lists() {
     local selection=$1
@@ -287,8 +319,10 @@ EOF
       - exec: $lazy_cache
       - exec: jump has_resp_sequence
       - exec: prefer_ipv4
-      - exec: ecs 106.152.210.210
 EOF
+
+    # Add ECS configuration with variable substitution
+    echo "      - exec: ecs ${ECS_IP}" >> "$config_file"
 
     # Add custom DNS matching if configured
     if [ $USE_CUSTOM_DNS -eq 1 ]; then
@@ -467,11 +501,20 @@ parse_args() {
             -d|--dns)
                 if [ -z "$2" ]; then
                     log_error "使用 -d 选项需要提供DNS服务器地址"
-                    echo "用法: $0 [-i] [-d <DNS服务器地址>] [-u]"
+                    echo "用法: $0 [-i] [-d <DNS服务器地址>] [-e <ECS位置>] [-u]"
                     exit 1
                 fi
                 USE_CUSTOM_DNS=1
                 CUSTOM_DNS_SERVER="$2"
+                shift 2
+                ;;
+            -e|--ecs)
+                if [ -z "$2" ]; then
+                    log_error "使用 -e 选项需要提供ECS位置 (HK/TYO/LA/SEA)"
+                    echo "用法: $0 [-i] [-d <DNS服务器地址>] [-e <ECS位置>] [-u]"
+                    exit 1
+                fi
+                ECS_LOCATION="$2"
                 shift 2
                 ;;
             -u|--uninstall)
@@ -480,11 +523,14 @@ parse_args() {
                 ;;
             *)
                 log_error "未知参数: $1"
-                echo "用法: $0 [-i] [-d <DNS服务器地址>] [-u]"
+                echo "用法: $0 [-i] [-d <DNS服务器地址>] [-e <ECS位置>] [-u]"
                 exit 1
                 ;;
         esac
     done
+    
+    # Set ECS IP based on location
+    set_ecs_ip "$ECS_LOCATION"
     
     # Validate parameters and prompt for domain list selection if needed
     if [ $USE_CUSTOM_DNS -eq 1 ] && [ -z "$DOMAIN_SELECTION" ]; then
@@ -531,6 +577,34 @@ show_menu() {
         1)
             log_info "选择：安装 mosdns 服务"
             echo ""
+            
+            # ECS location selection
+            echo "请选择ECS位置："
+            echo "  1) HK  - 香港 (42.2.2.2)"
+            echo "  2) TYO - 东京 (106.152.210.210) [默认]"
+            echo "  3) LA  - 洛杉矶 (107.119.53.53)"
+            echo "  4) SEA - 西雅图 (68.86.93.93)"
+            echo ""
+            read -p "请选择 [1-4] (默认: 2): " ecs_choice
+            
+            case $ecs_choice in
+                1)
+                    ECS_LOCATION="HK"
+                    ;;
+                3)
+                    ECS_LOCATION="LA"
+                    ;;
+                4)
+                    ECS_LOCATION="SEA"
+                    ;;
+                *)
+                    ECS_LOCATION="TYO"
+                    ;;
+            esac
+            
+            set_ecs_ip "$ECS_LOCATION"
+            echo ""
+            
             read -p "是否配置额外的DNS解析？(y/n) [n]: " use_custom
             if [[ "$use_custom" == "y" || "$use_custom" == "Y" ]]; then
                 USE_CUSTOM_DNS=1
