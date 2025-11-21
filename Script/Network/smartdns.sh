@@ -197,7 +197,7 @@ serve-expired yes
 cache-size 32768
 cache-persist yes
 cache-file /etc/smartdns/smartdns.cache
-force-AAAA-SOA yes
+dualstack-ip-selection yes
 force-qtype-SOA 65
 EOF
 
