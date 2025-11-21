@@ -193,15 +193,10 @@ server 8.8.8.8
 server 9.9.9.9
 server 208.67.222.222
 speed-check-mode ping,tcp:80,tcp:443
+serve-expired no
 cache-size 32768
-serve-expired yes
-serve-expired-reply-ttl 5
-serve-expired-ttl 259200
-prefetch-domain yes
-serve-expired-prefetch-time 21600
 cache-persist yes
 cache-file /etc/smartdns/smartdns.cache
-cache-checkpoint-time 86400
 force-AAAA-SOA yes
 force-qtype-SOA 65
 EOF
