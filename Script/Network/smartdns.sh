@@ -193,7 +193,7 @@ server 8.8.8.8
 server 9.9.9.9
 server 208.67.222.222
 speed-check-mode ping,tcp:80,tcp:443
-serve-expired no
+serve-expired yes
 cache-size 32768
 cache-persist yes
 cache-file /etc/smartdns/smartdns.cache
