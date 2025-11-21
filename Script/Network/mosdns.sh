@@ -291,20 +291,6 @@ EOF
         - addr: "udp://9.9.9.9"
         - addr: "udp://208.67.222.222"
 
-  - tag: lazy_cache
-    type: "cache"
-    args:
-      size: 15360
-      lazy_cache_ttl: 86400
-      dump_file: "/etc/mosdns/cache.dump"
-      dump_interval: 1800
-
-  - tag: has_resp_sequence
-    type: "sequence"
-    args:
-      - matches: has_resp
-        exec: accept
-
   - tag: core_reslove
     type: "fallback"
     args:
@@ -316,8 +302,6 @@ EOF
   - tag: main_sequence
     type: "sequence"
     args:
-      - exec: $lazy_cache
-      - exec: jump has_resp_sequence
       - exec: prefer_ipv4
 EOF
 
@@ -331,13 +315,14 @@ EOF
       - matches:
         - qname $dns_domain
         exec: $dns_reslove
-      - exec: jump has_resp_sequence
+      - matches: has_resp
+        exec: accept
+
 EOF
     fi
 
     # Complete main_sequence
     cat >> "$config_file" << 'EOF'
-
       - exec: $core_reslove
 
   - tag: udp_server
