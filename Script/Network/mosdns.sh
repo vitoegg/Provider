@@ -29,7 +29,7 @@ declare -A ECS_MAP=(
 # Domain list configuration
 DOMAIN_LISTS=(
     "https://mirror.1991991.xyz/RuleSet/Extra/MosDNS/google.txt|Google"
-    "https://mirror.1991991.xyz/RuleSet/Extra/MosDNS/openai.txt|OpenAI"
+    "https://mirror.1991991.xyz/RuleSet/Extra/MosDNS/reddit.txt|Reddit"
 )
 
 # Logging functions
@@ -477,6 +477,16 @@ parse_args() {
         return 0
     fi
     
+    # First pass: check for uninstall flag
+    for arg in "$@"; do
+        if [ "$arg" = "-u" ] || [ "$arg" = "--uninstall" ]; then
+            UNINSTALL=1
+            log_info "检测到卸载参数，进入卸载流程"
+            return 0
+        fi
+    done
+    
+    # Second pass: parse installation parameters
     while [[ $# -gt 0 ]]; do
         case $1 in
             -i|--install)
@@ -502,10 +512,6 @@ parse_args() {
                 ECS_LOCATION="$2"
                 shift 2
                 ;;
-            -u|--uninstall)
-                UNINSTALL=1
-                shift
-                ;;
             *)
                 log_error "未知参数: $1"
                 echo "用法: $0 [-i] [-d <DNS服务器地址>] [-e <ECS位置>] [-u]"
@@ -514,35 +520,27 @@ parse_args() {
         esac
     done
     
-    # Set ECS IP based on location
+    # Set ECS IP based on location (default: TYO)
     set_ecs_ip "$ECS_LOCATION"
     
-    # Validate parameters and prompt for domain list selection if needed
+    # If custom DNS is enabled but no domain list selected, use all available lists
     if [ $USE_CUSTOM_DNS -eq 1 ] && [ -z "$DOMAIN_SELECTION" ]; then
-        log_info "检测到自定义DNS配置，需要选择域名列表"
-        echo ""
-        echo "可用的域名列表："
+        # Generate default selection: all available lists
+        local default_selection=""
         for i in "${!DOMAIN_LISTS[@]}"; do
-            local list_info="${DOMAIN_LISTS[$i]}"
-            local name="${list_info##*|}"
-            echo "  $(($i+1)). $name"
+            default_selection="$default_selection $(($i+1))"
         done
-        echo ""
-        read -p "请输入要使用的列表编号（多个用空格分隔，如: 1 2）: " DOMAIN_SELECTION
-        if [ -z "$DOMAIN_SELECTION" ]; then
-            log_error "必须选择至少一个域名列表"
-            exit 1
-        fi
+        DOMAIN_SELECTION="${default_selection# }"
+        log_info "未指定域名列表，使用所有可用列表: $DOMAIN_SELECTION"
     fi
     
     # Display operation summary
-    if [ $UNINSTALL -eq 1 ]; then
-        log_info "准备卸载 mosdns..."
-    elif [ $USE_CUSTOM_DNS -eq 1 ]; then
+    if [ $USE_CUSTOM_DNS -eq 1 ]; then
         log_info "自定义DNS服务器: $CUSTOM_DNS_SERVER"
         log_info "选择的域名列表: $DOMAIN_SELECTION"
+        log_info "ECS位置: $ECS_LOCATION ($ECS_IP)"
     else
-        log_info "使用默认配置安装"
+        log_info "使用默认配置安装 (ECS位置: $ECS_LOCATION)"
     fi
 }
 
