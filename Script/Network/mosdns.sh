@@ -284,8 +284,10 @@ EOF
   - tag: main_sequence
     type: "sequence"
     args:
-      - exec: prefer_ipv4
       - exec: $lazy_cache
+      - exec: jump has_resp_sequence
+      - exec: prefer_ipv4
+      - exec: ecs 106.152.210.210
 EOF
 
     # Add custom DNS matching if configured
