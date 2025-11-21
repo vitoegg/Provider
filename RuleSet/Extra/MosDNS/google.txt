@@ -3,32 +3,14 @@ domain:google.com
 domain:googleapis.com
 domain:gstatic.com
 
-# Google AI
-# > Google Generative Language API
-domain:generativelanguage.googleapis.com
-domain:geller-pa.googleapis.com
-domain:proactivebackend-pa.googleapis.com
-# > Google AI Studio
-domain:alkalimakersuite-pa.clients6.google.com
-domain:aistudio.google.com
-domain:makersuite.google.com
-domain:generativeai.google
-domain:ai.google.dev
-full:alkalicore-pa.clients6.google.com
-full:waa-pa.clients6.google.com
-# > Google Gemini
+# Google Play
+domain:googleapis.cn
+domain:googleapis.com
+domain:xn--ngstr-lra8j.com
+
+# Google Gemini
 domain:apis.google.com
 domain:bard.google.com
 domain:gemini.google.com
 domain:aisandbox-pa.googleapis.com
 domain:robinfrontend-pa.googleapis.com
-# > Google NotebookLM
-domain:notebooklm.google
-domain:notebooklm.google.com
-# > Google DeepMind
-domain:deepmind.com
-domain:deepmind.google
-# > Google Antigravity
-domain:antigravity.google
-full:antigravity-unleash.goog
-full:antigravity-auto-updater-974169037036.us-central1.run.app
