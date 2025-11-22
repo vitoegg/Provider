@@ -30,37 +30,3 @@ browser-intake-datadoghq.com
 .claudeusercontent.com
 cdn.usefathom.com
 servd-anthropic-website.b-cdn.net
-
-# Google AI
-# > Google Generative Language API
-.generativelanguage.googleapis.com
-.geller-pa.googleapis.com
-.proactivebackend-pa.googleapis.com
-# > Google AI Studio
-.alkalimakersuite-pa.clients6.google.com
-.aistudio.google.com
-.makersuite.google.com
-.generativeai.google
-ai.google.dev
-alkalicore-pa.clients6.google.com
-waa-pa.clients6.google.com
-# > Google Gemini
-.apis.google.com
-.bard.google.com
-.gemini.google.com
-.aisandbox-pa.googleapis.com
-.robinfrontend-pa.googleapis.com
-# > Google NotebookLM
-.notebooklm.google
-.notebooklm.google.com
-# > Google DeepMind
-.deepmind.com
-.deepmind.google
-
-# Grok
-.x.ai
-.grok.com
-.xai.chronosphere.io
-
-# Perplexity AI
-.perplexity.ai
