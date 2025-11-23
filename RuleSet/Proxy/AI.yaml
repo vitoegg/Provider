@@ -73,6 +73,7 @@ payload:
 
   # Perplexity
   - '+.perplexity.ai'
+  - 'perplexity-ai.cloudflareaccess.com'
 
   # Vibe Coding
   # > Cursor

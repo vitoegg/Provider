@@ -34,3 +34,4 @@ payload:
 
   # Perplexity AI
   - '+.perplexity.ai'
+  - 'perplexity-ai.cloudflareaccess.com'
