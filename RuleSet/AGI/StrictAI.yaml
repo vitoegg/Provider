@@ -31,3 +31,6 @@ payload:
   - '+.claudeusercontent.com'
   - 'cdn.usefathom.com'
   - 'servd-anthropic-website.b-cdn.net'
+
+  # Perplexity AI
+  - '+.perplexity.ai'
