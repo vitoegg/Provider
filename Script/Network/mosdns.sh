@@ -275,10 +275,11 @@ EOF
   - tag: main_dns
     type: "forward"
     args:
-      concurrent: 2
+      concurrent: 3
       upstreams:
         - addr: "udp://8.8.8.8"
         - addr: "udp://208.67.222.222"
+        - addr: "udp://94.140.14.140"
 
   - tag: fallback_dns
     type: "forward"
