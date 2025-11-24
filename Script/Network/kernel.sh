@@ -48,18 +48,20 @@ show_help() {
     echo
     echo -e "${WHITE}Linux Kernel Optimization Script${NC}"
     echo
-    echo "Usage: $0 [-r region] [-q qdisc] [-d disable_ipv6] [-h]"
+    echo "Usage: $0 [-r [region]] [-q [qdisc]] [-d [disable_ipv6]] [-h]"
     echo
     echo "Options:"
-    echo "  -r  Region configuration (jp, hk, us, custom)"
-    echo "  -q  Queue discipline algorithm (fq, fq_pie, cake). Default: fq"
-    echo "  -d  Disable IPv6 (yes, no). Default: no"
+    echo "  -r  Region configuration (jp, hk, us, custom). Default if no value: jp"
+    echo "  -q  Queue discipline algorithm (fq, fq_pie, cake). Default if no value: fq"
+    echo "  -d  Disable IPv6 (yes, no). Default if no value: yes"
     echo "  -h  Display this help message"
     echo
     echo "Examples:"
     echo "  $0                         # Interactive mode"
+    echo "  $0 -r -q -d                # Use all defaults (jp, fq, IPv6 disabled)"
     echo "  $0 -r jp -q fq -d no       # Japan region, fq queue, IPv6 enabled"
     echo "  $0 -r us -q cake -d yes    # US region, cake queue, IPv6 disabled"
+    echo "  $0 -r -q cake              # Default region (jp), cake queue, interactive IPv6"
     echo
     exit 0
 }
@@ -204,19 +206,61 @@ REGION=""
 QDISC=""
 DISABLE_IPV6=""
 
-while getopts "r:q:d:h" opt; do
+while getopts ":r:q:d:h" opt; do
     case $opt in
         r)
-            REGION="$OPTARG"
+            if [ -z "$OPTARG" ] || [[ "$OPTARG" == -* ]]; then
+                REGION="jp"
+                log_config "Using default region: jp"
+                # If OPTARG was another option, we need to reprocess it
+                if [[ "$OPTARG" == -* ]]; then
+                    OPTIND=$((OPTIND - 1))
+                fi
+            else
+                REGION="$OPTARG"
+            fi
             ;;
         q)
-            QDISC="$OPTARG"
+            if [ -z "$OPTARG" ] || [[ "$OPTARG" == -* ]]; then
+                QDISC="fq"
+                log_config "Using default qdisc: fq"
+                if [[ "$OPTARG" == -* ]]; then
+                    OPTIND=$((OPTIND - 1))
+                fi
+            else
+                QDISC="$OPTARG"
+            fi
             ;;
         d)
-            DISABLE_IPV6="$OPTARG"
+            if [ -z "$OPTARG" ] || [[ "$OPTARG" == -* ]]; then
+                DISABLE_IPV6="yes"
+                log_config "Using default IPv6 setting: disabled"
+                if [[ "$OPTARG" == -* ]]; then
+                    OPTIND=$((OPTIND - 1))
+                fi
+            else
+                DISABLE_IPV6="$OPTARG"
+            fi
             ;;
         h)
             show_help
+            ;;
+        :)
+            # Parameter requires an argument but none provided
+            case $OPTARG in
+                r)
+                    REGION="jp"
+                    log_config "Using default region: jp"
+                    ;;
+                q)
+                    QDISC="fq"
+                    log_config "Using default qdisc: fq"
+                    ;;
+                d)
+                    DISABLE_IPV6="yes"
+                    log_config "Using default IPv6 setting: disabled"
+                    ;;
+            esac
             ;;
         \?)
             log_error "Invalid option: -$OPTARG"
@@ -246,17 +290,14 @@ if [ -n "$REGION" ]; then
         jp)
             RMEM_MAX=33554432
             WMEM_MAX=16777216
-            log_config "Using JP configuration from parameter"
             ;;
         hk)
             RMEM_MAX=12582912
             WMEM_MAX=6291456
-            log_config "Using HK configuration from parameter"
             ;;
         us)
             RMEM_MAX=67108864
             WMEM_MAX=33554432
-            log_config "Using US configuration from parameter"
             ;;
         custom)
             log_error "Custom region requires interactive input"
@@ -271,11 +312,11 @@ else
     show_region_menu
 fi
 
-# Validate and set qdisc
+# Validate qdisc (no additional logging needed)
 if [ -n "$QDISC" ]; then
     case "$QDISC" in
         fq|fq_pie|cake)
-            log_config "Using qdisc from parameter: $QDISC"
+            # Valid qdisc, already logged during parameter parsing
             ;;
         *)
             log_warning "Invalid qdisc '$QDISC'. Valid options: fq, fq_pie, cake"
@@ -286,15 +327,11 @@ else
     show_qdisc_menu
 fi
 
-# Validate and set IPv6 disable option
+# Validate IPv6 option (no additional logging needed)
 if [ -n "$DISABLE_IPV6" ]; then
     case "$DISABLE_IPV6" in
         yes|no)
-            if [ "$DISABLE_IPV6" = "yes" ]; then
-                log_config "IPv6 will be disabled (from parameter)"
-            else
-                log_config "IPv6 will remain enabled (from parameter)"
-            fi
+            # Valid option, already logged during parameter parsing
             ;;
         *)
             log_warning "Invalid disable_ipv6 value '$DISABLE_IPV6'. Valid options: yes, no"
