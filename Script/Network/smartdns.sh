@@ -190,11 +190,14 @@ log-level error
 bind [::]:53
 server 1.1.1.1
 server 8.8.8.8
-server 9.9.9.9
-server 208.67.222.222
+server 94.140.14.140
 speed-check-mode ping,tcp:80,tcp:443
 serve-expired yes
-cache-size 32768
+serve-expired-ttl 86400
+serve-expired-reply-ttl 1
+prefetch-domain yes
+serve-expired-prefetch-time 10800
+cache-size 4096
 cache-persist yes
 cache-file /etc/smartdns/smartdns.cache
 dualstack-ip-selection yes
