@@ -193,10 +193,10 @@ server 8.8.8.8
 server 94.140.14.140
 speed-check-mode ping,tcp:80,tcp:443
 serve-expired yes
-serve-expired-ttl 86400
+serve-expired-ttl 129600
 serve-expired-reply-ttl 1
 prefetch-domain yes
-serve-expired-prefetch-time 10800
+serve-expired-prefetch-time 21600
 cache-size 4096
 cache-persist yes
 cache-file /etc/smartdns/smartdns.cache
