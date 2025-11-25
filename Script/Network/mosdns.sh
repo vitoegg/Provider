@@ -245,6 +245,14 @@ log:
   file: "/etc/mosdns/mosdns.log"
 
 plugins:
+  - tag: lazy_cache
+    type: "cache"
+    args:
+      size: 8192
+      lazy_cache_ttl: 86400
+      dump_file: "/etc/mosdns/cache.dump"
+      dump_interval: 1800
+
 EOF
 
     # Add custom DNS plugins if configured and domain files downloaded successfully
@@ -269,14 +277,6 @@ EOF
 
 EOF
     fi
-
-  - tag: lazy_cache
-    type: "cache"
-    args:
-      size: 8192
-      lazy_cache_ttl: 86400
-      dump_file: "/etc/mosdns/cache.dump"
-      dump_interval: 1800
 
     # Add standard DNS plugins
     cat >> "$config_file" << 'EOF'
@@ -309,6 +309,9 @@ EOF
     type: "sequence"
     args:
       - exec: $lazy_cache
+      - matches: has_resp
+        exec: accept
+
       - exec: prefer_ipv4
 EOF
 
