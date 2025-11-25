@@ -1,8 +1,8 @@
 # cron:5 0 * * *
 # new Env('NS+DF每日签到');
 """
-Version: 1.0.0
-Updated Time: 2025-10-06 22:01:09
+Version: 1.0.1
+Updated Time: 2025-11-25 23:00:01
 Reference: https://github.com/wugeng20/NodeSeekSignin
 """
 import os
@@ -140,7 +140,7 @@ class NodeSeekForum(BaseForum):
         if not self.cookie:
             return {"success": False, "message": "❌ 未设置 NS_COOKIE 环境变量"}
 
-        sign_url = f"{self.base_url}/api/attendance?random=true"
+        sign_url = f"{self.base_url}/api/attendance?random=false"
         self.headers["Referer"] = f"{self.base_url}/board"
         self.headers["Cookie"] = self.cookie
 
@@ -170,7 +170,7 @@ class DeepFloodForum(BaseForum):
         if not self.cookie:
             return {"success": False, "message": "❌ 未设置 DF_COOKIE 环境变量"}
 
-        sign_url = f"{self.base_url}/api/attendance?random=true"
+        sign_url = f"{self.base_url}/api/attendance?random=false"
         self.headers["Referer"] = f"{self.base_url}/board"
         self.headers["Cookie"] = self.cookie
 
