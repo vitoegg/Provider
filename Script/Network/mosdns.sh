@@ -247,8 +247,8 @@ log:
 plugins:
 EOF
 
-    # Add custom DNS plugins if configured
-    if [ $USE_CUSTOM_DNS -eq 1 ]; then
+    # Add custom DNS plugins if configured and domain files downloaded successfully
+    if [ $USE_CUSTOM_DNS -eq 1 ] && [ ${#DOWNLOADED_RULE_FILES[@]} -gt 0 ]; then
         cat >> "$config_file" << EOF
   - tag: dns_domain
     type: "domain_set"
@@ -269,6 +269,14 @@ EOF
 
 EOF
     fi
+
+  - tag: lazy_cache
+    type: "cache"
+    args:
+      size: 8192
+      lazy_cache_ttl: 86400
+      dump_file: "/etc/mosdns/cache.dump"
+      dump_interval: 1800
 
     # Add standard DNS plugins
     cat >> "$config_file" << 'EOF'
@@ -300,14 +308,15 @@ EOF
   - tag: main_sequence
     type: "sequence"
     args:
+      - exec: $lazy_cache
       - exec: prefer_ipv4
 EOF
 
     # Add ECS configuration with variable substitution
     echo "      - exec: ecs ${ECS_IP}" >> "$config_file"
 
-    # Add custom DNS matching if configured
-    if [ $USE_CUSTOM_DNS -eq 1 ]; then
+    # Add custom DNS matching if configured and domain files downloaded successfully
+    if [ $USE_CUSTOM_DNS -eq 1 ] && [ ${#DOWNLOADED_RULE_FILES[@]} -gt 0 ]; then
         cat >> "$config_file" << 'EOF'
 
       - matches:
