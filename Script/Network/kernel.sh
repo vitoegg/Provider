@@ -46,22 +46,24 @@ log_status() {
 # ========================================
 show_help() {
     echo
-    echo -e "${WHITE}Linux Kernel Optimization Script${NC}"
+    echo -e "${WHITE}┌─────────────────────────────────────────┐${NC}"
+    echo -e "${WHITE}│${NC}   ${CYAN}Linux Kernel Optimization Script${NC}    ${WHITE}│${NC}"
+    echo -e "${WHITE}└─────────────────────────────────────────┘${NC}"
     echo
-    echo "Usage: $0 [-r [region]] [-q [qdisc]] [-d [disable_ipv6]] [-h]"
+    echo -e "${YELLOW}Usage:${NC}"
+    echo -e "  $0 [-r [region]] [-q [qdisc]] [-d [disable_ipv6]] [-h]"
     echo
-    echo "Options:"
-    echo "  -r  Region configuration (jp, hk, us, custom). Default if no value: jp"
-    echo "  -q  Queue discipline algorithm (fq, fq_pie, cake). Default if no value: fq"
-    echo "  -d  Disable IPv6 (yes, no). Default if no value: yes"
-    echo "  -h  Display this help message"
+    echo -e "${YELLOW}Options:${NC}"
+    echo -e "  ${GREEN}-r${NC}  Region ${CYAN}(jp, hk, us, custom)${NC} - Default: ${WHITE}jp${NC}"
+    echo -e "  ${GREEN}-q${NC}  Queue discipline ${CYAN}(fq, fq_pie, cake)${NC} - Default: ${WHITE}fq${NC}"
+    echo -e "  ${GREEN}-d${NC}  Disable IPv6 ${CYAN}(yes, no)${NC} - Default: ${WHITE}yes${NC}"
+    echo -e "  ${GREEN}-h${NC}  Display this help message"
     echo
-    echo "Examples:"
-    echo "  $0                         # Interactive mode"
-    echo "  $0 -r -q -d                # Use all defaults (jp, fq, IPv6 disabled)"
-    echo "  $0 -r jp -q fq -d no       # Japan region, fq queue, IPv6 enabled"
-    echo "  $0 -r us -q cake -d yes    # US region, cake queue, IPv6 disabled"
-    echo "  $0 -r -q cake              # Default region (jp), cake queue, interactive IPv6"
+    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "  ${WHITE}$0${NC}                         ${CYAN}# Interactive mode${NC}"
+    echo -e "  ${WHITE}$0 -r -q -d${NC}                ${CYAN}# Use all defaults${NC}"
+    echo -e "  ${WHITE}$0 -r jp -q fq -d no${NC}       ${CYAN}# Japan, fq, IPv6 enabled${NC}"
+    echo -e "  ${WHITE}$0 -r us -q cake -d yes${NC}    ${CYAN}# US, cake, IPv6 disabled${NC}"
     echo
     exit 0
 }
@@ -72,14 +74,15 @@ show_help() {
 show_region_menu() {
     while true; do
         echo
-        echo -e "${PURPLE}╔═══════════════════════════════════════════════════════╗${NC}"
-        echo -e "${PURPLE}║${NC}              ${WHITE}Region Configuration${NC}                     ${PURPLE}║${NC}"
-        echo -e "${PURPLE}╠═══════════════════════════════════════════════════════╣${NC}"
-        echo -e "${PURPLE}║${NC} ${GREEN}1.${NC} ${WHITE}JP Config${NC} ${CYAN}(Rmem: 33554432, Wmem: 16777216)${NC}        ${PURPLE}║${NC}"
-        echo -e "${PURPLE}║${NC} ${GREEN}2.${NC} ${WHITE}HK Config${NC} ${CYAN}(Rmem: 12582912, Wmem: 6291456)${NC}         ${PURPLE}║${NC}"
-        echo -e "${PURPLE}║${NC} ${GREEN}3.${NC} ${WHITE}US Config${NC} ${CYAN}(Rmem: 67108864, Wmem: 33554432)${NC}        ${PURPLE}║${NC}"
-        echo -e "${PURPLE}║${NC} ${GREEN}4.${NC} ${WHITE}Custom Values${NC}                                      ${PURPLE}║${NC}"
-        echo -e "${PURPLE}╚═══════════════════════════════════════════════════════╝${NC}"
+        echo -e "${PURPLE}┌─────────────────────────────────────────┐${NC}"
+        echo -e "${PURPLE}│${NC}        ${WHITE}Region Configuration${NC}            ${PURPLE}│${NC}"
+        echo -e "${PURPLE}└─────────────────────────────────────────┘${NC}"
+        echo
+        echo -e "  ${GREEN}1.${NC} ${WHITE}JP Config${NC}  ${CYAN}(Rmem: 33554432, Wmem: 16777216)${NC}"
+        echo -e "  ${GREEN}2.${NC} ${WHITE}HK Config${NC}  ${CYAN}(Rmem: 12582912, Wmem: 6291456)${NC}"
+        echo -e "  ${GREEN}3.${NC} ${WHITE}US Config${NC}  ${CYAN}(Rmem: 67108864, Wmem: 33554432)${NC}"
+        echo -e "  ${GREEN}4.${NC} ${WHITE}Custom Values${NC}"
+        echo
         echo -e -n "${YELLOW}Please select region (1-4): ${NC}"
         read choice
         
@@ -133,13 +136,14 @@ show_region_menu() {
 show_qdisc_menu() {
     while true; do
         echo
-        echo -e "${CYAN}╔═══════════════════════════════════════════════════════╗${NC}"
-        echo -e "${CYAN}║${NC}          ${WHITE}Queue Discipline Configuration${NC}               ${CYAN}║${NC}"
-        echo -e "${CYAN}╠═══════════════════════════════════════════════════════╣${NC}"
-        echo -e "${CYAN}║${NC} ${GREEN}1.${NC} ${WHITE}fq${NC} ${CYAN}(Fair Queue - Default)${NC}                         ${CYAN}║${NC}"
-        echo -e "${CYAN}║${NC} ${GREEN}2.${NC} ${WHITE}fq_pie${NC} ${CYAN}(Fair Queue with PIE)${NC}                      ${CYAN}║${NC}"
-        echo -e "${CYAN}║${NC} ${GREEN}3.${NC} ${WHITE}cake${NC} ${CYAN}(Common Applications Kept Enhanced)${NC}          ${CYAN}║${NC}"
-        echo -e "${CYAN}╚═══════════════════════════════════════════════════════╝${NC}"
+        echo -e "${CYAN}┌─────────────────────────────────────────┐${NC}"
+        echo -e "${CYAN}│${NC}     ${WHITE}Queue Discipline Configuration${NC}     ${CYAN}│${NC}"
+        echo -e "${CYAN}└─────────────────────────────────────────┘${NC}"
+        echo
+        echo -e "  ${GREEN}1.${NC} ${WHITE}fq${NC}      ${CYAN}(Fair Queue - Default)${NC}"
+        echo -e "  ${GREEN}2.${NC} ${WHITE}fq_pie${NC}  ${CYAN}(Fair Queue with PIE)${NC}"
+        echo -e "  ${GREEN}3.${NC} ${WHITE}cake${NC}    ${CYAN}(Common Applications Kept Enhanced)${NC}"
+        echo
         echo -e -n "${YELLOW}Please select qdisc (1-3): ${NC}"
         read choice
         
@@ -172,12 +176,13 @@ show_qdisc_menu() {
 show_ipv6_menu() {
     while true; do
         echo
-        echo -e "${BLUE}╔═══════════════════════════════════════════════════════╗${NC}"
-        echo -e "${BLUE}║${NC}               ${WHITE}IPv6 Configuration${NC}                      ${BLUE}║${NC}"
-        echo -e "${BLUE}╠═══════════════════════════════════════════════════════╣${NC}"
-        echo -e "${BLUE}║${NC} ${GREEN}1.${NC} ${WHITE}Keep IPv6 enabled${NC}                                  ${BLUE}║${NC}"
-        echo -e "${BLUE}║${NC} ${GREEN}2.${NC} ${WHITE}Disable IPv6${NC}                                       ${BLUE}║${NC}"
-        echo -e "${BLUE}╚═══════════════════════════════════════════════════════╝${NC}"
+        echo -e "${BLUE}┌─────────────────────────────────────────┐${NC}"
+        echo -e "${BLUE}│${NC}          ${WHITE}IPv6 Configuration${NC}              ${BLUE}│${NC}"
+        echo -e "${BLUE}└─────────────────────────────────────────┘${NC}"
+        echo
+        echo -e "  ${GREEN}1.${NC} ${WHITE}Keep IPv6 Enabled${NC}"
+        echo -e "  ${GREEN}2.${NC} ${WHITE}Disable IPv6${NC}"
+        echo
         echo -e -n "${YELLOW}Please select IPv6 option (1-2): ${NC}"
         read choice
         
@@ -345,28 +350,24 @@ fi
 # ========================================
 # Configuration Summary
 # ========================================
-echo
-echo -e "${GREEN}╔═══════════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║${NC}              ${WHITE}Configuration Summary${NC}                     ${GREEN}║${NC}"
-echo -e "${GREEN}╠═══════════════════════════════════════════════════════╣${NC}"
-
-# Display region
 REGION_DISPLAY=$(echo "$REGION" | tr '[:lower:]' '[:upper:]')
-echo -e "${GREEN}║${NC} ${CYAN}Region:${NC} ${WHITE}$REGION_DISPLAY${NC}"
-echo -e "${GREEN}║${NC} ${CYAN}Rmem Max:${NC} ${WHITE}$RMEM_MAX${NC}"
-echo -e "${GREEN}║${NC} ${CYAN}Wmem Max:${NC} ${WHITE}$WMEM_MAX${NC}"
-
-# Display qdisc
-echo -e "${GREEN}║${NC} ${CYAN}Queue Discipline:${NC} ${WHITE}$QDISC${NC}"
-
-# Display IPv6 status
 if [ "$DISABLE_IPV6" = "yes" ]; then
-    echo -e "${GREEN}║${NC} ${CYAN}IPv6:${NC} ${WHITE}Disabled${NC}"
+    IPV6_STATUS="Disabled"
 else
-    echo -e "${GREEN}║${NC} ${CYAN}IPv6:${NC} ${WHITE}Enabled${NC}"
+    IPV6_STATUS="Enabled"
 fi
 
-echo -e "${GREEN}╚═══════════════════════════════════════════════════════╝${NC}"
+echo
+echo -e "${GREEN}┌─────────────────────────────────────────┐${NC}"
+echo -e "${GREEN}│${NC}       ${WHITE}Configuration Summary${NC}            ${GREEN}│${NC}"
+echo -e "${GREEN}└─────────────────────────────────────────┘${NC}"
+echo
+echo -e "  ${CYAN}Region${NC}             ${WHITE}$REGION_DISPLAY${NC}"
+echo -e "  ${CYAN}Rmem Max${NC}           ${WHITE}$RMEM_MAX${NC}"
+echo -e "  ${CYAN}Wmem Max${NC}           ${WHITE}$WMEM_MAX${NC}"
+echo -e "  ${CYAN}Queue Discipline${NC}   ${WHITE}$QDISC${NC}"
+echo -e "  ${CYAN}IPv6${NC}               ${WHITE}$IPV6_STATUS${NC}"
+echo
 
 # ========================================
 # Start Optimization
@@ -539,9 +540,10 @@ fi
 # Verification
 # ========================================
 echo
-echo -e "${BLUE}╔═══════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║${NC}        ${WHITE}Verification Results${NC}           ${BLUE}║${NC}"
-echo -e "${BLUE}╚═══════════════════════════════════════╝${NC}"
+echo -e "${BLUE}┌─────────────────────────────────────────┐${NC}"
+echo -e "${BLUE}│${NC}        ${WHITE}Verification Results${NC}             ${BLUE}│${NC}"
+echo -e "${BLUE}└─────────────────────────────────────────┘${NC}"
+echo
 
 # Verify kernel parameters applied
 rmem_actual=$(cat /proc/sys/net/core/rmem_max 2>/dev/null)
