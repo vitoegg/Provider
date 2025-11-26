@@ -1,6 +1,9 @@
 payload:
-  # General Emby
+  # ShouHou Emby
   - '+.cn2gias.uk'
-  - '+.lilyemby.my'
+  # > Lily Emby
+  - 'www.lilyemby.my'
   # UHDNow Emby
   - '+.uhdnow.com'
+  # > Recmata Emby
+  - '+.recmata.net'
