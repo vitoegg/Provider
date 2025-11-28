@@ -11,6 +11,17 @@ RELEASE_NUMBER=""
 PACKAGE_VERSION=""
 ARCH_TYPE=""
 
+# ECS region variable
+ECS_REGION=""
+
+# ECS region to IP mapping
+declare -A ECS_IPS=(
+    ["HK"]="42.2.2.2"
+    ["TYO"]="106.152.210.210"
+    ["LA"]="107.119.53.53"
+    ["SEA"]="68.86.93.93"
+)
+
 # Logging functions
 log_info() {
     echo -e "${GREEN}[$(date '+%Y-%m-%d %H:%M:%S')][INFO] $1${NC}"
@@ -131,10 +142,26 @@ parse_args() {
                 UNINSTALL=1
                 shift
                 ;;
+            -e|--ecs)
+                if [ -z "$2" ] || [[ "$2" == -* ]]; then
+                    log_error "ECS region not specified"
+                    echo "Available regions: HK, TYO, LA, SEA"
+                    exit 1
+                fi
+                ECS_REGION=$(echo "$2" | tr '[:lower:]' '[:upper:]')
+                if [ -z "${ECS_IPS[$ECS_REGION]}" ]; then
+                    log_error "Invalid ECS region: $2"
+                    echo "Available regions: HK, TYO, LA, SEA"
+                    exit 1
+                fi
+                log_info "ECS region set to: $ECS_REGION (IP: ${ECS_IPS[$ECS_REGION]})"
+                shift 2
+                ;;
             *)
                 log_error "Unknown parameter: $1"
-                echo "Usage: $0 [-u|--uninstall]"
+                echo "Usage: $0 [-u|--uninstall] [-e|--ecs REGION]"
                 echo "       $0 (no parameters for default installation)"
+                echo "Available ECS regions: HK, TYO, LA, SEA"
                 exit 1
                 ;;
         esac
@@ -184,13 +211,21 @@ install_smartdns() {
 configure_smartdns() {
     mkdir -p /etc/smartdns
 
+    # Generate ECS suffix for DNS servers (except 1.1.1.1)
+    local ecs_suffix=""
+    if [ -n "$ECS_REGION" ]; then
+        ecs_suffix=" -subnet ${ECS_IPS[$ECS_REGION]}/24"
+        log_info "Applying ECS configuration with IP: ${ECS_IPS[$ECS_REGION]}"
+    fi
+
     cat > /etc/smartdns/smartdns.conf << EOF
 server-name smartdns
 log-level error
 bind [::]:53
 server 1.1.1.1
-server 8.8.8.8
-server 94.140.14.140
+server 8.8.8.8${ecs_suffix}
+server 94.140.14.140${ecs_suffix}
+server 208.67.222.222${ecs_suffix}
 speed-check-mode ping,tcp:80,tcp:443
 serve-expired yes
 serve-expired-ttl 129600
