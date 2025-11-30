@@ -3,7 +3,7 @@
 ### reality.sh
 Install and manage Reality and ShadowSocks services using Xray.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/reality.sh && bash reality.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/reality.sh && bash reality.sh
 ```
 * `--install`: Install service.
 * `--update`: Update service.
@@ -21,7 +21,7 @@ wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/r
 ### shadowtls.sh
 Install and manage Shadowsocks and ShadowTLS services.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/shadowtls.sh && bash shadowtls.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/shadowtls.sh && bash shadowtls.sh
 ```
 * `--ss-port`: Shadowsocks server port.
 * `--ss-pass`: Shadowsocks password.
@@ -32,7 +32,7 @@ wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/s
 ### snell.sh
 Install and manage Snell proxy server.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/snell.sh && bash snell.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/snell.sh && bash snell.sh
 ```
 * `-i`: Install Snell server (optional version).
 * `-n`: Update Snell server (optional version).
@@ -43,7 +43,7 @@ wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/s
 ### anytls.sh
 Install and manage AnyTLS service using Singbox.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/anytls.sh && bash anytls.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/anytls.sh && bash anytls.sh
 ```
 * `--port`: Specify AnyTLS port (default: auto-generated 50000-60000).
 * `--password`: Specify AnyTLS password (default: auto-generated).
@@ -55,7 +55,7 @@ wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/a
 ### shadowsocks.sh
 Install and manage Shadowsocks-rust service.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/shadowsocks.sh && bash shadowsocks.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/shadowsocks.sh && bash shadowsocks.sh
 ```
 * `-s`: Specify Shadowsocks password.
 * `-p`: Specify Shadowsocks port.
@@ -63,7 +63,7 @@ wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/s
 ### smartdns.sh
 Install and manage SmartDNS service.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/smartdns.sh && bash smartdns.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/smartdns.sh && bash smartdns.sh
 ```
 * `-e`: Specify ECS region (HK, TYO, LA, SEA).
 * `-u`: Uninstall SmartDNS service.
@@ -71,7 +71,7 @@ wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/s
 ### mosdns.sh
 Install and manage MosDNS service with custom DNS and ECS support.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/mosdns.sh && bash mosdns.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/mosdns.sh && bash mosdns.sh
 ```
 * `-i`: Install with default configuration.
 * `-d`: Specify custom DNS server address.
@@ -81,7 +81,7 @@ wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/m
 ### nftables.sh
 Manage NFTables port forwarding rules.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/nftables.sh && bash nftables.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/nftables.sh && bash nftables.sh
 ```
 * `--add`: Add forwarding rule (Format: "port:ip:port").
 * `--remove`: Remove forwarding rule by port.
@@ -91,13 +91,13 @@ wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/n
 ### iptables.sh
 Manage iptables forwarding rules with an interactive menu.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/iptables.sh && bash iptables.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/iptables.sh && bash iptables.sh
 ```
 
 ### realm.sh
 Manage Realm TCP/UDP forwarding service.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/realm.sh && bash realm.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/realm.sh && bash realm.sh
 ```
 * `--add`: Add forwarding rule (Format: "port:address:port").
 * `--remove`: Remove forwarding rule by port.
@@ -109,7 +109,7 @@ wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/r
 ### kernel.sh
 Optimize Linux kernel network parameters for better performance.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/kernel.sh && bash kernel.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/kernel.sh && bash kernel.sh
 ```
 * `-r`: Region configuration (jp, hk, us, custom).
 * `-q`: Queue discipline (fq, fq_pie, cake).
@@ -118,20 +118,20 @@ wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/k
 ### ssh_keys.sh
 Configure SSH public key authentication.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/ssh_keys.sh && bash ssh_keys.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/ssh_keys.sh && bash ssh_keys.sh
 ```
 * `-k`: SSH public key string (required).
 
 ### tcp.sh
 Configure and optimize TCP network settings.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/tcp.sh && bash tcp.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/tcp.sh && bash tcp.sh
 ```
 
 ### traffic.sh
 Monitor and limit network traffic usage.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/traffic.sh && bash traffic.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/traffic.sh && bash traffic.sh
 ```
 * `$1`: Traffic limit in GB.
 * `$2`: Day of the month to reset traffic.
@@ -141,7 +141,7 @@ wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/t
 ### ipconfig.sh
 Configure IP priority (IPv4/IPv6) for the system.
 ```bash
-wget -N https://raw.githubusercontent.com/1991991/Provider/main/Script/Network/ipconfig.sh && bash ipconfig.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/ipconfig.sh && bash ipconfig.sh
 ```
 * `-v4`: Set IPv4 priority.
 * `-v6`: Set IPv6 priority.
