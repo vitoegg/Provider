@@ -48,6 +48,7 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 * `--port`: Specify AnyTLS port (default: auto-generated 50000-60000).
 * `--password`: Specify AnyTLS password (default: auto-generated).
 * `--domain`: Specify domain name.
+* `--token`: Specify Cloudflare API Token for DNS-01 certificate challenge.
 * `--version`: Specify Singbox version to install.
 * `--update`: Update Singbox to the latest version.
 * `--uninstall`: Uninstall Singbox service and remove configuration.

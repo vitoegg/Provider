@@ -69,6 +69,7 @@ PORT=""
 PASSWORD=""
 DOMAIN=""
 SINGBOX_VERSION=""
+TOKEN=""
 
 ################################################################################
 # Command-line arguments parser
@@ -93,6 +94,10 @@ parse_args() {
                 ;;
             --version)
                 SINGBOX_VERSION="$2"
+                shift 2
+                ;;
+            --token)
+                TOKEN="$2"
                 shift 2
                 ;;
             -u|--uninstall)
@@ -132,6 +137,7 @@ show_usage() {
     echo "  --port PORT             Specify AnyTLS port (default: auto-generated 50000-60000)"
     echo "  --password PASS         Specify AnyTLS password (default: auto-generated)"
     echo "  --domain DOMAIN         Specify domain name (required if not provided interactively)"
+    echo "  --token TOKEN           Specify Cloudflare API Token for DNS-01 certificate challenge"
     echo "  --version VERSION       Specify Singbox version to install (e.g., v1.8.0 or 1.8.0)"
     echo ""
     echo "Management Options:"
@@ -140,15 +146,15 @@ show_usage() {
     echo "  -h, --help              Show this help message"
     echo ""
     echo "Examples:"
-    echo "  # Install with all parameters specified"
-    echo "  $0 --port 52555 --password mypass123 --domain listen.example.com"
+    echo "  # Install with all parameters specified (including Cloudflare token)"
+    echo "  $0 --port 52555 --password mypass123 --domain api.example.com --token YOUR_CF_TOKEN"
     echo ""
     echo "  # Install with partial parameters (others will be auto-generated or prompted)"
-    echo "  $0 --domain listen.example.com"
-    echo "  $0 --port 52555 --domain listen.example.com"
+    echo "  $0 --domain api.example.com --token YOUR_CF_TOKEN"
+    echo "  $0 --port 52555 --domain api.example.com"
     echo ""
     echo "  # Install with specific version"
-    echo "  $0 --domain listen.example.com --version v1.8.0"
+    echo "  $0 --domain api.example.com --version v1.8.0"
     echo ""
     echo "  # Update or Uninstall"
     echo "  $0 --update"
@@ -620,6 +626,20 @@ generate_config_params() {
         log_info "Using specified domain: $DOMAIN"
     fi
     
+    # Prompt for Cloudflare API Token if not specified
+    if [[ -z "$TOKEN" ]]; then
+        echo ""
+        log_info "DNS-01 certificate challenge requires Cloudflare API Token"
+        read -p "Please enter your Cloudflare API Token: " TOKEN
+        if [[ -z "$TOKEN" ]]; then
+            log_error "Cloudflare API Token is required for DNS-01 certificate challenge!"
+            exit 1
+        fi
+        log_info "Cloudflare API Token configured"
+    else
+        log_info "Using specified Cloudflare API Token"
+    fi
+    
     log_success "Configuration parameters ready"
 }
 
@@ -653,10 +673,15 @@ create_singbox_config() {
         }
       ],
       "padding_scheme": [
-        "stop=3",
+        "stop=8",
         "0=30-30",
-        "1=100-400",
-        "2=400-500,c,500-1000,c,500-1000,c,500-1000,c,500-1000"
+        "1=100-300",
+        "2=300-600,c,800-1200,c,1000-1500",
+        "3=200-500,c,800-1200",
+        "4=50-100,c,500-1000",
+        "5=50-100,c,500-1000",
+        "6=50-100,c,500-1000",
+        "7=50-100,c,500-1000"
       ],
       "tls": {
         "enabled": true,
@@ -669,8 +694,12 @@ create_singbox_config() {
           "domain": [
             "$DOMAIN"
           ],
-          "email": "admin@cert.eu.org",
-          "provider": "letsencrypt"
+          "email": "admin@xinsight.eu.org",
+          "provider": "letsencrypt",
+          "dns01_challenge": {
+            "provider": "cloudflare",
+            "api_token": "$TOKEN"
+          }
         }
       }
     }
@@ -941,7 +970,7 @@ main() {
     parse_args "$@"
     
     # If any configuration parameters are provided, run installation
-    if [[ -n "$PORT" || -n "$PASSWORD" || -n "$DOMAIN" ]]; then
+    if [[ -n "$PORT" || -n "$PASSWORD" || -n "$DOMAIN" || -n "$TOKEN" ]]; then
         run_installation
     else
         # Show interactive menu
