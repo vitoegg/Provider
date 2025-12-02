@@ -172,11 +172,12 @@ generate_port() {
 }
 
 ################################################################################
-# Generate random password using /dev/urandom
+# Generate random password for Shadowsocks 2022
+# 2022-blake3-aes-128-gcm requires a 16-byte Base64 encoded key
 ################################################################################
 generate_password() {
-    # Generate a random password using /dev/urandom
-    tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16
+    # Generate a Base64 encoded 16-byte random key for 2022-blake3-aes-128-gcm
+    openssl rand -base64 16
 }
 
 ################################################################################
@@ -323,8 +324,8 @@ install_shadowsocks() {
 # Prepare for Configuration
 ################################################################################
 prepare_configuration() {
-    # Set encryption method to aes-128-gcm
-    ss_method="aes-128-gcm"
+    # Set encryption method to 2022-blake3-aes-128-gcm (Shadowsocks 2022 protocol)
+    ss_method="2022-blake3-aes-128-gcm"
     log info "Using encryption method: $ss_method"
 
     # Set or generate port
