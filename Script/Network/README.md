@@ -45,13 +45,30 @@ Install and manage AnyTLS service using Singbox.
 ```bash
 wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/anytls.sh && bash anytls.sh
 ```
+**Configuration Options:**
 * `--port`: Specify AnyTLS port (default: auto-generated 50000-60000).
 * `--password`: Specify AnyTLS password (default: auto-generated).
 * `--domain`: Specify domain name.
-* `--token`: Specify Cloudflare API Token for DNS-01 certificate challenge.
 * `--version`: Specify Singbox version to install.
+
+**Certificate Options (mutually exclusive modes):**
+* `--cert-mode`: Certificate mode: `acme` (auto-generate) or `manual` (use existing).
+* `--token`: [ACME mode] Cloudflare API Token for DNS-01 certificate challenge.
+* `--cert-path`: [Manual mode] Path to TLS certificate file.
+* `--key-path`: [Manual mode] Path to TLS private key file.
+
+**Management Options:**
 * `--update`: Update Singbox to the latest version.
 * `--uninstall`: Uninstall Singbox service and remove configuration.
+
+**Examples:**
+```bash
+# ACME mode: Auto-generate certificate
+bash anytls.sh --domain api.example.com --token YOUR_CF_TOKEN
+
+# Manual mode: Use existing certificate
+bash anytls.sh --cert-mode manual --domain api.example.com --cert-path /etc/ssl/certs/cert.crt --key-path /etc/ssl/certs/cert.key
+```
 
 ### shadowsocks.sh
 Install and manage Shadowsocks-rust service.

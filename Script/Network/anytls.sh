@@ -70,6 +70,11 @@ PASSWORD=""
 DOMAIN=""
 SINGBOX_VERSION=""
 TOKEN=""
+# Certificate mode: "acme" (default) or "manual"
+CERT_MODE=""
+# Manual certificate paths
+CERT_PATH=""
+KEY_PATH=""
 
 ################################################################################
 # Command-line arguments parser
@@ -100,6 +105,22 @@ parse_args() {
                 TOKEN="$2"
                 shift 2
                 ;;
+            --cert-mode)
+                CERT_MODE="$2"
+                if [[ "$CERT_MODE" != "acme" && "$CERT_MODE" != "manual" ]]; then
+                    log_error "Invalid cert-mode: $CERT_MODE. Must be 'acme' or 'manual'."
+                    exit 1
+                fi
+                shift 2
+                ;;
+            --cert-path)
+                CERT_PATH="$2"
+                shift 2
+                ;;
+            --key-path)
+                KEY_PATH="$2"
+                shift 2
+                ;;
             -u|--uninstall)
                 uninstall_requested=true
                 shift
@@ -125,6 +146,22 @@ parse_args() {
         uninstall_service
         exit 0
     fi
+    
+    # Validate certificate mode parameters
+    if [[ -n "$CERT_PATH" || -n "$KEY_PATH" ]]; then
+        # If cert-path or key-path is provided, auto-set to manual mode
+        if [[ -z "$CERT_MODE" ]]; then
+            CERT_MODE="manual"
+        elif [[ "$CERT_MODE" == "acme" ]]; then
+            log_error "Cannot use --cert-path or --key-path with --cert-mode acme"
+            exit 1
+        fi
+    fi
+    
+    if [[ -n "$TOKEN" && "$CERT_MODE" == "manual" ]]; then
+        log_error "Cannot use --token with --cert-mode manual"
+        exit 1
+    fi
 }
 
 ################################################################################
@@ -137,8 +174,13 @@ show_usage() {
     echo "  --port PORT             Specify AnyTLS port (default: auto-generated 50000-60000)"
     echo "  --password PASS         Specify AnyTLS password (default: auto-generated)"
     echo "  --domain DOMAIN         Specify domain name (required if not provided interactively)"
-    echo "  --token TOKEN           Specify Cloudflare API Token for DNS-01 certificate challenge"
     echo "  --version VERSION       Specify Singbox version to install (e.g., v1.8.0 or 1.8.0)"
+    echo ""
+    echo "Certificate Options (mutually exclusive modes):"
+    echo "  --cert-mode MODE        Certificate mode: 'acme' (auto-generate) or 'manual' (use existing)"
+    echo "  --token TOKEN           [ACME mode] Cloudflare API Token for DNS-01 certificate challenge"
+    echo "  --cert-path PATH        [Manual mode] Path to TLS certificate file"
+    echo "  --key-path PATH         [Manual mode] Path to TLS private key file"
     echo ""
     echo "Management Options:"
     echo "  --update                Update Singbox to the latest version"
@@ -146,15 +188,19 @@ show_usage() {
     echo "  -h, --help              Show this help message"
     echo ""
     echo "Examples:"
-    echo "  # Install with all parameters specified (including Cloudflare token)"
+    echo "  # ACME mode: Auto-generate certificate using Cloudflare DNS-01 challenge"
+    echo "  $0 --cert-mode acme --domain api.example.com --token YOUR_CF_TOKEN"
+    echo "  $0 --domain api.example.com --token YOUR_CF_TOKEN"
+    echo ""
+    echo "  # Manual mode: Use existing certificate files"
+    echo "  $0 --cert-mode manual --domain api.example.com --cert-path /etc/ssl/certs/cert.crt --key-path /etc/ssl/certs/cert.key"
+    echo "  $0 --domain api.example.com --cert-path /etc/ssl/certs/cert.crt --key-path /etc/ssl/certs/cert.key"
+    echo ""
+    echo "  # Install with specific port and password"
     echo "  $0 --port 52555 --password mypass123 --domain api.example.com --token YOUR_CF_TOKEN"
     echo ""
-    echo "  # Install with partial parameters (others will be auto-generated or prompted)"
-    echo "  $0 --domain api.example.com --token YOUR_CF_TOKEN"
-    echo "  $0 --port 52555 --domain api.example.com"
-    echo ""
     echo "  # Install with specific version"
-    echo "  $0 --domain api.example.com --version v1.8.0"
+    echo "  $0 --domain api.example.com --version v1.8.0 --token YOUR_CF_TOKEN"
     echo ""
     echo "  # Update or Uninstall"
     echo "  $0 --update"
@@ -626,18 +672,80 @@ generate_config_params() {
         log_info "Using specified domain: $DOMAIN"
     fi
     
-    # Prompt for Cloudflare API Token if not specified
-    if [[ -z "$TOKEN" ]]; then
+    # Prompt for certificate mode if not specified
+    if [[ -z "$CERT_MODE" ]]; then
         echo ""
-        log_info "DNS-01 certificate challenge requires Cloudflare API Token"
-        read -p "Please enter your Cloudflare API Token: " TOKEN
+        log_info "Certificate Mode Selection:"
+        echo "  1. ACME mode - Auto-generate certificate using Cloudflare DNS-01 challenge"
+        echo "  2. Manual mode - Use existing certificate files"
+        echo ""
+        read -p "Please select certificate mode (1 or 2): " cert_choice
+        case $cert_choice in
+            1)
+                CERT_MODE="acme"
+                log_info "Selected: ACME mode"
+                ;;
+            2)
+                CERT_MODE="manual"
+                log_info "Selected: Manual mode"
+                ;;
+            *)
+                log_error "Invalid choice. Please enter 1 or 2."
+                exit 1
+                ;;
+        esac
+    else
+        log_info "Using specified certificate mode: $CERT_MODE"
+    fi
+    
+    # Handle certificate mode specific parameters
+    if [[ "$CERT_MODE" == "acme" ]]; then
+        # ACME mode: Prompt for Cloudflare API Token
         if [[ -z "$TOKEN" ]]; then
-            log_error "Cloudflare API Token is required for DNS-01 certificate challenge!"
+            echo ""
+            log_info "DNS-01 certificate challenge requires Cloudflare API Token"
+            read -p "Please enter your Cloudflare API Token: " TOKEN
+            if [[ -z "$TOKEN" ]]; then
+                log_error "Cloudflare API Token is required for DNS-01 certificate challenge!"
+                exit 1
+            fi
+            log_info "Cloudflare API Token configured"
+        else
+            log_info "Using specified Cloudflare API Token"
+        fi
+    elif [[ "$CERT_MODE" == "manual" ]]; then
+        # Manual mode: Prompt for certificate paths
+        if [[ -z "$CERT_PATH" ]]; then
+            echo ""
+            read -p "Please enter certificate file path: " CERT_PATH
+            if [[ -z "$CERT_PATH" ]]; then
+                log_error "Certificate path is required for manual mode!"
+                exit 1
+            fi
+        fi
+        
+        # Verify certificate file exists
+        if [[ ! -f "$CERT_PATH" ]]; then
+            log_error "Certificate file not found: $CERT_PATH"
             exit 1
         fi
-        log_info "Cloudflare API Token configured"
-    else
-        log_info "Using specified Cloudflare API Token"
+        log_info "Using certificate: $CERT_PATH"
+        
+        if [[ -z "$KEY_PATH" ]]; then
+            echo ""
+            read -p "Please enter private key file path: " KEY_PATH
+            if [[ -z "$KEY_PATH" ]]; then
+                log_error "Private key path is required for manual mode!"
+                exit 1
+            fi
+        fi
+        
+        # Verify key file exists
+        if [[ ! -f "$KEY_PATH" ]]; then
+            log_error "Private key file not found: $KEY_PATH"
+            exit 1
+        fi
+        log_info "Using private key: $KEY_PATH"
     fi
     
     log_success "Configuration parameters ready"
@@ -654,8 +762,56 @@ create_singbox_config() {
     
     local config_file="/etc/sing-box/config.json"
     
-    # Create AnyTLS configuration file
-    cat > "$config_file" << EOF
+    # Create AnyTLS configuration file based on certificate mode
+    if [[ "$CERT_MODE" == "manual" ]]; then
+        # Manual mode: Use existing certificate files
+        log_info "Creating configuration with manual certificate mode..."
+        cat > "$config_file" << EOF
+{
+  "log": {
+    "disabled": true
+  },
+  "inbounds": [
+    {
+      "type": "anytls",
+      "tag": "anytls-in",
+      "listen": "::",
+      "listen_port": $PORT,
+      "users": [
+        {
+          "name": "AnyCloud",
+          "password": "$PASSWORD"
+        }
+      ],
+      "padding_scheme": [
+        "stop=8",
+        "0=30-30",
+        "1=100-300",
+        "2=300-600,c,800-1200,c,1000-1500",
+        "3=200-500,c,800-1200",
+        "4=50-100,c,500-1000",
+        "5=50-100,c,500-1000",
+        "6=50-100,c,500-1000",
+        "7=50-100,c,500-1000"
+      ],
+      "tls": {
+        "enabled": true,
+        "alpn": [
+          "h2",
+          "http/1.1"
+        ],
+        "server_name": "$DOMAIN",
+        "certificate_path": "$CERT_PATH",
+        "key_path": "$KEY_PATH"
+      }
+    }
+  ]
+}
+EOF
+    else
+        # ACME mode: Auto-generate certificate using Cloudflare DNS-01 challenge
+        log_info "Creating configuration with ACME certificate mode..."
+        cat > "$config_file" << EOF
 {
   "log": {
     "disabled": true
@@ -706,8 +862,10 @@ create_singbox_config() {
   ]
 }
 EOF
+    fi
     
     log_success "Configuration file created: $config_file"
+    log_info "Certificate mode: $CERT_MODE"
 }
 
 ################################################################################
@@ -761,6 +919,14 @@ show_configuration() {
     printf "%-25s %s\n" "Port:" "$PORT"
     printf "%-25s %s\n" "Password:" "$PASSWORD"
     printf "%-25s %s\n" "Domain:" "$DOMAIN"
+    printf "%-25s %s\n" "Certificate Mode:" "$CERT_MODE"
+    
+    if [[ "$CERT_MODE" == "manual" ]]; then
+        printf "%-25s %s\n" "Certificate Path:" "$CERT_PATH"
+        printf "%-25s %s\n" "Private Key Path:" "$KEY_PATH"
+    else
+        printf "%-25s %s\n" "ACME Provider:" "Let's Encrypt (Cloudflare DNS-01)"
+    fi
     
     echo "=================================="
     echo ""
