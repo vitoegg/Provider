@@ -339,7 +339,7 @@ EOF
     type: "udp_server"
     args:
       entry: main_sequence
-      listen: ":53"
+      listen: "127.0.0.1:53"
 EOF
 
     log_info "配置文件生成完成: $config_file"

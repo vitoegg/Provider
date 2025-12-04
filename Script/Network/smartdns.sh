@@ -221,7 +221,7 @@ configure_smartdns() {
     cat > /etc/smartdns/smartdns.conf << EOF
 server-name smartdns
 log-level error
-bind [::]:53
+bind 127.0.0.1:53
 server 1.1.1.1
 server 8.8.8.8${ecs_suffix}
 server 94.140.14.140${ecs_suffix}
