@@ -1,153 +1,127 @@
 #!/bin/bash
 
 # ============================================================================
-# NFTables 端口转发管理工具
-# 用途：管理 Linux 系统上的端口转发规则（本地转发和远程转发）
+# NFTables 端口转发与保护管理工具
+# 用途：管理 Linux 系统上的端口转发规则和防火墙保护
+# 功能：
+#   - 端口转发：本地转发和远程转发
+#   - 端口保护：防火墙过滤，仅允许指定端口访问
+#   - 联动机制：添加转发规则时自动开启保护
 # ============================================================================
 
-# 输出颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# ============================================================================
+# 常量定义
+# ============================================================================
 
-# 日志输出函数
-function log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
-
-function log_warn() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-function log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-function log_debug() {
-    echo -e "${BLUE}[DEBUG]${NC} $1"
-}
-
-# 检查脚本是否以 root 权限运行
-if [ "$EUID" -ne 0 ]; then
-    log_error "此脚本必须以 root 权限运行"
-    exit 1
-fi
-
-# 检查系统是否为 Debian 或 Ubuntu
-if ! grep -qiE 'debian|ubuntu' /etc/os-release; then
-    log_error "此脚本仅支持 Debian 或 Ubuntu 系统"
-    exit 1
-fi
-
-# 检查 nftables 是否已安装，若未安装则自动安装
-if ! command -v nft &> /dev/null; then
-    log_warn "nftables 未安装，正在自动安装..."
-    apt update > /dev/null 2>&1
-    apt install -y nftables > /dev/null 2>&1
-    
-    if [ $? -ne 0 ]; then
-        log_error "nftables 安装失败，请手动安装"
-        exit 1
-    else
-        log_info "nftables 安装成功"
-    fi
-else
-    log_info "nftables 已安装"
-fi
-
-# 启用并启动 nftables 服务
-systemctl enable nftables > /dev/null 2>&1
-systemctl start nftables > /dev/null 2>&1
+# NFTables 表和链名称
+readonly TABLE_NAME="fowardaws"
+readonly CHAIN_PREROUTING="prerouting"
+readonly CHAIN_POSTROUTING="postrouting"
+readonly CHAIN_OUTPUT="output"
+readonly CHAIN_INPUT="input"
 
 # 配置文件路径
-CONFIG_FILE="/etc/nftables.conf"
+readonly CONFIG_FILE="/etc/nftables.conf"
 
-# 初始化 nftables 配置函数
-function initialize_nftables() {
-    log_info "正在初始化 nftables 端口转发配置"
-    
-    # 检查转发表是否已存在
-    if ! nft list tables | grep -q "fowardaws"; then
-        # 创建基础配置文件
-        cat > "$CONFIG_FILE" << 'EOF'
-#!/usr/sbin/nft -f
+# 默认开放端口（保护模式下允许访问的端口）
+readonly DEFAULT_OPEN_PORTS="5168,51080,52080"
 
-flush ruleset
-
-table ip fowardaws {
-    chain prerouting {
-        type nat hook prerouting priority -100;
-        # TCP 和 UDP 转发规则将在此处添加
-    }
-
-    chain postrouting {
-        type nat hook postrouting priority 100;
-        # Masquerade 规则将在此处添加
-    }
-}
-EOF
-        # 加载配置
-        if nft -f "$CONFIG_FILE"; then
-            log_info "基础转发配置已创建并加载"
-        else
-            log_error "初始化 nftables 配置失败"
-            return 1
-        fi
-    else
-        log_info "转发表已存在"
-    fi
-    
-    # 确保内核 IP 转发已启用
-    if [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "1" ]; then
-        echo 1 > /proc/sys/net/ipv4/ip_forward
-        
-        # 检查 /etc/sysctl.conf 中是否已配置
-        if ! grep -q "^net.ipv4.ip_forward" /etc/sysctl.conf; then
-            echo "" >> /etc/sysctl.conf
-            echo "# 启用 IP 转发以支持端口转发" >> /etc/sysctl.conf
-            echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
-            sysctl -p > /dev/null 2>&1
-        fi
-        
-        log_info "IP 转发已启用"
-    fi
-    
-    return 0
-}
-
-# 启动时初始化 nftables
-initialize_nftables
+# 输出颜色定义
+readonly RED='\033[0;31m'
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[0;33m'
+readonly BLUE='\033[0;34m'
+readonly NC='\033[0m'
 
 # ============================================================================
-# 工具函数区 - 核心逻辑抽象
+# 日志函数
 # ============================================================================
 
-# IP 地址验证函数（增强版，检查每个八位字节范围）
-function validate_ip_address() {
+log_info()    { echo -e "${GREEN}[INFO]${NC} $1"; }
+log_warn()    { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+log_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
+log_debug()   { echo -e "${BLUE}[DEBUG]${NC} $1"; }
+
+# ============================================================================
+# 工具函数
+# ============================================================================
+
+# 验证端口号是否有效 (1-65535)
+validate_port() {
+    local port="$1"
+    [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
+}
+
+# 验证 IP 地址格式和范围
+validate_ip_address() {
     local ip="$1"
     
-    # 检查 IP 格式
-    if ! [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        return 1
-    fi
+    # 检查基本格式
+    [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
     
-    # 检查每个八位字节是否在 0-255 范围内
+    # 检查每个八位字节范围
     local IFS='.'
     read -ra octets <<< "$ip"
-    
     for octet in "${octets[@]}"; do
-        if [ "$octet" -lt 0 ] || [ "$octet" -gt 255 ]; then
-            return 1
-        fi
+        [ "$octet" -ge 0 ] && [ "$octet" -le 255 ] || return 1
     done
-    
     return 0
 }
 
-# 规则验证函数
-function validate_rule() {
+# 规范化端口列表格式（去除空格，去重，排序）
+normalize_ports() {
+    local ports="$1"
+    echo "$ports" | tr -d ' ' | tr ',' '\n' | sort -un | tr '\n' ',' | sed 's/,$//'
+}
+
+# ============================================================================
+# 核心函数
+# ============================================================================
+
+# 确保 NFTables 表和基础链存在
+ensure_table_exists() {
+    if ! nft list tables 2>/dev/null | grep -q "$TABLE_NAME"; then
+        nft add table ip "$TABLE_NAME"
+        nft add chain ip "$TABLE_NAME" "$CHAIN_PREROUTING" '{ type nat hook prerouting priority -100; }'
+        nft add chain ip "$TABLE_NAME" "$CHAIN_POSTROUTING" '{ type nat hook postrouting priority 100; }'
+    fi
+}
+
+# 确保 output 链存在（用于本地转发）
+ensure_output_chain() {
+    ensure_table_exists
+    if ! nft list chains ip "$TABLE_NAME" 2>/dev/null | grep -q "chain $CHAIN_OUTPUT"; then
+        nft add chain ip "$TABLE_NAME" "$CHAIN_OUTPUT" '{ type nat hook output priority -100; }'
+    fi
+}
+
+# 保存当前规则集到配置文件
+save_rules() {
+    nft list ruleset > "$CONFIG_FILE"
+}
+
+# 检测保护模式是否已开启
+is_protection_enabled() {
+    nft list chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null | grep -q "policy drop"
+}
+
+# 从转发规则中提取所有源端口
+get_forwarding_ports() {
+    local prerouting_ports=$(nft list chain ip "$TABLE_NAME" "$CHAIN_PREROUTING" 2>/dev/null | \
+        grep -oP 'dport \K[0-9]+(?= dnat)' | sort -u)
+    local output_ports=$(nft list chain ip "$TABLE_NAME" "$CHAIN_OUTPUT" 2>/dev/null | \
+        grep -oP 'dport \K[0-9]+(?= dnat)' | sort -u)
+    
+    # 合并并格式化
+    echo -e "${prerouting_ports}\n${output_ports}" | grep -v '^$' | sort -un | tr '\n' ',' | sed 's/,$//'
+}
+
+# ============================================================================
+# 规则管理函数
+# ============================================================================
+
+# 验证并解析转发规则，返回格式: local_port:dest_ip:dest_port:is_local
+validate_rule() {
     local rule_string="$1"
     
     # 检查规则格式是否为 端口:IP:端口
@@ -156,323 +130,335 @@ function validate_rule() {
         return 1
     fi
     
-    # 解析规则
     local local_port=$(echo "$rule_string" | cut -d':' -f1)
     local dest_ip=$(echo "$rule_string" | cut -d':' -f2)
     local dest_port=$(echo "$rule_string" | cut -d':' -f3)
+    local is_local="false"
     
     # 验证源端口
-    if ! [[ "$local_port" =~ ^[0-9]+$ ]] || [ "$local_port" -lt 1 ] || [ "$local_port" -gt 65535 ]; then
+    if ! validate_port "$local_port"; then
         log_error "无效的源端口: $local_port (必须在 1-65535 之间)"
         return 1
     fi
     
-    # 检查是否为本地转发
-    local is_local=false
+    # 处理本地转发标识
     if [[ "$dest_ip" == "local" || "$dest_ip" == "localhost" || "$dest_ip" == "127.0.0.1" ]]; then
         dest_ip="127.0.0.1"
-        is_local=true
+        is_local="true"
     elif ! validate_ip_address "$dest_ip"; then
-        log_error "无效的目标IP地址: $dest_ip (支持格式: 有效的 IPv4 地址 或 local/localhost)"
+        log_error "无效的目标IP地址: $dest_ip"
         return 1
     fi
     
     # 验证目标端口
-    if ! [[ "$dest_port" =~ ^[0-9]+$ ]] || [ "$dest_port" -lt 1 ] || [ "$dest_port" -gt 65535 ]; then
+    if ! validate_port "$dest_port"; then
         log_error "无效的目标端口: $dest_port (必须在 1-65535 之间)"
         return 1
     fi
     
-    # 输出验证后的值到全局变量
-    VALIDATED_LOCAL_PORT="$local_port"
-    VALIDATED_DEST_IP="$dest_ip"
-    VALIDATED_DEST_PORT="$dest_port"
-    VALIDATED_IS_LOCAL="$is_local"
-    
+    # 返回解析结果
+    echo "${local_port}:${dest_ip}:${dest_port}:${is_local}"
     return 0
 }
 
-# 冲突检测函数（增强版，修复 grep 行数限制问题，添加跨链冲突检测）
-function check_rule_conflict() {
+# 检查规则冲突
+check_rule_conflict() {
     local local_port="$1"
     local dest_ip="$2"
     local dest_port="$3"
     local is_local="$4"
     
-    # 检查 fowardaws 表是否存在
-    if ! nft list tables 2>/dev/null | grep -q "fowardaws"; then
-        # 表不存在，没有冲突
+    # 表不存在则无冲突
+    nft list tables 2>/dev/null | grep -q "$TABLE_NAME" || return 0
+    
+    local prerouting_rules=$(nft list chain ip "$TABLE_NAME" "$CHAIN_PREROUTING" 2>/dev/null)
+    local output_rules=$(nft list chain ip "$TABLE_NAME" "$CHAIN_OUTPUT" 2>/dev/null)
+    
+    # 精确匹配端口：使用 dport X dnat 格式，X 后有空格确保精确
+    if [ "$is_local" = "true" ]; then
+        # 本地转发：检查是否与远程转发冲突
+        if echo "$prerouting_rules" | grep -qE "dport ${local_port} dnat to"; then
+            log_error "端口冲突: 端口 ${local_port} 已被用于远程转发"
+            return 1
+        fi
+        
+        # 检查本地转发规则
+        local existing=$(echo "$output_rules" | grep -E "dport ${local_port} dnat to")
+        if [ -n "$existing" ]; then
+            if echo "$existing" | grep -q "dnat to ${dest_ip}:${dest_port}"; then
+                log_warn "本地转发规则已存在: 端口 ${local_port} -> ${dest_ip}:${dest_port}"
+            else
+                log_error "端口冲突: 本地端口 ${local_port} 已被用于其他转发"
+            fi
+            return 1
+        fi
+    else
+        # 远程转发：检查是否与本地转发冲突
+        if echo "$output_rules" | grep -qE "dport ${local_port} dnat to"; then
+            log_error "端口冲突: 端口 ${local_port} 已被用于本地转发"
+            return 1
+        fi
+        
+        # 检查远程转发规则
+        local existing=$(echo "$prerouting_rules" | grep -E "dport ${local_port} dnat to")
+        if [ -n "$existing" ]; then
+            if echo "$existing" | grep -q "dnat to ${dest_ip}:${dest_port}"; then
+                log_warn "转发规则已存在: 端口 ${local_port} -> ${dest_ip}:${dest_port}"
+            else
+                log_error "端口冲突: 端口 ${local_port} 已被用于其他转发"
+            fi
+            return 1
+        fi
+    fi
+    
+    return 0
+}
+
+# 应用单条转发规则
+apply_single_forwarding_rule() {
+    local local_port="$1"
+    local dest_ip="$2"
+    local dest_port="$3"
+    local is_local="$4"
+    
+    if [ "$is_local" = "true" ]; then
+        ensure_output_chain
+        nft add rule ip "$TABLE_NAME" "$CHAIN_OUTPUT" tcp dport "$local_port" dnat to "${dest_ip}:${dest_port}"
+        nft add rule ip "$TABLE_NAME" "$CHAIN_OUTPUT" udp dport "$local_port" dnat to "${dest_ip}:${dest_port}"
+    else
+        ensure_table_exists
+        nft add rule ip "$TABLE_NAME" "$CHAIN_PREROUTING" tcp dport "$local_port" dnat to "${dest_ip}:${dest_port}"
+        nft add rule ip "$TABLE_NAME" "$CHAIN_PREROUTING" udp dport "$local_port" dnat to "${dest_ip}:${dest_port}"
+        
+        # 添加 masquerade 规则（如果不存在）
+        if ! nft list chain ip "$TABLE_NAME" "$CHAIN_POSTROUTING" 2>/dev/null | grep -q "ip daddr $dest_ip masquerade"; then
+            nft add rule ip "$TABLE_NAME" "$CHAIN_POSTROUTING" ip daddr "$dest_ip" masquerade
+        fi
+    fi
+    
+    save_rules
+    return 0
+}
+
+# 清除所有转发规则
+clear_all_rules() {
+    log_info "正在清除所有转发规则..."
+    
+    if ! nft list tables 2>/dev/null | grep -q "$TABLE_NAME"; then
+        log_warn "转发表不存在，无需清除"
         return 0
     fi
     
-    # 获取指定链的规则（不使用行数限制）
-    local prerouting_rules=$(nft list chain ip fowardaws prerouting 2>/dev/null)
-    local output_rules=$(nft list chain ip fowardaws output 2>/dev/null)
+    local protection_was_enabled=false
+    is_protection_enabled && protection_was_enabled=true
     
-    # 检查跨链冲突（同一端口不应同时用于本地和远程转发）
-    if [ "$is_local" = true ]; then
-        # 检查是否在 prerouting 链中已使用该端口
-        if echo "$prerouting_rules" | grep -q "dport ${local_port} dnat to"; then
-            log_error "端口冲突: 端口 ${local_port} 已被用于远程转发，不能同时用于本地转发"
-            return 1
-        fi
-        
-        # 检查 output 链中的规则
-        local existing_tcp=$(echo "$output_rules" | grep "tcp dport ${local_port} dnat to")
-        local existing_udp=$(echo "$output_rules" | grep "udp dport ${local_port} dnat to")
-        
-        if [[ -n "$existing_tcp" && -n "$existing_udp" ]]; then
-            # 检查是否是完全相同的规则
-            if echo "$existing_tcp" | grep -q "dnat to ${dest_ip}:${dest_port}" && \
-               echo "$existing_udp" | grep -q "dnat to ${dest_ip}:${dest_port}"; then
-                log_warn "本地转发规则已存在: 端口 ${local_port} -> ${dest_ip}:${dest_port}"
-                return 1
-            else
-                log_error "端口冲突: 本地端口 ${local_port} 已被用于其他转发规则"
-                return 1
-            fi
-        elif [[ -n "$existing_tcp" || -n "$existing_udp" ]]; then
-            log_error "端口冲突: 本地端口 ${local_port} 已被部分使用"
-            return 1
-        fi
-    else
-        # 检查是否在 output 链中已使用该端口
-        if echo "$output_rules" | grep -q "dport ${local_port} dnat to"; then
-            log_error "端口冲突: 端口 ${local_port} 已被用于本地转发，不能同时用于远程转发"
-            return 1
-        fi
-        
-        # 检查 prerouting 链中的规则
-        local existing_tcp=$(echo "$prerouting_rules" | grep "tcp dport ${local_port} dnat to")
-        local existing_udp=$(echo "$prerouting_rules" | grep "udp dport ${local_port} dnat to")
-        
-        if [[ -n "$existing_tcp" && -n "$existing_udp" ]]; then
-            # 检查是否是完全相同的规则
-            if echo "$existing_tcp" | grep -q "dnat to ${dest_ip}:${dest_port}" && \
-               echo "$existing_udp" | grep -q "dnat to ${dest_ip}:${dest_port}"; then
-                log_warn "转发规则已存在: 端口 ${local_port} -> ${dest_ip}:${dest_port}"
-                return 1
-            else
-                log_error "端口冲突: 端口 ${local_port} 已被用于其他转发规则"
-                return 1
-            fi
-        elif [[ -n "$existing_tcp" || -n "$existing_udp" ]]; then
-            log_error "端口冲突: 端口 ${local_port} 已被部分使用"
-            return 1
-        fi
+    # 清空转发链
+    nft flush chain ip "$TABLE_NAME" "$CHAIN_PREROUTING" 2>/dev/null
+    nft flush chain ip "$TABLE_NAME" "$CHAIN_POSTROUTING" 2>/dev/null
+    nft flush chain ip "$TABLE_NAME" "$CHAIN_OUTPUT" 2>/dev/null
+    
+    # 如果之前开启了保护，重建为仅默认端口
+    if [ "$protection_was_enabled" = true ]; then
+        log_info "重建保护规则（仅保留默认端口）..."
+        nft delete chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null
+        build_protection_rules "$DEFAULT_OPEN_PORTS"
     fi
     
-    return 0
+    save_rules
+    log_info "已清除所有转发规则"
 }
 
-# 规则应用函数（优化版，使用 nft 命令直接操作而非 sed）
-function apply_single_forwarding_rule() {
-    local local_port="$1"
-    local dest_ip="$2"
-    local dest_port="$3"
-    local is_local="$4"
+# 解析规则集到关联数组
+parse_ruleset_to_map() {
+    declare -gA RULE_MAP RULE_PROTOCOLS RULE_TYPE
+    RULE_MAP=() RULE_PROTOCOLS=() RULE_TYPE=()
     
-    # 确保表存在
-    if ! nft list tables | grep -q "fowardaws"; then
-        nft add table ip fowardaws
-        nft add chain ip fowardaws prerouting '{ type nat hook prerouting priority -100; }'
-        nft add chain ip fowardaws postrouting '{ type nat hook postrouting priority 100; }'
-    fi
+    nft list tables 2>/dev/null | grep -q "$TABLE_NAME" || return 1
     
-    # 为本地转发创建 output 链（如果需要且不存在）
-    if [ "$is_local" = true ]; then
-        if ! nft list chains ip fowardaws 2>/dev/null | grep -q "output"; then
-            nft add chain ip fowardaws output '{ type nat hook output priority -100; }'
-        fi
+    # 处理远程转发规则
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local proto=$(echo "$line" | grep -oP '^(tcp|udp)')
+        local src_port=$(echo "$line" | grep -oP 'dport \K[0-9]+')
+        local dest=$(echo "$line" | grep -oP 'dnat to \K[0-9.]+:[0-9]+')
+        [ -z "$src_port" ] || [ -z "$dest" ] && continue
         
-        # 添加本地转发规则
-        nft add rule ip fowardaws output tcp dport $local_port dnat to $dest_ip:$dest_port
-        nft add rule ip fowardaws output udp dport $local_port dnat to $dest_ip:$dest_port
-    else
-        # 添加远程转发规则
-        nft add rule ip fowardaws prerouting tcp dport $local_port dnat to $dest_ip:$dest_port
-        nft add rule ip fowardaws prerouting udp dport $local_port dnat to $dest_ip:$dest_port
+        local key="${src_port}:${dest}"
+        RULE_MAP["$key"]="$dest"
+        RULE_TYPE["$key"]="remote"
         
-        # 检查是否需要添加 masquerade 规则
-        if ! nft list chain ip fowardaws postrouting 2>/dev/null | grep -q "ip daddr $dest_ip masquerade"; then
-            nft add rule ip fowardaws postrouting ip daddr $dest_ip masquerade
+        if [ -z "${RULE_PROTOCOLS[$key]}" ]; then
+            RULE_PROTOCOLS["$key"]="${proto^^}"
+        elif [[ "${RULE_PROTOCOLS[$key]}" != *"${proto^^}"* ]]; then
+            RULE_PROTOCOLS["$key"]="TCP+UDP"
         fi
-    fi
+    done < <(nft list chain ip "$TABLE_NAME" "$CHAIN_PREROUTING" 2>/dev/null | grep "dnat to")
     
-    # 保存规则集到配置文件
-    nft list ruleset > "$CONFIG_FILE"
+    # 处理本地转发规则
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local proto=$(echo "$line" | grep -oP '^(tcp|udp)')
+        local src_port=$(echo "$line" | grep -oP 'dport \K[0-9]+')
+        local dest=$(echo "$line" | grep -oP 'dnat to \K[0-9.]+:[0-9]+')
+        [ -z "$src_port" ] || [ -z "$dest" ] && continue
+        
+        local key="${src_port}:${dest}:local"
+        RULE_MAP["$key"]="$dest"
+        RULE_TYPE["$key"]="local"
+        
+        if [ -z "${RULE_PROTOCOLS[$key]}" ]; then
+            RULE_PROTOCOLS["$key"]="${proto^^}"
+        elif [[ "${RULE_PROTOCOLS[$key]}" != *"${proto^^}"* ]]; then
+            RULE_PROTOCOLS["$key"]="TCP+UDP"
+        fi
+    done < <(nft list chain ip "$TABLE_NAME" "$CHAIN_OUTPUT" 2>/dev/null | grep "dnat to")
     
-    return 0
+    [ ${#RULE_MAP[@]} -gt 0 ]
 }
 
 # ============================================================================
-# 规则提取和解析公共函数 - 消除代码重复
+# 保护模式函数
 # ============================================================================
 
-# 从规则集中提取规则的公共函数
-function extract_rules_from_ruleset() {
-    local ruleset_output="$1"
+# 构建保护规则（核心函数，被其他保护函数调用）
+build_protection_rules() {
+    local ports="$1"
     
-    # 提取各类规则
-    EXTRACTED_TCP_RULES=$(echo "$ruleset_output" | nft list chain ip fowardaws prerouting 2>/dev/null | grep "tcp dport .* dnat to")
-    EXTRACTED_UDP_RULES=$(echo "$ruleset_output" | nft list chain ip fowardaws prerouting 2>/dev/null | grep "udp dport .* dnat to")
-    EXTRACTED_LOCAL_TCP_RULES=$(echo "$ruleset_output" | nft list chain ip fowardaws output 2>/dev/null | grep "tcp dport .* dnat to")
-    EXTRACTED_LOCAL_UDP_RULES=$(echo "$ruleset_output" | nft list chain ip fowardaws output 2>/dev/null | grep "udp dport .* dnat to")
-    EXTRACTED_MASQ_RULES=$(echo "$ruleset_output" | nft list chain ip fowardaws postrouting 2>/dev/null | grep "ip daddr .* masquerade")
+    ensure_table_exists
+    
+    # 删除已存在的 input 链
+    nft delete chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null
+    
+    # 创建新的 input 链，默认策略为 drop
+    nft add chain ip "$TABLE_NAME" "$CHAIN_INPUT" '{ type filter hook input priority 0; policy drop; }'
+    
+    # 添加基础规则
+    nft add rule ip "$TABLE_NAME" "$CHAIN_INPUT" iifname "lo" accept
+    nft add rule ip "$TABLE_NAME" "$CHAIN_INPUT" ct state established,related accept
+    nft add rule ip "$TABLE_NAME" "$CHAIN_INPUT" ip protocol icmp accept
+    
+    # 开放指定端口
+    nft add rule ip "$TABLE_NAME" "$CHAIN_INPUT" tcp dport "{ $ports }" accept
+    nft add rule ip "$TABLE_NAME" "$CHAIN_INPUT" udp dport "{ $ports }" accept
+    
+    save_rules
 }
 
-# 解析规则到映射数组的公共函数
-function parse_ruleset_to_map() {
-    # 清空全局关联数组
-    unset RULE_PROTOCOLS
-    unset RULE_MAP
-    unset RULE_TYPE
-    declare -gA RULE_PROTOCOLS
-    declare -gA RULE_MAP
-    declare -gA RULE_TYPE
+# 开启保护模式（可选包含转发端口）
+enable_protection() {
+    local include_forward="${1:-false}"
     
-    # 获取规则集
-    local ruleset_output=$(nft list ruleset 2>/dev/null)
+    log_info "正在开启端口保护模式..."
     
-    if [ -z "$ruleset_output" ] || ! echo "$ruleset_output" | grep -q "table ip fowardaws"; then
-        return 1
+    local all_ports="$DEFAULT_OPEN_PORTS"
+    
+    if [ "$include_forward" = "true" ]; then
+        local forward_ports=$(get_forwarding_ports)
+        if [ -n "$forward_ports" ]; then
+            all_ports=$(normalize_ports "${DEFAULT_OPEN_PORTS},${forward_ports}")
+        fi
     fi
     
-    # 提取规则
-    local tcp_rules=$(nft list chain ip fowardaws prerouting 2>/dev/null | grep "tcp dport .* dnat to")
-    local udp_rules=$(nft list chain ip fowardaws prerouting 2>/dev/null | grep "udp dport .* dnat to")
-    local local_tcp_rules=$(nft list chain ip fowardaws output 2>/dev/null | grep "tcp dport .* dnat to")
-    local local_udp_rules=$(nft list chain ip fowardaws output 2>/dev/null | grep "udp dport .* dnat to")
-    
-    # 处理远程 TCP 规则
-    while read -r line; do
-        if [[ -z "$line" ]]; then continue; fi
-        
-        local src_port=$(echo "$line" | grep -oP 'dport \K[0-9]+')
-        local dest=$(echo "$line" | grep -oP 'dnat to \K[0-9.]+:[0-9]+')
-        local key="${src_port}:${dest}"
-        
-        RULE_MAP["$key"]="$dest"
-        RULE_TYPE["$key"]="remote"
-        if [[ -z "${RULE_PROTOCOLS[$key]}" ]]; then
-            RULE_PROTOCOLS["$key"]="TCP"
-        fi
-    done <<< "$tcp_rules"
-    
-    # 处理远程 UDP 规则并合并
-    while read -r line; do
-        if [[ -z "$line" ]]; then continue; fi
-        
-        local src_port=$(echo "$line" | grep -oP 'dport \K[0-9]+')
-        local dest=$(echo "$line" | grep -oP 'dnat to \K[0-9.]+:[0-9]+')
-        local key="${src_port}:${dest}"
-        
-        RULE_MAP["$key"]="$dest"
-        RULE_TYPE["$key"]="remote"
-        if [[ -z "${RULE_PROTOCOLS[$key]}" ]]; then
-            RULE_PROTOCOLS["$key"]="UDP"
-        else
-            RULE_PROTOCOLS["$key"]="TCP+UDP"
-        fi
-    done <<< "$udp_rules"
-    
-    # 处理本地 TCP 规则
-    while read -r line; do
-        if [[ -z "$line" ]]; then continue; fi
-        
-        local src_port=$(echo "$line" | grep -oP 'dport \K[0-9]+')
-        local dest=$(echo "$line" | grep -oP 'dnat to \K[0-9.]+:[0-9]+')
-        local key="${src_port}:${dest}:local"
-        
-        RULE_MAP["$key"]="$dest"
-        RULE_TYPE["$key"]="local"
-        if [[ -z "${RULE_PROTOCOLS[$key]}" ]]; then
-            RULE_PROTOCOLS["$key"]="TCP"
-        fi
-    done <<< "$local_tcp_rules"
-    
-    # 处理本地 UDP 规则并合并
-    while read -r line; do
-        if [[ -z "$line" ]]; then continue; fi
-        
-        local src_port=$(echo "$line" | grep -oP 'dport \K[0-9]+')
-        local dest=$(echo "$line" | grep -oP 'dnat to \K[0-9.]+:[0-9]+')
-        local key="${src_port}:${dest}:local"
-        
-        RULE_MAP["$key"]="$dest"
-        RULE_TYPE["$key"]="local"
-        if [[ -z "${RULE_PROTOCOLS[$key]}" ]]; then
-            RULE_PROTOCOLS["$key"]="UDP"
-        else
-            RULE_PROTOCOLS["$key"]="TCP+UDP"
-        fi
-    done <<< "$local_udp_rules"
-    
-    return 0
+    build_protection_rules "$all_ports"
+    log_info "端口保护已开启，开放端口: $all_ports"
 }
 
-# 帮助信息函数
-function show_help() {
-    cat << EOF
-${BLUE}NFTables 端口转发管理工具${NC}
-
-${GREEN}用法:${NC}
-  $0                          ${YELLOW}# 进入交互式菜单${NC}
-  $0 --add 规则1 [规则2 ...]  ${YELLOW}# 批量添加转发规则${NC}
-  $0 --list                   ${YELLOW}# 列出当前规则${NC}
-  $0 --help                   ${YELLOW}# 显示此帮助${NC}
-
-${GREEN}规则格式:${NC} 源端口:目标IP:目标端口
-  ${BLUE}远程转发:${NC} 8080:192.168.1.10:80
-  ${BLUE}本地转发:${NC} 9000:local:3000 (或 localhost/127.0.0.1)
-
-${GREEN}示例:${NC}
-  $0 --add 8080:192.168.1.10:80 8443:192.168.1.10:443
-  $0 --add 9000:local:3000
-  $0 --add 3306:192.168.1.100:3306 6379:local:6379
-
-${GREEN}说明:${NC}
-  - 每条规则会同时创建 TCP 和 UDP 转发
-  - 本地转发用于在本机内部重定向端口
-  - 远程转发用于将流量转发到其他主机
-  - 系统会自动检测并阻止端口冲突和重复规则
-
-EOF
+# 关闭保护模式
+disable_protection() {
+    log_info "正在关闭端口保护模式..."
+    
+    if ! nft list tables 2>/dev/null | grep -q "$TABLE_NAME"; then
+        log_warn "转发表不存在"
+        return 0
+    fi
+    
+    if nft list chains ip "$TABLE_NAME" 2>/dev/null | grep -q "chain $CHAIN_INPUT"; then
+        nft delete chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null
+        save_rules
+        log_info "端口保护已关闭"
+    else
+        log_warn "保护模式未开启"
+    fi
 }
 
-# 批量添加规则函数
-function add_rule_batch() {
+# 追加开放端口到保护规则
+add_open_port() {
+    local new_port="$1"
+    
+    is_protection_enabled || return 0
+    
+    # 获取当前开放的端口（处理 nft 输出格式）
+    local current_ports=$(nft list chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null | \
+        grep "tcp dport" | grep -oP '\{ \K[^}]+' | head -1 | tr -d ' ')
+    
+    [ -z "$current_ports" ] && return 1
+    
+    # 检查端口是否已存在
+    if echo ",$current_ports," | grep -q ",${new_port},"; then
+        log_debug "端口 $new_port 已在开放列表中"
+        return 0
+    fi
+    
+    # 重建保护规则
+    local all_ports=$(normalize_ports "${current_ports},${new_port}")
+    build_protection_rules "$all_ports"
+    log_debug "已追加开放端口: $new_port"
+}
+
+# 显示保护状态
+show_protection_status() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}           端口保护状态${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    
+    if is_protection_enabled; then
+        echo -e "保护状态: ${GREEN}已开启${NC}"
+        
+        local current_ports=$(nft list chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null | \
+            grep "tcp dport" | grep -oP '\{ \K[^}]+' | head -1)
+        [ -n "$current_ports" ] && echo -e "开放端口: ${YELLOW}$current_ports${NC}"
+        echo -e "默认端口: ${BLUE}$DEFAULT_OPEN_PORTS${NC}"
+        
+        local forward_ports=$(get_forwarding_ports)
+        [ -n "$forward_ports" ] && echo -e "转发端口: ${YELLOW}$forward_ports${NC}"
+    else
+        echo -e "保护状态: ${RED}未开启${NC}"
+        echo -e "说明: 所有端口均可访问"
+    fi
+    
+    echo -e "${BLUE}========================================${NC}"
+}
+
+# ============================================================================
+# 业务函数
+# ============================================================================
+
+# 批量添加规则
+add_rule_batch() {
     local rules=("$@")
     
-    if [ ${#rules[@]} -eq 0 ]; then
-        log_error "未提供任何规则"
-        return 1
-    fi
+    [ ${#rules[@]} -eq 0 ] && { log_error "未提供任何规则"; return 1; }
     
     log_info "准备批量添加 ${#rules[@]} 条转发规则..."
+    cp "$CONFIG_FILE" "${CONFIG_FILE}.bak" 2>/dev/null
     
-    # 备份配置文件
-    cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
+    local -a success_rules success_ports failed_rules skipped_rules
     
-    # 结果统计
-    local -a success_rules
-    local -a failed_rules
-    local -a skipped_rules
-    
-    # 处理每条规则
     for rule in "${rules[@]}"; do
         log_info "处理规则: $rule"
         
-        # 验证规则
-        if ! validate_rule "$rule"; then
+        # 验证并解析规则
+        local parsed=$(validate_rule "$rule")
+        if [ $? -ne 0 ]; then
             failed_rules+=("$rule (格式验证失败)")
             continue
         fi
         
-        local local_port="$VALIDATED_LOCAL_PORT"
-        local dest_ip="$VALIDATED_DEST_IP"
-        local dest_port="$VALIDATED_DEST_PORT"
-        local is_local="$VALIDATED_IS_LOCAL"
+        # 解析返回值
+        local local_port=$(echo "$parsed" | cut -d':' -f1)
+        local dest_ip=$(echo "$parsed" | cut -d':' -f2)
+        local dest_port=$(echo "$parsed" | cut -d':' -f3)
+        local is_local=$(echo "$parsed" | cut -d':' -f4)
         
         # 检查冲突
         if ! check_rule_conflict "$local_port" "$dest_ip" "$dest_port" "$is_local"; then
@@ -483,365 +469,244 @@ function add_rule_batch() {
         # 应用规则
         if apply_single_forwarding_rule "$local_port" "$dest_ip" "$dest_port" "$is_local"; then
             success_rules+=("$rule")
-            log_debug "规则已添加到配置: $rule"
+            success_ports+=("$local_port")
+            log_debug "规则已添加: $rule"
         else
             failed_rules+=("$rule (应用失败)")
         fi
     done
     
-    # 验证规则应用结果
+    # 处理结果
     if [ ${#success_rules[@]} -gt 0 ]; then
-        log_info "规则已成功应用到运行时配置"
-        # 清理备份文件
         rm -f "${CONFIG_FILE}.bak"
-    else
-        log_warn "没有成功添加任何规则"
-        # 恢复备份并重新加载
-        if [ -f "${CONFIG_FILE}.bak" ]; then
-            mv "${CONFIG_FILE}.bak" "$CONFIG_FILE"
-            nft -f "$CONFIG_FILE" > /dev/null 2>&1
+        
+        # 更新保护模式
+        if is_protection_enabled; then
+            for port in "${success_ports[@]}"; do
+                add_open_port "$port"
+            done
+        else
+            enable_protection "true"
         fi
+    else
+        [ -f "${CONFIG_FILE}.bak" ] && mv "${CONFIG_FILE}.bak" "$CONFIG_FILE" && nft -f "$CONFIG_FILE" 2>/dev/null
     fi
     
     # 输出摘要
+    print_batch_summary success_rules skipped_rules failed_rules
+    [ ${#success_rules[@]} -gt 0 ] && show_protection_status
+}
+
+# 打印批量操作摘要
+print_batch_summary() {
+    local -n _success=$1 _skipped=$2 _failed=$3
+    
     echo ""
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}           批量添加结果摘要${NC}"
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${GREEN}成功添加: ${#success_rules[@]} 条${NC}"
-    for rule in "${success_rules[@]}"; do
-        echo -e "  ${GREEN}✓${NC} $rule"
-    done
     
-    if [ ${#skipped_rules[@]} -gt 0 ]; then
-        echo -e "\n${YELLOW}跳过规则: ${#skipped_rules[@]} 条${NC}"
-        for rule in "${skipped_rules[@]}"; do
-            echo -e "  ${YELLOW}○${NC} $rule"
-        done
+    echo -e "${GREEN}成功添加: ${#_success[@]} 条${NC}"
+    for rule in "${_success[@]}"; do echo -e "  ${GREEN}✓${NC} $rule"; done
+    
+    if [ ${#_skipped[@]} -gt 0 ]; then
+        echo -e "\n${YELLOW}跳过规则: ${#_skipped[@]} 条${NC}"
+        for rule in "${_skipped[@]}"; do echo -e "  ${YELLOW}○${NC} $rule"; done
     fi
     
-    if [ ${#failed_rules[@]} -gt 0 ]; then
-        echo -e "\n${RED}失败规则: ${#failed_rules[@]} 条${NC}"
-        for rule in "${failed_rules[@]}"; do
-            echo -e "  ${RED}✗${NC} $rule"
-        done
+    if [ ${#_failed[@]} -gt 0 ]; then
+        echo -e "\n${RED}失败规则: ${#_failed[@]} 条${NC}"
+        for rule in "${_failed[@]}"; do echo -e "  ${RED}✗${NC} $rule"; done
     fi
     
     echo -e "${BLUE}========================================${NC}"
-    
-    return 0
 }
 
-# 显示当前规则函数（优化版，使用公共函数消除重复代码）
-function display_rules() {
+# 显示当前规则
+display_rules() {
     log_info "当前端口转发规则:"
     
-    # 检查 nftables 规则集是否存在
-    if ! nft list ruleset &> /dev/null; then
-        log_warn "未找到 nftables 规则集"
-        return
-    fi
-    
-    # 使用公共函数解析规则
     if ! parse_ruleset_to_map; then
-        log_warn "未找到转发表或规则"
-        return
-    fi
-    
-    # 检查是否有规则
-    if [ ${#RULE_MAP[@]} -eq 0 ]; then
         log_warn "未找到转发规则"
         return
     fi
     
-    # 显示规则
     echo -e "${YELLOW}=== 端口转发规则 ===${NC}"
     local count=1
     
     for key in "${!RULE_MAP[@]}"; do
         local src_port=$(echo "$key" | cut -d':' -f1)
         local dest="${RULE_MAP[$key]}"
-        local dest_ip=$(echo "$dest" | cut -d':' -f1)
-        local dest_port=$(echo "$dest" | cut -d':' -f2)
         local protocol="${RULE_PROTOCOLS[$key]}"
         local type="${RULE_TYPE[$key]}"
         
         if [ "$type" = "local" ]; then
-            echo -e "${GREEN}$count)${NC} ${BLUE}[本地]${NC} 端口: ${YELLOW}$src_port${NC} -> ${YELLOW}$dest_ip:$dest_port${NC} (${BLUE}$protocol${NC})"
+            echo -e "${GREEN}$count)${NC} ${BLUE}[本地]${NC} 端口: ${YELLOW}$src_port${NC} -> ${YELLOW}$dest${NC} (${BLUE}$protocol${NC})"
         else
-            echo -e "${GREEN}$count)${NC} 端口: ${YELLOW}$src_port${NC} -> 目标: ${YELLOW}$dest_ip:$dest_port${NC} (${BLUE}$protocol${NC})"
+            echo -e "${GREEN}$count)${NC} 端口: ${YELLOW}$src_port${NC} -> 目标: ${YELLOW}$dest${NC} (${BLUE}$protocol${NC})"
         fi
-        count=$((count+1))
+        ((count++))
     done
 }
 
-# 添加新转发规则函数（交互模式）
-function add_rule() {
-    log_info "添加新的端口转发规则"
-    
-    # 从用户获取输入
-    read -p "输入源端口号: " local_port
-    read -p "输入目标IP地址 (或输入 'local' 表示本地转发): " dest_ip
-    read -p "输入目标端口号: " dest_port
-    
-    # 构建规则字符串并验证
-    local rule_string="${local_port}:${dest_ip}:${dest_port}"
-    
-    if ! validate_rule "$rule_string"; then
-        return 1
-    fi
-    
-    local validated_port="$VALIDATED_LOCAL_PORT"
-    local validated_ip="$VALIDATED_DEST_IP"
-    local validated_dest_port="$VALIDATED_DEST_PORT"
-    local validated_is_local="$VALIDATED_IS_LOCAL"
-    
-    # 检查冲突
-    if ! check_rule_conflict "$validated_port" "$validated_ip" "$validated_dest_port" "$validated_is_local"; then
-        log_error "无法添加规则，请检查上述冲突信息"
-        return 1
-    fi
-    
-    # 备份当前配置
-    if [ -f "$CONFIG_FILE" ]; then
-        cp "$CONFIG_FILE" "${CONFIG_FILE}.bak"
-    fi
-    
-    # 应用规则
-    if ! apply_single_forwarding_rule "$validated_port" "$validated_ip" "$validated_dest_port" "$validated_is_local"; then
-        log_error "应用规则失败"
-        if [ -f "${CONFIG_FILE}.bak" ]; then
-            mv "${CONFIG_FILE}.bak" "$CONFIG_FILE"
-            nft -f "$CONFIG_FILE" > /dev/null 2>&1
-        fi
-        return 1
-    fi
-    
-    # 显示成功信息
-    if [ "$validated_is_local" = true ]; then
-        log_info "本地端口转发规则添加成功 (TCP+UDP): 端口 $validated_port -> $validated_ip:$validated_dest_port"
-    else
-        log_info "端口转发规则添加成功 (TCP+UDP): 端口 $validated_port -> $validated_ip:$validated_dest_port"
-    fi
-    
-    # 清理备份文件
-    rm -f "${CONFIG_FILE}.bak"
-    
-    return 0
-}
+# 显示帮助信息
+show_help() {
+    cat << EOF
+${BLUE}NFTables 端口转发与保护管理工具${NC}
 
-# 删除转发规则函数（优化版，使用公共函数）
-function delete_rule() {
-    # 首先显示当前规则
-    display_rules
-    
-    # 使用公共函数解析规则
-    if ! parse_ruleset_to_map; then
-        log_warn "未找到可删除的转发表"
-        return
-    fi
-    
-    # 转换为索引数组便于选择
-    local combined_ports=()
-    local combined_dests=()
-    local combined_protocols=()
-    local combined_types=()
-    
-    for key in "${!RULE_MAP[@]}"; do
-        local src_port=$(echo "$key" | cut -d':' -f1)
-        local dest="${RULE_MAP[$key]}"
-        local protocol="${RULE_PROTOCOLS[$key]}"
-        local type="${RULE_TYPE[$key]}"
-        
-        combined_ports+=("$src_port")
-        combined_dests+=("$dest")
-        combined_protocols+=("$protocol")
-        combined_types+=("$type")
-    done
-    
-    # 检查是否有规则
-    if [ ${#combined_ports[@]} -eq 0 ]; then
-        log_warn "未找到可删除的转发规则"
-        return
-    fi
-    
-    # 显示删除选项
-    echo -e "\n${YELLOW}请选择要删除的端口转发规则:${NC}"
-    for i in "${!combined_ports[@]}"; do
-        local src_port="${combined_ports[$i]}"
-        local dest="${combined_dests[$i]}"
-        local protocol="${combined_protocols[$i]}"
-        local type="${combined_types[$i]}"
-        local dest_ip=$(echo "$dest" | cut -d':' -f1)
-        local dest_port=$(echo "$dest" | cut -d':' -f2)
-        
-        if [ "$type" = "local" ]; then
-            echo "$((i+1))) [本地] 端口 ${src_port} -> ${dest_ip}:${dest_port} (${protocol})"
-        else
-            echo "$((i+1))) 端口 ${src_port} -> ${dest_ip}:${dest_port} (${protocol})"
-        fi
-    done
-    
-    echo "$((${#combined_ports[@]}+1))) 取消"
-    
-    read -p "输入编号 (1-$((${#combined_ports[@]}+1))): " choice
-    
-    # 取消选项
-    if [ "$choice" -eq "$((${#combined_ports[@]}+1))" ]; then
-        log_info "已取消删除操作"
-        return
-    fi
-    
-    # 验证输入
-    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "${#combined_ports[@]}" ]; then
-        log_error "无效的选择"
-        return
-    fi
-    
-    # 获取选中的规则信息
-    local index=$((choice-1))
-    local selected_port="${combined_ports[$index]}"
-    local selected_dest="${combined_dests[$index]}"
-    local selected_protocol="${combined_protocols[$index]}"
-    local selected_type="${combined_types[$index]}"
-    local selected_ip=$(echo "$selected_dest" | cut -d':' -f1)
-    
-    log_info "正在删除端口 ${selected_port} 的 ${selected_protocol} 转发规则..."
-    
-    # 根据规则类型删除相应的规则
-    if [ "$selected_type" = "remote" ]; then
-        # 删除远程转发规则
-        if [[ "$selected_protocol" == *"TCP"* ]]; then
-            local tcp_handle=$(nft -a list chain ip fowardaws prerouting 2>/dev/null | grep "tcp dport ${selected_port} dnat to ${selected_dest}" | grep -oP 'handle \K[0-9]+')
-            if [ -n "$tcp_handle" ]; then
-                nft delete rule ip fowardaws prerouting handle "$tcp_handle"
-                log_debug "已删除 TCP 转发规则 (handle $tcp_handle)"
-            fi
-        fi
-        
-        if [[ "$selected_protocol" == *"UDP"* ]]; then
-            local udp_handle=$(nft -a list chain ip fowardaws prerouting 2>/dev/null | grep "udp dport ${selected_port} dnat to ${selected_dest}" | grep -oP 'handle \K[0-9]+')
-            if [ -n "$udp_handle" ]; then
-                nft delete rule ip fowardaws prerouting handle "$udp_handle"
-                log_debug "已删除 UDP 转发规则 (handle $udp_handle)"
-            fi
-        fi
-    else
-        # 删除本地转发规则
-        if [[ "$selected_protocol" == *"TCP"* ]]; then
-            local tcp_handle=$(nft -a list chain ip fowardaws output 2>/dev/null | grep "tcp dport ${selected_port} dnat to ${selected_dest}" | grep -oP 'handle \K[0-9]+')
-            if [ -n "$tcp_handle" ]; then
-                nft delete rule ip fowardaws output handle "$tcp_handle"
-                log_debug "已删除本地 TCP 转发规则 (handle $tcp_handle)"
-            fi
-        fi
-        
-        if [[ "$selected_protocol" == *"UDP"* ]]; then
-            local udp_handle=$(nft -a list chain ip fowardaws output 2>/dev/null | grep "udp dport ${selected_port} dnat to ${selected_dest}" | grep -oP 'handle \K[0-9]+')
-            if [ -n "$udp_handle" ]; then
-                nft delete rule ip fowardaws output handle "$udp_handle"
-                log_debug "已删除本地 UDP 转发规则 (handle $udp_handle)"
-            fi
-        fi
-    fi
-    
-    # 检查是否还有其他规则使用该目标 IP（本地地址除外）
-    if [ "$selected_ip" != "127.0.0.1" ]; then
-        local ip_still_in_use=false
-        for i in "${!combined_dests[@]}"; do
-            if [ $i -ne $index ]; then
-                local other_dest="${combined_dests[$i]}"
-                local other_ip=$(echo "$other_dest" | cut -d':' -f1)
-                
-                if [ "$other_ip" == "$selected_ip" ]; then
-                    ip_still_in_use=true
-                    break
-                fi
-            fi
-        done
-        
-        # 如果 IP 不再被使用，删除对应的 masquerade 规则
-        if [ "$ip_still_in_use" = false ]; then
-            local masq_handle=$(nft -a list chain ip fowardaws postrouting 2>/dev/null | grep "ip daddr ${selected_ip} masquerade" | grep -oP 'handle \K[0-9]+')
-            if [ -n "$masq_handle" ]; then
-                nft delete rule ip fowardaws postrouting handle "$masq_handle"
-                log_debug "已删除关联的 masquerade 规则 (handle $masq_handle)"
-            fi
-        fi
-    fi
-    
-    # 保存更改到配置文件
-    nft list ruleset > "$CONFIG_FILE"
-    log_info "端口转发规则删除成功"
+${GREEN}用法:${NC}
+  $0 --help                       ${YELLOW}# 显示此帮助${NC}
+  $0 --list                       ${YELLOW}# 列出当前转发规则${NC}
+  $0 --add 规则1 [规则2 ...]      ${YELLOW}# 批量添加转发规则（自动开启保护）${NC}
+  $0 --replace 规则1 [规则2 ...]  ${YELLOW}# 清除现有规则后添加新规则${NC}
+  $0 --protect on                 ${YELLOW}# 开启端口保护（仅开放默认端口）${NC}
+  $0 --protect off                ${YELLOW}# 关闭端口保护${NC}
+  $0 --protect status             ${YELLOW}# 查看保护状态${NC}
+
+${GREEN}规则格式:${NC} 源端口:目标IP:目标端口
+  ${BLUE}远程转发:${NC} 8080:192.168.1.10:80
+  ${BLUE}本地转发:${NC} 9000:local:3000 (或 localhost/127.0.0.1)
+
+${GREEN}端口保护:${NC}
+  默认开放端口: ${YELLOW}$DEFAULT_OPEN_PORTS${NC}
+  - 保护模式开启后，仅允许访问开放的端口
+  - 添加转发规则时会自动开启保护并开放转发端口
+  - 已建立的连接和 ICMP 流量始终允许通过
+
+${GREEN}示例:${NC}
+  ${BLUE}# 场景1：只开启保护（不转发）${NC}
+  $0 --protect on
+
+  ${BLUE}# 场景2：添加转发规则（自动开启保护）${NC}
+  $0 --add 8080:192.168.1.10:80
+  ${YELLOW}# 结果：开放 $DEFAULT_OPEN_PORTS + 8080${NC}
+
+  ${BLUE}# 场景3：已保护后追加转发${NC}
+  $0 --protect on
+  $0 --add 9000:192.168.1.20:443
+  ${YELLOW}# 结果：开放 $DEFAULT_OPEN_PORTS + 9000${NC}
+
+  ${BLUE}# 场景4：关闭保护${NC}
+  $0 --protect off
+
+${GREEN}说明:${NC}
+  - 每条规则会同时创建 TCP 和 UDP 转发
+  - 本地转发用于在本机内部重定向端口
+  - 远程转发用于将流量转发到其他主机
+  - --add 会自动检测并阻止端口冲突和重复规则
+  - --replace 会先清除所有现有规则，再添加新规则
+  - 使用转发功能时会自动开启保护模式
+
+EOF
 }
 
 # ============================================================================
-# 主流程 - 命令行参数解析和交互式菜单
+# 初始化函数
 # ============================================================================
 
-# 检查是否有命令行参数
-if [ $# -gt 0 ]; then
-    # 命令行模式
-    case "$1" in
-        --help|-h)
-            show_help
-            exit 0
-            ;;
-        --list|-l)
-            display_rules
-            exit 0
-            ;;
-        --add|-a)
-            # 获取所有规则参数（从第二个参数开始）
-            shift
-            if [ $# -eq 0 ]; then
-                log_error "未提供任何规则。用法: $0 --add 规则1 [规则2 ...]"
-                echo ""
-                show_help
-                exit 1
-            fi
-            # 调用批量添加函数
-            add_rule_batch "$@"
-            exit $?
-            ;;
-        --delete|-d)
-            log_error "命令行删除功能尚未实现，请使用交互式菜单"
-            exit 1
-            ;;
-        *)
-            log_error "未知参数: $1"
-            echo ""
-            show_help
-            exit 1
-            ;;
-    esac
+initialize_nftables() {
+    log_info "正在初始化 nftables 端口转发配置"
+    
+    if ! nft list tables 2>/dev/null | grep -q "$TABLE_NAME"; then
+        cat > "$CONFIG_FILE" << 'EOF'
+#!/usr/sbin/nft -f
+
+flush ruleset
+
+table ip fowardaws {
+    chain prerouting {
+        type nat hook prerouting priority -100;
+    }
+
+    chain postrouting {
+        type nat hook postrouting priority 100;
+    }
+}
+EOF
+        if nft -f "$CONFIG_FILE"; then
+            log_info "基础转发配置已创建并加载"
+        else
+            log_error "初始化 nftables 配置失败"
+            return 1
+        fi
+    else
+        log_info "转发表已存在"
+    fi
+    
+    # 启用 IP 转发
+    if [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "1" ]; then
+        echo 1 > /proc/sys/net/ipv4/ip_forward
+        
+        if ! grep -q "^net.ipv4.ip_forward" /etc/sysctl.conf 2>/dev/null; then
+            echo -e "\n# 启用 IP 转发以支持端口转发\nnet.ipv4.ip_forward = 1" >> /etc/sysctl.conf
+            sysctl -p > /dev/null 2>&1
+        fi
+        log_info "IP 转发已启用"
+    fi
+}
+
+# ============================================================================
+# 主流程
+# ============================================================================
+
+# 检查 root 权限
+[ "$EUID" -ne 0 ] && { log_error "此脚本必须以 root 权限运行"; exit 1; }
+
+# 检查系统类型
+grep -qiE 'debian|ubuntu' /etc/os-release 2>/dev/null || { log_error "此脚本仅支持 Debian 或 Ubuntu 系统"; exit 1; }
+
+# 检查并安装 nftables
+if ! command -v nft &> /dev/null; then
+    log_warn "nftables 未安装，正在自动安装..."
+    apt update > /dev/null 2>&1 && apt install -y nftables > /dev/null 2>&1 || { log_error "nftables 安装失败"; exit 1; }
+    log_info "nftables 安装成功"
 else
-    # 交互式菜单模式
-    while true; do
-        echo -e "\n${BLUE}=== NFTables 端口转发管理 ===${NC}"
-        echo "1) 查看当前转发规则"
-        echo "2) 添加新的转发规则"
-        echo "3) 删除转发规则"
-        echo "4) 退出程序"
-        read -p "请选择操作 (1-4): " choice
-        
-        case $choice in
-            1)
-                display_rules
-                ;;
-            2)
-                add_rule
-                ;;
-            3)
-                delete_rule
-                ;;
-            4)
-                log_info "正在退出程序..."
-                exit 0
-                ;;
-            *)
-                log_error "无效选项，请选择 1-4"
-                ;;
-        esac
-    done
+    log_info "nftables 已安装"
 fi
+
+# 启用服务
+systemctl enable nftables > /dev/null 2>&1
+systemctl start nftables > /dev/null 2>&1
+
+# 初始化
+initialize_nftables
+
+# 命令行参数处理
+[ $# -eq 0 ] && { show_help; exit 0; }
+
+case "$1" in
+    --help|-h)
+        show_help
+        ;;
+    --list|-l)
+        display_rules
+        ;;
+    --add|-a)
+        shift
+        [ $# -eq 0 ] && { log_error "未提供任何规则。用法: $0 --add 规则1 [规则2 ...]"; show_help; exit 1; }
+        add_rule_batch "$@"
+        ;;
+    --replace|-r)
+        shift
+        [ $# -eq 0 ] && { log_error "未提供任何规则。用法: $0 --replace 规则1 [规则2 ...]"; show_help; exit 1; }
+        clear_all_rules
+        add_rule_batch "$@"
+        ;;
+    --protect|-p)
+        shift
+        [ $# -eq 0 ] && { log_error "未提供保护模式参数。用法: $0 --protect [on|off|status]"; show_help; exit 1; }
+        case "$1" in
+            on)     enable_protection "false"; show_protection_status ;;
+            off)    disable_protection; show_protection_status ;;
+            status) show_protection_status ;;
+            *)      log_error "未知的保护模式参数: $1"; exit 1 ;;
+        esac
+        ;;
+    *)
+        log_error "未知参数: $1"
+        show_help
+        exit 1
+        ;;
+esac
+
+exit 0

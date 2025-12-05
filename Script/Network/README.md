@@ -97,14 +97,34 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 * `-u`: Uninstall MosDNS service.
 
 ### nftables.sh
-Manage NFTables port forwarding rules.
+Manage NFTables port forwarding and firewall protection.
 ```bash
 wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/nftables.sh && bash nftables.sh
 ```
-* `--add`: Add forwarding rule (Format: "port:ip:port").
-* `--remove`: Remove forwarding rule by port.
-* `--remove-all`: Remove all forwarding rules.
-* `--list`: List current forwarding rules.
+**Rule Format:** `source_port:target_ip:target_port`
+* Remote forwarding: `8080:192.168.1.10:80`
+* Local forwarding: `9000:local:3000`
+
+**Options:**
+* `--help`, `-h`: Show help message.
+* `--list`, `-l`: List current forwarding rules.
+* `--add`, `-a`: Add forwarding rules (auto-enable protection).
+* `--replace`, `-r`: Clear existing rules and add new rules.
+* `--protect on`: Enable port protection (default ports only).
+* `--protect off`: Disable port protection.
+* `--protect status`: Show protection status.
+
+**Examples:**
+```bash
+# Add forwarding rules
+bash nftables.sh -a 21443:1.2.3.4:51080 31443:1.2.3.4:52080
+
+# Replace all rules
+bash nftables.sh -r 8080:192.168.1.10:80
+
+# Check protection status
+bash nftables.sh -p status
+```
 
 ### iptables.sh
 Manage iptables forwarding rules with an interactive menu.
