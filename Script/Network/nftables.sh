@@ -13,7 +13,7 @@
 # 常量定义
 # ============================================================================
 
-# NFTables 表和链名称
+# NFTables 表和链名称（IPv4/IPv6 共用同名表）
 readonly TABLE_NAME="fowardaws"
 readonly CHAIN_PREROUTING="prerouting"
 readonly CHAIN_POSTROUTING="postrouting"
@@ -78,18 +78,24 @@ normalize_ports() {
 # 核心函数
 # ============================================================================
 
-# 确保 NFTables 表和基础链存在
-ensure_table_exists() {
-    if ! nft list tables 2>/dev/null | grep -q "$TABLE_NAME"; then
-        nft add table ip "$TABLE_NAME"
+# 通用表存在性检查
+ensure_table_family() {
+    local family="$1"
+    nft list tables "$family" 2>/dev/null | grep -q "$TABLE_NAME" || nft add table "$family" "$TABLE_NAME"
+}
+
+# 确保 IPv4 NAT 表与基础链存在
+ensure_nat_table_v4() {
+    ensure_table_family ip
+    nft list chains ip "$TABLE_NAME" 2>/dev/null | grep -q "chain $CHAIN_PREROUTING" || \
         nft add chain ip "$TABLE_NAME" "$CHAIN_PREROUTING" '{ type nat hook prerouting priority -100; }'
+    nft list chains ip "$TABLE_NAME" 2>/dev/null | grep -q "chain $CHAIN_POSTROUTING" || \
         nft add chain ip "$TABLE_NAME" "$CHAIN_POSTROUTING" '{ type nat hook postrouting priority 100; }'
-    fi
 }
 
 # 确保 output 链存在（用于本地转发）
 ensure_output_chain() {
-    ensure_table_exists
+    ensure_nat_table_v4
     if ! nft list chains ip "$TABLE_NAME" 2>/dev/null | grep -q "chain $CHAIN_OUTPUT"; then
         nft add chain ip "$TABLE_NAME" "$CHAIN_OUTPUT" '{ type nat hook output priority -100; }'
     fi
@@ -102,7 +108,8 @@ save_rules() {
 
 # 检测保护模式是否已开启
 is_protection_enabled() {
-    nft list chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null | grep -q "policy drop"
+    nft list chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null | grep -q "policy drop" || \
+    nft list chain ip6 "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null | grep -q "policy drop"
 }
 
 # 从转发规则中提取所有源端口
@@ -226,7 +233,7 @@ apply_single_forwarding_rule() {
         nft add rule ip "$TABLE_NAME" "$CHAIN_OUTPUT" tcp dport "$local_port" dnat to "${dest_ip}:${dest_port}"
         nft add rule ip "$TABLE_NAME" "$CHAIN_OUTPUT" udp dport "$local_port" dnat to "${dest_ip}:${dest_port}"
     else
-        ensure_table_exists
+        ensure_nat_table_v4
         nft add rule ip "$TABLE_NAME" "$CHAIN_PREROUTING" tcp dport "$local_port" dnat to "${dest_ip}:${dest_port}"
         nft add rule ip "$TABLE_NAME" "$CHAIN_PREROUTING" udp dport "$local_port" dnat to "${dest_ip}:${dest_port}"
         
@@ -244,7 +251,12 @@ apply_single_forwarding_rule() {
 clear_all_rules() {
     log_info "正在清除所有转发规则..."
     
-    if ! nft list tables 2>/dev/null | grep -q "$TABLE_NAME"; then
+    local has_ip_table=false
+    local has_ip6_table=false
+    nft list tables ip 2>/dev/null | grep -q "$TABLE_NAME" && has_ip_table=true
+    nft list tables ip6 2>/dev/null | grep -q "$TABLE_NAME" && has_ip6_table=true
+    
+    if [ "$has_ip_table" = false ] && [ "$has_ip6_table" = false ]; then
         log_warn "转发表不存在，无需清除"
         return 0
     fi
@@ -253,14 +265,17 @@ clear_all_rules() {
     is_protection_enabled && protection_was_enabled=true
     
     # 清空转发链
-    nft flush chain ip "$TABLE_NAME" "$CHAIN_PREROUTING" 2>/dev/null
-    nft flush chain ip "$TABLE_NAME" "$CHAIN_POSTROUTING" 2>/dev/null
-    nft flush chain ip "$TABLE_NAME" "$CHAIN_OUTPUT" 2>/dev/null
+    if [ "$has_ip_table" = true ]; then
+        nft flush chain ip "$TABLE_NAME" "$CHAIN_PREROUTING" 2>/dev/null
+        nft flush chain ip "$TABLE_NAME" "$CHAIN_POSTROUTING" 2>/dev/null
+        nft flush chain ip "$TABLE_NAME" "$CHAIN_OUTPUT" 2>/dev/null
+    fi
     
     # 如果之前开启了保护，重建为仅默认端口
     if [ "$protection_was_enabled" = true ]; then
         log_info "重建保护规则（仅保留默认端口）..."
         nft delete chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null
+        nft delete chain ip6 "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null
         build_protection_rules "$DEFAULT_OPEN_PORTS"
     fi
     
@@ -320,28 +335,43 @@ parse_ruleset_to_map() {
 # 保护模式函数
 # ============================================================================
 
+# 创建保护链（支持 IPv4/IPv6）
+create_input_chain() {
+    local family="$1"
+    local ports="$2"
+    
+    ensure_table_family "$family"
+    nft delete chain "$family" "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null
+    nft add chain "$family" "$TABLE_NAME" "$CHAIN_INPUT" '{ type filter hook input priority 0; policy drop; }'
+    nft add rule "$family" "$TABLE_NAME" "$CHAIN_INPUT" iifname "lo" accept
+    nft add rule "$family" "$TABLE_NAME" "$CHAIN_INPUT" ct state established,related accept
+    
+    if [ "$family" = "ip" ]; then
+        nft add rule ip "$TABLE_NAME" "$CHAIN_INPUT" ip protocol icmp accept
+        nft add rule ip "$TABLE_NAME" "$CHAIN_INPUT" tcp dport "{ $ports }" accept
+        nft add rule ip "$TABLE_NAME" "$CHAIN_INPUT" udp dport "{ $ports }" accept
+    else
+        nft add rule ip6 "$TABLE_NAME" "$CHAIN_INPUT" ip6 nexthdr icmpv6 accept
+        nft add rule ip6 "$TABLE_NAME" "$CHAIN_INPUT" tcp dport "{ $ports }" accept
+        nft add rule ip6 "$TABLE_NAME" "$CHAIN_INPUT" udp dport "{ $ports }" accept
+    fi
+}
+
 # 构建保护规则（核心函数，被其他保护函数调用）
 build_protection_rules() {
     local ports="$1"
-    
-    ensure_table_exists
-    
-    # 删除已存在的 input 链
-    nft delete chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null
-    
-    # 创建新的 input 链，默认策略为 drop
-    nft add chain ip "$TABLE_NAME" "$CHAIN_INPUT" '{ type filter hook input priority 0; policy drop; }'
-    
-    # 添加基础规则
-    nft add rule ip "$TABLE_NAME" "$CHAIN_INPUT" iifname "lo" accept
-    nft add rule ip "$TABLE_NAME" "$CHAIN_INPUT" ct state established,related accept
-    nft add rule ip "$TABLE_NAME" "$CHAIN_INPUT" ip protocol icmp accept
-    
-    # 开放指定端口
-    nft add rule ip "$TABLE_NAME" "$CHAIN_INPUT" tcp dport "{ $ports }" accept
-    nft add rule ip "$TABLE_NAME" "$CHAIN_INPUT" udp dport "{ $ports }" accept
-    
+    create_input_chain "ip" "$ports"
+    create_input_chain "ip6" "$ports"
     save_rules
+}
+
+# 获取当前保护链开放端口（优先 IPv4，回退 IPv6）
+get_current_protection_ports() {
+    local ports=$(nft list chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null | \
+        grep "tcp dport" | grep -oP '\{ \K[^}]+' | head -1 | tr -d ' ')
+    [ -n "$ports" ] && { echo "$ports"; return 0; }
+    nft list chain ip6 "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null | \
+        grep "tcp dport" | grep -oP '\{ \K[^}]+' | head -1 | tr -d ' '
 }
 
 # 开启保护模式（可选包含转发端口）
@@ -367,13 +397,10 @@ enable_protection() {
 disable_protection() {
     log_info "正在关闭端口保护模式..."
     
-    if ! nft list tables 2>/dev/null | grep -q "$TABLE_NAME"; then
-        log_warn "转发表不存在"
-        return 0
-    fi
-    
-    if nft list chains ip "$TABLE_NAME" 2>/dev/null | grep -q "chain $CHAIN_INPUT"; then
-        nft delete chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null
+    local removed=false
+    nft delete chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null && removed=true
+    nft delete chain ip6 "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null && removed=true
+    if [ "$removed" = true ]; then
         save_rules
         log_info "端口保护已关闭"
     else
@@ -388,8 +415,7 @@ add_open_port() {
     is_protection_enabled || return 0
     
     # 获取当前开放的端口（处理 nft 输出格式）
-    local current_ports=$(nft list chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null | \
-        grep "tcp dport" | grep -oP '\{ \K[^}]+' | head -1 | tr -d ' ')
+    local current_ports=$(get_current_protection_ports)
     
     [ -z "$current_ports" ] && return 1
     
@@ -414,8 +440,7 @@ show_protection_status() {
     if is_protection_enabled; then
         echo -e "保护状态: ${GREEN}已开启${NC}"
         
-        local current_ports=$(nft list chain ip "$TABLE_NAME" "$CHAIN_INPUT" 2>/dev/null | \
-            grep "tcp dport" | grep -oP '\{ \K[^}]+' | head -1)
+        local current_ports=$(get_current_protection_ports)
         [ -n "$current_ports" ] && echo -e "开放端口: ${YELLOW}$current_ports${NC}"
         echo -e "默认端口: ${BLUE}$DEFAULT_OPEN_PORTS${NC}"
         
@@ -559,7 +584,7 @@ ${GREEN}用法:${NC}
   $0 --list                       ${YELLOW}# 列出当前转发规则${NC}
   $0 --add 规则1 [规则2 ...]      ${YELLOW}# 批量添加转发规则（自动开启保护）${NC}
   $0 --replace 规则1 [规则2 ...]  ${YELLOW}# 清除现有规则后添加新规则${NC}
-  $0 --protect on                 ${YELLOW}# 开启端口保护（仅开放默认端口）${NC}
+  $0 --protect on                 ${YELLOW}# 开启端口保护（仅开放默认端口，IPv4+IPv6）${NC}
   $0 --protect off                ${YELLOW}# 关闭端口保护${NC}
   $0 --protect status             ${YELLOW}# 查看保护状态${NC}
 
@@ -569,7 +594,8 @@ ${GREEN}规则格式:${NC} 源端口:目标IP:目标端口
 
 ${GREEN}端口保护:${NC}
   默认开放端口: ${YELLOW}$DEFAULT_OPEN_PORTS${NC}
-  - 保护模式开启后，仅允许访问开放的端口
+  - 保护模式开启后，仅允许访问开放的端口（IPv4+IPv6 同步）
+  - 端口转发仅支持 IPv4，IPv6 仅用于保护
   - 添加转发规则时会自动开启保护并开放转发端口
   - 已建立的连接和 ICMP 流量始终允许通过
 
@@ -632,6 +658,9 @@ EOF
     else
         log_info "转发表已存在"
     fi
+    
+    # 确保 IPv4 NAT 链存在（幂等）
+    ensure_nat_table_v4
     
     # 启用 IP 转发
     if [ "$(cat /proc/sys/net/ipv4/ip_forward)" != "1" ]; then
