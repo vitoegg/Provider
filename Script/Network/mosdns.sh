@@ -308,6 +308,10 @@ EOF
   - tag: main_sequence
     type: "sequence"
     args:
+      - matches:
+        - qtype 65
+        exec: reject 3
+
       - exec: $lazy_cache
       - matches: has_resp
         exec: accept
