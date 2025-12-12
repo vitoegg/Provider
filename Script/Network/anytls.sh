@@ -75,6 +75,8 @@ CERT_MODE=""
 # Manual certificate paths
 CERT_PATH=""
 KEY_PATH=""
+# Padding scheme (pipe-separated string, e.g., "stop=3|0=30-30|1=140-320")
+PADDING_SCHEME=""
 
 ################################################################################
 # Command-line arguments parser
@@ -119,6 +121,10 @@ parse_args() {
                 ;;
             --key-path)
                 KEY_PATH="$2"
+                shift 2
+                ;;
+            -s|--scheme)
+                PADDING_SCHEME="$2"
                 shift 2
                 ;;
             -u|--uninstall)
@@ -175,6 +181,8 @@ show_usage() {
     echo "  --password PASS         Specify AnyTLS password (default: auto-generated)"
     echo "  --domain DOMAIN         Specify domain name (required if not provided interactively)"
     echo "  --version VERSION       Specify Singbox version to install (e.g., v1.8.0 or 1.8.0)"
+    echo "  -s, --scheme SCHEME     Specify padding scheme (pipe '|' separated values)"
+    echo "                          Default: stop=3|0=30-30|1=140-320|2=420-780,c,780-1400"
     echo ""
     echo "Certificate Options (mutually exclusive modes):"
     echo "  --cert-mode MODE        Certificate mode: 'acme' (auto-generate) or 'manual' (use existing)"
@@ -201,6 +209,9 @@ show_usage() {
     echo ""
     echo "  # Install with specific version"
     echo "  $0 --domain api.example.com --version v1.8.0 --token YOUR_CF_TOKEN"
+    echo ""
+    echo "  # Install with custom padding scheme"
+    echo "  $0 --domain api.example.com --token YOUR_CF_TOKEN -s 'stop=5|0=50-50|1=200-400'"
     echo ""
     echo "  # Update or Uninstall"
     echo "  $0 --update"
@@ -752,6 +763,45 @@ generate_config_params() {
 }
 
 ################################################################################
+# Generate padding scheme JSON array
+# Converts pipe-separated string to JSON array format
+# Input: "stop=3|0=30-30|1=140-320" -> ["stop=3","0=30-30","1=140-320"]
+################################################################################
+generate_padding_scheme_json() {
+    local scheme_str="$1"
+    local default_scheme="stop=3|0=30-30|1=140-320|2=420-780,c,780-1400"
+    
+    # Use default if not specified
+    if [[ -z "$scheme_str" ]]; then
+        scheme_str="$default_scheme"
+    fi
+    
+    # Convert pipe-separated string to JSON array
+    local json_array="["
+    local first=true
+    
+    # Split by pipe and build JSON array
+    IFS='|' read -ra scheme_parts <<< "$scheme_str"
+    for part in "${scheme_parts[@]}"; do
+        # Trim whitespace
+        part=$(echo "$part" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if [[ -n "$part" ]]; then
+            if [[ "$first" == true ]]; then
+                first=false
+            else
+                json_array+=","
+            fi
+            # Escape special characters in JSON string
+            part=$(echo "$part" | sed 's/\\/\\\\/g; s/"/\\"/g')
+            json_array+="\"$part\""
+        fi
+    done
+    
+    json_array+="]"
+    echo "$json_array"
+}
+
+################################################################################
 # Create Singbox configuration
 ################################################################################
 create_singbox_config() {
@@ -761,6 +811,11 @@ create_singbox_config() {
     clean_sing_box_config
     
     local config_file="/etc/sing-box/config.json"
+    
+    # Generate padding scheme JSON array
+    local padding_json
+    padding_json=$(generate_padding_scheme_json "$PADDING_SCHEME")
+    log_info "Using padding scheme: $padding_json"
     
     # Create AnyTLS configuration file based on certificate mode
     if [[ "$CERT_MODE" == "manual" ]]; then
@@ -783,12 +838,7 @@ create_singbox_config() {
           "password": "$PASSWORD"
         }
       ],
-      "padding_scheme": [
-        "stop=3",
-        "0=30-30",
-        "1=140-320",
-        "2=420-780,c,780-1400"
-      ],
+      "padding_scheme": $padding_json,
       "tls": {
         "enabled": true,
         "alpn": [
@@ -823,12 +873,7 @@ EOF
           "password": "$PASSWORD"
         }
       ],
-      "padding_scheme": [
-        "stop=3",
-        "0=30-30",
-        "1=140-320",
-        "2=420-780,c,780-1400"
-      ],
+      "padding_scheme": $padding_json,
       "tls": {
         "enabled": true,
         "alpn": [
@@ -910,6 +955,10 @@ show_configuration() {
     printf "%-25s %s\n" "Password:" "$PASSWORD"
     printf "%-25s %s\n" "Domain:" "$DOMAIN"
     printf "%-25s %s\n" "Certificate Mode:" "$CERT_MODE"
+    
+    # Display padding scheme
+    local display_scheme="${PADDING_SCHEME:-stop=3|0=30-30|1=140-320|2=420-780,c,780-1400}"
+    printf "%-25s %s\n" "Padding Scheme:" "$display_scheme"
     
     if [[ "$CERT_MODE" == "manual" ]]; then
         printf "%-25s %s\n" "Certificate Path:" "$CERT_PATH"
@@ -1126,7 +1175,7 @@ main() {
     parse_args "$@"
     
     # If any configuration parameters are provided, run installation
-    if [[ -n "$PORT" || -n "$PASSWORD" || -n "$DOMAIN" || -n "$TOKEN" ]]; then
+    if [[ -n "$PORT" || -n "$PASSWORD" || -n "$DOMAIN" || -n "$TOKEN" || -n "$PADDING_SCHEME" ]]; then
         run_installation
     else
         # Show interactive menu

@@ -50,6 +50,8 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 * `--password`: Specify AnyTLS password (default: auto-generated).
 * `--domain`: Specify domain name.
 * `--version`: Specify Singbox version to install.
+* `-s, --scheme`: Specify padding scheme (pipe `|` separated values).
+  * Default: `stop=3|0=30-30|1=140-320|2=420-780,c,780-1400`
 
 **Certificate Options (mutually exclusive modes):**
 * `--cert-mode`: Certificate mode: `acme` (auto-generate) or `manual` (use existing).
@@ -68,6 +70,9 @@ bash anytls.sh --domain api.example.com --token YOUR_CF_TOKEN
 
 # Manual mode: Use existing certificate
 bash anytls.sh --cert-mode manual --domain api.example.com --cert-path /etc/ssl/certs/cert.crt --key-path /etc/ssl/certs/cert.key
+
+# Custom padding scheme
+bash anytls.sh --domain api.example.com --token YOUR_CF_TOKEN -s 'stop=5|0=50-50|1=200-400'
 ```
 
 ### shadowsocks.sh
