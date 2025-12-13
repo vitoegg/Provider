@@ -222,9 +222,10 @@ configure_smartdns() {
 server-name smartdns
 log-level error
 bind 127.0.0.1:53
-server 8.8.8.8${ecs_suffix}
+server 1.1.1.1
+server 8.8.8.8
+server 9.9.9.11${ecs_suffix}
 server 94.140.14.140${ecs_suffix}
-server 208.67.222.222${ecs_suffix}
 speed-check-mode ping,tcp:80,tcp:443
 serve-expired yes
 serve-expired-ttl 129600
