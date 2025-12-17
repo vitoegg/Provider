@@ -222,6 +222,7 @@
 .books-analytics-events.apple.com
 .browsercfg-drcn.cloud.dbankcloud.cn
 .bsrv.qq.com
+.bugsnag.com
 .bugly.qq.com
 .business-api.tiktok.com
 .c.bidtoolads.com
@@ -613,6 +614,7 @@
 .segment.com
 .segment.io
 .segmentify.com
+.sentry.io
 .sensors-log.dongqiudi.com
 .sentiance.com
 .serverbid.com
@@ -803,6 +805,7 @@ api.miwifi.com
 app-site-association.cdn-apple.com
 blackhole.m.jd.com
 dataflow.biliapi.com
+events.mapbox.com
 http-inputs-notion.splunkcloud.com
 js.users.51.la
 mc.51.la
