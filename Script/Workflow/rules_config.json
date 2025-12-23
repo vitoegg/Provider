@@ -15,7 +15,6 @@
         "https://ruleset.skk.moe/List/domainset/reject.conf",
         "https://ruleset.skk.moe/List/domainset/reject_extra.conf",
         "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Surge.list",
-        "https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/master/anti-ad-surge2.txt",
         "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Privacy.list"
       ]
     },
