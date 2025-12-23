@@ -1,5 +1,5 @@
-# 更新时间: 2025-12-23 11:29:16
-# 规则条数: 167037
+# 更新时间: 2025-12-23 13:17:20
+# 规则条数: 167039
 # 规则来源:
 # - https://https://ruleset.skk.moe/List/domainset/reject.conf
 # - https://https://ruleset.skk.moe/List/domainset/reject_extra.conf
@@ -14975,6 +14975,7 @@
 .api-access.pangolin-sdk-toutiao2.com
 .api-access.pangolin-sdk-toutiao3.com
 .api-access.pangolin-sdk-toutiao4.com
+.api-access.pangolin-sdk-toutiao5.com
 .api-ad-adapter.wps.com
 .api-ad-callback.falconnet.app
 .api-ad-callback.mobiuspace.net
@@ -84518,7 +84519,6 @@
 .log-api-mn.huxiu.com
 .log-api.cli.im
 .log-api.huxiu.com
-.log-api.pangolin-sdk-toutiao-b.com
 .log-api.pangolin-sdk-toutiao.com
 .log-api.sooplive.com
 .log-auth.flysleep.cn
@@ -105277,6 +105277,7 @@
 .pangintrigueliquidate.com
 .pangle-b.io
 .pangle.io
+.pangolin-sdk-toutiao-b.com
 .pangolin-x.com
 .pangolin.snssdk.com
 .pangolin16.isnssdk.com
@@ -152920,6 +152921,7 @@
 .utmostxu.com
 .utnbfoeokjxuz.website
 .utokapa.com
+.utoken.umeng.com
 .utorrent.it
 .utorrentz2.eu
 .utoumine.net
