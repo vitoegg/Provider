@@ -1,9 +1,8 @@
-# 更新时间: 2025-12-23 10:40:31
-# 规则条数: 167038
+# 更新时间: 2025-12-23 11:29:16
+# 规则条数: 167037
 # 规则来源:
 # - https://https://ruleset.skk.moe/List/domainset/reject.conf
 # - https://https://ruleset.skk.moe/List/domainset/reject_extra.conf
-# - https://https://github.com/TG-Twilight/AWAvenue-Ads-Rule
 # - https://https://github.com/vitoegg/Provider
 
 .0.myikas.com
@@ -14976,7 +14975,6 @@
 .api-access.pangolin-sdk-toutiao2.com
 .api-access.pangolin-sdk-toutiao3.com
 .api-access.pangolin-sdk-toutiao4.com
-.api-access.pangolin-sdk-toutiao5.com
 .api-ad-adapter.wps.com
 .api-ad-callback.falconnet.app
 .api-ad-callback.mobiuspace.net
@@ -59047,6 +59045,7 @@
 .getpool.network
 .getpopunder.com
 .getprocrack.net
+.getpush.com
 .getpush.net
 .getpushmonkey.com
 .getpxq.rivolishop.com
@@ -84519,6 +84518,7 @@
 .log-api-mn.huxiu.com
 .log-api.cli.im
 .log-api.huxiu.com
+.log-api.pangolin-sdk-toutiao-b.com
 .log-api.pangolin-sdk-toutiao.com
 .log-api.sooplive.com
 .log-auth.flysleep.cn
@@ -105277,7 +105277,6 @@
 .pangintrigueliquidate.com
 .pangle-b.io
 .pangle.io
-.pangolin-sdk-toutiao-b.com
 .pangolin-x.com
 .pangolin.snssdk.com
 .pangolin16.isnssdk.com
@@ -152921,7 +152920,6 @@
 .utmostxu.com
 .utnbfoeokjxuz.website
 .utokapa.com
-.utoken.umeng.com
 .utorrent.it
 .utorrentz2.eu
 .utoumine.net
@@ -166884,6 +166882,7 @@ stat.m.jd.com
 stat.simba.taobao.com
 stat.srpg.dev
 stat.v.baidu.com
+stat.youpin.mi.com
 stat.zuimeitianqi.com
 static.app.m.letv.com
 static.cdn.gtsmobi.com
@@ -166947,7 +166946,6 @@ track.tiara.kakao.com
 trackapp.guahao.cn
 tracker.didiglobal.com
 tracker.sns.iqiyi.com
-tracking.intl.miui.com
 tracking.yorg.app
 trackingprd.hwwt8.com
 tracklog.58.com
