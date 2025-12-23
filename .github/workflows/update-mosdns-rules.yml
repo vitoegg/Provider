@@ -2,7 +2,7 @@ name: Update MosDNS Rules
 
 on:
   schedule:
-    - cron: '0 3 * * *'  # 每天凌晨3点执行
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 jobs:
@@ -36,11 +36,11 @@ jobs:
         id: check_changes
         run: |
           # 赋予脚本执行权限
-          chmod +x ${GITHUB_WORKSPACE}/Script/Workflow/process_mosdns_rules.sh
-          chmod +x ${GITHUB_WORKSPACE}/Script/Workflow/process_mosdns_rules.py
+          chmod +x ${GITHUB_WORKSPACE}/Script/Workflow/mosdns_rules.sh
+          chmod +x ${GITHUB_WORKSPACE}/Script/Workflow/mosdns_rules.py
           
           # 执行MosDNS规则更新脚本
-          ${GITHUB_WORKSPACE}/Script/Workflow/process_mosdns_rules.sh
+          ${GITHUB_WORKSPACE}/Script/Workflow/mosdns_rules.sh
 
       - name: Commit and Push Changes
         if: steps.check_changes.outputs.has_changes == 'true'

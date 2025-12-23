@@ -87,7 +87,7 @@ process_rule() {
     
     echo "┃   ▶️ 使用Python脚本进行规则清洗..." | tee -a "$log_file"
     
-    script_path="${GITHUB_WORKSPACE}/Script/Workflow/process_proxy_rules.py"
+    script_path="${GITHUB_WORKSPACE}/Script/Workflow/proxy_rules.py"
     chmod +x "$script_path"
     
     local stats_file=$(mktemp)
@@ -261,7 +261,7 @@ process_rule() {
 }
 
 main() {
-  config_file="${GITHUB_WORKSPACE}/Script/Workflow/rules_config.json"
+  config_file="${GITHUB_WORKSPACE}/Script/Workflow/proxy_config.json"
   
   echo "┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo "┃ 🚀 规则集更新工具"

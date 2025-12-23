@@ -1,11 +1,11 @@
 {
   "rules": [
     {
-      "name": "CHINA",
-      "path": "RuleSet/Direct/China.list",
+      "name": "PRIVACY",
+      "path": "RuleSet/Extra/Privacy.list",
       "urls": [
-        "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list",
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/ChinaSite.list"
+        "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Surge.list",
+        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Privacy.list"
       ]
     },
     {
@@ -14,8 +14,15 @@
       "urls": [
         "https://ruleset.skk.moe/List/domainset/reject.conf",
         "https://ruleset.skk.moe/List/domainset/reject_extra.conf",
-        "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Surge.list",
         "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Privacy.list"
+      ]
+    },
+    {
+      "name": "CHINA",
+      "path": "RuleSet/Direct/China.list",
+      "urls": [
+        "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list",
+        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/ChinaSite.list"
       ]
     },
     {

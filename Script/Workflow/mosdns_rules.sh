@@ -113,7 +113,7 @@ process_mosdns_rule() {
     
     echo "┃   ▶️ 使用MosDNS专用Python脚本进行规则处理..."
     
-    script_path="${GITHUB_WORKSPACE}/Script/Workflow/process_mosdns_rules.py"
+    script_path="${GITHUB_WORKSPACE}/Script/Workflow/mosdns_rules.py"
     chmod +x "$script_path"
     
     local stats_file=$(mktemp)
