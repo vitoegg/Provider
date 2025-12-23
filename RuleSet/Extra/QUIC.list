@@ -2,9 +2,17 @@
 # 规则来源:
 # - https://ruleset.skk.moe/List/non_ip/reject-no-drop.conf
 
+# > P2P
 DOMAIN-SUFFIX,p2ptun.qq.com
 DOMAIN-SUFFIX,p2pupgrade.gamedl.qq.com
 DOMAIN-SUFFIX,p2pupdate.gamedl.qq.com
 DOMAIN-SUFFIX,p2p.qq.com
-DOMAIN-WILDCARD,p2p*.qq.com
+# > PCDN
+DOMAIN-SUFFIX,szbdyd.com
+DOMAIN-SUFFIX,mcdn.bilivideo.cn
+DOMAIN-SUFFIX,xycdn.com
+DOMAIN-SUFFIX,stun.hitv.com
+DOMAIN-SUFFIX,tpa-hcdn.iqiyi.com
+DOMAIN-SUFFIX,pcdn.xmcdn.com
+# > QUIC
 AND,((PROTOCOL,UDP), (DOMAIN-SUFFIX,googlevideo.com))
