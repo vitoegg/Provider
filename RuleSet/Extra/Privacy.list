@@ -1,7 +1,7 @@
-# 更新时间: 2025-05-09 15:16:57
+# 更新时间: 2025-12-23 15:16:57
 # 规则来源:
-# - https://https://github.com/TG-Twilight/AWAvenue-Ads-Rule
 # - https://https://github.com/vitoegg/Provider
+# - https://ruleset.skk.moe/List/non_ip/reject-drop.conf
 
 .1500020991.vodplayer.wxamedia.com
 .1500022744.vodplayer.wxamedia.com
@@ -211,6 +211,7 @@
 .bdapi-in-ads.realmemobile.com
 .bdapi.ads.oppomobile.com
 .beacon-api.aliyuncs.com
+.beacon.qq.com
 .beaconcdn.qq.com
 .beacons.gvt2.com
 .beizi.biz
@@ -299,6 +300,7 @@
 .dyp2p-ali.douyucdn.cn
 .dyp2p-hw.douyucdn.cn
 .e.ad.xiaomi.com
+.easytomessage.com
 .eclick.baidu.com
 .edge.ads.twitch.tv
 .ef-dongfeng.tanx.com
@@ -318,6 +320,7 @@
 .frontend-perf-service.e.kuaishou.com
 .fundingchoicesmessages.google.com
 .fxgate.baidu.com
+.f-log-extension.grammarly.io
 .g.dtv.cn.miaozhen.com
 .g2.ganjing.world
 .game.loveota.com
@@ -325,7 +328,9 @@
 .gemini.yahoo.com
 .geo.yahoo.com
 .getui.cn
+.getui.net
 .getui.com
+.getpush.com
 .ggx.cmvideo.cn
 .ggx01.miguvideo.com
 .ggx03.miguvideo.com
@@ -707,6 +712,7 @@
 .tracker.ai.xiaomi.com
 .tracker.gitee.com
 .tracking.miui.com
+.tracking.intl.miui.com
 .tracking.rus.miui.com
 .trackingio.com
 .tvapp.hpplay.cn
@@ -812,12 +818,12 @@ mc.51.la
 safebrowsing.googleapis.com
 safebrowsing.urlsec.qq.com
 spider-tracker.xiaohongshu.com
+stat.youpin.mi.com
 track.58.com
 track.tenjin.com
 track.tenjin.io
 track.tiara.daum.net
 track.tiara.kakao.com
-tracking.intl.miui.com
 tracklog.58.com
 wc.51.la
 zgsdk.zhugeio.com

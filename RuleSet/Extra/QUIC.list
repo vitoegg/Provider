@@ -1,8 +1,10 @@
-#########################################
-# ReferURL: https://ruleset.skk.moe/List/non_ip/reject-no-drop.conf
-# Last Updated: 2025-01-12
-#########################################
-DOMAIN-SUFFIX,szbdyd.com
-DOMAIN-SUFFIX,mcdn.bilivideo.cn
-DOMAIN-SUFFIX,p2p.huya.com
+# 更新时间: 2025-12-23 11:16:57
+# 规则来源:
+# - https://ruleset.skk.moe/List/non_ip/reject-no-drop.conf
+
+DOMAIN-SUFFIX,p2ptun.qq.com
+DOMAIN-SUFFIX,p2pupgrade.gamedl.qq.com
+DOMAIN-SUFFIX,p2pupdate.gamedl.qq.com
+DOMAIN-SUFFIX,p2p.qq.com
+DOMAIN-WILDCARD,p2p*.qq.com
 AND,((PROTOCOL,UDP), (DOMAIN-SUFFIX,googlevideo.com))
