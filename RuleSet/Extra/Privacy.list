@@ -1,5 +1,5 @@
-# 更新时间: 2025-12-23 11:29:13
-# 规则条数: 958
+# 更新时间: 2025-12-24 13:17:40
+# 规则条数: 960
 # 规则来源:
 # - https://https://github.com/TG-Twilight/AWAvenue-Ads-Rule
 # - https://https://github.com/vitoegg/Provider
@@ -554,6 +554,7 @@
 .mazu.m.qq.com
 .mbdlog.iqiyi.com
 .mcs.zijieapi.com
+.medproad.com
 .metrics.icloud.com
 .metrics.mzstatic.com
 .metrika.yandex.ru
@@ -765,6 +766,7 @@
 .syh-imp.cdnjtzy.com
 .syh.zybang.com
 .szbdyd.com
+.t-adx.52qumao.com
 .t-dsp.pinduoduo.com
 .t.l.qq.com
 .t.teads.tv
