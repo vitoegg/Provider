@@ -8,14 +8,6 @@
     2. 分析变更的任务文件 (jd_*.js/py/sh/ts)，提取任务ID和任务名称
     3. 通过 Telegram Bot 推送变更通知
 
-环境变量:
-    - GITHUB_TOKEN: GitHub API Token (可选，用于提高 API 速率限制)
-    - TELEGRAM_BOT_TOKEN: Telegram Bot Token (必需)
-    - TELEGRAM_CHAT_ID: 接收消息的 Chat ID (必需)
-    - CHECK_HOURS: 检查最近多少小时的变更，默认 24
-    - GITHUB_WORKSPACE: GitHub Actions 工作目录
-
-作者: GitHub Actions
 日期: 2026-01-08
 """
 
@@ -576,20 +568,9 @@ class UpstreamChecker:
             
             # 使用 blockquote expandable 包裹详情
             lines.append("<blockquote expandable>")
-            lines.append("📝 <b>变更详情</b>\n")
             lines.extend(details_lines)
             lines.append("</blockquote>")
             lines.append("")
-            
-            # 完整任务列表（仅新增和修改的，保留扩展名）
-            active_tasks = repo_changes.added + repo_changes.modified
-            if active_tasks:
-                task_list = "\n".join(f"{t.task_id}{t.file_ext}" for t in active_tasks)
-                lines.append("<blockquote expandable>")
-                lines.append("📋 <b>变更任务列表 (可复制)</b>\n")
-                lines.append(f"<pre>{task_list}</pre>")
-                lines.append("</blockquote>")
-                lines.append("")
         
         return "\n".join(lines)
     
