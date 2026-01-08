@@ -1,0 +1,65 @@
+# 上游仓库任务变更监控
+# 
+# 功能: 检查 jdpro 和 faker2 仓库的任务变更，通过 Telegram 推送通知
+# 
+# 需要配置的 GitHub Secrets:
+#   - TELEGRAM_BOT_TOKEN: Telegram Bot 的 API Token (从 @BotFather 获取)
+#   - TELEGRAM_CHAT_ID: 接收消息的 Chat ID (可以是用户ID或群组ID)
+#
+# 获取 Chat ID 的方法:
+#   1. 向你的 Bot 发送一条消息
+#   2. 访问 https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates
+#   3. 在返回的 JSON 中找到 "chat": {"id": xxx}，xxx 就是 Chat ID
+
+name: Check Upstream Tasks
+
+on:
+  schedule:
+    # 每天 UTC 0:00 执行 (北京时间 8:00)
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: '检查最近多少小时的变更 (默认24小时)'
+        required: false
+        default: '24'
+        type: string
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Timezone
+        run: sudo timedatectl set-timezone "Asia/Shanghai"
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Check Upstream Changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          CHECK_HOURS: ${{ github.event.inputs.hours || '24' }}
+        run: |
+          python ${GITHUB_WORKSPACE}/Script/Workflow/upstream_tasks.py
+
+      - name: Delete Workflow Runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 1
+

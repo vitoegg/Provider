@@ -1,0 +1,27 @@
+{
+  "upstream_repos": [
+    {
+      "name": "jdpro",
+      "owner": "6dylan6",
+      "repo": "jdpro",
+      "branch": "main",
+      "description": "6dylan6 的 JD 脚本仓库"
+    },
+    {
+      "name": "faker2",
+      "owner": "shufflewzc",
+      "repo": "faker2",
+      "branch": "main",
+      "description": "shufflewzc 的 faker2 脚本仓库"
+    }
+  ],
+  "file_patterns": {
+    "prefix": "jd_",
+    "extensions": [".js", ".py", ".sh", ".ts"],
+    "exclude": ["sendNotify.js", "sendNotify.py"]
+  },
+  "telegram": {
+    "parse_mode": "HTML",
+    "disable_web_page_preview": true
+  }
+}
