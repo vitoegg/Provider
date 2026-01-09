@@ -157,6 +157,91 @@ install_packages() {
 }
 
 ################################################################################
+# Check if system time synchronization is enabled
+################################################################################
+check_time_sync() {
+    # Use timedatectl to check NTP synchronization status
+    # Returns 0 if synchronized, 1 if not
+    local ntp_sync
+    ntp_sync=$(timedatectl show --property=NTPSynchronized --value 2>/dev/null)
+    
+    if [ "$ntp_sync" = "yes" ]; then
+        return 0
+    fi
+    
+    # Fallback: parse timedatectl status output for older systems
+    if timedatectl status 2>/dev/null | grep -qi "System clock synchronized: yes"; then
+        return 0
+    fi
+    
+    return 1
+}
+
+################################################################################
+# Setup time synchronization service
+# SS2022 protocol is time-sensitive, requires accurate system time
+################################################################################
+setup_time_sync() {
+    log progress "Checking time synchronization status"
+    
+    # Check if time is already synchronized
+    if check_time_sync; then
+        log progress_end "Time synchronization is already enabled"
+        return 0
+    fi
+    
+    log warn "Time synchronization is not enabled, setting up..."
+    
+    # Check if systemd-timesyncd is installed
+    if systemctl list-unit-files 2>/dev/null | grep -q "systemd-timesyncd"; then
+        log info "Found systemd-timesyncd, enabling service"
+        systemctl enable systemd-timesyncd >/dev/null 2>&1
+        systemctl start systemd-timesyncd >/dev/null 2>&1
+    else
+        # systemd-timesyncd not installed, install based on package manager
+        log info "systemd-timesyncd not found, installing time sync service"
+        if command_exists apt-get; then
+            # Debian/Ubuntu: install systemd-timesyncd
+            apt-get update -qq >/dev/null 2>&1
+            apt-get install -y systemd-timesyncd -qq >/dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                log info "systemd-timesyncd installed successfully"
+                systemctl enable systemd-timesyncd >/dev/null 2>&1
+                systemctl start systemd-timesyncd >/dev/null 2>&1
+            else
+                log warn "Failed to install systemd-timesyncd, trying chrony"
+                apt-get install -y chrony -qq >/dev/null 2>&1
+                systemctl enable chrony >/dev/null 2>&1
+                systemctl start chrony >/dev/null 2>&1
+            fi
+        elif command_exists yum; then
+            # CentOS/RHEL: install chrony
+            yum install -y chrony -q >/dev/null 2>&1
+            systemctl enable chronyd >/dev/null 2>&1
+            systemctl start chronyd >/dev/null 2>&1
+        else
+            log warn "Unknown package manager, please manually install time sync service"
+        fi
+    fi
+    
+    # Enable NTP synchronization
+    log info "Enabling NTP synchronization"
+    timedatectl set-ntp true >/dev/null 2>&1
+    
+    # Wait for synchronization
+    log info "Waiting for time synchronization..."
+    sleep 5
+    
+    # Verify synchronization status
+    if check_time_sync; then
+        log progress_end "Time synchronization enabled successfully"
+    else
+        log warn "Time sync service started but not yet synchronized"
+        log warn "SS2022 may have connection issues if time drift is significant"
+    fi
+}
+
+################################################################################
 # Function to generate a random port (skip ports containing digit 4)
 ################################################################################
 generate_port() {
@@ -540,6 +625,7 @@ run_installation() {
     fi
     
     install_packages
+    setup_time_sync
     detect_arch
     prepare_configuration
     install_shadowsocks
