@@ -9,4 +9,4 @@ payload:
   - DOMAIN-SUFFIX,greencloudvps.com
   # Direct Emby
   # > Lily Emby
-  - DOMAIN,cdn.lilyemby.my
+  - DOMAIN,cdn.lilyemby.com
