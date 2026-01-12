@@ -3,385 +3,227 @@
 # Optimized for clean environment installation
 
 # ========================================
-# Color Definitions
+# Color Definitions & Logging
 # ========================================
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-WHITE='\033[1;37m'
-NC='\033[0m'
+declare -A CLR=([R]='\033[0;31m' [G]='\033[0;32m' [Y]='\033[1;33m' [B]='\033[0;34m' [P]='\033[0;35m' [C]='\033[0;36m' [W]='\033[1;37m' [N]='\033[0m')
+
+log() {
+    local -A map=([info]=C [ok]=G [warn]=Y [err]=R [cfg]=P [stat]=B)
+    local c="${CLR[${map[$1]:-C}]}" n="${CLR[N]}"
+    echo -e "${c}[${1^^}]${n} ${c}$2${n}"
+}
+
+box() { echo -e "${CLR[$1]}┌─────────────────────────────────────────┐${CLR[N]}\n${CLR[$1]}│${CLR[N]}$2${CLR[$1]}│${CLR[N]}\n${CLR[$1]}└─────────────────────────────────────────┘${CLR[N]}"; }
 
 # ========================================
-# Logging Functions
+# Configuration Data
 # ========================================
-log_info() {
-    echo -e "${CYAN}[INFO]${NC} ${CYAN}$1${NC}"
-}
-
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} ${GREEN}$1${NC}"
-}
-
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} ${YELLOW}$1${NC}"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} ${RED}$1${NC}"
-}
-
-log_config() {
-    echo -e "${PURPLE}[CONFIG]${NC} ${PURPLE}$1${NC}"
-}
-
-log_status() {
-    echo -e "${BLUE}[STATUS]${NC} ${BLUE}$1${NC}"
-}
+declare -A REGIONS=([jp]="33554432:16777216" [hk]="12582912:6291456" [us]="67108864:33554432")
+VALID_MODES="simple advanced"
+VALID_QDISCS="fq fq_pie cake"
+VALID_IPV6="yes no"
 
 # ========================================
 # Help Function
 # ========================================
 show_help() {
     echo
-    echo -e "${WHITE}┌─────────────────────────────────────────┐${NC}"
-    echo -e "${WHITE}│${NC}   ${CYAN}Linux Kernel Optimization Script${NC}    ${WHITE}│${NC}"
-    echo -e "${WHITE}└─────────────────────────────────────────┘${NC}"
-    echo
-    echo -e "${YELLOW}Usage:${NC}"
-    echo -e "  $0 [-r [region]] [-q [qdisc]] [-d [disable_ipv6]] [-h]"
-    echo
-    echo -e "${YELLOW}Options:${NC}"
-    echo -e "  ${GREEN}-r${NC}  Region ${CYAN}(jp, hk, us, custom)${NC} - Default: ${WHITE}jp${NC}"
-    echo -e "  ${GREEN}-q${NC}  Queue discipline ${CYAN}(fq, fq_pie, cake)${NC} - Default: ${WHITE}fq${NC}"
-    echo -e "  ${GREEN}-d${NC}  Disable IPv6 ${CYAN}(yes, no)${NC} - Default: ${WHITE}yes${NC}"
-    echo -e "  ${GREEN}-h${NC}  Display this help message"
-    echo
-    echo -e "${YELLOW}Examples:${NC}"
-    echo -e "  ${WHITE}$0${NC}                         ${CYAN}# Interactive mode${NC}"
-    echo -e "  ${WHITE}$0 -r -q -d${NC}                ${CYAN}# Use all defaults${NC}"
-    echo -e "  ${WHITE}$0 -r jp -q fq -d no${NC}       ${CYAN}# Japan, fq, IPv6 enabled${NC}"
-    echo -e "  ${WHITE}$0 -r us -q cake -d yes${NC}    ${CYAN}# US, cake, IPv6 disabled${NC}"
+    box W "   ${CLR[C]}Linux Kernel Optimization Script${CLR[N]}    "
+    echo -e "\n${CLR[Y]}Usage:${CLR[N]}\n  $0 [-m mode] [-r region] [-q qdisc] [-6 ipv6] [-h]"
+    echo -e "\n${CLR[Y]}Options:${CLR[N]}"
+    echo -e "  ${CLR[G]}-m${CLR[N]}  Mode ${CLR[C]}(simple, advanced)${CLR[N]} - Default: ${CLR[W]}advanced${CLR[N]}"
+    echo -e "  ${CLR[G]}-r${CLR[N]}  Region ${CLR[C]}(jp, hk, us, custom)${CLR[N]} - Default: ${CLR[W]}jp${CLR[N]} ${CLR[Y]}(ignored in simple mode)${CLR[N]}"
+    echo -e "  ${CLR[G]}-q${CLR[N]}  Queue discipline ${CLR[C]}(fq, fq_pie, cake)${CLR[N]} - Default: ${CLR[W]}fq${CLR[N]}"
+    echo -e "  ${CLR[G]}-6${CLR[N]}  IPv6 ${CLR[C]}(yes=enable, no=disable)${CLR[N]} - Default: ${CLR[W]}yes${CLR[N]}"
+    echo -e "  ${CLR[G]}-h${CLR[N]}  Display this help message"
+    echo -e "\n${CLR[Y]}Modes:${CLR[N]}"
+    echo -e "  ${CLR[W]}simple${CLR[N]}    ${CLR[C]}Configure BBR, queue discipline, and IPv6 only${CLR[N]}"
+    echo -e "  ${CLR[W]}advanced${CLR[N]}  ${CLR[C]}Full kernel optimization with buffer tuning${CLR[N]}"
+    echo -e "\n${CLR[Y]}Examples:${CLR[N]}"
+    echo -e "  ${CLR[W]}$0${CLR[N]}                              ${CLR[C]}# Interactive mode${CLR[N]}"
+    echo -e "  ${CLR[W]}$0 -m simple -q fq -6 yes${CLR[N]}       ${CLR[C]}# Simple mode, fq, IPv6 enabled${CLR[N]}"
+    echo -e "  ${CLR[W]}$0 -m advanced -r jp -q fq${CLR[N]}      ${CLR[C]}# Advanced, Japan, fq${CLR[N]}"
     echo
     exit 0
 }
 
 # ========================================
-# Region Selection Menu
+# Generic Menu Function
 # ========================================
-show_region_menu() {
+show_menu() {
+    local title=$1 var_name=$2 color=$3
+    shift 3
+    local options=("$@") choice
+
     while true; do
         echo
-        echo -e "${PURPLE}┌─────────────────────────────────────────┐${NC}"
-        echo -e "${PURPLE}│${NC}        ${WHITE}Region Configuration${NC}            ${PURPLE}│${NC}"
-        echo -e "${PURPLE}└─────────────────────────────────────────┘${NC}"
+        box "$color" "        ${CLR[W]}$title${CLR[N]}              "
         echo
-        echo -e "  ${GREEN}1.${NC} ${WHITE}JP Config${NC}  ${CYAN}(Rmem: 33554432, Wmem: 16777216)${NC}"
-        echo -e "  ${GREEN}2.${NC} ${WHITE}HK Config${NC}  ${CYAN}(Rmem: 12582912, Wmem: 6291456)${NC}"
-        echo -e "  ${GREEN}3.${NC} ${WHITE}US Config${NC}  ${CYAN}(Rmem: 67108864, Wmem: 33554432)${NC}"
-        echo -e "  ${GREEN}4.${NC} ${WHITE}Custom Values${NC}"
+        for i in "${!options[@]}"; do
+            echo -e "  ${CLR[G]}$((i+1)).${CLR[N]} ${CLR[W]}${options[$i]%%|*}${CLR[N]}  ${CLR[C]}${options[$i]#*|}${CLR[N]}"
+        done
         echo
-        echo -e -n "${YELLOW}Please select region (1-4): ${NC}"
-        read choice
-        
-        case $choice in
-            1)
-                REGION="jp"
-                RMEM_MAX=33554432
-                WMEM_MAX=16777216
-                log_config "JP Configuration selected"
-                break
-                ;;
-            2)
-                REGION="hk"
-                RMEM_MAX=12582912
-                WMEM_MAX=6291456
-                log_config "HK Configuration selected"
-                break
-                ;;
-            3)
-                REGION="us"
-                RMEM_MAX=67108864
-                WMEM_MAX=33554432
-                log_config "US Configuration selected"
-                break
-                ;;
-            4)
-                REGION="custom"
-                echo -e -n "${CYAN}Enter Rmem value: ${NC}"
-                read RMEM_MAX
-                echo -e -n "${CYAN}Enter Wmem value: ${NC}"
-                read WMEM_MAX
-                
-                if ! [[ "$RMEM_MAX" =~ ^[0-9]+$ ]] || ! [[ "$WMEM_MAX" =~ ^[0-9]+$ ]]; then
-                    log_error "Please enter valid numeric values"
+        echo -e -n "${CLR[Y]}Please select (1-${#options[@]}): ${CLR[N]}"
+        read -r choice
+
+        if [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#options[@]})); then
+            local selected="${options[$((choice-1))]%%|*}"
+            # Handle special case for custom region
+            if [[ "$selected" == "Custom Values" ]]; then
+                echo -e -n "${CLR[C]}Enter Rmem value: ${CLR[N]}"
+                read -r RMEM_MAX
+                echo -e -n "${CLR[C]}Enter Wmem value: ${CLR[N]}"
+                read -r WMEM_MAX
+                if ! [[ "$RMEM_MAX" =~ ^[0-9]+$ && "$WMEM_MAX" =~ ^[0-9]+$ ]]; then
+                    log err "Please enter valid numeric values"
                     continue
                 fi
-                
-                log_config "Custom values set - Rmem: $RMEM_MAX, Wmem: $WMEM_MAX"
-                break
-                ;;
-            *)
-                log_error "Invalid option. Please select 1-4."
-                ;;
-        esac
+                eval "$var_name=custom"
+                log cfg "Custom values set - Rmem: $RMEM_MAX, Wmem: $WMEM_MAX"
+            else
+                # Extract the value (lowercase first word)
+                local val="${selected%% *}"
+                val="${val,,}"
+                # Handle IPv6 special mapping
+                [[ "$var_name" == "DISABLE_IPV6" ]] && { [[ "$val" == "keep" ]] && val="no" || val="yes"; }
+                eval "$var_name=\"$val\""
+                log cfg "$title: $selected"
+            fi
+            break
+        else
+            log err "Invalid option. Please select 1-${#options[@]}."
+        fi
     done
 }
 
 # ========================================
-# Queue Discipline Selection Menu
+# Menu Option Definitions
 # ========================================
-show_qdisc_menu() {
-    while true; do
-        echo
-        echo -e "${CYAN}┌─────────────────────────────────────────┐${NC}"
-        echo -e "${CYAN}│${NC}     ${WHITE}Queue Discipline Configuration${NC}     ${CYAN}│${NC}"
-        echo -e "${CYAN}└─────────────────────────────────────────┘${NC}"
-        echo
-        echo -e "  ${GREEN}1.${NC} ${WHITE}fq${NC}      ${CYAN}(Fair Queue - Default)${NC}"
-        echo -e "  ${GREEN}2.${NC} ${WHITE}fq_pie${NC}  ${CYAN}(Fair Queue with PIE)${NC}"
-        echo -e "  ${GREEN}3.${NC} ${WHITE}cake${NC}    ${CYAN}(Common Applications Kept Enhanced)${NC}"
-        echo
-        echo -e -n "${YELLOW}Please select qdisc (1-3): ${NC}"
-        read choice
-        
-        case $choice in
-            1)
-                QDISC="fq"
-                log_config "fq qdisc selected"
-                break
-                ;;
-            2)
-                QDISC="fq_pie"
-                log_config "fq_pie qdisc selected"
-                break
-                ;;
-            3)
-                QDISC="cake"
-                log_config "cake qdisc selected"
-                break
-                ;;
-            *)
-                log_error "Invalid option. Please select 1-3."
-                ;;
-        esac
-    done
-}
-
-# ========================================
-# IPv6 Configuration Menu
-# ========================================
-show_ipv6_menu() {
-    while true; do
-        echo
-        echo -e "${BLUE}┌─────────────────────────────────────────┐${NC}"
-        echo -e "${BLUE}│${NC}          ${WHITE}IPv6 Configuration${NC}              ${BLUE}│${NC}"
-        echo -e "${BLUE}└─────────────────────────────────────────┘${NC}"
-        echo
-        echo -e "  ${GREEN}1.${NC} ${WHITE}Keep IPv6 Enabled${NC}"
-        echo -e "  ${GREEN}2.${NC} ${WHITE}Disable IPv6${NC}"
-        echo
-        echo -e -n "${YELLOW}Please select IPv6 option (1-2): ${NC}"
-        read choice
-        
-        case $choice in
-            1)
-                DISABLE_IPV6="no"
-                log_config "IPv6 will remain enabled"
-                break
-                ;;
-            2)
-                DISABLE_IPV6="yes"
-                log_config "IPv6 will be disabled"
-                break
-                ;;
-            *)
-                log_error "Invalid option. Please select 1-2."
-                ;;
-        esac
-    done
-}
+show_mode_menu()   { show_menu "Configuration Mode" MODE W "Simple Mode|(BBR + Queue + IPv6 only)" "Advanced Mode|(Full kernel optimization)"; }
+show_region_menu() { show_menu "Region Configuration" REGION P "JP Config|(Rmem: 33554432, Wmem: 16777216)" "HK Config|(Rmem: 12582912, Wmem: 6291456)" "US Config|(Rmem: 67108864, Wmem: 33554432)" "Custom Values|"; }
+show_qdisc_menu()  { show_menu "Queue Discipline" QDISC C "fq|(Fair Queue - Default)" "fq_pie|(Fair Queue with PIE)" "cake|(Common Applications Kept Enhanced)"; }
+show_ipv6_menu()   { show_menu "IPv6 Configuration" DISABLE_IPV6 B "Keep IPv6 Enabled|" "Disable IPv6|"; }
 
 # ========================================
 # Parameter Parsing
 # ========================================
-REGION=""
-QDISC=""
-DISABLE_IPV6=""
+MODE="" REGION="" QDISC="" DISABLE_IPV6=""
 
-while getopts ":r:q:d:h" opt; do
+parse_opt() {
+    local val=$1 default=$2
+    [[ -z "$val" || "$val" == -* ]] && echo "$default" || echo "$val"
+}
+
+while getopts ":m:r:q:6:h" opt; do
     case $opt in
-        r)
-            if [ -z "$OPTARG" ] || [[ "$OPTARG" == -* ]]; then
-                REGION="jp"
-                log_config "Using default region: jp"
-                # If OPTARG was another option, we need to reprocess it
-                if [[ "$OPTARG" == -* ]]; then
-                    OPTIND=$((OPTIND - 1))
-                fi
-            else
-                REGION="$OPTARG"
-            fi
+        m) MODE=$(parse_opt "$OPTARG" "advanced"); [[ "$OPTARG" == -* ]] && ((OPTIND--)) ;;
+        r) REGION=$(parse_opt "$OPTARG" "jp"); [[ "$OPTARG" == -* ]] && ((OPTIND--)) ;;
+        q) QDISC=$(parse_opt "$OPTARG" "fq"); [[ "$OPTARG" == -* ]] && ((OPTIND--)) ;;
+        6) 
+            tmp=$(parse_opt "$OPTARG" "yes")
+            [[ "$OPTARG" == -* ]] && ((OPTIND--))
+            DISABLE_IPV6=$([[ "$tmp" == "yes" ]] && echo "no" || echo "yes")
             ;;
-        q)
-            if [ -z "$OPTARG" ] || [[ "$OPTARG" == -* ]]; then
-                QDISC="fq"
-                log_config "Using default qdisc: fq"
-                if [[ "$OPTARG" == -* ]]; then
-                    OPTIND=$((OPTIND - 1))
-                fi
-            else
-                QDISC="$OPTARG"
-            fi
-            ;;
-        d)
-            if [ -z "$OPTARG" ] || [[ "$OPTARG" == -* ]]; then
-                DISABLE_IPV6="yes"
-                log_config "Using default IPv6 setting: disabled"
-                if [[ "$OPTARG" == -* ]]; then
-                    OPTIND=$((OPTIND - 1))
-                fi
-            else
-                DISABLE_IPV6="$OPTARG"
-            fi
-            ;;
-        h)
-            show_help
-            ;;
-        :)
-            # Parameter requires an argument but none provided
-            case $OPTARG in
-                r)
-                    REGION="jp"
-                    log_config "Using default region: jp"
-                    ;;
-                q)
-                    QDISC="fq"
-                    log_config "Using default qdisc: fq"
-                    ;;
-                d)
-                    DISABLE_IPV6="yes"
-                    log_config "Using default IPv6 setting: disabled"
-                    ;;
-            esac
-            ;;
-        \?)
-            log_error "Invalid option: -$OPTARG"
-            show_help
-            ;;
+        h) show_help ;;
+        :) case $OPTARG in
+               m) MODE="advanced" ;; r) REGION="jp" ;; q) QDISC="fq" ;; 6) DISABLE_IPV6="no" ;;
+           esac ;;
+        \?) log err "Invalid option: -$OPTARG"; show_help ;;
     esac
 done
 
 # ========================================
 # Root Privilege Check
 # ========================================
-if [ "$(id -u)" != "0" ]; then
-    echo
-    log_error "Root privileges required"
-    exit 1
-fi
+[[ "$(id -u)" != "0" ]] && { echo; log err "Root privileges required"; exit 1; }
 
 # ========================================
-# Configuration Collection
+# Configuration Validation
 # ========================================
 echo
-log_info "Collecting configuration parameters..."
+log info "Collecting configuration parameters..."
 
-# Validate and set region
-if [ -n "$REGION" ]; then
-    case "$REGION" in
-        jp)
-            RMEM_MAX=33554432
-            WMEM_MAX=16777216
-            ;;
-        hk)
-            RMEM_MAX=12582912
-            WMEM_MAX=6291456
-            ;;
-        us)
-            RMEM_MAX=67108864
-            WMEM_MAX=33554432
-            ;;
-        custom)
-            log_error "Custom region requires interactive input"
-            show_region_menu
-            ;;
-        *)
-            log_warning "Invalid region '$REGION'. Valid options: jp, hk, us, custom"
-            show_region_menu
-            ;;
-    esac
+validate_or_menu() {
+    local var_name=$1 value=$2 valid=$3 menu_func=$4 msg=$5
+    if [[ -z "$value" ]]; then
+        $menu_func
+    elif [[ ! " $valid " =~ " $value " ]]; then
+        log warn "Invalid $msg '$value'. Valid options: $valid"
+        $menu_func
+    else
+        log cfg "$msg: $value"
+    fi
+}
+
+# Validate mode
+validate_or_menu MODE "$MODE" "$VALID_MODES" show_mode_menu "mode"
+
+# Validate region (advanced mode only)
+if [[ "$MODE" == "simple" ]]; then
+    [[ -n "$REGION" ]] && log warn "Region parameter ignored in simple mode"
 else
-    show_region_menu
+    if [[ -n "$REGION" ]]; then
+        if [[ "$REGION" == "custom" ]]; then
+            log err "Custom region requires interactive input"
+            show_region_menu
+        elif [[ -n "${REGIONS[$REGION]}" ]]; then
+            IFS=: read -r RMEM_MAX WMEM_MAX <<< "${REGIONS[$REGION]}"
+            log cfg "Region: $REGION (Rmem: $RMEM_MAX, Wmem: $WMEM_MAX)"
+        else
+            log warn "Invalid region '$REGION'. Valid options: jp, hk, us, custom"
+            show_region_menu
+        fi
+    else
+        show_region_menu
+    fi
+    # Set RMEM/WMEM from REGIONS if not custom
+    [[ "$REGION" != "custom" && -z "$RMEM_MAX" ]] && IFS=: read -r RMEM_MAX WMEM_MAX <<< "${REGIONS[$REGION]}"
 fi
 
-# Validate qdisc (no additional logging needed)
-if [ -n "$QDISC" ]; then
-    case "$QDISC" in
-        fq|fq_pie|cake)
-            # Valid qdisc, already logged during parameter parsing
-            ;;
-        *)
-            log_warning "Invalid qdisc '$QDISC'. Valid options: fq, fq_pie, cake"
-            show_qdisc_menu
-            ;;
-    esac
-else
-    show_qdisc_menu
-fi
+# Validate qdisc
+validate_or_menu QDISC "$QDISC" "$VALID_QDISCS" show_qdisc_menu "qdisc"
 
-# Validate IPv6 option (no additional logging needed)
-if [ -n "$DISABLE_IPV6" ]; then
-    case "$DISABLE_IPV6" in
-        yes|no)
-            # Valid option, already logged during parameter parsing
-            ;;
-        *)
-            log_warning "Invalid disable_ipv6 value '$DISABLE_IPV6'. Valid options: yes, no"
-            show_ipv6_menu
-            ;;
-    esac
-else
+# Validate IPv6
+if [[ -z "$DISABLE_IPV6" ]]; then
+    show_ipv6_menu
+elif [[ ! "$DISABLE_IPV6" =~ ^(yes|no)$ ]]; then
+    log warn "Invalid IPv6 value. Valid options: yes, no"
     show_ipv6_menu
 fi
 
 # ========================================
 # Configuration Summary
 # ========================================
-REGION_DISPLAY=$(echo "$REGION" | tr '[:lower:]' '[:upper:]')
-if [ "$DISABLE_IPV6" = "yes" ]; then
-    IPV6_STATUS="Disabled"
-else
-    IPV6_STATUS="Enabled"
-fi
+IPV6_STATUS=$([[ "$DISABLE_IPV6" == "yes" ]] && echo "Disabled" || echo "Enabled")
+MODE_DISPLAY=$([[ "$MODE" == "simple" ]] && echo "Simple" || echo "Advanced")
 
 echo
-echo -e "${GREEN}┌─────────────────────────────────────────┐${NC}"
-echo -e "${GREEN}│${NC}       ${WHITE}Configuration Summary${NC}            ${GREEN}│${NC}"
-echo -e "${GREEN}└─────────────────────────────────────────┘${NC}"
+box G "       ${CLR[W]}Configuration Summary${CLR[N]}            "
 echo
-echo -e "  ${CYAN}Region${NC}             ${WHITE}$REGION_DISPLAY${NC}"
-echo -e "  ${CYAN}Rmem Max${NC}           ${WHITE}$RMEM_MAX${NC}"
-echo -e "  ${CYAN}Wmem Max${NC}           ${WHITE}$WMEM_MAX${NC}"
-echo -e "  ${CYAN}Queue Discipline${NC}   ${WHITE}$QDISC${NC}"
-echo -e "  ${CYAN}IPv6${NC}               ${WHITE}$IPV6_STATUS${NC}"
+echo -e "  ${CLR[C]}Mode${CLR[N]}               ${CLR[W]}$MODE_DISPLAY${CLR[N]}"
+[[ "$MODE" == "advanced" ]] && {
+    echo -e "  ${CLR[C]}Region${CLR[N]}             ${CLR[W]}${REGION^^}${CLR[N]}"
+    echo -e "  ${CLR[C]}Rmem Max${CLR[N]}           ${CLR[W]}$RMEM_MAX${CLR[N]}"
+    echo -e "  ${CLR[C]}Wmem Max${CLR[N]}           ${CLR[W]}$WMEM_MAX${CLR[N]}"
+}
+echo -e "  ${CLR[C]}Queue Discipline${CLR[N]}   ${CLR[W]}$QDISC${CLR[N]}"
+echo -e "  ${CLR[C]}IPv6${CLR[N]}               ${CLR[W]}$IPV6_STATUS${CLR[N]}"
 echo
 
 # ========================================
 # Start Optimization
 # ========================================
 echo
-log_info "Starting Linux kernel optimization..."
+log info "Starting Linux kernel optimization ($MODE_DISPLAY mode)..."
 
 # ========================================
-# File Descriptor Limits Configuration
+# File Descriptor Limits (Advanced mode only)
 # ========================================
-echo
-log_info "Configuring file descriptor limits..."
+if [[ "$MODE" == "advanced" ]]; then
+    echo
+    log info "Configuring file descriptor limits..."
 
-cat > /etc/security/limits.conf << 'EOF'
+    cat > /etc/security/limits.conf << 'EOF'
 *     soft   nofile    131072
 *     hard   nofile    131072
 *     soft   nproc     131072
@@ -401,21 +243,25 @@ root  hard   memlock   unlimited
 root  soft   memlock   unlimited
 EOF
 
-echo tls >> /usr/lib/modules-load.d/tls-loader.conf
-log_success "TLS module enabled"
+    echo tls >> /usr/lib/modules-load.d/tls-loader.conf
+    log ok "TLS module enabled"
 
-if [ -f /etc/pam.d/common-session ]; then
-    echo "session required pam_limits.so" >> /etc/pam.d/common-session
+    [[ -f /etc/pam.d/common-session ]] && echo "session required pam_limits.so" >> /etc/pam.d/common-session
+    log ok "File descriptor limits configured"
 fi
-
-log_success "File descriptor limits configured"
 
 # ========================================
 # Kernel Network Parameters
 # ========================================
-log_info "Configuring kernel network parameters (Rmem: $RMEM_MAX, Wmem: $WMEM_MAX)"
+generate_sysctl() {
+    # Common: IP forwarding
+    echo "# IP Forwarding"
+    echo "net.ipv4.ip_forward = 1"
 
-cat > /etc/sysctl.conf << EOF
+    # Advanced mode: full configuration
+    if [[ "$MODE" == "advanced" ]]; then
+        cat << EOF
+
 # File System
 fs.file-max = 131072
 fs.inotify.max_user_instances = 4096
@@ -472,26 +318,10 @@ net.ipv4.tcp_rfc1337 = 0
 
 # IP Parameters
 net.ipv4.ip_local_port_range = 1024 65000
-net.ipv4.ip_forward = 1
 net.ipv4.conf.all.forwarding = 1
 net.ipv4.conf.default.forwarding = 1
 net.ipv4.conf.all.route_localnet = 1
 net.ipv4.route.gc_timeout = 100
-EOF
-
-# Conditionally add IPv6 disable configuration
-if [ "$DISABLE_IPV6" = "yes" ]; then
-    cat >> /etc/sysctl.conf << 'EOF'
-
-# Disable IPv6
-net.ipv6.conf.all.disable_ipv6 = 1
-net.ipv6.conf.default.disable_ipv6 = 1
-net.ipv6.conf.lo.disable_ipv6 = 1
-EOF
-fi
-
-# Add Virtual Memory parameters
-cat >> /etc/sysctl.conf << 'EOF'
 
 # Virtual Memory
 vm.swappiness = 10
@@ -499,93 +329,95 @@ vm.vfs_cache_pressure = 50
 vm.dirty_ratio = 15
 vm.dirty_background_ratio = 5
 EOF
+    fi
 
-log_success "Kernel network parameters configured"
+    # IPv6 disable configuration
+    if [[ "$DISABLE_IPV6" == "yes" ]]; then
+        cat << 'EOF'
+
+# Disable IPv6
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
+EOF
+    fi
+}
+
+log info "Configuring kernel network parameters..."
+generate_sysctl > /etc/sysctl.conf
+log ok "Kernel network parameters configured ($MODE_DISPLAY mode)"
 
 # ========================================
 # BBR Congestion Control
 # ========================================
-log_info "Configuring BBR congestion control..."
+log info "Configuring BBR congestion control..."
 
-if modprobe tcp_bbr 2>/dev/null; then
-    if grep -wq bbr /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
-        echo "net.core.default_qdisc = $QDISC" >> /etc/sysctl.conf
-        echo "net.ipv4.tcp_congestion_control = bbr" >> /etc/sysctl.conf
-        log_success "BBR enabled successfully with qdisc: $QDISC"
-    else
-        log_warning "BBR not available"
-    fi
+if modprobe tcp_bbr 2>/dev/null && grep -wq bbr /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
+    cat >> /etc/sysctl.conf << EOF
+
+# BBR Congestion Control
+net.core.default_qdisc = $QDISC
+net.ipv4.tcp_congestion_control = bbr
+EOF
+    log ok "BBR enabled successfully with qdisc: $QDISC"
 else
-    log_warning "BBR module not supported"
+    log warn "BBR not available or module not supported"
 fi
 
 # ========================================
 # Apply Configuration
 # ========================================
-log_info "Applying configuration..."
+log info "Applying configuration..."
 
-if sysctl -p >/dev/null 2>&1; then
-    log_success "sysctl.conf loaded successfully"
-else
-    log_warning "sysctl.conf loading failed"
-fi
-
-if sysctl --system >/dev/null 2>&1; then
-    log_success "System sysctl configurations loaded"
-else
-    log_warning "System sysctl loading failed"
-fi
+sysctl -p >/dev/null 2>&1 && log ok "sysctl.conf loaded successfully" || log warn "sysctl.conf loading failed"
+sysctl --system >/dev/null 2>&1 && log ok "System sysctl configurations loaded" || log warn "System sysctl loading failed"
 
 # ========================================
 # Verification
 # ========================================
 echo
-echo -e "${BLUE}┌─────────────────────────────────────────┐${NC}"
-echo -e "${BLUE}│${NC}        ${WHITE}Verification Results${NC}             ${BLUE}│${NC}"
-echo -e "${BLUE}└─────────────────────────────────────────┘${NC}"
+box B "        ${CLR[W]}Verification Results${CLR[N]}             "
 echo
 
-# Verify kernel parameters applied
-rmem_actual=$(cat /proc/sys/net/core/rmem_max 2>/dev/null)
-wmem_actual=$(cat /proc/sys/net/core/wmem_max 2>/dev/null)
+verify() {
+    local desc=$1 expected=$2 actual=$3 warn_msg=${4:-"may require reboot"}
+    [[ "$actual" == "$expected" ]] && log ok "$desc" || log warn "$desc $warn_msg"
+}
 
-if [ "$rmem_actual" = "$RMEM_MAX" ] && [ "$wmem_actual" = "$WMEM_MAX" ]; then
-    log_success "Buffer sizes applied successfully"
-else
-    log_warning "Buffer sizes may not be applied correctly"
+# Verify buffer sizes (Advanced mode only)
+if [[ "$MODE" == "advanced" ]]; then
+    rmem_actual=$(cat /proc/sys/net/core/rmem_max 2>/dev/null)
+    wmem_actual=$(cat /proc/sys/net/core/wmem_max 2>/dev/null)
+    [[ "$rmem_actual" == "$RMEM_MAX" && "$wmem_actual" == "$WMEM_MAX" ]] \
+        && log ok "Buffer sizes applied successfully" \
+        || log warn "Buffer sizes may not be applied correctly"
 fi
 
 # Verify BBR status
-bbr_status=$(lsmod | grep bbr >/dev/null 2>&1 && echo 'loaded' || echo 'not loaded')
-if [ "$bbr_status" = "loaded" ]; then
+if lsmod | grep -q bbr 2>/dev/null; then
     qdisc_actual=$(cat /proc/sys/net/core/default_qdisc 2>/dev/null)
     congestion=$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)
-    if [ "$qdisc_actual" = "$QDISC" ] && [ "$congestion" = "bbr" ]; then
-        log_success "BBR and $QDISC applied successfully"
-    else
-        log_warning "BBR configuration may not be applied correctly"
-    fi
+    [[ "$qdisc_actual" == "$QDISC" && "$congestion" == "bbr" ]] \
+        && log ok "BBR and $QDISC applied successfully" \
+        || log warn "BBR configuration may not be applied correctly"
 else
-    log_warning "BBR module not loaded"
+    log warn "BBR module not loaded"
 fi
 
 # Verify IPv6 status
-if [ "$DISABLE_IPV6" = "yes" ]; then
+if [[ "$DISABLE_IPV6" == "yes" ]]; then
     ipv6_actual=$(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null || echo '0')
-    if [ "$ipv6_actual" = "1" ]; then
-        log_success "IPv6 disabled successfully"
-    else
-        log_warning "IPv6 disable pending (reboot required)"
-    fi
+    verify "IPv6 disabled" "1" "$ipv6_actual" "(reboot required)"
+else
+    log ok "IPv6 remains enabled"
 fi
 
-# Verify file descriptors
-fd_limit=$(ulimit -n)
-if [ "$fd_limit" -ge "131072" ]; then
-    log_success "File descriptor limits applied successfully"
-else
-    log_warning "File descriptor limits may require relogin or reboot"
+# Verify file descriptors (Advanced mode only)
+if [[ "$MODE" == "advanced" ]]; then
+    fd_limit=$(ulimit -n)
+    ((fd_limit >= 131072)) && log ok "File descriptor limits applied successfully" \
+        || log warn "File descriptor limits may require relogin or reboot"
 fi
 
 echo
-log_success "Optimization completed. Reboot recommended for all changes to take effect."
+log ok "Optimization completed ($MODE_DISPLAY mode). Reboot recommended for all changes to take effect."
