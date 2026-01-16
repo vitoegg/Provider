@@ -76,6 +76,8 @@ payload:
   - 'perplexity-ai.cloudflareaccess.com'
 
   # Vibe Coding
+  # > OpenCode
+  - '+.opencode.ai'
   # > Cursor
   - '+.cursor.sh'
   # > Windsurf
