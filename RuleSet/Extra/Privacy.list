@@ -1,5 +1,5 @@
-# 更新时间: 2025-12-24 13:17:40
-# 规则条数: 960
+# 更新时间: 2026-01-23 13:21:10
+# 规则条数: 961
 # 规则来源:
 # - https://https://github.com/TG-Twilight/AWAvenue-Ads-Rule
 # - https://https://github.com/vitoegg/Provider
@@ -422,6 +422,7 @@
 .heads-fa.spotify.com
 .hexagon-analytics.com
 .hlog.bigda.com
+.hm.baidu.com
 .hmma.baidu.com
 .hotjar.com
 .hotjar.io
