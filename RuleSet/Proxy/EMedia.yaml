@@ -1,7 +1,9 @@
 payload:
   # ShouHou Emby
   - '+.cn2gias.uk'
-  # > Lily Emby
-  - 'www.lilyemby.com'
   # UHDNow Emby
   - '+.uhdnow.com'
+  # Lily Emby
+  - 'www.lilyemby.my'
+  # Gomami Emby
+  - 'cf.longemby.com'
