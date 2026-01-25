@@ -1,5 +1,5 @@
-# 更新时间: 2026-01-25 12:18:25
-# 规则条数: 181472
+# 更新时间: 2026-01-25 13:22:06
+# 规则条数: 181521
 # 规则来源:
 # - https://https://ruleset.skk.moe/List/domainset/reject.conf
 # - https://https://ruleset.skk.moe/List/domainset/reject_extra.conf
@@ -6046,6 +6046,7 @@
 .ad-score.com
 .ad-script.viewus.co.kr
 .ad-sdk-config.youdao.com
+.ad-sdk.huxiu.com
 .ad-seek.jp
 .ad-serve.b-cdn.net
 .ad-server.co.za
@@ -6517,6 +6518,7 @@
 .ad1game.ru
 .ad2.bannerhost.ru
 .ad2.cooks.com
+.ad2.ettoday.net
 .ad2.firehousezone.com
 .ad2.gammae.com
 .ad2.hotel.com
@@ -8473,6 +8475,7 @@
 .ads.mtv.uol.com.br
 .ads.multimania.lycos.fr
 .ads.museum.or.jp
+.ads.music.126.net
 .ads.muslimehelfen.org
 .ads.mustangworks.com
 .ads.mvscoelho.com
@@ -9523,6 +9526,7 @@
 .adv.donejty.pl
 .adv.drtuber.com
 .adv.ettoday.net
+.adv.fjtv.net
 .adv.forpsi.hu
 .adv.freeonline.it
 .adv.gazeta.pl
@@ -13581,6 +13585,7 @@
 .analytics.gnetworks.xyz
 .analytics.go.com
 .analytics.gokwik.co
+.analytics.google.com
 .analytics.gooogol.com
 .analytics.gorgeous-il.co.il
 .analytics.gorillanation.com
@@ -26531,6 +26536,7 @@
 .bugscrawled.com
 .bugsense.com
 .bugshasrub.cyou
+.bugsnag.com
 .bugsnag.shopbop.amazon.dev
 .bugturkey.com
 .bugwykhuyh.com
@@ -29605,7 +29611,6 @@
 .cdn.wenzhangba.cn
 .cdn.wg.uproxx.com
 .cdn.wheelio-app.com
-.cdn.wootric.com
 .cdn.wuyou.ca
 .cdn.wwfx.xyz
 .cdn.xbcpcn.com
@@ -46797,6 +46802,7 @@
 .dl.wooribank.com.kh
 .dl.workindia.in
 .dl.zola.com
+.dl.zuimeitianqi.com
 .dl1d2m8ri9v3j.cloudfront.net
 .dl2.brandatt.com
 .dl37p9e5e1vn0.cloudfront.net
@@ -53160,6 +53166,8 @@
 .errandsfloes.help
 .erreoawajurdj.space
 .erriteolycook.qpon
+.errlog.umeng.com
+.errnewlog.umeng.com
 .erroneousobligedcooler.com
 .error-analytics-production.shopifysvc.com
 .error-analytics-sessions-production.shopifysvc.com
@@ -62019,6 +62027,7 @@
 .getpool.network
 .getpopunder.com
 .getprocrack.net
+.getpush.com
 .getpush.net
 .getpushmonkey.com
 .getpxq.rivolishop.com
@@ -62713,6 +62722,7 @@
 .gjesm.honeybirdette.com
 .gjfcsgjyouxpx.com
 .gjfyeghpsuxmx.space
+.gjfzpt.cn
 .gjgdm.1aauto.com
 .gjgjl.1898leather.com
 .gjhjo.impactdogcrates.com
@@ -63792,7 +63802,6 @@
 .go.palpita.net
 .go.panda-click.com
 .go.panda.sa
-.go.pardot.com
 .go.parents.mingle.com
 .go.paze.com
 .go.pcfaceshield.com
@@ -64439,6 +64448,7 @@
 .googlesyndication.com
 .googletagamnager.com
 .googletagmanager-cn.com
+.googletagmanager.com
 .googletagservices-cn.com
 .googletraveladservices.com
 .googlevads-cn.com
@@ -64892,6 +64902,7 @@
 .granulargame.com
 .grapefruitstarchbeep.com
 .grapeshot.co.uk
+.graph.facebook.com
 .grapheffect.com
 .graphicasa.com
 .graphics.pop6.com
@@ -82428,6 +82439,7 @@
 .kissagepurrah.qpon
 .kissgeneticallyfly.com
 .kisshentai.net
+.kissmetrics.com
 .kissmyads.biz
 .kissoffering.com
 .kissyexuding.cfd
@@ -91321,7 +91333,6 @@
 .log.tosspayments.com
 .log.tpns.gz2.tencent.com
 .log.tpns.tencent.com
-.log.trackingio.com
 .log.trend.rankify.best
 .log.ttbc-hcm.gov.vn
 .log.tv.zing.vn
@@ -95568,7 +95579,6 @@
 .marketing.smartrg.com
 .marketing.smartvault.com
 .marketing.smithcarson.com
-.marketing.socialbakers.com
 .marketing.softwaresecure.com
 .marketing.soha.io
 .marketing.soloprotect.com
@@ -96021,6 +96031,7 @@
 .marketjavgg124.fun
 .marketland.me
 .marketleverage.com
+.marketo.com
 .marketo.net
 .marketpalce.com
 .marketpd4.top
@@ -96062,6 +96073,7 @@
 .marrowleaves.com
 .marrvelousgirl.com
 .marryclamour.com
+.mars.jd.com
 .mars1st.baby
 .marsads.com
 .marshalcurve.com
@@ -100323,6 +100335,7 @@
 .miluwo.com
 .milvuslepaanous.cyou
 .milyondolar.com
+.mime.baidu.com
 .mimeioagotwvo.online
 .mimerachel.click
 .mimerestates.top
@@ -101175,6 +101188,7 @@
 .mmeumm.icu
 .mmfmes.rukodelov.ru
 .mmfykwayhgftt.space
+.mmgame.qpic.cn
 .mmgzxnkwgjpnx.space
 .mmi.bemobile.ua
 .mmimb.itzyritzy.com
@@ -101788,6 +101802,7 @@
 .mon.tiktokv.com
 .mon.us.tiktokv.com
 .mon.xactware.com
+.mon.zijieapi.com
 .mon16-normal-us-ttp.capcutapi.us
 .monachahitcher.click
 .monacobeatles.com
@@ -102427,6 +102442,7 @@
 .mpanythathaveresulte.com
 .mpanythathaveresultet.info
 .mpappy.fr
+.mparticle.com
 .mpau.biz
 .mpay1.info
 .mpay69.biz
@@ -112957,6 +112973,7 @@
 .pardko.pricerunner.com
 .pardompus.ru
 .pardonpopular.com
+.pardot.com
 .pardstoother.cyou
 .paregospeltheir.com
 .parentapp.byjus.com
@@ -117855,6 +117872,7 @@
 .precursortrimrequest.com
 .predataclient.b-cdn.net
 .predestinationicebergpredicament.com
+.predic.io
 .predicta.net
 .predictad.com
 .predictioncustom.com
@@ -127247,6 +127265,7 @@
 .rtb2.vashoot.com
 .rtbadzesto.com
 .rtbanalytics.com
+.rtbasia.com
 .rtbbhub.com
 .rtbbnr.com
 .rtbbpowaq.com
@@ -129980,6 +129999,7 @@
 .score.lumen.com
 .score.optionalities.com
 .scoreaisle.com
+.scorecardresearch.com
 .scoredconnect.com
 .scornbob.com
 .scornfacultative.com
@@ -130307,7 +130327,6 @@
 .sdk.pulse.schibsted.com
 .sdk.qzbonline.com
 .sdk.starbolt.io
-.sdk.stats-locations.com
 .sdk.streamrail.com
 .sdk.zadn.vn
 .sdk4push.com
@@ -130322,7 +130341,6 @@
 .sdkl.info
 .sdklog.uu.cc
 .sdkoptedge.chinanetcenter.com
-.sdks.stats-locations.com
 .sdksaxnhxdzos.site
 .sdkv2.imaginationunwired.com
 .sdlmaf.bestsecret.at
@@ -130965,6 +130983,7 @@
 .seetlittleofthe.org
 .seetron.net
 .seeweejaspis.qpon
+.seewhy.com
 .seezauptofaugou.net
 .seezeit.fr
 .seezoacaulod.net
@@ -130981,9 +131000,11 @@
 .segment-api.goodrx.com
 .segment-api.inrix.com
 .segment-cdn.producthunt.com
+.segment.com
 .segment.io
 .segment.lalr.co
 .segmenthub.com
+.segmentify.com
 .segmentor.snowfox-ai.com
 .segmetrics.io
 .segob.gob.mx
@@ -131197,6 +131218,7 @@
 .sensualsheilas.com
 .sentencecarry.com
 .sentencekillerdrift.com
+.sentiance.com
 .sentientfog.com
 .sentifi.com
 .sentiment.icis.com
@@ -131222,6 +131244,7 @@
 .sentry.filmnet.ir
 .sentry.footballiapp.com
 .sentry.hamravesh.com
+.sentry.io
 .sentry.malltina.com
 .sentry.mci.dev
 .sentry.mediacdn.vn
@@ -137507,6 +137530,7 @@
 .smartlinkoffer.com
 .smartlinkprivate.com
 .smartliving.group
+.smartlook.com
 .smartmetrics.co.uk
 .smartmining.net
 .smartmnews.pro
@@ -138107,6 +138131,8 @@
 .social.talenttitan.com
 .social.terre-net-occasions.fr
 .social.tinyview.com
+.socialannex.com
+.socialbakers.com
 .socialbars-web1.com
 .socialdate.me
 .socialelective.com
@@ -146703,6 +146729,7 @@
 .stats-dev.brid.tv
 .stats-factory.digitregroup.io
 .stats-iobit-com.us-east-1.elasticbeanstalk.com
+.stats-locations.com
 .stats-messages.gifs.com
 .stats-newyork1.bloxcms.com
 .stats-proto.pandora.com
@@ -152473,6 +152500,7 @@
 .talkdodgeticket.com
 .talkfusion.com
 .talkingdata.com
+.talkingdata.net
 .talkscreativity.com
 .talkshoodle.shop
 .talktalkmyaccount.co.uk
@@ -152582,6 +152610,7 @@
 .taoyinbiacid.com
 .tap-nexus.appspot.com
 .tap.carling.com
+.tapad.com
 .taparchieadvantages.com
 .tapasidlinslicking.cfd
 .tapaxfbh.com
@@ -154275,6 +154304,7 @@
 .terminussurfacespurr.com
 .termite.queerburners.org
 .termitebeaked.rest
+.terms-drcn.platform.dbankcloud.cn
 .tern.daffy.org
 .tern.xebel.co
 .terningfishery.qpon
@@ -161090,6 +161120,7 @@
 .trackinginternal.hcltech.com
 .trackinginternal.ti.com
 .trackinginternal.ti.com.cn
+.trackingio.com
 .trackinglabs.com
 .trackinglibrary.prodperfect.com
 .trackinglrus.wolterskluwer.com
@@ -167003,6 +167034,7 @@
 .valgoidbeeswaxjason.cfd
 .valgoiddharmic.cfd
 .valhala.is
+.vali-ugc.cp31.ott.cibntv.net
 .valiantsubquery.com
 .valianttossczar.com
 .validacion.rayo.com.co
@@ -172553,6 +172585,7 @@
 .wetter24.fr
 .wettestprims.cyou
 .wettigo136.com
+.wetype.weixin.qq.com
 .wevbgr.vidaxl.it
 .wevrwqjaomjrm.top
 .wevrwqjlylbyz.top
@@ -173934,6 +173967,7 @@
 .woosspoom.cyou
 .woosyt.portalesardegna.com
 .wootmedia.net
+.wootric.com
 .woovoree.net
 .woowjy.desa.com.tr
 .woozephucaisoo.net
@@ -180620,6 +180654,7 @@ analytics.atom.com
 analytics.immersivetranslate.com
 analytics.infomaniak.com
 analytics.msn.com
+analytics.slashdotmedia.com
 analytics.spotify.com
 analytics.workos.com
 analytics3.dopool.com
@@ -180639,6 +180674,7 @@ api.g.micloud.xiaomi.net
 api.hybrid.intl.xiaomi.com
 api.hybrid.xiaomi.com
 api.jr.mi.com
+api.miwifi.com
 api.sec.intl.miui.com
 api.snmi.cn
 api.touchxd.com
@@ -180651,6 +180687,7 @@ apidns-js.kwd.inkuai.com
 apidns.kwd.inkuai.com
 apiv4-iyes.youku.com
 app-monitor.ele.me
+app-site-association.cdn-apple.com
 app.aplus.pptv.com
 app.migc.xiaomi.com
 app01.nodes.gslb.mi-idc.com
@@ -180685,6 +180722,7 @@ biz.live.xunlei.com
 biz5.sandai.net
 bk01.hh.xiaomi.com
 bksoup.v.qq.com
+blackhole.m.jd.com
 blog.xiaomi.com
 bolt.jebe.renren.com
 bowserlab.ddns.net
@@ -180800,6 +180838,7 @@ d8.sinaimg.cn
 d9.sina.com.cn
 da.mmarket.com
 das.mobile.youku.com
+dataflow.biliapi.com
 dcads.sina.com.cn
 dd.iask.cn
 ddd.1sapp.com
@@ -180863,6 +180902,7 @@ eu-nilupool.ddns.net
 eu-ubqpool.ddns.net
 events-analytics.apple.com
 events.jianshu.io
+events.mapbox.com
 events.observablehq.com
 f1.g.mi.com
 f4.market.xiaomi.com
@@ -180936,6 +180976,7 @@ hm.l.qq.com
 hm.xiaomi.com
 hot.m.shouji.360tpcdn.com
 hotchat-im.iqiyi.com
+http-inputs-notion.splunkcloud.com
 httpdns-api.aliyuncs.com
 httpdns-browser.platform.dbankcloud.cn
 httpdns-euex-push.heytapmobile.com
@@ -181002,7 +181043,6 @@ impservice.youdao.com
 in.vipliangmei.com
 info.analysis.kp.sec.miui.com
 info.sec.miui.com
-inside.rtbasia.com
 insights.mochaa.ws
 insights.samsung.com
 inst.360safe.com
@@ -181060,6 +181100,7 @@ mamasearchad.cloudvideocdn.taobao.com
 masdk.3g.qq.com
 match.p4p.1688.com
 mazu.3g.qq.com
+mcdn.bilivideo.cn
 mcfg.sandai.net
 mcgi.v.qq.com
 mclean.cloud.360safe.com
@@ -181238,6 +181279,8 @@ s.w-x.co
 s3.pfp.sina.net
 sa.api.intl.miui.com
 sa.holopin.io
+safebrowsing.googleapis.com
+safebrowsing.urlsec.qq.com
 samsung-klimatyzacja.pl
 samsungcloudsolution.com
 samsungcloudsolution.net
@@ -181297,6 +181340,7 @@ soft.data.weather.360.cn
 soul-ad.soulapp.cn
 soup.v.qq.com
 sousuo.xm.sjzhushou.com
+spider-tracker.xiaohongshu.com
 splash.yy.com
 splashimgbssdl.yun.kugou.com
 splashimgretrybssdl.cloud.kugou.com
@@ -181319,6 +181363,7 @@ stat.m.jd.com
 stat.rdap.ss
 stat.simba.taobao.com
 stat.v.baidu.com
+stat.youpin.mi.com
 stat.zuimeitianqi.com
 static.app.m.letv.com
 static.cdn.gtsmobi.com
@@ -181375,13 +181420,17 @@ topapi.cp12.ott.cibntv.net
 topapi.cp12.wasu.tv
 toutiao-frontier.snssdk.com
 tpns.qq.com
-trace2.rtbasia.com
 track.58.com
+track.tenjin.com
+track.tenjin.io
+track.tiara.daum.net
+track.tiara.kakao.com
 trackapp.guahao.cn
 tracker.didiglobal.com
 tracker.sns.iqiyi.com
 tracking.yorg.app
 trackingprd.hwwt8.com
+tracklog.58.com
 tracks.hackmd.io
 traffic.mogujie.com
 trends.mobile.sina.cn
