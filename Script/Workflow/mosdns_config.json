@@ -6,8 +6,7 @@
       "description": "MosDNS 拦截规则集",
       "urls": [
         "https://raw.githubusercontent.com/miaoermua/AdguardFilter/main/rule.txt",
-        "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Mosdns_v5.txt",
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/MosDNS/reject.txt"
+        "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Mosdns_v5.txt"
       ]
     }
   },
@@ -16,4 +15,4 @@
     "last_updated": "2025-07-10",
     "description": "MosDNS 规则配置文件"
   }
-} 
+}
