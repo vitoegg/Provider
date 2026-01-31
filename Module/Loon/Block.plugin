@@ -1,0 +1,13 @@
+#!name = 系统更新拦截器
+#!desc = 屏蔽Apple系统更新请求，避免出现红点
+#!author = Vitoegg
+#!icon = https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/Block.webp
+#!date = 2026-01-31 11:18:00
+
+[Rule]
+
+# iOS 系统更新
+DOMAIN-SUFFIX,gdmf.apple.com,REJECT
+
+# MacOS 系统更新
+DOMAIN-SUFFIX,swdist.apple.com,REJECT

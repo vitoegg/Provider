@@ -1,0 +1,11 @@
+#!name=系统更新拦截器
+#!desc=屏蔽Apple系统更新请求，避免出现红点
+#!category=Hub
+#!date=2026-01-31 11:25:00
+
+[Rule]
+# iOS 系统更新
+DOMAIN-SUFFIX,gdmf.apple.com,REJECT,extended-matching,pre-matching
+
+# MacOS 系统更新
+DOMAIN-SUFFIX,swdist.apple.com,REJECT,extended-matching,pre-matching
