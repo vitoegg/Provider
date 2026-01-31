@@ -1,5 +1,5 @@
-# 更新时间: 2026-01-31 10:42:36
-# 规则条数: 971
+# 更新时间: 2026-01-31 13:32:17
+# 规则条数: 970
 # 规则来源:
 # - https://https://github.com/TG-Twilight/AWAvenue-Ads-Rule
 # - https://https://github.com/vitoegg/Provider
@@ -958,7 +958,6 @@ blackhole.m.jd.com
 cm.bilibili.com
 dataflow.biliapi.com
 events.mapbox.com
-gdmf.apple.com
 http-inputs-notion.splunkcloud.com
 js.users.51.la
 mc.51.la

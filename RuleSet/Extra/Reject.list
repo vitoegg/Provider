@@ -1,5 +1,5 @@
-# 更新时间: 2026-01-31 10:42:38
-# 规则条数: 184885
+# 更新时间: 2026-01-31 13:32:20
+# 规则条数: 184886
 # 规则来源:
 # - https://https://ruleset.skk.moe/List/domainset/reject.conf
 # - https://https://ruleset.skk.moe/List/domainset/reject_extra.conf
@@ -184210,6 +184210,7 @@ game.weibo.com
 game.wostore.cn
 gas.data.pplive.com
 gatherer.m.qq.com
+gdmf.apple.com
 gecko-hl.snssdk.com
 gecko-lq.snssdk.com
 gemini.yahoo.com
