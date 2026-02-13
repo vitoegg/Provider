@@ -7,6 +7,7 @@
 #   - 端口转发：本地转发和远程转发
 #   - 端口保护：防火墙过滤，仅允许指定端口访问
 #   - 联动机制：添加转发规则时自动开启保护
+# 运行环境：仅支持 Debian/Ubuntu（依赖 nftables、util-linux、GNU date、procfs 等）
 # ============================================================================
 
 set -o pipefail
@@ -16,7 +17,7 @@ set -o pipefail
 # ============================================================================
 
 # NFTables 表和链名称（IPv4/IPv6 共用同名表）
-readonly TABLE_NAME="fowardaws"
+readonly TABLE_NAME="forwardaws"
 readonly CHAIN_PREROUTING="prerouting"
 readonly CHAIN_POSTROUTING="postrouting"
 readonly CHAIN_OUTPUT="output"
@@ -153,6 +154,7 @@ acquire_global_lock() {
     [ "$FORWARDAWS_LOCK_HELD" = "1" ] && return 0
 
     if ! command -v flock >/dev/null 2>&1; then
+        log_warn "未检测到 flock，跳过并发锁保护（并发执行可能导致状态不一致）"
         return 0
     fi
 
@@ -332,6 +334,17 @@ clear_ddns_state() {
     : > "$DDNS_STATE_FILE"
 }
 
+# 根据“源端口|域名|目标端口”查询 DDNS 状态中记录的目标 IP
+lookup_ddns_saved_ip() {
+    local src_port="$1"
+    local domain="$2"
+    local dest_port="$3"
+
+    [ -f "$DDNS_STATE_FILE" ] || return 1
+    awk -F'|' -v sp="$src_port" -v dm="$domain" -v dp="$dest_port" \
+        'NF>=4 && $1==sp && $2==dm && $3==dp { print $4; exit }' "$DDNS_STATE_FILE"
+}
+
 # 格式化时间戳
 format_epoch_time() {
     local ts="$1"
@@ -367,7 +380,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash ${script_path} ${exec_args}
+ExecStart=/bin/bash "${script_path}" ${exec_args}
 EOF
 
     cat > "/etc/systemd/system/${timer_name}" << EOF
@@ -445,41 +458,23 @@ disable_timer_if_available() {
     fi
 }
 
-# 按需启用 DDNS 定时器
-enable_ddns_timer_if_needed() {
-    local domain_count
-    domain_count=$(ddns_state_count_domains)
-    [ "$domain_count" -gt 0 ] || return 0
-
-    enable_timer_with_fallback \
-        "$DDNS_TIMER_NAME" \
-        "install_ddns_systemd_units_if_needed" \
-        "未检测到 systemctl，跳过内置定时器" \
-        "--ddns-sync" \
-        "DDNS 定时同步已启用" \
-        "启用 DDNS 定时同步失败，请手动检查 systemd 状态"
-}
-
-# 当无域名规则时停用 DDNS 定时器
-disable_ddns_timer_if_no_domain_rules() {
-    local domain_count
-    domain_count=$(ddns_state_count_domains)
-    [ "$domain_count" -eq 0 ] || return 0
-
-    disable_timer_if_available \
-        "$DDNS_TIMER_NAME" \
-        "无 DDNS 域名规则，已停用 DDNS 定时同步"
-}
-
-# 根据 DDNS 规则状态协调定时器开关
+# 根据 DDNS 规则状态协调定时器开关（单次 count，避免重复计算）
 reconcile_ddns_timer_state() {
     local domain_count
     domain_count=$(ddns_state_count_domains)
 
     if [ "$domain_count" -gt 0 ]; then
-        enable_ddns_timer_if_needed
+        enable_timer_with_fallback \
+            "$DDNS_TIMER_NAME" \
+            "install_ddns_systemd_units_if_needed" \
+            "未检测到 systemctl，跳过内置定时器" \
+            "--ddns-sync" \
+            "DDNS 定时同步已启用" \
+            "启用 DDNS 定时同步失败，请手动检查 systemd 状态"
     else
-        disable_ddns_timer_if_no_domain_rules
+        disable_timer_if_available \
+            "$DDNS_TIMER_NAME" \
+            "无 DDNS 域名规则，已停用 DDNS 定时同步"
     fi
 }
 
@@ -661,9 +656,87 @@ require_root() {
 }
 
 ensure_nft_installed() {
-    command -v nft >/dev/null 2>&1 && return 0
-    log_error "未检测到 nft 命令，请先安装 nftables"
-    return 1
+    ensure_all_dependencies
+}
+
+# 统一依赖检查：一次性检查并安装所有可安装依赖
+# 关键依赖（nft）缺失且安装失败时返回错误；可选依赖（flock/ss/dig）仅告警
+ensure_all_dependencies() {
+    # 防止重复执行
+    [ "${_FORWARDAWS_DEPS_CHECKED:-0}" = "1" ] && return 0
+    _FORWARDAWS_DEPS_CHECKED=1
+
+    # 定义依赖列表: "命令名:包名:critical|optional"
+    local dep_specs=(
+        "nft:nftables:critical"
+        "flock:util-linux:optional"
+        "ss:iproute2:optional"
+        "dig:dnsutils:optional"
+    )
+
+    local missing_critical=()
+    local missing_optional=()
+    local all_missing_pkgs=()
+
+    for spec in "${dep_specs[@]}"; do
+        local cmd_name="${spec%%:*}"
+        local remainder="${spec#*:}"
+        local pkg_name="${remainder%%:*}"
+        local criticality="${remainder##*:}"
+
+        if ! command -v "$cmd_name" >/dev/null 2>&1; then
+            if [ "$criticality" = "critical" ]; then
+                missing_critical+=("$cmd_name:$pkg_name")
+            else
+                missing_optional+=("$cmd_name:$pkg_name")
+            fi
+            all_missing_pkgs+=("$pkg_name")
+        fi
+    done
+
+    # 所有依赖都已满足
+    [ ${#all_missing_pkgs[@]} -eq 0 ] && return 0
+
+    log_warn "缺失依赖: ${all_missing_pkgs[*]}，正在自动安装..."
+
+    # 去重包名列表（flock 和 dig 可能同包，虽然当前不是）
+    local unique_pkgs
+    unique_pkgs=$(printf '%s\n' "${all_missing_pkgs[@]}" | sort -u | tr '\n' ' ')
+
+    if apt update -qq >/dev/null 2>&1 && apt install -y -qq $unique_pkgs >/dev/null 2>&1; then
+        log_info "依赖安装完成: ${unique_pkgs}"
+    else
+        # 批量安装失败，逐个尝试
+        log_warn "批量安装失败，逐个尝试..."
+        for spec_entry in "${missing_critical[@]}" "${missing_optional[@]}"; do
+            local c="${spec_entry%%:*}"
+            local p="${spec_entry##*:}"
+            if ! command -v "$c" >/dev/null 2>&1; then
+                apt install -y -qq "$p" >/dev/null 2>&1 || true
+            fi
+        done
+    fi
+
+    # 验证关键依赖
+    for spec_entry in "${missing_critical[@]}"; do
+        local c="${spec_entry%%:*}"
+        local p="${spec_entry##*:}"
+        if ! command -v "$c" >/dev/null 2>&1; then
+            log_error "关键依赖 ${c}（${p}）安装失败，请手动执行: apt install -y ${p}"
+            return 1
+        fi
+    done
+
+    # 验证可选依赖（仅告警）
+    for spec_entry in "${missing_optional[@]}"; do
+        local c="${spec_entry%%:*}"
+        local p="${spec_entry##*:}"
+        if ! command -v "$c" >/dev/null 2>&1; then
+            log_warn "可选依赖 ${c}（${p}）安装失败，相关功能可能受限"
+        fi
+    done
+
+    return 0
 }
 
 ensure_root_and_nft() {
@@ -695,8 +768,6 @@ ensure_nft_main_config_include() {
         log_error "无法访问主配置文件: $NFT_MAIN_CONFIG_FILE"
         return 1
     }
-
-    nft_main_config_has_forwardaws_include && return 0
 
     printf '\n%s\n' "$include_line" >> "$NFT_MAIN_CONFIG_FILE" 2>/dev/null || {
         log_error "写入主配置 include 失败: $NFT_MAIN_CONFIG_FILE"
@@ -821,9 +892,16 @@ save_rules() {
         echo "#!/usr/sbin/nft -f"
         echo "# forwardaws generated at $(date +'%Y-%m-%dT%H:%M:%S%z')"
         echo
-        nft list table ip "$TABLE_NAME" 2>/dev/null || true
+        # 先删除已有表再重建，确保文件可重入加载
+        if nft list table ip "$TABLE_NAME" >/dev/null 2>&1; then
+            echo "delete table ip $TABLE_NAME"
+            nft list table ip "$TABLE_NAME" 2>/dev/null || true
+        fi
         echo
-        nft list table ip6 "$TABLE_NAME" 2>/dev/null || true
+        if nft list table ip6 "$TABLE_NAME" >/dev/null 2>&1; then
+            echo "delete table ip6 $TABLE_NAME"
+            nft list table ip6 "$TABLE_NAME" 2>/dev/null || true
+        fi
     } > "$tmp_file" || {
         rm -f "$tmp_file"
         log_error "生成持久化规则文件失败"
@@ -1112,13 +1190,20 @@ collect_dnat_rule_handles() {
     local dest_port="$5"
 
     nft -a list chain ip "$TABLE_NAME" "$chain" 2>/dev/null | \
-        awk -v p="$proto" -v sp="$local_port" -v dp="${dest_ip}:${dest_port}" '
-            $1==p && $0 ~ ("dport " sp " ") && $0 ~ ("dnat to " dp) {
+        awk -v p="$proto" -v sp="$local_port" -v dip="$dest_ip" -v dpt="$dest_port" '
+            {
+                match_proto=0
+                match_dport=0
+                match_dnat=0
+                handle_val=""
                 for (i=1; i<=NF; i++) {
-                    if ($i=="handle") {
-                        print $(i+1);
-                        break;
-                    }
+                    if ($i==p) match_proto=1
+                    if ($i=="dport" && $(i+1)==sp) match_dport=1
+                    if ($i=="dnat" && $(i+1)=="to" && $(i+2)==(dip ":" dpt)) match_dnat=1
+                    if ($i=="handle") handle_val=$(i+1)
+                }
+                if (match_proto && match_dport && match_dnat && handle_val!="") {
+                    print handle_val
                 }
             }
         '
@@ -1281,10 +1366,34 @@ append_input_chain_commands() {
     _commands+=("add rule $family $TABLE_NAME $CHAIN_INPUT udp dport { $ports } accept")
 }
 
+# 检查 conntrack 是否可用（保护模式依赖 ct state 规则）
+ensure_conntrack_available() {
+    # 尝试检查内核 conntrack 模块
+    if [ -f /proc/net/nf_conntrack ] || [ -d /proc/sys/net/netfilter ]; then
+        return 0
+    fi
+
+    # 尝试加载模块
+    if command -v modprobe >/dev/null 2>&1; then
+        if modprobe nf_conntrack >/dev/null 2>&1; then
+            return 0
+        fi
+    fi
+
+    log_error "conntrack 模块不可用，保护模式需要 ct state 支持才能正常工作"
+    return 1
+}
+
 # 构建保护规则（核心函数，被其他保护函数调用）
 build_protection_rules() {
     local ports="$1"
 
+    if [ -z "$ports" ]; then
+        log_error "保护端口列表为空，拒绝构建保护规则（会导致所有流量被丢弃）"
+        return 1
+    fi
+
+    ensure_conntrack_available || return 1
     ensure_table_family ip || return 1
     ensure_table_family ip6 || return 1
 
@@ -1453,7 +1562,7 @@ sync_ddns_rules() {
 
     if [ ! -s "$DDNS_STATE_FILE" ]; then
         log_warn "未配置 DDNS 域名规则，无需同步"
-        disable_ddns_timer_if_no_domain_rules
+        reconcile_ddns_timer_state
         return 0
     fi
 
@@ -1468,6 +1577,7 @@ sync_ddns_rules() {
     local changed_count=0
     local unchanged_count=0
     local failed_count=0
+    local -a retired_ips=()
 
     while IFS='|' read -r src_port domain dest_port last_ip status updated_at; do
         [ -z "$src_port$domain$dest_port" ] && continue
@@ -1506,7 +1616,7 @@ sync_ddns_rules() {
         fi
 
         if apply_single_forwarding_rule "$src_port" "$new_ip" "$dest_port" "false"; then
-            cleanup_masquerade_if_unused "$last_ip"
+            [ -n "$last_ip" ] && retired_ips+=("$last_ip")
             echo "${src_port}|${domain}|${dest_port}|${new_ip}|ok|${now}" >> "$tmp_file"
             log_info "DDNS 更新成功: ${domain} ${last_ip:-N/A} -> ${new_ip}"
             ((changed_count++))
@@ -1519,6 +1629,12 @@ sync_ddns_rules() {
             ((failed_count++))
         fi
     done < "$DDNS_STATE_FILE"
+
+    # 延迟清理：循环结束后统一清理不再引用的旧 IP masquerade 规则
+    local _retired_ip=""
+    for _retired_ip in "${retired_ips[@]}"; do
+        cleanup_masquerade_if_unused "$_retired_ip"
+    done
 
     if ! mv "$tmp_file" "$DDNS_STATE_FILE"; then
         rm -f "$tmp_file"
@@ -1551,6 +1667,7 @@ add_rule_batch() {
         local dest_ip=""
         local domain_name=""
         local parse_error_reason=""
+        local saved_ip=""
         if ! parse_rule_for_forwarding \
             "$rule" \
             local_port \
@@ -1607,8 +1724,111 @@ add_rule_batch() {
     reconcile_ddns_timer_state
     
     # 输出摘要
-    print_batch_summary success_rules skipped_rules failed_rules
+    print_batch_summary "添加" success_rules skipped_rules failed_rules
     [ ${#success_rules[@]} -gt 0 ] && show_protection_status
+}
+
+# 批量删除规则
+delete_rule_batch() {
+    local rules=("$@")
+
+    [ ${#rules[@]} -eq 0 ] && { log_error "未提供任何规则"; return 1; }
+
+    log_info "准备删除 ${#rules[@]} 条转发规则..."
+
+    local -a success_rules failed_rules skipped_rules
+
+    for rule in "${rules[@]}"; do
+        log_info "处理规则: $rule"
+
+        local local_port=""
+        local dest_value=""
+        local dest_port=""
+        local is_local=""
+        local target_type=""
+        local dest_ip=""
+        local domain_name=""
+        local parse_error_reason=""
+        local saved_ip=""
+        if ! parse_rule_for_forwarding \
+            "$rule" \
+            local_port \
+            dest_value \
+            dest_port \
+            is_local \
+            target_type \
+            dest_ip \
+            domain_name \
+            parse_error_reason; then
+            # 对域名规则尝试从 DDNS 状态中查找已记录的 IP
+            if [ "$parse_error_reason" = "域名解析失败" ] && [ -n "$domain_name" ]; then
+                saved_ip=$(lookup_ddns_saved_ip "$local_port" "$domain_name" "$dest_port" 2>/dev/null || true)
+                if validate_ip_address "$saved_ip"; then
+                    dest_ip="$saved_ip"
+                    is_local="false"
+                    target_type="domain"
+                    log_info "域名解析失败，使用 DDNS 记录的 IP: $saved_ip"
+                else
+                    failed_rules+=("$rule (${parse_error_reason})")
+                    continue
+                fi
+            else
+                failed_rules+=("$rule (${parse_error_reason:-解析失败})")
+                continue
+            fi
+        fi
+        if [ "$target_type" = "domain" ]; then
+            saved_ip=$(lookup_ddns_saved_ip "$local_port" "$domain_name" "$dest_port" 2>/dev/null || true)
+        fi
+
+        local chain="$CHAIN_PREROUTING"
+        [ "$is_local" = "true" ] && chain="$CHAIN_OUTPUT"
+
+        # 检查规则是否存在
+        if ! chain_has_exact_dnat_rule "$chain" "$local_port" "$dest_ip" "$dest_port"; then
+            if [ "$target_type" = "domain" ] && \
+                validate_ip_address "$saved_ip" && \
+                [ "$saved_ip" != "$dest_ip" ] && \
+                chain_has_exact_dnat_rule "$chain" "$local_port" "$saved_ip" "$dest_port"; then
+                dest_ip="$saved_ip"
+                log_info "目标 IP 已变化，使用 DDNS 记录的旧 IP 删除: $saved_ip"
+            else
+                skipped_rules+=("$rule (规则不存在)")
+                continue
+            fi
+        fi
+
+        # 删除转发规则
+        if remove_forwarding_rule_by_tuple "$local_port" "$dest_ip" "$dest_port" "$is_local"; then
+            cleanup_masquerade_if_unused "$dest_ip"
+
+            # 清理 DDNS 状态
+            if [ "$target_type" = "domain" ] && [ -f "$DDNS_STATE_FILE" ]; then
+                local tmp_file="${DDNS_STATE_FILE}.tmp.$$"
+                awk -F'|' -v sp="$local_port" -v dm="$domain_name" -v dp="$dest_port" \
+                    'NF>0 && !(NF>=3 && $1==sp && $2==dm && $3==dp) { print $0 }' \
+                    "$DDNS_STATE_FILE" > "$tmp_file" 2>/dev/null && \
+                    mv "$tmp_file" "$DDNS_STATE_FILE" || rm -f "$tmp_file"
+            fi
+
+            success_rules+=("$rule")
+            log_debug "规则已删除: $rule"
+        else
+            failed_rules+=("$rule (删除失败)")
+        fi
+    done
+
+    # 同步保护模式
+    if [ ${#success_rules[@]} -gt 0 ] && is_protection_enabled; then
+        sync_protection_ports || {
+            log_warn "自动同步保护端口失败，请手动执行: $0 --protect sync"
+        }
+    fi
+
+    reconcile_ddns_timer_state
+
+    # 输出摘要
+    print_batch_summary "删除" success_rules skipped_rules failed_rules
 }
 
 # 原子替换规则（全部校验成功后一次提交）
@@ -1687,7 +1907,8 @@ replace_rules_batch() {
 
     [ ${#candidate_entries[@]} -gt 0 ] || { log_error "无可应用的新规则"; return 1; }
 
-    ensure_output_chain || return 1
+    # 确保 NAT 表及所有基础链（prerouting/postrouting/output）均存在，防止 flush 失败
+    ensure_nft_base_structures || return 1
     if [ ${#remote_ips_map[@]} -gt 0 ]; then
         ensure_ipv4_forwarding_enabled || true
     fi
@@ -1738,14 +1959,15 @@ replace_rules_batch() {
 
 # 打印批量操作摘要
 print_batch_summary() {
-    local -n _success=$1 _skipped=$2 _failed=$3
+    local action="$1"
+    local -n _success=$2 _skipped=$3 _failed=$4
     
     echo ""
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}           批量添加结果摘要${NC}"
+    echo -e "${BLUE}           批量${action}结果摘要${NC}"
     echo -e "${BLUE}========================================${NC}"
     
-    echo -e "${GREEN}成功添加: ${#_success[@]} 条${NC}"
+    echo -e "${GREEN}成功${action}: ${#_success[@]} 条${NC}"
     for rule in "${_success[@]}"; do echo -e "  ${GREEN}✓${NC} $rule"; done
     
     if [ ${#_skipped[@]} -gt 0 ]; then
@@ -1801,6 +2023,7 @@ show_help() {
   $0 --help
   $0 --list
   $0 --add <规则1> [规则2 ...]
+  $0 --delete <规则1> [规则2 ...]
   $0 --replace <规则1> [规则2 ...]
   $0 --ddns-sync
   $0 --ddns-list
@@ -1835,6 +2058,11 @@ cmd_replace_rules() {
     replace_rules_batch "$@"
 }
 
+cmd_delete_rules() {
+    initialize_nftables || return 1
+    delete_rule_batch "$@"
+}
+
 cmd_ddns_sync() {
     initialize_nftables || return 1
     sync_ddns_rules
@@ -1846,6 +2074,7 @@ cmd_protect_on() {
 }
 
 cmd_protect_off() {
+    initialize_nftables || return 1
     disable_protection
 }
 
@@ -1867,7 +2096,7 @@ case "$1" in
         show_help
         ;;
     --list|-l)
-        ensure_nft_installed || exit 1
+        ensure_root_and_nft || exit 1
         display_rules || exit 1
         ;;
     --add|-a)
@@ -1875,6 +2104,12 @@ case "$1" in
         shift
         [ $# -eq 0 ] && { log_error "未提供任何规则。用法: $0 --add 规则1 [规则2 ...]"; show_help; exit 1; }
         run_locked_mutation_with_persistence "批量添加转发规则" cmd_add_rules "$@" || exit 1
+        ;;
+    --delete|-d)
+        ensure_root_and_nft || exit 1
+        shift
+        [ $# -eq 0 ] && { log_error "未提供任何规则。用法: $0 --delete 规则1 [规则2 ...]"; show_help; exit 1; }
+        run_locked_mutation_with_persistence "批量删除转发规则" cmd_delete_rules "$@" || exit 1
         ;;
     --replace|-r)
         ensure_root_and_nft || exit 1
