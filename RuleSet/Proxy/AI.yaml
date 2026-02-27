@@ -1,5 +1,4 @@
 payload:
-  # https://github.com/dler-io/Rules/blob/main/Clash/Provider/AI%20Suite.yaml
   # https://github.com/v2fly/domain-list-community/blob/master/data/openai
   
   # OpenAI
@@ -94,6 +93,8 @@ payload:
   # > Augment
   - '+.augment.com'
   - '+.augmentcode.com'
+  # > AMP Code
+  - '+.ampcode.com'
   # > Kiro
   - '+.kiro.dev'
   # > Chorus
