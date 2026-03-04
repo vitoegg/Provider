@@ -1,5 +1,5 @@
-# 更新时间: 2026-02-10 14:06:49
-# 规则条数: 1559
+# 更新时间: 2026-03-04 13:37:04
+# 规则条数: 1560
 # 规则来源:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/Loyalsoldier/surge-rules
@@ -1007,6 +1007,7 @@
 .icloud-isupport.com
 .icloud-sandbox.com
 .icloud.ch
+.icloud.cn
 .icloud.com
 .icloud.com.cn
 .icloud.de
