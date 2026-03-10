@@ -375,7 +375,7 @@ install_systemd_units_if_needed() {
     cat > "/etc/systemd/system/${service_name}" << EOF
 [Unit]
 Description=${service_desc}
-After=network-online.target
+After=network-online.target nftables.service
 Wants=network-online.target
 
 [Service]
@@ -773,6 +773,15 @@ ensure_nft_main_config_include() {
         log_error "写入主配置 include 失败: $NFT_MAIN_CONFIG_FILE"
         return 1
     }
+
+    # 确保 nftables.service 开机自启，否则重启后规则不会被加载
+    if command -v systemctl >/dev/null 2>&1; then
+        if ! systemctl is-enabled nftables.service >/dev/null 2>&1; then
+            systemctl enable nftables.service >/dev/null 2>&1 && \
+                log_info "已启用 nftables.service 开机自启" || \
+                log_warn "无法启用 nftables.service，重启后规则可能丢失"
+        fi
+    fi
 }
 
 run_nft_transaction() {
@@ -810,20 +819,26 @@ run_nft_transaction() {
 ensure_ipv4_forwarding_enabled() {
     local current
     current=$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo "0")
-    [ "$current" = "1" ] && return 0
 
-    if command -v sysctl >/dev/null 2>&1 && sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1; then
-        log_info "已启用 net.ipv4.ip_forward=1（运行时）"
-        return 0
+    if [ "$current" != "1" ]; then
+        if command -v sysctl >/dev/null 2>&1 && sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1; then
+            log_info "已启用 net.ipv4.ip_forward=1（运行时）"
+        elif echo 1 > /proc/sys/net/ipv4/ip_forward 2>/dev/null; then
+            log_info "已启用 /proc/sys/net/ipv4/ip_forward"
+        else
+            log_warn "无法自动启用 IP 转发，远程端口转发可能无法生效"
+            return 1
+        fi
     fi
 
-    if echo 1 > /proc/sys/net/ipv4/ip_forward 2>/dev/null; then
-        log_info "已启用 /proc/sys/net/ipv4/ip_forward"
-        return 0
+    # 持久化 IP 转发设置，确保重启后依然生效
+    local sysctl_conf="/etc/sysctl.d/99-forwardaws.conf"
+    if [ ! -f "$sysctl_conf" ] || ! grep -q 'net.ipv4.ip_forward=1' "$sysctl_conf" 2>/dev/null; then
+        echo "net.ipv4.ip_forward=1" > "$sysctl_conf" 2>/dev/null && \
+            log_info "已持久化 net.ipv4.ip_forward=1 至 $sysctl_conf" || \
+            log_warn "无法持久化 IP 转发设置，重启后可能失效"
     fi
-
-    log_warn "无法自动启用 IP 转发，远程端口转发可能无法生效"
-    return 1
+    return 0
 }
 
 # ============================================================================
@@ -907,6 +922,13 @@ save_rules() {
         log_error "生成持久化规则文件失败"
         return 1
     }
+
+    # 安全检查：防止写入不包含有效规则的空文件
+    if ! grep -q 'table' "$tmp_file" 2>/dev/null; then
+        rm -f "$tmp_file"
+        log_error "生成的规则文件不包含有效内容，跳过保存"
+        return 1
+    fi
 
     if ! mv "$tmp_file" "$FORWARDAWS_RULES_FILE"; then
         rm -f "$tmp_file"
