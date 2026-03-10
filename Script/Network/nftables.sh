@@ -1595,13 +1595,13 @@ sync_ddns_rules() {
         new_ip=$(resolve_ddns_ipv4 "$domain")
         if [ $? -ne 0 ] || [ -z "$new_ip" ]; then
             log_warn "域名解析失败，保留原规则: $domain"
-            echo "${src_port}|${domain}|${dest_port}|${last_ip}|resolve_failed|${now}" >> "$tmp_file"
+            echo "${src_port}|${domain}|${dest_port}|${last_ip}|resolve_failed|${updated_at}" >> "$tmp_file"
             ((failed_count++))
             continue
         fi
 
         if [ "$new_ip" = "$last_ip" ] && [ -n "$last_ip" ]; then
-            echo "${src_port}|${domain}|${dest_port}|${last_ip}|ok|${now}" >> "$tmp_file"
+            echo "${src_port}|${domain}|${dest_port}|${last_ip}|ok|${updated_at}" >> "$tmp_file"
             ((unchanged_count++))
             continue
         fi
@@ -1609,7 +1609,7 @@ sync_ddns_rules() {
         if [ -n "$last_ip" ]; then
             if ! remove_forwarding_rule_by_tuple "$src_port" "$last_ip" "$dest_port" "false"; then
                 log_error "旧规则删除失败，跳过本次更新: ${domain}"
-                echo "${src_port}|${domain}|${dest_port}|${last_ip}|remove_failed|${now}" >> "$tmp_file"
+                echo "${src_port}|${domain}|${dest_port}|${last_ip}|remove_failed|${updated_at}" >> "$tmp_file"
                 ((failed_count++))
                 continue
             fi
@@ -1625,7 +1625,7 @@ sync_ddns_rules() {
             if [ -n "$last_ip" ]; then
                 apply_single_forwarding_rule "$src_port" "$last_ip" "$dest_port" "false" >/dev/null 2>&1
             fi
-            echo "${src_port}|${domain}|${dest_port}|${last_ip}|apply_failed|${now}" >> "$tmp_file"
+            echo "${src_port}|${domain}|${dest_port}|${last_ip}|apply_failed|${updated_at}" >> "$tmp_file"
             ((failed_count++))
         fi
     done < "$DDNS_STATE_FILE"
