@@ -762,17 +762,17 @@ nft_main_config_has_forwardaws_include() {
 ensure_nft_main_config_include() {
     local include_line='include "/etc/nftables.d/*.nft"'
 
-    nft_main_config_has_forwardaws_include && return 0
+    if ! nft_main_config_has_forwardaws_include; then
+        touch "$NFT_MAIN_CONFIG_FILE" 2>/dev/null || {
+            log_error "无法访问主配置文件: $NFT_MAIN_CONFIG_FILE"
+            return 1
+        }
 
-    touch "$NFT_MAIN_CONFIG_FILE" 2>/dev/null || {
-        log_error "无法访问主配置文件: $NFT_MAIN_CONFIG_FILE"
-        return 1
-    }
-
-    printf '\n%s\n' "$include_line" >> "$NFT_MAIN_CONFIG_FILE" 2>/dev/null || {
-        log_error "写入主配置 include 失败: $NFT_MAIN_CONFIG_FILE"
-        return 1
-    }
+        printf '\n%s\n' "$include_line" >> "$NFT_MAIN_CONFIG_FILE" 2>/dev/null || {
+            log_error "写入主配置 include 失败: $NFT_MAIN_CONFIG_FILE"
+            return 1
+        }
+    fi
 
     # 确保 nftables.service 开机自启，否则重启后规则不会被加载
     if command -v systemctl >/dev/null 2>&1; then
@@ -907,13 +907,15 @@ save_rules() {
         echo "#!/usr/sbin/nft -f"
         echo "# forwardaws generated at $(date +'%Y-%m-%dT%H:%M:%S%z')"
         echo
-        # 先删除已有表再重建，确保文件可重入加载
+        # 先声明空表再删除再重建，确保启动时表不存在也不会报错
         if nft list table ip "$TABLE_NAME" >/dev/null 2>&1; then
+            echo "table ip $TABLE_NAME"
             echo "delete table ip $TABLE_NAME"
             nft list table ip "$TABLE_NAME" 2>/dev/null || true
         fi
         echo
         if nft list table ip6 "$TABLE_NAME" >/dev/null 2>&1; then
+            echo "table ip6 $TABLE_NAME"
             echo "delete table ip6 $TABLE_NAME"
             nft list table ip6 "$TABLE_NAME" 2>/dev/null || true
         fi
