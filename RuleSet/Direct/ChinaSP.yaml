@@ -7,6 +7,7 @@ payload:
   - DOMAIN-SUFFIX,zimuku.org
   # Cloud Service
   - DOMAIN-SUFFIX,greencloudvps.com
+  - DOMAIN-SUFFIX,po0.com
   # Direct Emby
   # > Lily Emby
   - DOMAIN,cdn.lilyemby.com
