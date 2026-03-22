@@ -616,9 +616,9 @@ detect_runtime_public_ports() {
         ports="${ports}${ports:+,}${port}"
     done < <(
         {
-            ss -H -ltnu4 2>/dev/null
-            ss -H -ltnu6 2>/dev/null
-        } | awk '{print $5}'
+            ss -H -ltn4 2>/dev/null
+            ss -H -ltn6 2>/dev/null
+        } | awk '{print $(NF-1)}'
     )
 
     normalize_ports "$ports"
