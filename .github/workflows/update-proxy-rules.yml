@@ -14,7 +14,7 @@ jobs:
       has_changes: ${{ steps.check_changes.outputs.has_changes }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         id: checkout
         with:
           fetch-depth: 1
@@ -24,11 +24,11 @@ jobs:
         id: timezone
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: '3.x'
         id: python
-        
+
       - name: Install jq
         run: sudo apt-get install -y jq
 
@@ -50,10 +50,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-      - name: Delete Workflow Runs
-        uses: Mattraks/delete-workflow-runs@v2
+      - name: Delete old Workflows
+        uses: ophub/delete-releases-workflows@main
         with:
-          token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          retain_days: 0
-          keep_minimum_runs: 1
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+          delete_releases: true
+          releases_keep_latest: 0
+          delete_tags: true
+          delete_workflows: true
+          workflows_keep_day: 0

@@ -15,11 +15,9 @@ on:
 jobs:
   check-upstream:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
@@ -27,7 +25,7 @@ jobs:
         run: sudo timedatectl set-timezone "Asia/Shanghai"
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: '3.x'
 
@@ -44,11 +42,12 @@ jobs:
         run: |
           python ${GITHUB_WORKSPACE}/Script/Workflow/upstream_tasks.py
 
-      - name: Delete Workflow Runs
-        uses: Mattraks/delete-workflow-runs@v2
+      - name: Delete old Workflows
+        uses: ophub/delete-releases-workflows@main
         with:
-          token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          retain_days: 0
-          keep_minimum_runs: 1
-
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+          delete_releases: true
+          releases_keep_latest: 0
+          delete_tags: true
+          delete_workflows: true
+          workflows_keep_day: 0
