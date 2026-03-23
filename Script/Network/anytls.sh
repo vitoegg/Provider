@@ -1010,8 +1010,8 @@ clean_sing_box_config() {
 ################################################################################
 uninstall_service() {
     print_header "Uninstalling Singbox"
-    
-    # Stop and disable service
+
+    # Step 1: Stop and disable service
     log_info "Stopping and disabling Singbox service..."
     if systemctl is-active --quiet sing-box 2>/dev/null; then
         if ! systemctl stop sing-box >/dev/null 2>&1; then
@@ -1022,22 +1022,39 @@ uninstall_service() {
     else
         log_info "Service is not running"
     fi
-    
+
     if systemctl is-enabled --quiet sing-box 2>/dev/null; then
         systemctl disable sing-box >/dev/null 2>&1
         log_success "Service disabled"
     else
         log_info "Service is not enabled"
     fi
-    
-    # Clean up systemd unit files and reload daemon
+
+    # Step 2: Purge package via dpkg FIRST (before manual file cleanup)
+    # Using --purge instead of --remove to fully clear dpkg database state
+    log_info "Purging Singbox package..."
+    if dpkg -l | grep -q "sing-box" 2>/dev/null; then
+        DEBIAN_FRONTEND=noninteractive dpkg --purge sing-box >/dev/null 2>&1 || {
+            # If purge fails, force remove then purge to clear database
+            DEBIAN_FRONTEND=noninteractive dpkg --remove --force-remove-reinstreq sing-box >/dev/null 2>&1
+            DEBIAN_FRONTEND=noninteractive dpkg --purge sing-box >/dev/null 2>&1
+        }
+        log_success "Package purged"
+    else
+        log_info "Package is not installed"
+    fi
+
+    # Step 3: Fix any broken dpkg state
+    DEBIAN_FRONTEND=noninteractive dpkg --configure -a >/dev/null 2>&1 || true
+
+    # Step 4: Clean up systemd unit files that dpkg may not have removed
     log_info "Cleaning up systemd configuration..."
     local systemd_files=(
         "/etc/systemd/system/sing-box.service"
         "/lib/systemd/system/sing-box.service"
         "/usr/lib/systemd/system/sing-box.service"
     )
-    
+
     local found_systemd_file=false
     for file in "${systemd_files[@]}"; do
         if [[ -f "$file" ]]; then
@@ -1046,66 +1063,52 @@ uninstall_service() {
             log_info "Removed systemd unit file: $file"
         fi
     done
-    
+
     if [[ "$found_systemd_file" == true ]]; then
         systemctl daemon-reload >/dev/null 2>&1
         log_success "Systemd daemon reloaded"
     fi
-    
-    # Remove Singbox package
-    log_info "Removing Singbox package..."
-    if dpkg -l | grep -q "^ii.*sing-box" 2>/dev/null; then
-        # Try normal removal first, then force if needed
-        DEBIAN_FRONTEND=noninteractive dpkg --remove sing-box >/dev/null 2>&1 || \
-        DEBIAN_FRONTEND=noninteractive dpkg --remove --force-remove-reinstreq sing-box >/dev/null 2>&1
-        log_success "Package removed"
-    else
-        log_info "Package is not installed"
-    fi
-    
-    # Use the centralized configuration cleanup function
-    clean_sing_box_config
-    
-    # Clean up additional paths that might not be covered by the function
-    log_info "Removing additional configuration files and directories..."
-    local additional_paths=(
+
+    # Step 5: Clean up configuration and data directories
+    log_info "Removing configuration files and directories..."
+    local cleanup_paths=(
+        "/etc/sing-box"
+        "/var/lib/sing-box"
+        "/var/cache/sing-box"
+        "/run/sing-box"
         "/var/log/sing-box"
         "/etc/default/sing-box"
         "/etc/sing-box.conf"
+        "/tmp/sing-box-config-backup.json"
         "/home/*/.sing-box"
         "/root/.sing-box"
     )
-    
-    for path in "${additional_paths[@]}"; do
+
+    for path in "${cleanup_paths[@]}"; do
         if [[ -e "$path" ]]; then
             rm -rf "$path" >/dev/null 2>&1
             log_info "Removed: $path"
         fi
     done
-    
-    # Clean up any Singbox binary if it still exists
+
+    # Step 6: Clean up any Singbox binary if it still exists
     log_info "Removing Singbox binary..."
     local binary_paths=(
         "/usr/bin/sing-box"
         "/usr/local/bin/sing-box"
         "/opt/sing-box/sing-box"
     )
-    
+
     for binary in "${binary_paths[@]}"; do
         if [[ -f "$binary" ]]; then
             rm -f "$binary" >/dev/null 2>&1
             log_info "Removed binary: $binary"
         fi
     done
-    
-    # Quick package manager cleanup (optional)
-    log_info "Running basic package cleanup..."
-    DEBIAN_FRONTEND=noninteractive dpkg --configure -a >/dev/null 2>&1 || true
-    log_success "Basic cleanup completed"
-    
-    # Clean up temporary files from this script
+
+    # Step 7: Clean up temporary files from this script
     cleanup_temp_files
-    
+
     log_success "Complete uninstallation finished successfully"
     log_info "All Singbox components have been removed from the system"
     log_info "The system is ready for normal package operations"
