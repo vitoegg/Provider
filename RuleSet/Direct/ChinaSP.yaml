@@ -10,4 +10,4 @@ payload:
   - DOMAIN-SUFFIX,po0.com
   # Direct Emby
   # > Lily Emby Cloudflare
-  - DOMAIN,www.lilyemby.com
+  - DOMAIN-SUFFIX,lilyemby.com
