@@ -1,0 +1,5 @@
+payload:
+  # Lily Emby CF
+  - '+.lilyemby.com'
+  # Lily Emby Streaming
+  - '+.lilyemby.cc'

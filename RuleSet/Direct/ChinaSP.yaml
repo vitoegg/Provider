@@ -8,7 +8,3 @@ payload:
   # Cloud Service
   - DOMAIN-SUFFIX,greencloudvps.com
   - DOMAIN-SUFFIX,po0.com
-  # Direct Emby
-  # > Lily Emby Cloudflare
-  - DOMAIN-SUFFIX,lilyemby.com
-  - DOMAIN-SUFFIX,lilyemby.cc
