@@ -11,3 +11,4 @@ payload:
   # Direct Emby
   # > Lily Emby Cloudflare
   - DOMAIN-SUFFIX,lilyemby.com
+  - DOMAIN-SUFFIX,lilyemby.cc
