@@ -258,6 +258,15 @@ generate_sysctl() {
     echo "# IP Forwarding"
     echo "net.ipv4.ip_forward = 1"
 
+    # Simple mode: keep only low-risk network tuning
+    if [[ "$MODE" == "simple" ]]; then
+        cat << 'EOF'
+
+# Simple Mode Network
+net.ipv4.tcp_mtu_probing = 1
+EOF
+    fi
+
     # Advanced mode: full configuration
     if [[ "$MODE" == "advanced" ]]; then
         cat << EOF
