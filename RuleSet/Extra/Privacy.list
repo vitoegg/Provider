@@ -1,5 +1,5 @@
-# 更新时间: 2026-04-01 14:22:01
-# 规则条数: 970
+# 更新时间: 2026-04-08 14:16:00
+# 规则条数: 971
 # 规则来源:
 # - https://https://github.com/TG-Twilight/AWAvenue-Ads-Rule
 # - https://https://github.com/vitoegg/Provider
@@ -577,6 +577,7 @@
 .mobads.baidu.com
 .mobaliyun.res.mgtv.com
 .mobile.da.mgtv.com
+.mobile.events.data.microsoft.com
 .mobilead.kuwo.cn
 .mobileapptracking.com
 .mobilelog.kugou.com
