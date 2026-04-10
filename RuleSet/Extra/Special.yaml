@@ -1,0 +1,8 @@
+payload:
+  # Lily Emby CF
+  - '+.lilyemby.com'
+  # Lily Emby Streaming
+  - '+.lilyemby.cc'
+  # Cloud Service
+  - DOMAIN-SUFFIX,greencloudvps.com
+  - DOMAIN-SUFFIX,po0.com
