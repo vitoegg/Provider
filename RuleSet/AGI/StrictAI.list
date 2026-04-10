@@ -23,13 +23,20 @@ openai-api.arkoselabs.com
 .o33249.ingest.sentry.io
 openaicom.imgix.net
 browser-intake-datadoghq.com
- 
+
 # Claude
 .anthropic.com
 .claude.ai
+.claude.com
+.clau.de
+.claudemcpclient.com
 .claudeusercontent.com
+cdn.anthropic.com
 cdn.usefathom.com
+ahtropic.com.cdn.cloudflare.net
 servd-anthropic-website.b-cdn.net
+anthropic.auth0.com
+anthropic-com.ghost.io
 
 # Perplexity AI
 .perplexity.ai

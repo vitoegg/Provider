@@ -1,6 +1,6 @@
 payload:
   # https://github.com/v2fly/domain-list-community/blob/master/data/openai
-  
+
   # OpenAI
   # > ChatGPT
   - '+.openai.com'
@@ -30,9 +30,16 @@ payload:
   # Claude
   - '+.anthropic.com'
   - '+.claude.ai'
+  - '+.claude.com'
+  - '+.clau.de'
+  - '+.claudemcpclient.com'
   - '+.claudeusercontent.com'
   - 'cdn.usefathom.com'
+  - 'cdn.anthropic.com'
+  - 'anthropic.com.cdn.cloudflare.net'
   - 'servd-anthropic-website.b-cdn.net'
+  - 'anthropic.auth0.com'
+  - 'anthropic-com.ghost.io'
 
   # Google AI
   # > Google Generative Language API
@@ -64,7 +71,7 @@ payload:
   - '+.daily-cloudcode-pa.sandbox.googleapis.com'
   - 'antigravity-unleash.goog'
   - 'antigravity-auto-updater-974169037036.us-central1.run.app'
-  
+
   # Grok
   - '+.x.ai'
   - '+.grok.com'
@@ -113,7 +120,7 @@ payload:
   - 'gateway.ai.cloudflare.com'
   # > Vercel
   - 'ai-gateway.vercel.sh'
-  
+
   # AI Tools
   # > Manus
   - '+.manus.space'

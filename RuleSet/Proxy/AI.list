@@ -25,13 +25,20 @@ openai-api.arkoselabs.com
 .o33249.ingest.sentry.io
 openaicom.imgix.net
 browser-intake-datadoghq.com
- 
+
 # Claude
 .anthropic.com
 .claude.ai
+.claude.com
+.clau.de
+.claudemcpclient.com
 .claudeusercontent.com
+cdn.anthropic.com
 cdn.usefathom.com
+ahtropic.com.cdn.cloudflare.net
 servd-anthropic-website.b-cdn.net
+anthropic.auth0.com
+anthropic-com.ghost.io
 
 # Google AI
 # > Google Generative Language API
@@ -112,7 +119,7 @@ copilot.microsoft.com
 gateway.ai.cloudflare.com
 # > Vercel
 ai-gateway.vercel.sh
-  
+
 # AI Tools
 # > Manus
 .manus.space
