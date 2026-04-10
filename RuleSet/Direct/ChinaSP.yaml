@@ -5,6 +5,3 @@ payload:
   - DOMAIN-SUFFIX,oyunfor.com
   # Zimuku
   - DOMAIN-SUFFIX,zimuku.org
-  # Cloud Service
-  - DOMAIN-SUFFIX,greencloudvps.com
-  - DOMAIN-SUFFIX,po0.com
