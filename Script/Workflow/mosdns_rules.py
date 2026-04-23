@@ -2,13 +2,15 @@
 # -*- coding: utf-8 -*-
 """
 MosDNS规则处理脚本
-功能: 
+功能:
 1. 将AdGuard Home规则转换为MosDNS规则
-2. 去掉正则匹配类型的规则
-3. 按域名进行合并，相同的合并，包含关系的合并（主域名覆盖子域名）
-4. 输出详细的处理日志
+2. 将Surge domain-set规则转换为MosDNS规则
+3. 去掉正则匹配类型的规则
+4. 按域名进行合并，相同的合并，包含关系的合并（主域名覆盖子域名）
+5. 输出详细的处理日志
 """
 
+import argparse
 import sys
 import time
 import os
@@ -17,6 +19,8 @@ from typing import Set, List, Tuple, Dict
 
 # 编译正则模式以提升性能
 REGEX_PATTERN = re.compile(r'[\*\[\]\(\)\\+\?\^\$\|]')
+DOMAIN_PATTERN = re.compile(r'^[a-zA-Z0-9._-]+$')
+SUPPORTED_FORMATS = ("adguard", "surge_domain_set")
 
 def is_regex_rule(rule: str) -> bool:
     """检查MosDNS规则是否为正则表达式规则"""
@@ -31,86 +35,136 @@ def convert_adguard_to_mosdns(rule: str) -> Tuple[str, str]:
     返回: (转换后的规则, 规则类型)
     """
     original_rule = rule.strip()
-    
+
     # 跳过注释和空行
     if not original_rule or original_rule.startswith('#') or original_rule.startswith('!'):
         return "", "comment"
-    
+
     # 跳过允许规则（@@开头）
     if original_rule.startswith('@@'):
         return "", "allow"
-    
+
     # 跳过 keyword: 和 regexp: 类型规则
     if original_rule.startswith('keyword:') or original_rule.startswith('regexp:'):
         return "", "keyword_or_regexp"
-    
+
     # 格式7: 已经是MosDNS格式 (domain:example.com 或 full:example.com)
     if original_rule.startswith('domain:') or original_rule.startswith('full:'):
         return original_rule, "mosdns"
-    
+
     # 处理不同格式的AdGuard规则
     domain = ""
     rule_type = "unknown"
-    
+
     # 格式1: ||example.com^
     if original_rule.startswith('||') and original_rule.endswith('^'):
         domain = original_rule[2:-1]
         rule_type = "domain"
-    
+
     # 格式2: ||example.com^$third-party
     elif original_rule.startswith('||') and '^' in original_rule:
         domain = original_rule[2:original_rule.index('^')]
         rule_type = "domain"
-    
+
     # 格式3: |http://example.com
     elif original_rule.startswith('|http://'):
         domain = original_rule[8:]
         if '/' in domain:
             domain = domain[:domain.index('/')]
         rule_type = "domain"
-    
+
     # 格式4: |https://example.com
     elif original_rule.startswith('|https://'):
         domain = original_rule[9:]
         if '/' in domain:
             domain = domain[:domain.index('/')]
         rule_type = "domain"
-    
+
     # 格式6: .example.com (泛域名)
     elif original_rule.startswith('.'):
         domain = original_rule
         rule_type = "wildcard"
-    
+
     # 格式5: example.com (简单域名格式)
     elif '.' in original_rule and not original_rule.startswith('.'):
         domain = original_rule
         rule_type = "domain"
-    
+
     # 清理域名
     if domain:
         # 移除端口号
         if ':' in domain and not domain.startswith('domain:') and not domain.startswith('full:'):
             domain = domain[:domain.index(':')]
-        
+
         # 移除路径
         if '/' in domain:
             domain = domain[:domain.index('/')]
-        
+
         # 移除查询参数
         if '?' in domain:
             domain = domain[:domain.index('?')]
-        
+
         # 基本验证域名格式（允许一些特殊字符，后续再过滤）
         if not re.match(r'^[a-zA-Z0-9._*+?^$|()\[\]\\-]+$', domain):
             return "", "invalid"
-        
+
         # 转换为MosDNS格式
         if rule_type == "wildcard":
             return f"domain:{domain[1:]}", "converted"
         else:
             return f"domain:{domain}", "converted"
-    
+
     return "", "unknown"
+
+def convert_surge_domain_set_to_mosdns(rule: str) -> Tuple[str, str]:
+    """
+    将Surge domain-set规则转换为MosDNS规则
+    .example.com -> domain:example.com
+    example.com -> full:example.com
+    """
+    original_rule = rule.strip()
+
+    # 跳过注释和空行
+    if not original_rule or original_rule.startswith('#') or original_rule.startswith(';') or original_rule.startswith('//'):
+        return "", "comment"
+
+    rule_type = ""
+    domain = ""
+
+    # 兼容Surge逗号规则，当前上游主要是domain-set纯域名格式
+    if ',' in original_rule:
+        parts = [part.strip() for part in original_rule.split(',', 2)]
+        if len(parts) < 2:
+            return "", "invalid"
+
+        surge_type = parts[0].upper()
+        domain = parts[1]
+
+        if surge_type == "DOMAIN-SUFFIX":
+            rule_type = "domain"
+        elif surge_type == "DOMAIN":
+            rule_type = "full"
+        else:
+            return "", "unknown"
+    elif original_rule.startswith('.'):
+        domain = original_rule[1:]
+        rule_type = "domain"
+    else:
+        domain = original_rule
+        rule_type = "full"
+
+    domain = domain.strip().lower()
+
+    if not domain or domain.startswith('.') or domain.endswith('.') or '..' in domain:
+        return "", "invalid"
+
+    if not DOMAIN_PATTERN.match(domain):
+        return "", "invalid"
+
+    if rule_type == "domain":
+        return f"domain:{domain}", "converted"
+
+    return f"full:{domain}", "converted"
 
 def filter_regex_rules(rules: List[str]) -> Tuple[List[str], int]:
     """
@@ -119,13 +173,13 @@ def filter_regex_rules(rules: List[str]) -> Tuple[List[str], int]:
     """
     filtered_rules = []
     regex_count = 0
-    
+
     for rule in rules:
         if is_regex_rule(rule):
             regex_count += 1
         else:
             filtered_rules.append(rule)
-    
+
     return filtered_rules, regex_count
 
 def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
@@ -140,12 +194,12 @@ def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
         "domain_covered_full": 0,
         "kept": 0
     }
-    
+
     # 分离不同类型的规则
     domain_rules = []  # domain:example.com
     full_rules = []    # full:example.com
     other_rules = []   # 其他格式
-    
+
     for rule in rules:
         if rule.startswith('domain:'):
             domain_rules.append(rule[7:])  # 去掉 domain: 前缀
@@ -153,24 +207,24 @@ def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
             full_rules.append(rule[5:])  # 去掉 full: 前缀
         else:
             other_rules.append(rule)
-    
+
     # 去重
     original_count = len(domain_rules) + len(full_rules) + len(other_rules)
     domain_rules = list(set(domain_rules))
     full_rules = list(set(full_rules))
     other_rules = list(set(other_rules))
-    
+
     stats["duplicates"] = original_count - len(domain_rules) - len(full_rules) - len(other_rules)
-    
+
     # 优化domain规则 - 按域名长度排序，短的在前
     sorted_domains = sorted(domain_rules, key=lambda x: (len(x.split('.')), x))
-    
+
     # 使用集合进行高效查找
     kept_domains = set()
     for domain in sorted_domains:
         is_covered = False
         domain_parts = domain.split('.')
-        
+
         # 检查是否被已保留的更短域名覆盖
         for i in range(1, len(domain_parts)):
             parent_domain = '.'.join(domain_parts[i:])
@@ -180,15 +234,15 @@ def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
                     is_covered = True
                     stats["wildcard_covered"] += 1
                     break
-        
+
         if not is_covered:
             kept_domains.add(domain)
-    
+
     # 处理 full 规则 - 检查是否被 domain 规则覆盖
     kept_full_rules = []
     for full_domain in full_rules:
         is_covered = False
-        
+
         # 检查 full 域名本身是否在 domain 集合中
         if full_domain in kept_domains:
             is_covered = True
@@ -202,30 +256,42 @@ def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
                     is_covered = True
                     stats["domain_covered_full"] += 1
                     break
-        
+
         if not is_covered:
             kept_full_rules.append(f"full:{full_domain}")
-    
+
     # 组装最终规则
     optimized_domains = [f"domain:{d}" for d in kept_domains]
     final_rules = optimized_domains + kept_full_rules + other_rules
     stats["kept"] = len(final_rules)
-    
+
     return sorted(final_rules), stats
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="MosDNS规则处理脚本")
+    parser.add_argument("input_file", help="输入文件路径")
+    parser.add_argument(
+        "--format",
+        choices=SUPPORTED_FORMATS,
+        default="adguard",
+        help="输入规则格式，默认 adguard"
+    )
+    return parser.parse_args()
+
 def main():
-    if len(sys.argv) < 2:
-        print("用法: {} <输入文件路径>".format(sys.argv[0]), file=sys.stderr)
-        sys.exit(1)
-        
-    input_file = sys.argv[1]
-    
+    args = parse_args()
+    input_file = args.input_file
+
+    converter = convert_adguard_to_mosdns
+    if args.format == "surge_domain_set":
+        converter = convert_surge_domain_set_to_mosdns
+
     if not os.path.exists(input_file):
         print("错误: 输入文件 '{}' 不存在".format(input_file), file=sys.stderr)
         sys.exit(1)
-    
+
     start_time = time.time()
-    
+
     # 初始化统计信息
     conversion_stats = {
         "total_lines": 0,
@@ -238,22 +304,22 @@ def main():
         "invalid": 0,
         "unknown": 0
     }
-    
-    print("[1/4] 读取和转换规则文件...", file=sys.stderr)
-    
+
+    print(f"[1/5] 读取和转换规则文件，输入格式: {args.format}...", file=sys.stderr)
+
     converted_rules = []
-    
+
     try:
         with open(input_file, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
                 conversion_stats["total_lines"] += 1
-                
+
                 if not line:
                     continue
-                
-                converted_rule, rule_type = convert_adguard_to_mosdns(line)
-                
+
+                converted_rule, rule_type = converter(line)
+
                 # 统计转换结果
                 if rule_type == "comment":
                     conversion_stats["comments"] += 1
@@ -273,26 +339,26 @@ def main():
                     conversion_stats["invalid"] += 1
                 else:
                     conversion_stats["unknown"] += 1
-        
-        print(f"[2/4] 过滤正则表达式规则 ({len(converted_rules)} 条)...", file=sys.stderr)
-        
+
+        print(f"[2/5] 过滤正则表达式规则 ({len(converted_rules)} 条)...", file=sys.stderr)
+
         # 过滤掉正则表达式规则
         filtered_rules, regex_count = filter_regex_rules(converted_rules)
         conversion_stats["regex_rules"] = regex_count # 更新统计信息
-        
-        print(f"[3/4] 优化域名规则 ({len(filtered_rules)} 条)...", file=sys.stderr)
-        
+
+        print(f"[3/5] 优化域名规则 ({len(filtered_rules)} 条)...", file=sys.stderr)
+
         # 优化域名规则
         final_rules, optimization_stats = optimize_domains(filtered_rules)
-        
-        print(f"[4/4] 生成最终规则 ({len(final_rules)} 条)...", file=sys.stderr)
-        
+
+        print(f"[4/5] 生成最终规则 ({len(final_rules)} 条)...", file=sys.stderr)
+
         # 输出最终规则
         for rule in final_rules:
             print(rule)
-        
+
         print("[5/5] 输出统计信息...", file=sys.stderr)
-        
+
         # 输出统计信息
         end_time = time.time()
         print(f"处理时间: {end_time - start_time:.2f} 秒", file=sys.stderr)
@@ -309,10 +375,10 @@ def main():
         print(f"被父域名覆盖: {optimization_stats['wildcard_covered']}", file=sys.stderr)
         print(f"被domain规则覆盖的full规则: {optimization_stats['domain_covered_full']}", file=sys.stderr)
         print(f"最终保留: {optimization_stats['kept']}", file=sys.stderr)
-        
+
     except Exception as e:
         print(f"处理出错: {str(e)}", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":
-    main() 
+    main()
