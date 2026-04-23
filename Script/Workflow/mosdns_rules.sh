@@ -100,15 +100,19 @@ process_mosdns_rule() {
 
   # 基础清理：移除注释和空行
   awk '
-    !/^[[:space:]]*[#;!\/\/]/ &&
-    !/^[[:space:]]*$/ &&
-    !/^payload:/ &&
-    !/^[[:space:]]*\/\*/ &&
-    !/\*\// {
-      gsub(/[[:space:]]*[#;!\/\/].*$/, "");
-      gsub(/^[[:space:]]*/, "");
-      gsub(/[[:space:]]*$/, "");
-      if (length($0) > 0) print;
+    /^[[:space:]]*$/ { next }
+    /^[[:space:]]*(#|;|!|\/\/|\/\*)/ { next }
+    /^[[:space:]]*payload:/ { next }
+    /\*\// { next }
+    {
+      gsub(/^[[:space:]]+/, "")
+      gsub(/[[:space:]]+$/, "")
+      sub(/[[:space:]]+#.*$/, "")
+      sub(/[[:space:]]+;.*$/, "")
+      sub(/[[:space:]]+!.*$/, "")
+      gsub(/^[[:space:]]+/, "")
+      gsub(/[[:space:]]+$/, "")
+      if (length($0) > 0) print
     }
   ' "$merged_file" > "$cleaned_file"
 

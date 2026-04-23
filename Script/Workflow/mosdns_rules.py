@@ -5,22 +5,23 @@ MosDNS规则处理脚本
 功能:
 1. 将AdGuard Home规则转换为MosDNS规则
 2. 将Surge domain-set规则转换为MosDNS规则
-3. 去掉正则匹配类型的规则
-4. 按域名进行合并，相同的合并，包含关系的合并（主域名覆盖子域名）
-5. 输出详细的处理日志
+3. 将IP/CIDR规则规范化为纯CIDR格式
+4. 去掉正则匹配类型的规则
+5. 按规则类型执行去重和优化
 """
 
 import argparse
+import ipaddress
 import sys
 import time
 import os
 import re
-from typing import Set, List, Tuple, Dict
+from typing import List, Tuple, Dict
 
 # 编译正则模式以提升性能
 REGEX_PATTERN = re.compile(r'[\*\[\]\(\)\\+\?\^\$\|]')
 DOMAIN_PATTERN = re.compile(r'^[a-zA-Z0-9._-]+$')
-SUPPORTED_FORMATS = ("adguard", "surge_domain_set")
+SUPPORTED_FORMATS = ("adguard", "surge_domain_set", "ip_cidr")
 
 def is_regex_rule(rule: str) -> bool:
     """检查MosDNS规则是否为正则表达式规则"""
@@ -166,6 +167,43 @@ def convert_surge_domain_set_to_mosdns(rule: str) -> Tuple[str, str]:
 
     return f"full:{domain}", "converted"
 
+def convert_ip_cidr_rule(rule: str) -> Tuple[str, str]:
+    """
+    将IP规则统一转换为标准CIDR格式
+    支持以下输入:
+    1. 1.2.3.0/24
+    2. 240e::/20
+    3. 1.2.3.4 -> 1.2.3.4/32
+    4. IP-CIDR,1.2.3.0/24,no-resolve
+    """
+    original_rule = rule.strip()
+
+    if (
+        not original_rule or
+        original_rule.startswith('#') or
+        original_rule.startswith(';') or
+        original_rule.startswith('!') or
+        original_rule.startswith('//')
+    ):
+        return "", "comment"
+
+    if ',' in original_rule:
+        parts = [part.strip() for part in original_rule.split(',')]
+        if len(parts) >= 2 and parts[0].upper() in ("IP-CIDR", "IP-CIDR6"):
+            original_rule = parts[1]
+
+    try:
+        if '/' in original_rule:
+            network = ipaddress.ip_network(original_rule, strict=False)
+        else:
+            address = ipaddress.ip_address(original_rule)
+            prefix_length = 32 if address.version == 4 else 128
+            network = ipaddress.ip_network(f"{address}/{prefix_length}", strict=False)
+    except ValueError:
+        return "", "invalid"
+
+    return network.with_prefixlen, "converted"
+
 def filter_regex_rules(rules: List[str]) -> Tuple[List[str], int]:
     """
     过滤掉正则表达式规则
@@ -267,6 +305,23 @@ def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
 
     return sorted(final_rules), stats
 
+def optimize_ip_networks(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
+    """
+    规范化IP规则，仅做完全重复去重和稳定排序
+    """
+    unique_rules = set(rules)
+    stats = {
+        "total": len(rules),
+        "duplicates": len(rules) - len(unique_rules),
+        "kept": len(unique_rules)
+    }
+
+    def sort_key(rule: str) -> Tuple[int, int, int]:
+        network = ipaddress.ip_network(rule, strict=False)
+        return (network.version, int(network.network_address), network.prefixlen)
+
+    return sorted(unique_rules, key=sort_key), stats
+
 def parse_args():
     parser = argparse.ArgumentParser(description="MosDNS规则处理脚本")
     parser.add_argument("input_file", help="输入文件路径")
@@ -283,8 +338,12 @@ def main():
     input_file = args.input_file
 
     converter = convert_adguard_to_mosdns
+    optimizer = optimize_domains
     if args.format == "surge_domain_set":
         converter = convert_surge_domain_set_to_mosdns
+    elif args.format == "ip_cidr":
+        converter = convert_ip_cidr_rule
+        optimizer = optimize_ip_networks
 
     if not os.path.exists(input_file):
         print("错误: 输入文件 '{}' 不存在".format(input_file), file=sys.stderr)
@@ -340,16 +399,18 @@ def main():
                 else:
                     conversion_stats["unknown"] += 1
 
-        print(f"[2/5] 过滤正则表达式规则 ({len(converted_rules)} 条)...", file=sys.stderr)
+        filtered_rules = converted_rules
+        if args.format == "ip_cidr":
+            optimization_step_label = "优化IP规则"
+        else:
+            print(f"[2/5] 过滤正则表达式规则 ({len(converted_rules)} 条)...", file=sys.stderr)
+            filtered_rules, regex_count = filter_regex_rules(converted_rules)
+            conversion_stats["regex_rules"] = regex_count
+            optimization_step_label = "优化域名规则"
 
-        # 过滤掉正则表达式规则
-        filtered_rules, regex_count = filter_regex_rules(converted_rules)
-        conversion_stats["regex_rules"] = regex_count # 更新统计信息
+        print(f"[3/5] {optimization_step_label} ({len(filtered_rules)} 条)...", file=sys.stderr)
 
-        print(f"[3/5] 优化域名规则 ({len(filtered_rules)} 条)...", file=sys.stderr)
-
-        # 优化域名规则
-        final_rules, optimization_stats = optimize_domains(filtered_rules)
+        final_rules, optimization_stats = optimizer(filtered_rules)
 
         print(f"[4/5] 生成最终规则 ({len(final_rules)} 条)...", file=sys.stderr)
 
@@ -372,8 +433,9 @@ def main():
         print(f"无效规则: {conversion_stats['invalid']}", file=sys.stderr)
         print(f"未知格式: {conversion_stats['unknown']}", file=sys.stderr)
         print(f"重复规则: {optimization_stats['duplicates']}", file=sys.stderr)
-        print(f"被父域名覆盖: {optimization_stats['wildcard_covered']}", file=sys.stderr)
-        print(f"被domain规则覆盖的full规则: {optimization_stats['domain_covered_full']}", file=sys.stderr)
+        if args.format != "ip_cidr":
+            print(f"被父域名覆盖: {optimization_stats['wildcard_covered']}", file=sys.stderr)
+            print(f"被domain规则覆盖的full规则: {optimization_stats['domain_covered_full']}", file=sys.stderr)
         print(f"最终保留: {optimization_stats['kept']}", file=sys.stderr)
 
     except Exception as e:

@@ -40,11 +40,21 @@
         "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt",
         "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt"
       ]
+    },
+    "geoip": {
+      "name": "MOSDNS_GEOIP",
+      "path": "RuleSet/Extra/MosDNS/geoip.txt",
+      "description": "MosDNS 中国 IP 规则集",
+      "format": "ip_cidr",
+      "urls": [
+        "https://raw.githubusercontent.com/Loyalsoldier/geoip/release/text/cn.txt",
+        "https://raw.githubusercontent.com/pmkol/easymosdns/rules/china_ip_list.txt"
+      ]
     }
   },
   "config_info": {
-    "version": "1.0",
-    "last_updated": "2026-04-23",
+    "version": "1.1",
+    "last_updated": "2026-04-24",
     "description": "MosDNS 规则配置文件"
   }
 }
