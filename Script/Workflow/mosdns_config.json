@@ -19,10 +19,7 @@
       "urls": [
         "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/BaseSet/MosDNS/whitelist.txt",
         "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list",
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/ChinaSite.list",
-        "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple_Domain.list",
-        "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt",
-        "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt"
+        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/ChinaSite.list"
       ]
     },
     "foreign": {
@@ -31,7 +28,6 @@
       "description": "MosDNS 海外域名规则集",
       "format": "surge_domain_set",
       "urls": [
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/BaseSet/MosDNS/greylist.txt",
         "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Global/Global_Domain.list",
         "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Proxy/AI.list"
       ]
@@ -54,7 +50,8 @@
       "format": "ip_cidr",
       "urls": [
         "https://raw.githubusercontent.com/Loyalsoldier/geoip/release/text/cn.txt",
-        "https://raw.githubusercontent.com/pmkol/easymosdns/rules/china_ip_list.txt"
+        "https://raw.githubusercontent.com/pmkol/easymosdns/rules/china_ip_list.txt",
+        "https://raw.githubusercontent.com/Masaiki/GeoIP2-CN/release/CN-ip-cidr.txt"
       ]
     }
   },

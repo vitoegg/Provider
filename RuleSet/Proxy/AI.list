@@ -121,12 +121,18 @@ gateway.ai.cloudflare.com
 ai-gateway.vercel.sh
 # > Fireworks
 .fireworks.ai
+# > Ollama
+.ollama.com
 
 # AI Tools
+# > Raycast
+.raycast.com
 # > Manus
 .manus.space
 .manus.im
+.manus.ai
 # > DIA
+.diabrowser.com
 .diabrowser.engineering
 # > Poe
 .poe.com
@@ -144,3 +150,5 @@ ai-gateway.vercel.sh
 .coze.com
 # > Meta AI
 .meta.ai
+# > Bixby
+.bixbyllm.com
