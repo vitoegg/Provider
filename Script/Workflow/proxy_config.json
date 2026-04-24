@@ -5,7 +5,7 @@
       "path": "RuleSet/Extra/Privacy.list",
       "urls": [
         "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Surge.list",
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/BaseSet/Reject/Surge.list"
+        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/BaseSet/Surge/Reject.list"
       ]
     },
     {
