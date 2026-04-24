@@ -220,6 +220,39 @@ def filter_regex_rules(rules: List[str]) -> Tuple[List[str], int]:
 
     return filtered_rules, regex_count
 
+def sort_ip_network_key(network) -> Tuple[int, int, int]:
+    """为IP网络生成稳定排序键"""
+    return (network.version, int(network.network_address), network.prefixlen)
+
+def remove_covered_ip_networks(networks) -> Tuple[List, Dict[str, int], List[Tuple[str, str]]]:
+    """
+    严格去重IP规则:
+    1. 保留更大父网段
+    2. 删除被父网段完整覆盖的子网段
+    3. 不主动聚合相邻网段
+    """
+    kept_networks = []
+    coverage_stats = {"covered_subnets": 0}
+    max_end_by_version = {4: -1, 6: -1}
+    max_end_network_by_version = {4: None, 6: None}
+    covered_samples = []
+
+    for network in sorted(networks, key=sort_ip_network_key):
+        version = network.version
+        network_end = int(network.broadcast_address)
+        if network_end <= max_end_by_version[version]:
+            coverage_stats["covered_subnets"] += 1
+            parent_network = max_end_network_by_version[version]
+            if parent_network is not None and len(covered_samples) < 5:
+                covered_samples.append((parent_network.with_prefixlen, network.with_prefixlen))
+            continue
+
+        kept_networks.append(network)
+        max_end_by_version[version] = network_end
+        max_end_network_by_version[version] = network
+
+    return kept_networks, coverage_stats, covered_samples
+
 def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
     """
     优化域名规则，合并重复和包含关系的域名
@@ -307,20 +340,69 @@ def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
 
 def optimize_ip_networks(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
     """
-    规范化IP规则，仅做完全重复去重和稳定排序
+    规范化IP规则，执行完全重复去重和父网段覆盖子网段裁剪
     """
     unique_rules = set(rules)
+    unique_networks = [
+        ipaddress.ip_network(rule, strict=False)
+        for rule in unique_rules
+    ]
+    kept_networks, coverage_stats, _ = remove_covered_ip_networks(unique_networks)
     stats = {
         "total": len(rules),
         "duplicates": len(rules) - len(unique_rules),
-        "kept": len(unique_rules)
+        "covered_subnets": coverage_stats["covered_subnets"],
+        "kept": len(kept_networks)
     }
 
-    def sort_key(rule: str) -> Tuple[int, int, int]:
-        network = ipaddress.ip_network(rule, strict=False)
-        return (network.version, int(network.network_address), network.prefixlen)
+    return [network.with_prefixlen for network in kept_networks], stats
 
-    return sorted(unique_rules, key=sort_key), stats
+def check_ip_cidr_rules(input_file: str) -> int:
+    """校验文件中是否仍存在重复或被父网段覆盖的CIDR规则"""
+    parsed_rules = []
+
+    with open(input_file, 'r', encoding='utf-8') as file_handle:
+        for line_number, line in enumerate(file_handle, start=1):
+            converted_rule, rule_type = convert_ip_cidr_rule(line)
+            if rule_type == "comment":
+                continue
+            if rule_type != "converted":
+                print(
+                    f"CIDR校验失败: 第 {line_number} 行不是有效的IP/CIDR规则: {line.strip()}",
+                    file=sys.stderr
+                )
+                return 1
+            parsed_rules.append(converted_rule)
+
+    unique_rules = set(parsed_rules)
+    duplicate_count = len(parsed_rules) - len(unique_rules)
+    kept_networks, coverage_stats, covered_samples = remove_covered_ip_networks(
+        [ipaddress.ip_network(rule, strict=False) for rule in unique_rules]
+    )
+
+    if duplicate_count > 0:
+        print(f"CIDR校验失败: 发现 {duplicate_count} 条完全重复规则", file=sys.stderr)
+    if coverage_stats["covered_subnets"] > 0:
+        if covered_samples:
+            parent_rule, child_rule = covered_samples[0]
+            print(
+                f"CIDR校验失败: 发现被父网段覆盖的子网段: {child_rule} <- {parent_rule}",
+                file=sys.stderr
+            )
+        else:
+            print(
+                f"CIDR校验失败: 发现 {coverage_stats['covered_subnets']} 条被父网段覆盖的子网段",
+                file=sys.stderr
+            )
+
+    if duplicate_count > 0 or coverage_stats["covered_subnets"] > 0:
+        return 1
+
+    print(
+        f"CIDR校验通过: 共 {len(kept_networks)} 条规则，无重复且无覆盖子网段",
+        file=sys.stderr
+    )
+    return 0
 
 def parse_args():
     parser = argparse.ArgumentParser(description="MosDNS规则处理脚本")
@@ -330,6 +412,11 @@ def parse_args():
         choices=SUPPORTED_FORMATS,
         default="adguard",
         help="输入规则格式，默认 adguard"
+    )
+    parser.add_argument(
+        "--check-redundant-ip-cidr",
+        action="store_true",
+        help="仅校验输入文件中是否还存在重复或被父网段覆盖的CIDR规则"
     )
     return parser.parse_args()
 
@@ -348,6 +435,9 @@ def main():
     if not os.path.exists(input_file):
         print("错误: 输入文件 '{}' 不存在".format(input_file), file=sys.stderr)
         sys.exit(1)
+
+    if args.check_redundant_ip_cidr:
+        sys.exit(check_ip_cidr_rules(input_file))
 
     start_time = time.time()
 
@@ -436,6 +526,8 @@ def main():
         if args.format != "ip_cidr":
             print(f"被父域名覆盖: {optimization_stats['wildcard_covered']}", file=sys.stderr)
             print(f"被domain规则覆盖的full规则: {optimization_stats['domain_covered_full']}", file=sys.stderr)
+        else:
+            print(f"被父网段覆盖的子网段: {optimization_stats['covered_subnets']}", file=sys.stderr)
         print(f"最终保留: {optimization_stats['kept']}", file=sys.stderr)
 
     except Exception as e:

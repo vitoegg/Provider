@@ -31,6 +31,27 @@ get_mosdns_config() {
   echo "$mosdns_config"
 }
 
+validate_ip_cidr_result() {
+  local script_path="$1"
+  local input_file="$2"
+  local validate_file
+  validate_file=$(mktemp)
+
+  if python3 "$script_path" --check-redundant-ip-cidr "$input_file" > /dev/null 2> "$validate_file"; then
+    while IFS= read -r line; do
+      echo "┃     $line"
+    done < "$validate_file"
+    rm -f "$validate_file"
+    return 0
+  fi
+
+  while IFS= read -r line; do
+    echo "┃     $line"
+  done < "$validate_file"
+  rm -f "$validate_file"
+  return 1
+}
+
 process_mosdns_rule() {
   local rule_name="$1"
   local output_path="$2"
@@ -127,7 +148,7 @@ process_mosdns_rule() {
 
     echo "┃   ▶️ 使用MosDNS专用Python脚本进行规则处理..."
 
-    script_path="${GITHUB_WORKSPACE}/Script/Workflow/mosdns_rules.py"
+    local script_path="${GITHUB_WORKSPACE}/Script/Workflow/mosdns_rules.py"
     chmod +x "$script_path"
 
     local stats_file=$(mktemp)
@@ -146,6 +167,20 @@ process_mosdns_rule() {
       echo "┃ ⏱️ 处理完成，用时: $duration 秒"
       echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       return 0
+    fi
+
+    if [ "$rule_format" = "ip_cidr" ]; then
+      echo "┃   🔍 正在校验CIDR严格去重结果..."
+      if validate_ip_cidr_result "$script_path" "$final_file"; then
+        echo "┃   ✅ CIDR严格去重校验通过"
+      else
+        echo "┃   ❌ CIDR严格去重校验失败，本地规则未做任何更改，跳过本次更新"
+        rm -f "$stats_file" "$final_file"
+        local duration=$((SECONDS - start_time))
+        echo "┃ ⏱️ 处理完成，用时: $duration 秒"
+        echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        return 0
+      fi
     fi
 
     rm -f "$stats_file"
