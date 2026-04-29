@@ -8,6 +8,7 @@ MosDNS规则处理脚本
 3. 将IP/CIDR规则规范化为纯CIDR格式
 4. 去掉正则匹配类型的规则
 5. 按规则类型执行去重和优化
+6. 支持用MosDNS域名规则排除被覆盖的域名
 """
 
 import argparse
@@ -220,6 +221,38 @@ def filter_regex_rules(rules: List[str]) -> Tuple[List[str], int]:
 
     return filtered_rules, regex_count
 
+def convert_mosdns_domain_rule(rule: str) -> Tuple[str, str]:
+    """严格解析MosDNS域名规则，仅接受 domain: 和 full:。"""
+    original_rule = rule.strip()
+
+    if (
+        not original_rule or
+        original_rule.startswith('#') or
+        original_rule.startswith(';') or
+        original_rule.startswith('!') or
+        original_rule.startswith('//')
+    ):
+        return "", "comment"
+
+    if original_rule.startswith('domain:'):
+        prefix = "domain"
+        domain = original_rule[7:]
+    elif original_rule.startswith('full:'):
+        prefix = "full"
+        domain = original_rule[5:]
+    else:
+        return "", "invalid"
+
+    domain = domain.strip().lower()
+
+    if not domain or domain.startswith('.') or domain.endswith('.') or '..' in domain:
+        return "", "invalid"
+
+    if not DOMAIN_PATTERN.match(domain):
+        return "", "invalid"
+
+    return f"{prefix}:{domain}", "converted"
+
 def sort_ip_network_key(network) -> Tuple[int, int, int]:
     """为IP网络生成稳定排序键"""
     return (network.version, int(network.network_address), network.prefixlen)
@@ -338,6 +371,72 @@ def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
 
     return sorted(final_rules), stats
 
+def is_covered_by_domain_rule(domain: str, domain_rules: set) -> bool:
+    """判断域名是否被 domain: 规则覆盖。"""
+    domain_parts = domain.split('.')
+    for index in range(len(domain_parts)):
+        parent_domain = '.'.join(domain_parts[index:])
+        if parent_domain in domain_rules:
+            return True
+    return False
+
+def load_exclude_rules(exclude_file: str) -> List[str]:
+    """加载MosDNS排除规则，非MosDNS域名规则直接失败。"""
+    exclude_rules = []
+
+    with open(exclude_file, 'r', encoding='utf-8') as file_handle:
+        for line_number, line in enumerate(file_handle, start=1):
+            converted_rule, rule_type = convert_mosdns_domain_rule(line)
+            if rule_type == "comment":
+                continue
+            if rule_type != "converted":
+                raise ValueError(
+                    f"排除规则文件第 {line_number} 行不是有效MosDNS域名规则: {line.strip()}"
+                )
+            exclude_rules.append(converted_rule)
+
+    optimized_rules, _ = optimize_domains(exclude_rules)
+    return optimized_rules
+
+def apply_domain_exclusions(rules: List[str], exclude_rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
+    """按MosDNS domain/full语义移除被排除规则覆盖的域名。"""
+    stats = {
+        "exclude_rules": len(exclude_rules),
+        "excluded_by_domain": 0,
+        "excluded_by_full": 0,
+        "kept": 0
+    }
+
+    exclude_domains = set()
+    exclude_fulls = set()
+
+    for rule in exclude_rules:
+        if rule.startswith('domain:'):
+            exclude_domains.add(rule[7:])
+        elif rule.startswith('full:'):
+            exclude_fulls.add(rule[5:])
+
+    filtered_rules = []
+    for rule in rules:
+        if rule.startswith('domain:'):
+            domain = rule[7:].lower()
+            if is_covered_by_domain_rule(domain, exclude_domains):
+                stats["excluded_by_domain"] += 1
+                continue
+        elif rule.startswith('full:'):
+            domain = rule[5:].lower()
+            if is_covered_by_domain_rule(domain, exclude_domains):
+                stats["excluded_by_domain"] += 1
+                continue
+            if domain in exclude_fulls:
+                stats["excluded_by_full"] += 1
+                continue
+
+        filtered_rules.append(rule)
+
+    stats["kept"] = len(filtered_rules)
+    return filtered_rules, stats
+
 def optimize_ip_networks(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
     """
     规范化IP规则，执行完全重复去重和父网段覆盖子网段裁剪
@@ -418,6 +517,10 @@ def parse_args():
         action="store_true",
         help="仅校验输入文件中是否还存在重复或被父网段覆盖的CIDR规则"
     )
+    parser.add_argument(
+        "--exclude-file",
+        help="MosDNS域名排除规则文件，仅支持 domain: 和 full:"
+    )
     return parser.parse_args()
 
 def main():
@@ -439,6 +542,14 @@ def main():
     if args.check_redundant_ip_cidr:
         sys.exit(check_ip_cidr_rules(input_file))
 
+    if args.exclude_file:
+        if args.format == "ip_cidr":
+            print("错误: IP/CIDR规则不支持域名排除文件", file=sys.stderr)
+            sys.exit(1)
+        if not os.path.exists(args.exclude_file):
+            print("错误: 排除规则文件 '{}' 不存在".format(args.exclude_file), file=sys.stderr)
+            sys.exit(1)
+
     start_time = time.time()
 
     # 初始化统计信息
@@ -454,7 +565,11 @@ def main():
         "unknown": 0
     }
 
-    print(f"[1/5] 读取和转换规则文件，输入格式: {args.format}...", file=sys.stderr)
+    has_exclude = bool(args.exclude_file and args.format != "ip_cidr")
+    total_steps = 6 if has_exclude else 5
+    optimize_step = 4 if has_exclude else 3
+
+    print(f"[1/{total_steps}] 读取和转换规则文件，输入格式: {args.format}...", file=sys.stderr)
 
     converted_rules = []
 
@@ -490,25 +605,30 @@ def main():
                     conversion_stats["unknown"] += 1
 
         filtered_rules = converted_rules
+        exclusion_stats = None
         if args.format == "ip_cidr":
             optimization_step_label = "优化IP规则"
         else:
-            print(f"[2/5] 过滤正则表达式规则 ({len(converted_rules)} 条)...", file=sys.stderr)
+            print(f"[2/{total_steps}] 过滤正则表达式规则 ({len(converted_rules)} 条)...", file=sys.stderr)
             filtered_rules, regex_count = filter_regex_rules(converted_rules)
             conversion_stats["regex_rules"] = regex_count
+            if args.exclude_file:
+                print(f"[3/{total_steps}] 应用域名排除规则: {args.exclude_file}...", file=sys.stderr)
+                exclude_rules = load_exclude_rules(args.exclude_file)
+                filtered_rules, exclusion_stats = apply_domain_exclusions(filtered_rules, exclude_rules)
             optimization_step_label = "优化域名规则"
 
-        print(f"[3/5] {optimization_step_label} ({len(filtered_rules)} 条)...", file=sys.stderr)
+        print(f"[{optimize_step}/{total_steps}] {optimization_step_label} ({len(filtered_rules)} 条)...", file=sys.stderr)
 
         final_rules, optimization_stats = optimizer(filtered_rules)
 
-        print(f"[4/5] 生成最终规则 ({len(final_rules)} 条)...", file=sys.stderr)
+        print(f"[{optimize_step + 1}/{total_steps}] 生成最终规则 ({len(final_rules)} 条)...", file=sys.stderr)
 
         # 输出最终规则
         for rule in final_rules:
             print(rule)
 
-        print("[5/5] 输出统计信息...", file=sys.stderr)
+        print(f"[{optimize_step + 2}/{total_steps}] 输出统计信息...", file=sys.stderr)
 
         # 输出统计信息
         end_time = time.time()
@@ -524,6 +644,10 @@ def main():
         print(f"未知格式: {conversion_stats['unknown']}", file=sys.stderr)
         print(f"重复规则: {optimization_stats['duplicates']}", file=sys.stderr)
         if args.format != "ip_cidr":
+            if exclusion_stats is not None:
+                print(f"排除规则: {exclusion_stats['exclude_rules']}", file=sys.stderr)
+                print(f"被domain排除规则覆盖: {exclusion_stats['excluded_by_domain']}", file=sys.stderr)
+                print(f"被full排除规则精确命中: {exclusion_stats['excluded_by_full']}", file=sys.stderr)
             print(f"被父域名覆盖: {optimization_stats['wildcard_covered']}", file=sys.stderr)
             print(f"被domain规则覆盖的full规则: {optimization_stats['domain_covered_full']}", file=sys.stderr)
         else:

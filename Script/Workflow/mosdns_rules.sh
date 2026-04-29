@@ -52,11 +52,34 @@ validate_ip_cidr_result() {
   return 1
 }
 
+clean_rule_file() {
+  local input_file="$1"
+  local output_file="$2"
+
+  awk '
+    /^[[:space:]]*$/ { next }
+    /^[[:space:]]*(#|;|!|\/\/|\/\*)/ { next }
+    /^[[:space:]]*payload:/ { next }
+    /\*\// { next }
+    {
+      gsub(/^[[:space:]]+/, "")
+      gsub(/[[:space:]]+$/, "")
+      sub(/[[:space:]]+#.*$/, "")
+      sub(/[[:space:]]+;.*$/, "")
+      sub(/[[:space:]]+!.*$/, "")
+      gsub(/^[[:space:]]+/, "")
+      gsub(/[[:space:]]+$/, "")
+      if (length($0) > 0) print
+    }
+  ' "$input_file" > "$output_file"
+}
+
 process_mosdns_rule() {
   local rule_name="$1"
   local output_path="$2"
   local urls="$3"
   local rule_format="${4:-adguard}"
+  local exclude_urls="${5:-}"
 
   PROCESS_CHANGED=0
   PROCESS_ADDED=0
@@ -76,11 +99,13 @@ process_mosdns_rule() {
   # 创建临时文件和目录
   local merged_file=$(mktemp)
   local cleaned_file=$(mktemp)
+  local exclude_merged_file=$(mktemp)
+  local exclude_cleaned_file=$(mktemp)
   local tmp_dir=$(mktemp -d)
 
   # 设置清理函数，确保临时文件被清理
   cleanup_temp_files() {
-    rm -f "$merged_file" "$cleaned_file"
+    rm -f "$merged_file" "$cleaned_file" "$exclude_merged_file" "$exclude_cleaned_file"
     rm -rf "$tmp_dir"
   }
   trap cleanup_temp_files RETURN
@@ -119,23 +144,7 @@ process_mosdns_rule() {
 
   cat "${tmp_dir}"/download_* > "$merged_file"
 
-  # 基础清理：移除注释和空行
-  awk '
-    /^[[:space:]]*$/ { next }
-    /^[[:space:]]*(#|;|!|\/\/|\/\*)/ { next }
-    /^[[:space:]]*payload:/ { next }
-    /\*\// { next }
-    {
-      gsub(/^[[:space:]]+/, "")
-      gsub(/[[:space:]]+$/, "")
-      sub(/[[:space:]]+#.*$/, "")
-      sub(/[[:space:]]+;.*$/, "")
-      sub(/[[:space:]]+!.*$/, "")
-      gsub(/^[[:space:]]+/, "")
-      gsub(/[[:space:]]+$/, "")
-      if (length($0) > 0) print
-    }
-  ' "$merged_file" > "$cleaned_file"
+  clean_rule_file "$merged_file" "$cleaned_file"
 
   # 统计清理后的规则行数
   local cleaned_count=$(wc -l < "$cleaned_file")
@@ -145,6 +154,56 @@ process_mosdns_rule() {
     echo "┃ 🧹 正在对MosDNS规则进行专业清洗..."
 
     local final_file=$(mktemp)
+    local exclude_args=()
+
+    if [ -n "$exclude_urls" ]; then
+      echo "┃ 🚫 正在下载排除规则数据..."
+
+      local exclude_download_count=0
+      local exclude_download_pids=()
+
+      for url in $exclude_urls; do
+        local tmp_file="${tmp_dir}/exclude_download_${exclude_download_count}"
+        local error_flag="${tmp_dir}/exclude_error_${exclude_download_count}"
+
+        (curl -sL --fail --connect-timeout 10 --max-time 30 "$url" > "$tmp_file" &&
+         echo "┃   ✅ 排除规则下载成功: $url" ||
+         { echo "┃   ❌ 排除规则下载失败: $url"; touch "$error_flag"; }) &
+
+        exclude_download_pids+=($!)
+        exclude_download_count=$((exclude_download_count + 1))
+      done
+
+      for pid in "${exclude_download_pids[@]}"; do
+        wait $pid || true
+      done
+
+      if compgen -G "${tmp_dir}/exclude_error_*" > /dev/null; then
+        echo "┃ ❌ 检测到有排除规则下载失败，本地规则未做任何更改，跳过本次更新"
+        rm -f "$final_file"
+        local duration=$((SECONDS - start_time))
+        echo "┃ ⏱️ 处理完成，用时: $duration 秒"
+        echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        return 0
+      fi
+
+      cat "${tmp_dir}"/exclude_download_* > "$exclude_merged_file"
+      clean_rule_file "$exclude_merged_file" "$exclude_cleaned_file"
+
+      local exclude_count=$(wc -l < "$exclude_cleaned_file")
+      echo "┃ 📊 清理后的排除规则条数: $exclude_count"
+
+      if [[ ! -s "$exclude_cleaned_file" ]]; then
+        echo "┃ ❌ 排除规则文件为空，本地规则未做任何更改，跳过本次更新"
+        rm -f "$final_file"
+        local duration=$((SECONDS - start_time))
+        echo "┃ ⏱️ 处理完成，用时: $duration 秒"
+        echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        return 0
+      fi
+
+      exclude_args=(--exclude-file "$exclude_cleaned_file")
+    fi
 
     echo "┃   ▶️ 使用MosDNS专用Python脚本进行规则处理..."
 
@@ -153,7 +212,7 @@ process_mosdns_rule() {
 
     local stats_file=$(mktemp)
 
-    if python3 "$script_path" --format "$rule_format" "$cleaned_file" > "$final_file" 2> "$stats_file"; then
+    if python3 "$script_path" --format "$rule_format" "${exclude_args[@]}" "$cleaned_file" > "$final_file" 2> "$stats_file"; then
       echo "┃   📋 MosDNS规则处理统计:"
       while IFS= read -r line; do
         echo "┃     $line"
@@ -314,6 +373,7 @@ main() {
     local output_path="${GITHUB_WORKSPACE}/$(echo "$rule_config" | jq -r '.path')"
     local rule_urls=$(echo "$rule_config" | jq -r '.urls | join(" ")')
     local rule_format=$(echo "$rule_config" | jq -r '.format // "adguard"')
+    local exclude_urls=$(echo "$rule_config" | jq -r '.exclude_urls // [] | join(" ")')
 
     echo "📋 从独立MosDNS配置文件读取到的规则配置:"
     echo "  规则标识: $rule_key"
@@ -321,9 +381,10 @@ main() {
     echo "  输出路径: $output_path"
     echo "  输入格式: $rule_format"
     echo "  规则源数量: $(echo "$rule_config" | jq -r '.urls | length')"
+    echo "  排除源数量: $(echo "$rule_config" | jq -r '.exclude_urls // [] | length')"
     echo "  规则描述: $(echo "$rule_config" | jq -r '.description')"
 
-    process_mosdns_rule "$rule_name" "$output_path" "$rule_urls" "$rule_format"
+    process_mosdns_rule "$rule_name" "$output_path" "$rule_urls" "$rule_format" "$exclude_urls"
 
     if [ "$PROCESS_CHANGED" -eq 1 ]; then
       has_changes=true

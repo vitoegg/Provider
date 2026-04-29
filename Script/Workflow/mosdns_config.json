@@ -20,6 +20,11 @@
         "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/BaseSet/MosDNS/whitelist.txt",
         "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list",
         "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/ChinaSite.list"
+      ],
+      "exclude_urls": [
+        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/MosDNS/apple.txt",
+        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/MosDNS/reject.txt",
+        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/MosDNS/direct.txt"
       ]
     },
     "foreign": {
@@ -30,6 +35,10 @@
       "urls": [
         "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Global/Global_Domain.list",
         "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Proxy/AI.list"
+      ],
+      "exclude_urls": [
+        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/MosDNS/apple.txt",
+        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/MosDNS/reject.txt"
       ]
     },
     "apple": {
@@ -56,8 +65,8 @@
     }
   },
   "config_info": {
-    "version": "1.1",
-    "last_updated": "2026-04-24",
+    "version": "1.2",
+    "last_updated": "2026-04-29",
     "description": "MosDNS 规则配置文件"
   }
 }
