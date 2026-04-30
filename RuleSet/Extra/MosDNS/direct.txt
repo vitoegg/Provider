@@ -1,6 +1,6 @@
 # > Alibaba
-domain:alibaba.com
 domain:aliapp.org
+domain:alibaba.com
 domain:alibabacloud.com
 domain:alibabausercontent.com
 domain:alicdn.com
@@ -8,13 +8,6 @@ domain:alicloudccp.com
 domain:aliexpress.com
 domain:aliimg.com
 domain:alikunlun.com
-domain:autonavi.com
-domain:taobao.com
-domain:taobaocdn.com
-domain:tbcache.com
-domain:tbcdn.com
-domain:tmall.com
-domain:tmall.hk
 domain:alipay.com
 domain:alipayobjects.com
 domain:aliyun.com
@@ -22,7 +15,14 @@ domain:aliyuncdn.com
 domain:aliyuncs.com
 domain:aliyundrive.com
 domain:amap.com
+domain:autonavi.com
 domain:dingtalk.com
+domain:taobao.com
+domain:taobaocdn.com
+domain:tbcache.com
+domain:tbcdn.com
+domain:tmall.com
+domain:tmall.hk
 domain:ykimg.com
 # > Baidu
 domain:baidu.com
@@ -32,7 +32,23 @@ domain:baidupcs.com
 domain:bdimg.com
 domain:bdstatic.com
 domain:yunjiasu-cdn.net
-# ByteDance
+# > Bilibili
+domain:acg.tv
+domain:acgvideo.com
+domain:b23.tv
+domain:bigfun.cn
+domain:bigfunapp.cn
+domain:biliapi.com
+domain:biliapi.net
+domain:bilibili.com
+domain:biligame.com
+domain:biligame.net
+domain:bilivideo.cn
+domain:bilivideo.com
+domain:hdslb.com
+domain:im9.com
+domain:smtcdns.net
+# > ByteDance
 domain:amemv.com
 domain:bdxiguaimg.com
 domain:bdxiguastatic.com
@@ -77,101 +93,36 @@ domain:zijieapi.com
 domain:zijieimg.com
 domain:zjbyte.com
 domain:zjcdn.com
-# > Tencent
-domain:qq.com
-domain:qqmail.com
-domain:qlogo.cn
-domain:qpic.cn
-domain:qqurl.com
-domain:servicewechat.com
-domain:gtimg.com
-domain:idqqimg.com
-domain:igamecj.com
-domain:smtcdns.com
-domain:smtcdns.net
-domain:myapp.com
-domain:myqcloud.com
-domain:soso.com
-domain:tencent.com
-domain:tencentmind.com
-domain:tencent-cloud.net
-domain:tenpay.com
-domain:wechat.com
-domain:weixin.com
-domain:wechatlegal.net
-domain:wechatpay.com
-domain:weixin.qq.com
-domain:weixin.qq.com.cn
-domain:weixinbridge.com
-domain:weixinsxy.com
-domain:wxapp.tc.qq.com
-domain:qidian.com
-full:file-igamecj.akamaized.net
-# > Sina
-domain:wbimg.cn
-domain:wbimg.com
-domain:wbimg.com.cn
-domain:wcdn.cn
-domain:weibo.cn
-domain:weibo.com
-domain:weibo.com.cn
-domain:weibo.tv
-domain:weibocdn.com
-domain:weiboums.com
-domain:xiaoka.tv
-domain:t.cn
-domain:sinaurl.cn
-domain:sina.cn
-domain:sina.com
-domain:sina.com.cn
-domain:sina.net
-domain:sinaapp.com
-domain:sinacdn.com
-domain:sinacloud.cn
-domain:sinacloud.com
-domain:sinacloud.com.cn
-domain:sinacloud.net
-domain:sinaimg.cn
-domain:sinaimg.com
-# > Douban
-domain:douban.com
-domain:doubanio.com
-# > Xiaohongshu
-domain:xiaohongshu.com
-domain:xhscdn.com
-domain:xhscdn.net
-domain:xinqiucc.com
-domain:tianwenca.com
-domain:kuiniuca.com
-# > JD
-domain:jd.com
-domain:jd.hk
-domain:jdpay.com
-domain:jdcloud.com
-domain:isvjcloud.com
-domain:jcloudcs.com
-domain:360buy.com
-domain:360buyimg.com
-domain:paipai.com
-domain:yihaodianimg.com
-# > Meituan
-domain:dianping.com
-domain:maoyan.com
-domain:meituan.com
-domain:meituan.net
-domain:mtyun.com
-domain:neixin.cn
-domain:sankuai.com
-domain:maoyun.tv
-# > ele
-domain:ele.me
-domain:eleme.cn
-domain:eleme.io
-domain:elemecdn.cn
-domain:elemecdn.com
-domain:fengniaopaotui.cn
-domain:fengniaozhongbao.cn
-domain:xingxuanwaimai.com
+# > Ctrip
+domain:c-ctrip.com
+domain:colinker.com
+domain:ctrip.cn
+domain:ctrip.co.id
+domain:ctrip.co.kr
+domain:ctrip.co.th
+domain:ctrip.com
+domain:ctrip.com.hk
+domain:ctrip.my
+domain:ctrip.sg
+domain:ctripbiz.com
+domain:ctripbuy.hk
+domain:ctripteam.com
+domain:doticloud.com
+domain:easytrip.com
+domain:hhtravel.com
+domain:hhtravel.com.tw
+domain:izuchebao.com
+domain:lvtds.com
+domain:shuntu.cn
+domain:skysea.com
+domain:suanya.cn
+domain:suanya.com
+domain:tieyou.com
+domain:toptown.cn
+domain:toursbms.com
+domain:trip.com
+domain:tripcdn.com
+domain:vipdlt.com
 # > DiDi
 domain:didi.cn
 domain:didialift.com
@@ -189,15 +140,18 @@ domain:juyanwenjuan.com
 domain:udache.com
 domain:xiaojuchefu.cn
 domain:xiaojukeji.com
-# > Bilibili
-domain:biliapi.net
-domain:bilibili.com
-domain:bilivideo.com
-domain:hdslb.com
-# > Tencent Video
-domain:video.qq.com
-domain:i.qq.com
-domain:v.qq.com
+# > Douban
+domain:douban.com
+domain:doubanio.com
+# > ele
+domain:ele.me
+domain:eleme.cn
+domain:eleme.io
+domain:elemecdn.cn
+domain:elemecdn.com
+domain:fengniaopaotui.cn
+domain:fengniaozhongbao.cn
+domain:xingxuanwaimai.com
 # > iQiyi
 domain:71.am
 domain:71edge.com
@@ -207,71 +161,135 @@ domain:ppsimg.com
 domain:qiyi.com
 domain:qiyipic.com
 domain:qy.net
-# > Youku
-domain:soku.com
-domain:youku.com
-domain:ykimg.com
-# > XiGua
-domain:ixigua.com
-domain:snssdk.com
-# > HunanTV
+# > JD
+domain:360buy.com
+domain:360buyimg.com
+domain:isvjcloud.com
+domain:jcloudcs.com
+domain:jd.com
+domain:jd.hk
+domain:jdcloud.com
+domain:jdpay.com
+domain:paipai.com
+domain:yihaodianimg.com
+# > Kuaishou
+domain:kuaishou.com
+domain:yximgs.com
+# > Meituan
+domain:dianping.com
+domain:maoyan.com
+domain:maoyun.tv
+domain:meituan.com
+domain:meituan.net
+domain:mtyun.com
+domain:neixin.cn
+domain:sankuai.com
+# > MGTV
 domain:hitv.com
 domain:hunantv.com
 domain:mgtv.com
-# > QQ Music
-domain:music.qq.com
-domain:music.tc.qq.com
-domain:qqmusic.qq.com
-domain:tencentmusic.com
-domain:y.qq.com
-full:aqqmusic.tc.qq.com
-full:moo.qq.com
-# > Ximalaya
-domain:ximalaya.com
-domain:xmcdn.com
-# > Xiaoyuzhou
-domain:xiaoyuzhoufm.com
-domain:xyzcdn.net
-# > News
-domain:sspai.com
-domain:36kr.com
-domain:ifanr.com
-domain:app.so
-domain:coolbuy.com
-domain:ithome.com
-domain:qdaily.com
-domain:sohu.com
-domain:soku.com
-domain:soso.com
-# > Xiaomi
-domain:mi.com
-domain:mi-img.com
-domain:xiaomi.com
-domain:xiaomi.net
-domain:xiaomicp.com
-domain:miui.com
-domain:miwifi.com
-domain:duokan.com
-domain:iciba.com
-domain:ksosoft.com
-domain:wps.cn
-# > Zhihu
-domain:zhihu.com
-domain:zhimg.com
 # > Netease
-domain:netease.com
-domain:netease.im
-domain:lofter.com
 domain:126.com
 domain:126.net
 domain:127.net
 domain:163.com
-domain:youdao.com
 domain:163yun.com
+domain:lofter.com
+domain:netease.com
+domain:netease.im
 domain:ydstatic.com
-# > China
-domain:acgvideo.com
-domain:akadns.net
-domain:qiniucdn.com
-domain:qyerstatic.com
+domain:youdao.com
+# > PDD
+domain:pinduoduo.com
+domain:yangkeduo.com
+# > Sina
+domain:sina.cn
+domain:sina.com
+domain:sina.com.cn
+domain:sina.net
+domain:sinaapp.com
+domain:sinacdn.com
+domain:sinacloud.cn
+domain:sinacloud.com
+domain:sinacloud.com.cn
+domain:sinacloud.net
+domain:sinaimg.cn
+domain:sinaimg.com
+domain:sinaurl.cn
+domain:t.cn
+domain:wbimg.cn
+domain:wbimg.com
+domain:wbimg.com.cn
+domain:wcdn.cn
+domain:weibo.cn
+domain:weibo.com
+domain:weibo.com.cn
+domain:weibo.tv
+domain:weibocdn.com
+domain:weiboums.com
+domain:xiaoka.tv
+# > Tencent
+domain:gtimg.com
+domain:idqqimg.com
+domain:igamecj.com
+domain:myapp.com
+domain:myqcloud.com
+domain:qidian.com
+domain:qlogo.cn
+domain:qpic.cn
+domain:qq.com
+domain:qqmail.com
+domain:qqurl.com
+domain:servicewechat.com
+domain:smtcdns.com
+domain:smtcdns.net
+domain:soso.com
+domain:tencent-cloud.net
+domain:tencent.com
+domain:tencentmind.com
+domain:tenpay.com
+domain:wechat.com
+domain:wechatlegal.net
+domain:wechatpay.com
+domain:weixin.com
+domain:weixin.qq.com
+domain:weixin.qq.com.cn
+domain:weixinbridge.com
+domain:weixinsxy.com
+domain:wxapp.tc.qq.com
+full:file-igamecj.akamaized.net
+# > Xiaohongshu
+domain:kuiniuca.com
+domain:tianwenca.com
+domain:xhscdn.com
+domain:xhscdn.net
+domain:xiaohongshu.com
+domain:xinqiucc.com
+# > Xiaomi
+domain:duokan.com
+domain:iciba.com
+domain:ksosoft.com
+domain:mi-img.com
+domain:mi.com
+domain:miui.com
+domain:miwifi.com
+domain:wps.cn
+domain:xiaomi.com
+domain:xiaomi.net
+domain:xiaomicp.com
+# > Xiaoyuzhou
+domain:xiaoyuzhoufm.com
+domain:xyzcdn.net
+# > Ximalaya
+domain:ximalaya.com
+domain:xmcdn.com
+# > Youku
+domain:soku.com
+domain:ykimg.com
+domain:youku.com
+# > Zhihu
+domain:zhihu.com
+domain:zhimg.com
+# > Z-Special
+domain:10010.com
 domain:cn
