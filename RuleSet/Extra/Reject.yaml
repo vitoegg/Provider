@@ -5,4 +5,5 @@ payload:
   - AND,((NETWORK,UDP),(DST-PORT,443))
   # > Telegram Pics
   - IP-CIDR,95.161.76.100/31,no-resolve
-  
+  # > Fakeip DESC
+  - IP-CIDR,198.18.0.1/32,no-resolve
