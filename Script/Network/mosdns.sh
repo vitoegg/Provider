@@ -17,6 +17,7 @@ UNINSTALL=0
 INTERACTIVE_MODE=0
 ECS_LOCATION="TYO"
 ECS_IP=""
+IP_PRIORITY="prefer_ipv4"
 
 # ECS location to IP mapping
 declare -A ECS_MAP=(
@@ -316,8 +317,9 @@ EOF
       - matches: has_resp
         exec: accept
 
-      - exec: prefer_ipv4
 EOF
+
+    echo "      - exec: ${IP_PRIORITY}" >> "$config_file"
 
     # Add ECS configuration with variable substitution
     echo "      - exec: ecs ${ECS_IP}" >> "$config_file"
@@ -510,7 +512,7 @@ parse_args() {
             -d|--dns)
                 if [ -z "$2" ]; then
                     log_error "使用 -d 选项需要提供DNS服务器地址"
-                    echo "用法: $0 [-i] [-d <DNS服务器地址>] [-e <ECS位置>] [-u]"
+                    echo "用法: $0 [-i] [-d <DNS服务器地址>] [-e <ECS位置>] [-4|-6] [-u]"
                     exit 1
                 fi
                 USE_CUSTOM_DNS=1
@@ -520,15 +522,23 @@ parse_args() {
             -e|--ecs)
                 if [ -z "$2" ]; then
                     log_error "使用 -e 选项需要提供ECS位置 (HK/TYO/LA/SEA)"
-                    echo "用法: $0 [-i] [-d <DNS服务器地址>] [-e <ECS位置>] [-u]"
+                    echo "用法: $0 [-i] [-d <DNS服务器地址>] [-e <ECS位置>] [-4|-6] [-u]"
                     exit 1
                 fi
                 ECS_LOCATION="$2"
                 shift 2
                 ;;
+            -4|--ipv4)
+                IP_PRIORITY="prefer_ipv4"
+                shift
+                ;;
+            -6|--ipv6)
+                IP_PRIORITY="prefer_ipv6"
+                shift
+                ;;
             *)
                 log_error "未知参数: $1"
-                echo "用法: $0 [-i] [-d <DNS服务器地址>] [-e <ECS位置>] [-u]"
+                echo "用法: $0 [-i] [-d <DNS服务器地址>] [-e <ECS位置>] [-4|-6] [-u]"
                 exit 1
                 ;;
         esac
@@ -553,8 +563,9 @@ parse_args() {
         log_info "自定义DNS服务器: $CUSTOM_DNS_SERVER"
         log_info "选择的域名列表: $DOMAIN_SELECTION"
         log_info "ECS位置: $ECS_LOCATION ($ECS_IP)"
+        log_info "DNS解析优先级: ${IP_PRIORITY#prefer_}"
     else
-        log_info "使用默认配置安装 (ECS位置: $ECS_LOCATION)"
+        log_info "使用默认配置安装 (ECS位置: $ECS_LOCATION，DNS解析优先级: ${IP_PRIORITY#prefer_})"
     fi
 }
 
@@ -600,6 +611,12 @@ show_menu() {
             esac
             
             set_ecs_ip "$ECS_LOCATION"
+            echo ""
+
+            read -p "是否启用 IPv6 优先？(y/n) [n]: " use_ipv6
+            if [[ "$use_ipv6" == "y" || "$use_ipv6" == "Y" ]]; then
+                IP_PRIORITY="prefer_ipv6"
+            fi
             echo ""
             
             read -p "是否配置额外的DNS解析？(y/n) [n]: " use_custom
@@ -670,4 +687,3 @@ main() {
 
 # Execute main function with all command line arguments
 main "$@"
-

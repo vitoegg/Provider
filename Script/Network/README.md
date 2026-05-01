@@ -99,6 +99,8 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 * `-i`: Install with default configuration.
 * `-d`: Specify custom DNS server address.
 * `-e`: Specify ECS location (HK, TYO, LA, SEA).
+* `-4`, `--ipv4`: Prefer IPv4 when resolving dual-stack domains (default).
+* `-6`, `--ipv6`: Prefer IPv6 when resolving dual-stack domains.
 * `-u`: Uninstall MosDNS service.
 
 ### nftables.sh
