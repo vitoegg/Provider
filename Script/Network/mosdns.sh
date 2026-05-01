@@ -284,10 +284,9 @@ EOF
   - tag: main_dns
     type: "forward"
     args:
-      concurrent: 3
+      concurrent: 2
       upstreams:
         - addr: "udp://8.8.8.8"
-        - addr: "udp://208.67.222.222"
         - addr: "udp://94.140.14.140"
 
   - tag: fallback_dns
@@ -296,14 +295,14 @@ EOF
       concurrent: 2
       upstreams:
         - addr: "udp://1.1.1.1"
-        - addr: "udp://9.9.9.9"
+        - addr: "udp://45.11.45.11"
 
   - tag: core_reslove
     type: "fallback"
     args:
       primary: main_dns
       secondary: fallback_dns
-      threshold: 200
+      threshold: 100
       always_standby: true
 
   - tag: main_sequence
