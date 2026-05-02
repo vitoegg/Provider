@@ -133,24 +133,6 @@ bash nftables.sh -r 8080:192.168.1.10:80
 bash nftables.sh -p status
 ```
 
-### iptables.sh
-Manage iptables forwarding rules with an interactive menu.
-```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/iptables.sh && bash iptables.sh
-```
-
-### realm.sh
-Manage Realm TCP/UDP forwarding service.
-```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/realm.sh && bash realm.sh
-```
-* `--add`: Add forwarding rule (Format: "port:address:port").
-* `--remove`: Remove forwarding rule by port.
-* `--remove-all`: Remove all forwarding rules.
-* `--list`: List current forwarding rules.
-* `--status`: Show service status.
-* `--uninstall`: Uninstall Realm service.
-
 ### kernel.sh
 Optimize Linux kernel network parameters for better performance.
 ```bash
@@ -159,35 +141,3 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 * `-r`: Region configuration (jp, hk, us, custom).
 * `-q`: Queue discipline (fq, fq_pie, cake).
 * `-d`: Disable IPv6 (yes, no).
-
-### ssh_keys.sh
-Configure SSH public key authentication.
-```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/ssh_keys.sh && bash ssh_keys.sh
-```
-* `-k`: SSH public key string (required).
-
-### tcp.sh
-Configure and optimize TCP network settings.
-```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/tcp.sh && bash tcp.sh
-```
-
-### traffic.sh
-Monitor and limit network traffic usage.
-```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/traffic.sh && bash traffic.sh
-```
-* `$1`: Traffic limit in GB.
-* `$2`: Day of the month to reset traffic.
-* `$3`: Traffic check mode (1: Upload, 2: Download, 3: Max(Up, Down), 4: Total).
-* `$4`: Network interface name.
-
-### ipconfig.sh
-Configure IP priority (IPv4/IPv6) for the system.
-```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/ipconfig.sh && bash ipconfig.sh
-```
-* `-v4`: Set IPv4 priority.
-* `-v6`: Set IPv6 priority.
-* `-u`: Restore default settings.
