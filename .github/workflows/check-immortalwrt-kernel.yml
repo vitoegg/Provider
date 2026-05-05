@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   actions: write
 
 jobs:
@@ -29,14 +29,31 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Restore Kernel State
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/immortalwrt-kernel-state
+          key: immortalwrt-kernel-state-${{ github.run_id }}
+          restore-keys: |
+            immortalwrt-kernel-state-
+
       - name: Check ImmortalWrt Kernel
+        id: check_kernel
         env:
           GITHUB_TOKEN: ${{ github.token }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           UPSTREAM_BRANCH: openwrt-25.12
           KERNEL_PATCHVER: '6.12'
+          KERNEL_STATE_FILE: ${{ runner.temp }}/immortalwrt-kernel-state/state.json
         run: python ${GITHUB_WORKSPACE}/Script/Workflow/kernel_monitor.py
+
+      - name: Save Kernel State
+        if: steps.check_kernel.outputs.cache_save == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/immortalwrt-kernel-state
+          key: immortalwrt-kernel-state-${{ steps.check_kernel.outputs.state_version }}-${{ steps.check_kernel.outputs.state_commit }}-${{ github.run_id }}
 
       - name: Delete old Workflows
         uses: ophub/delete-releases-workflows@main

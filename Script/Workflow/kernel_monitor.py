@@ -18,6 +18,7 @@ UPSTREAM_REPO = os.environ.get("UPSTREAM_REPO", "immortalwrt")
 UPSTREAM_BRANCH = os.environ.get("UPSTREAM_BRANCH", "openwrt-25.12")
 VAR_VERSION = os.environ.get("KERNEL_VERSION_VAR", "IMMORTALWRT_KERNEL_VERSION")
 VAR_COMMIT = os.environ.get("KERNEL_COMMIT_VAR", "IMMORTALWRT_KERNEL_COMMIT")
+STATE_FILE = os.environ.get("KERNEL_STATE_FILE", "")
 DRY_RUN = os.environ.get("DRY_RUN", "").lower() in {"1", "true", "yes"}
 TIMEZONE = ZoneInfo("Asia/Shanghai")
 
@@ -57,6 +58,14 @@ def request(method, url, token="", data=None):
         raise MonitorError(f"{method} {url} failed: HTTP {err.code} {detail}") from err
     except urllib.error.URLError as err:
         raise MonitorError(f"{method} {url} failed: {err}") from err
+
+
+def set_output(name, value):
+    output_path = os.environ.get("GITHUB_OUTPUT", "")
+    if not output_path:
+        return
+    with open(output_path, "a", encoding="utf-8") as output:
+        output.write(f"{name}={value}\n")
 
 
 def request_text(url):
@@ -155,37 +164,37 @@ def latest_kernel_commit(token, kernel_path):
     }
 
 
-def variable_url(repo, name=None):
-    base = f"/repos/{repo}/actions/variables"
-    if name:
-        base += f"/{name}"
-    return github_api_url(base)
+def read_state():
+    if STATE_FILE and os.path.exists(STATE_FILE):
+        with open(STATE_FILE, "r", encoding="utf-8") as state:
+            return json.load(state)
 
-
-def get_variable(repo, token, name):
     if DRY_RUN:
-        env_name = "PREVIOUS_" + name
-        return os.environ.get(env_name)
+        return {
+            "version": os.environ.get("PREVIOUS_" + VAR_VERSION),
+            "commit": os.environ.get("PREVIOUS_" + VAR_COMMIT),
+        }
 
-    status, data = request("GET", variable_url(repo, name), token=token)
-    if status == 404:
-        return None
-    return data.get("value") if data else None
+    return {}
 
 
-def set_variable(repo, token, name, value):
+def write_state(version, commit):
+    set_output("cache_save", "true")
+    set_output("state_version", version)
+    set_output("state_commit", commit[:12])
+
     if DRY_RUN:
-        log("variable_dry_run", name=name, value=value)
+        log("state_dry_run", version=version, commit=commit[:12])
         return
 
-    status, _ = request("GET", variable_url(repo, name), token=token)
-    if status == 404:
-        request("POST", variable_url(repo), token=token, data={"name": name, "value": value})
-        log("variable_created", name=name)
-        return
+    if not STATE_FILE:
+        raise MonitorError("缺少 KERNEL_STATE_FILE")
 
-    request("PATCH", variable_url(repo, name), token=token, data={"name": name, "value": value})
-    log("variable_updated", name=name)
+    os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+    with open(STATE_FILE, "w", encoding="utf-8") as state:
+        json.dump({"version": version, "commit": commit}, state, ensure_ascii=False, indent=2)
+        state.write("\n")
+    log("state_written", path=STATE_FILE, version=version, commit=commit[:12])
 
 
 def build_message(previous_version, current_version, commit):
@@ -239,13 +248,11 @@ def send_telegram(message):
 
 def main():
     token = os.environ.get("GITHUB_TOKEN", "")
-    repo = os.environ.get("GITHUB_REPOSITORY", "")
     if not token and not DRY_RUN:
         raise MonitorError("缺少 GITHUB_TOKEN")
-    if not repo and not DRY_RUN:
-        raise MonitorError("缺少 GITHUB_REPOSITORY")
 
     upstream_token = token
+    set_output("cache_save", "false")
     kernel_path = find_kernel_file(upstream_token)
     current_version = parse_kernel_version(kernel_path)
     commit = latest_kernel_commit(upstream_token, kernel_path)
@@ -257,16 +264,18 @@ def main():
         commit=commit["short_sha"],
     )
 
-    previous_version = get_variable(repo, token, VAR_VERSION)
-    previous_commit = get_variable(repo, token, VAR_COMMIT)
+    state = read_state()
+    previous_version = state.get("version")
+    previous_commit = state.get("commit")
 
     if not previous_version:
-        set_variable(repo, token, VAR_VERSION, current_version)
-        set_variable(repo, token, VAR_COMMIT, commit["sha"])
+        write_state(current_version, commit["sha"])
         log("state_initialized", version=current_version, commit=commit["short_sha"])
         return
 
     if previous_version == current_version:
+        set_output("state_version", current_version)
+        set_output("state_commit", commit["short_sha"])
         log("kernel_unchanged", version=current_version, commit=commit["short_sha"])
         return
 
@@ -279,8 +288,7 @@ def main():
         current_commit=commit["short_sha"],
     )
     send_telegram(message)
-    set_variable(repo, token, VAR_VERSION, current_version)
-    set_variable(repo, token, VAR_COMMIT, commit["sha"])
+    write_state(current_version, commit["sha"])
 
 
 if __name__ == "__main__":
