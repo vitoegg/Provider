@@ -93,10 +93,11 @@ payload:
   # > Zed
   - '+.zed.dev'
   # > Copilot
-  - 'api.github.com'
   - '+.githubcopilot.com'
-  - '+.microsoftonline.com'
   - 'copilot.microsoft.com'
+  - 'api.githubcopilot.com'
+  - 'copilot-proxy.githubusercontent.com'
+  - 'sydney.bing.com'
   # > Augment
   - '+.augment.com'
   - '+.augmentcode.com'
