@@ -456,6 +456,45 @@ def optimize_ip_networks(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
 
     return [network.with_prefixlen for network in kept_networks], stats
 
+def load_nft_ip_cidr_rules(nft_file: str) -> List[str]:
+    """从nftables set elements中提取IP/CIDR规则。"""
+    nft_rules = []
+    in_elements = False
+
+    with open(nft_file, 'r', encoding='utf-8') as file_handle:
+        for line_number, line in enumerate(file_handle, start=1):
+            content = line.split('#', 1)[0].strip()
+            if not content:
+                continue
+
+            if not in_elements:
+                if 'elements' not in content or '{' not in content:
+                    continue
+                in_elements = True
+                content = content.split('{', 1)[1]
+
+            if '}' in content:
+                content = content.split('}', 1)[0]
+                in_elements = False
+
+            for token in content.split(','):
+                token = token.strip()
+                if not token:
+                    continue
+                converted_rule, rule_type = convert_ip_cidr_rule(token)
+                if rule_type != "converted":
+                    raise ValueError(
+                        f"nft IP集合第 {line_number} 行不是有效IP/CIDR规则: {token}"
+                    )
+                nft_rules.append(converted_rule)
+
+    if in_elements:
+        raise ValueError(f"nft IP集合文件未正确闭合: {nft_file}")
+    if not nft_rules:
+        raise ValueError(f"未从nft IP集合文件提取到有效IP/CIDR规则: {nft_file}")
+
+    return nft_rules
+
 def check_ip_cidr_rules(input_file: str) -> int:
     """校验文件中是否仍存在重复或被父网段覆盖的CIDR规则"""
     parsed_rules = []
@@ -521,6 +560,10 @@ def parse_args():
         "--exclude-file",
         help="MosDNS域名排除规则文件，仅支持 domain: 和 full:"
     )
+    parser.add_argument(
+        "--nft-file",
+        help="nftables IP集合文件，仅支持 ip_cidr 格式"
+    )
     return parser.parse_args()
 
 def main():
@@ -548,6 +591,14 @@ def main():
             sys.exit(1)
         if not os.path.exists(args.exclude_file):
             print("错误: 排除规则文件 '{}' 不存在".format(args.exclude_file), file=sys.stderr)
+            sys.exit(1)
+
+    if args.nft_file:
+        if args.format != "ip_cidr":
+            print("错误: nft IP集合仅支持 ip_cidr 格式", file=sys.stderr)
+            sys.exit(1)
+        if not os.path.exists(args.nft_file):
+            print("错误: nft IP集合文件 '{}' 不存在".format(args.nft_file), file=sys.stderr)
             sys.exit(1)
 
     start_time = time.time()
@@ -606,7 +657,12 @@ def main():
 
         filtered_rules = converted_rules
         exclusion_stats = None
+        nft_rule_count = 0
         if args.format == "ip_cidr":
+            if args.nft_file:
+                nft_rules = load_nft_ip_cidr_rules(args.nft_file)
+                nft_rule_count = len(nft_rules)
+                filtered_rules.extend(nft_rules)
             optimization_step_label = "优化IP规则"
         else:
             print(f"[2/{total_steps}] 过滤正则表达式规则 ({len(converted_rules)} 条)...", file=sys.stderr)
@@ -652,6 +708,7 @@ def main():
             print(f"被domain规则覆盖的full规则: {optimization_stats['domain_covered_full']}", file=sys.stderr)
         else:
             print(f"被父网段覆盖的子网段: {optimization_stats['covered_subnets']}", file=sys.stderr)
+            print(f"nft IP集合规则: {nft_rule_count}", file=sys.stderr)
         print(f"最终保留: {optimization_stats['kept']}", file=sys.stderr)
 
     except Exception as e:

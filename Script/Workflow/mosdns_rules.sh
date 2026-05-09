@@ -80,6 +80,7 @@ process_mosdns_rule() {
   local urls="$3"
   local rule_format="${4:-adguard}"
   local exclude_urls="${5:-}"
+  local nft_urls="${6:-}"
 
   PROCESS_CHANGED=0
   PROCESS_ADDED=0
@@ -101,11 +102,12 @@ process_mosdns_rule() {
   local cleaned_file=$(mktemp)
   local exclude_merged_file=$(mktemp)
   local exclude_cleaned_file=$(mktemp)
+  local nft_merged_file=$(mktemp)
   local tmp_dir=$(mktemp -d)
 
   # 设置清理函数，确保临时文件被清理
   cleanup_temp_files() {
-    rm -f "$merged_file" "$cleaned_file" "$exclude_merged_file" "$exclude_cleaned_file"
+    rm -f "$merged_file" "$cleaned_file" "$exclude_merged_file" "$exclude_cleaned_file" "$nft_merged_file"
     rm -rf "$tmp_dir"
   }
   trap cleanup_temp_files RETURN
@@ -155,6 +157,7 @@ process_mosdns_rule() {
 
     local final_file=$(mktemp)
     local exclude_args=()
+    local nft_args=()
 
     if [ -n "$exclude_urls" ]; then
       echo "┃ 🚫 正在下载排除规则数据..."
@@ -205,6 +208,59 @@ process_mosdns_rule() {
       exclude_args=(--exclude-file "$exclude_cleaned_file")
     fi
 
+    if [ -n "$nft_urls" ]; then
+      if [ "$rule_format" != "ip_cidr" ]; then
+        echo "┃ ❌ nft IP集合只支持 ip_cidr 规则，本地规则未做任何更改，跳过本次更新"
+        rm -f "$final_file"
+        local duration=$((SECONDS - start_time))
+        echo "┃ ⏱️ 处理完成，用时: $duration 秒"
+        echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        return 0
+      fi
+
+      echo "┃ ⬇️ 正在下载nft IP集合数据..."
+
+      local nft_download_count=0
+      local nft_download_pids=()
+
+      for url in $nft_urls; do
+        local tmp_file="${tmp_dir}/nft_download_${nft_download_count}"
+        local error_flag="${tmp_dir}/nft_error_${nft_download_count}"
+
+        (curl -sL --fail --connect-timeout 10 --max-time 30 "$url" > "$tmp_file" &&
+         echo "┃   ✅ nft IP集合下载成功: $url" ||
+         { echo "┃   ❌ nft IP集合下载失败: $url"; touch "$error_flag"; }) &
+
+        nft_download_pids+=($!)
+        nft_download_count=$((nft_download_count + 1))
+      done
+
+      for pid in "${nft_download_pids[@]}"; do
+        wait $pid || true
+      done
+
+      if compgen -G "${tmp_dir}/nft_error_*" > /dev/null; then
+        echo "┃ ❌ 检测到有nft IP集合下载失败，本地规则未做任何更改，跳过本次更新"
+        rm -f "$final_file"
+        local duration=$((SECONDS - start_time))
+        echo "┃ ⏱️ 处理完成，用时: $duration 秒"
+        echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        return 0
+      fi
+
+      cat "${tmp_dir}"/nft_download_* > "$nft_merged_file"
+      if [[ ! -s "$nft_merged_file" ]]; then
+        echo "┃ ❌ nft IP集合文件为空，本地规则未做任何更改，跳过本次更新"
+        rm -f "$final_file"
+        local duration=$((SECONDS - start_time))
+        echo "┃ ⏱️ 处理完成，用时: $duration 秒"
+        echo "┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        return 0
+      fi
+
+      nft_args=(--nft-file "$nft_merged_file")
+    fi
+
     echo "┃   ▶️ 使用MosDNS专用Python脚本进行规则处理..."
 
     local script_path="${GITHUB_WORKSPACE}/Script/Workflow/mosdns_rules.py"
@@ -212,7 +268,7 @@ process_mosdns_rule() {
 
     local stats_file=$(mktemp)
 
-    if python3 "$script_path" --format "$rule_format" "${exclude_args[@]}" "$cleaned_file" > "$final_file" 2> "$stats_file"; then
+    if python3 "$script_path" --format "$rule_format" "${exclude_args[@]}" "${nft_args[@]}" "$cleaned_file" > "$final_file" 2> "$stats_file"; then
       echo "┃   📋 MosDNS规则处理统计:"
       while IFS= read -r line; do
         echo "┃     $line"
@@ -374,6 +430,7 @@ main() {
     local rule_urls=$(echo "$rule_config" | jq -r '.urls | join(" ")')
     local rule_format=$(echo "$rule_config" | jq -r '.format // "adguard"')
     local exclude_urls=$(echo "$rule_config" | jq -r '.exclude_urls // [] | join(" ")')
+    local nft_urls=$(echo "$rule_config" | jq -r '.nft_urls // [] | join(" ")')
 
     echo "📋 从独立MosDNS配置文件读取到的规则配置:"
     echo "  规则标识: $rule_key"
@@ -382,9 +439,10 @@ main() {
     echo "  输入格式: $rule_format"
     echo "  规则源数量: $(echo "$rule_config" | jq -r '.urls | length')"
     echo "  排除源数量: $(echo "$rule_config" | jq -r '.exclude_urls // [] | length')"
+    echo "  nft源数量: $(echo "$rule_config" | jq -r '.nft_urls // [] | length')"
     echo "  规则描述: $(echo "$rule_config" | jq -r '.description')"
 
-    process_mosdns_rule "$rule_name" "$output_path" "$rule_urls" "$rule_format" "$exclude_urls"
+    process_mosdns_rule "$rule_name" "$output_path" "$rule_urls" "$rule_format" "$exclude_urls" "$nft_urls"
 
     if [ "$PROCESS_CHANGED" -eq 1 ]; then
       has_changes=true

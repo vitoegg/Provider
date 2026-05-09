@@ -61,12 +61,15 @@
         "https://raw.githubusercontent.com/Loyalsoldier/geoip/release/text/cn.txt",
         "https://raw.githubusercontent.com/pmkol/easymosdns/rules/china_ip_list.txt",
         "https://raw.githubusercontent.com/Masaiki/GeoIP2-CN/release/CN-ip-cidr.txt"
+      ],
+      "nft_urls": [
+        "https://raw.githubusercontent.com/nikkinikki-org/OpenWrt-nikki/main/nikki/files/nftables/geoip_cn.nft"
       ]
     }
   },
   "config_info": {
-    "version": "1.2",
-    "last_updated": "2026-04-29",
+    "version": "1.3",
+    "last_updated": "2026-05-09",
     "description": "MosDNS 规则配置文件"
   }
 }
