@@ -113,6 +113,9 @@ payload:
   - '+.grazie.ai'
   - '+.jetbrains.ai'
   - '+.grazie.aws.intellij.net'
+  # > Trae
+  - '+.trae.ai'
+  - 'trae-api-sg.mchost.guru'
 
   # AI Gateway
   # > OpenRouter
