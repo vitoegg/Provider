@@ -17,6 +17,7 @@ domain:dl.zuimeitianqi.com
 domain:easytomessage.com
 domain:errlog.umeng.com
 domain:errnewlog.umeng.com
+domain:edge.mountaintoys.cn
 domain:f-log-extension.grammarly.io
 domain:fundingchoicesmessages.google.com
 domain:getpush.com
@@ -44,6 +45,7 @@ domain:mmgame.qpic.cn
 domain:mobileapptracking.com
 domain:mon.zijieapi.com
 domain:mparticle.com
+domain:mcdn.bilivideo.cn
 domain:nexac.com
 domain:nr-data.net
 domain:pardot.com
@@ -101,7 +103,6 @@ full:events.mapbox.com
 full:http-inputs-notion.splunkcloud.com
 full:js.users.51.la
 full:mc.51.la
-full:mcdn.bilivideo.cn
 full:prpr.96110.cn.com
 full:safebrowsing.googleapis.com
 full:safebrowsing.urlsec.qq.com
