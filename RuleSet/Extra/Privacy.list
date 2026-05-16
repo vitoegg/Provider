@@ -1,5 +1,5 @@
-# 更新时间: 2026-04-08 14:16:00
-# 规则条数: 971
+# 更新时间: 2026-05-16 15:10:07
+# 规则条数: 972
 # 规则来源:
 # - https://https://github.com/TG-Twilight/AWAvenue-Ads-Rule
 # - https://https://github.com/vitoegg/Provider
@@ -362,6 +362,7 @@
 .easytomessage.com
 .eclick.baidu.com
 .edge.ads.twitch.tv
+.edge.mountaintoys.cn
 .ef-dongfeng.tanx.com
 .engine.dcad01.com
 .entry.baidu.com
@@ -556,6 +557,7 @@
 .masdkv6.3g.qq.com
 .mazu.m.qq.com
 .mbdlog.iqiyi.com
+.mcdn.bilivideo.cn
 .mcs.zijieapi.com
 .medproad.com
 .metrics.icloud.com
@@ -961,7 +963,6 @@ events.mapbox.com
 http-inputs-notion.splunkcloud.com
 js.users.51.la
 mc.51.la
-mcdn.bilivideo.cn
 prpr.96110.cn.com
 safebrowsing.googleapis.com
 safebrowsing.urlsec.qq.com
