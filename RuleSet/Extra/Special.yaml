@@ -4,6 +4,7 @@ payload:
   # Lily Emby Streaming
   - '+.lilyemby.cc'
   - '+.lilyya.top'
+  - '+.nginxlily.cyou'
   # Cloud Service
   - '+.greencloudvps.com'
   - '+.green.cloud'
