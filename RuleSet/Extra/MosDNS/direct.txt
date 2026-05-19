@@ -32,6 +32,7 @@ domain:baidupcs.com
 domain:bdimg.com
 domain:bdstatic.com
 domain:yunjiasu-cdn.net
+domain:bdydns.com
 # > Bilibili
 domain:acg.tv
 domain:acgvideo.com
@@ -186,6 +187,7 @@ domain:youdao.com
 # > PDD
 domain:pinduoduo.com
 domain:yangkeduo.com
+domain:pddpic.com
 # > Sina
 domain:sina.com
 domain:sina.net
@@ -259,4 +261,6 @@ domain:zhihu.com
 domain:zhimg.com
 # > Z-Special
 domain:10010.com
+domain:ical.muhan.org
+domain:jomodns.com
 domain:cn
