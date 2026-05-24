@@ -138,6 +138,10 @@ Optimize Linux kernel network parameters for better performance.
 ```bash
 wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/kernel.sh && bash kernel.sh
 ```
+Clean old kernel.sh configuration without backup:
+```bash
+[ -f /etc/sysctl.conf ] && : > /etc/sysctl.conf; [ -f /etc/security/limits.conf ] && : > /etc/security/limits.conf; rm -f /usr/lib/modules-load.d/tls-loader.conf; [ -f /etc/pam.d/common-session ] && sed -i '/^[[:space:]]*session[[:space:]]\+required[[:space:]]\+pam_limits\.so[[:space:]]*$/d' /etc/pam.d/common-session; sysctl --system >/dev/null 2>&1 || true; echo "[OK] old kernel.sh config removed"
+```
 * `-m`: Mode (simple, advanced).
 * `-r`: Region configuration (jp, hk, us, custom).
 * `-q`: Queue discipline (fq, fq_pie, cake).
