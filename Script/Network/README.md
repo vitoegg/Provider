@@ -138,6 +138,10 @@ Optimize Linux kernel network parameters for better performance.
 ```bash
 wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/kernel.sh && bash kernel.sh
 ```
+* `-m`: Mode (simple, advanced).
 * `-r`: Region configuration (jp, hk, us, custom).
 * `-q`: Queue discipline (fq, fq_pie, cake).
-* `-d`: Disable IPv6 (yes, no).
+* `-6`: IPv6 (yes, no).
+* `-R`: Custom rmem max, required when `-r custom`.
+* `-W`: Custom wmem max, required when `-r custom`.
+* `-u`: Remove kernel optimization configuration.
