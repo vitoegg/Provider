@@ -61,9 +61,9 @@ contains() {
 
 set_region_buffers() {
     case "$REGION" in
-        jp) RMEM_MAX="33554432"; WMEM_MAX="16777216" ;;
-        hk) RMEM_MAX="12582912"; WMEM_MAX="6291456" ;;
-        us) RMEM_MAX="67108864"; WMEM_MAX="33554432" ;;
+        jp) RMEM_MAX="8388608"; WMEM_MAX="8388608" ;;
+        hk) RMEM_MAX="6291456"; WMEM_MAX="6291456" ;;
+        us) RMEM_MAX="52187628"; WMEM_MAX="52187628" ;;
         *) return 1 ;;
     esac
 }
@@ -126,8 +126,8 @@ net.core.rmem_max = $RMEM_MAX
 net.core.wmem_max = $WMEM_MAX
 
 # TCP Buffer
-net.ipv4.tcp_rmem = 4096 262144 $RMEM_MAX
-net.ipv4.tcp_wmem = 4096 262144 $WMEM_MAX
+net.ipv4.tcp_rmem = 8192 87380 $RMEM_MAX
+net.ipv4.tcp_wmem = 8192 65536 $WMEM_MAX
 
 # TCP Connection
 net.ipv4.tcp_syncookies = 1
