@@ -104,27 +104,38 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 * `-u`: Uninstall MosDNS service.
 
 ### nftables.sh
-Manage NFTables port forwarding and firewall protection.
+Manage NFTables port forwarding and firewall protection with declarative state.
 ```bash
 wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/nftables.sh && bash nftables.sh
 ```
-**Rule Format:** `source_port:target_ip:target_port`
+**Rule Format:** `source_port:target(IPv4/domain/local):target_port[:snat_ip[:mss]]`
 * Remote forwarding: `8080:192.168.1.10:80`
+* Domain forwarding: `8443:example.com:443`
 * Local forwarding: `9000:local:3000`
+* Private-line forwarding: `10086:82.40.1.2:33333:10.100.1.2`
+* Private-line forwarding with automatic MSS clamp: `10086:82.40.1.2:33333:10.100.1.2:auto`
+* Private-line forwarding with fixed MSS clamp: `10086:82.40.1.2:33333:10.100.1.2:1360`
 
 **Options:**
 * `--help`, `-h`: Show help message.
 * `--list`, `-l`: List current forwarding rules.
 * `--add`, `-a`: Add forwarding rules (auto-enable protection).
+* `--delete`, `-d`: Delete forwarding rules.
 * `--replace`, `-r`: Clear existing rules and add new rules.
-* `--protect on`: Enable port protection (default ports only).
+* `--ddns-sync`: Resolve domain rules and rebuild rules when IP changes.
+* `--ddns-list`: List domain forwarding state.
+* `--protect on`: Enable port protection.
 * `--protect off`: Disable port protection.
 * `--protect status`: Show protection status.
+* `--protect sync`: Rebuild protection ports from current state.
 
 **Examples:**
 ```bash
 # Add forwarding rules
 bash nftables.sh -a 21443:1.2.3.4:51080 31443:1.2.3.4:52080
+
+# Add private-line forwarding with explicit SNAT
+bash nftables.sh -a 10086:82.40.1.2:33333:10.100.1.2:auto
 
 # Replace all rules
 bash nftables.sh -r 8080:192.168.1.10:80
