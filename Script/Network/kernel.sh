@@ -112,22 +112,13 @@ write_sysctl_config() {
     install -d /etc/sysctl.d
 
     {
-        cat << EOF
-# IP Forwarding
-net.ipv4.ip_forward = 1
-net.ipv4.conf.all.forwarding = 1
-net.ipv4.conf.default.forwarding = 1
-EOF
-
         if [[ "$MODE" == "simple" ]]; then
             cat << 'EOF'
-
 # Simple Mode Network
 net.ipv4.tcp_mtu_probing = 1
 EOF
         else
             cat << EOF
-
 # Network Core
 net.core.somaxconn = 8192
 net.core.netdev_max_backlog = 8192
