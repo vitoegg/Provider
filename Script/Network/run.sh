@@ -214,6 +214,29 @@ dns_meta() {
   esac
 }
 
+remove_other_dns() {
+  local target="$1" other other_script other_service other_config other_uninstall other_port other_binary
+  case "$target" in
+    mosdns)
+      other="smartdns"
+      other_script="smartdns.sh"
+      ;;
+    smartdns)
+      other="mosdns"
+      other_script="mosdns.sh"
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+
+  IFS='|' read -r other_service other_config other_uninstall other_port other_binary <<< "$(dns_meta "$other")" || return 0
+  if service_exists "$other_service" || [ -e "$other_config" ] || [ -e "$other_binary" ]; then
+    provider_run "dns uninstall ${other}" "$other_script" "$other_uninstall" || fail "${other} 卸载失败"
+    log "dns: conflict removed | type=${other}"
+  fi
+}
+
 step_dns() {
   local type="$1" script="$2" service config uninstall port binary
   shift 2
@@ -229,6 +252,7 @@ step_dns() {
     log "dns: stale removed | type=${type}"
   fi
 
+  remove_other_dns "$type"
   provider_run "dns install ${type}" "$script" "$@" || fail "${type} 安装失败"
   service_usable "$service" "$config" "$port" || fail "${type} 安装后不可用"
   log "dns: installed | type=${type}"
