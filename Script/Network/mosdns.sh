@@ -24,6 +24,7 @@ declare -A ECS_MAP=(
     ["HK"]="42.2.2.2"
     ["TYO"]="106.152.210.210"
     ["LA"]="107.119.53.53"
+    ["OR"]="12.75.216.200"
     ["SEA"]="68.86.93.93"
 )
 
@@ -83,7 +84,7 @@ check_installed() {
         log_error "mosdns服务已存在，请先卸载后再安装"
         exit 1
     fi
-    
+
     if [ -f "/usr/local/bin/mosdns" ]; then
         log_warn "检测到mosdns执行文件已存在于/usr/local/bin/mosdns"
         log_error "请先执行卸载操作"
@@ -94,30 +95,30 @@ check_installed() {
 # Install dependencies
 install_dependencies() {
     local deps_to_install=()
-    
+
     # Check wget or curl
     if ! command -v wget &>/dev/null && ! command -v curl &>/dev/null; then
         deps_to_install+=("wget")
     fi
-    
+
     # Check unzip
     if ! command -v unzip &>/dev/null; then
         deps_to_install+=("unzip")
     fi
-    
+
     # Check jq
     if ! command -v jq &>/dev/null; then
         deps_to_install+=("jq")
     fi
-    
+
     if [ ${#deps_to_install[@]} -eq 0 ]; then
         log_info "所有必要依赖已安装"
         return 0
     fi
-    
+
     log_info "检测到缺失的依赖包: ${deps_to_install[*]}"
     log_info "开始安装依赖包..."
-    
+
     if [ -f /etc/debian_version ]; then
         apt-get update -qq >/dev/null 2>&1
         for dep in "${deps_to_install[@]}"; do
@@ -148,38 +149,38 @@ install_dependencies() {
 # Get the latest mosdns version from GitHub
 get_latest_version() {
     log_info "正在获取最新版本信息..."
-    
+
     local release_page
     if command -v wget &>/dev/null; then
         release_page=$(wget -qO- https://api.github.com/repos/IrineSistiana/mosdns/releases/latest)
     else
         release_page=$(curl -s https://api.github.com/repos/IrineSistiana/mosdns/releases/latest)
     fi
-    
+
     if [ -z "$release_page" ]; then
         log_error "无法获取版本信息"
         exit 1
     fi
-    
+
     MOSDNS_VERSION=$(echo "$release_page" | jq -r '.tag_name')
     if [ -z "$MOSDNS_VERSION" ] || [ "$MOSDNS_VERSION" = "null" ]; then
         log_error "解析版本号失败"
         exit 1
     fi
-    
+
     log_info "最新版本: $MOSDNS_VERSION"
 }
 
 # Set ECS IP based on location
 set_ecs_ip() {
     local location=$1
-    
+
     if [ -z "$location" ]; then
         location="TYO"
     fi
-    
+
     location=$(echo "$location" | tr '[:lower:]' '[:upper:]')
-    
+
     if [ -n "${ECS_MAP[$location]}" ]; then
         ECS_LOCATION="$location"
         ECS_IP="${ECS_MAP[$location]}"
@@ -196,10 +197,10 @@ set_ecs_ip() {
 download_domain_lists() {
     local selection=$1
     local rule_dir="/etc/mosdns/rule"
-    
+
     mkdir -p "$rule_dir"
     log_info "正在下载域名列表..."
-    
+
     local downloaded_files=()
     for num in $selection; do
         if [ "$num" -ge 1 ] && [ "$num" -le "${#DOMAIN_LISTS[@]}" ]; then
@@ -208,7 +209,7 @@ download_domain_lists() {
             local url="${list_info%%|*}"
             local name="${list_info##*|}"
             local filename="${name,,}.txt"
-            
+
             log_info "正在下载 $name 域名列表..."
             if command -v wget &>/dev/null; then
                 wget -q "$url" -O "$rule_dir/$filename" || {
@@ -228,7 +229,7 @@ download_domain_lists() {
             return 1
         fi
     done
-    
+
     # Store downloaded files for config generation
     DOWNLOADED_RULE_FILES=("${downloaded_files[@]}")
     return 0
@@ -237,9 +238,9 @@ download_domain_lists() {
 # Generate mosdns configuration
 generate_config() {
     local config_file="/etc/mosdns/config.yaml"
-    
+
     log_info "正在生成配置文件..."
-    
+
     cat > "$config_file" << 'EOF'
 log:
   level: error
@@ -267,7 +268,7 @@ EOF
         for file in "${DOWNLOADED_RULE_FILES[@]}"; do
             echo "        - \"$file\"" >> "$config_file"
         done
-        
+
         cat >> "$config_file" << EOF
 
   - tag: dns_reslove
@@ -355,10 +356,10 @@ install_mosdns() {
     local tmp_dir
     tmp_dir=$(mktemp -d)
     cd "$tmp_dir" || exit 1
-    
+
     log_info "正在下载 mosdns ${MOSDNS_VERSION}..."
     local download_url="https://github.com/IrineSistiana/mosdns/releases/download/${MOSDNS_VERSION}/mosdns-linux-${ARCH_TYPE}.zip"
-    
+
     if command -v wget &>/dev/null; then
         wget --no-check-certificate -q "$download_url" -O mosdns.zip || {
             log_error "下载失败"
@@ -372,14 +373,14 @@ install_mosdns() {
             exit 1
         }
     fi
-    
+
     log_info "正在解压文件..."
     unzip -q mosdns.zip || {
         log_error "解压失败"
         cd / && rm -rf "$tmp_dir"
         exit 1
     }
-    
+
     log_info "正在安装 mosdns 执行文件..."
     chmod +x mosdns
     mv mosdns /usr/local/bin/ || {
@@ -387,7 +388,7 @@ install_mosdns() {
         cd / && rm -rf "$tmp_dir"
         exit 1
     }
-    
+
     log_info "✓ mosdns 执行文件安装成功"
     cd / && rm -rf "$tmp_dir"
 }
@@ -395,7 +396,7 @@ install_mosdns() {
 # Configure and start mosdns service
 configure_mosdns() {
     mkdir -p /etc/mosdns
-    
+
     # Download domain lists if custom DNS is configured
     if [ $USE_CUSTOM_DNS -eq 1 ]; then
         if ! download_domain_lists "$DOMAIN_SELECTION"; then
@@ -403,10 +404,10 @@ configure_mosdns() {
             exit 1
         fi
     fi
-    
+
     # Generate configuration file
     generate_config
-    
+
     # Install systemd service
     log_info "正在安装 mosdns 服务..."
     /usr/local/bin/mosdns service install -d /etc/mosdns -c /etc/mosdns/config.yaml >/dev/null 2>&1 || {
@@ -414,7 +415,7 @@ configure_mosdns() {
         exit 1
     }
     log_info "✓ mosdns 服务安装成功"
-    
+
     # Modify DNS resolution
     log_info "正在配置系统DNS..."
     chattr -i /etc/resolv.conf 2>/dev/null
@@ -422,16 +423,16 @@ configure_mosdns() {
     echo "nameserver 127.0.0.1" > /etc/resolv.conf
     chattr +i /etc/resolv.conf
     log_info "✓ 系统DNS配置完成"
-    
+
     # Start service
     log_info "正在启动 mosdns 服务..."
     /usr/local/bin/mosdns service start || {
         log_error "服务启动失败"
         exit 1
     }
-    
+
     sleep 2
-    
+
     if systemctl is-active mosdns &>/dev/null; then
         log_info "✓ mosdns 服务启动成功！"
         echo "========================================="
@@ -446,25 +447,25 @@ configure_mosdns() {
 # Uninstall mosdns
 uninstall_mosdns() {
     log_info "开始卸载 mosdns..."
-    
+
     # Check if mosdns binary exists
     if [ ! -f "/usr/local/bin/mosdns" ]; then
         log_warn "mosdns 未安装"
         return 0
     fi
-    
+
     # Stop service
     if systemctl is-active mosdns &>/dev/null; then
         log_info "正在停止 mosdns 服务..."
         /usr/local/bin/mosdns service stop 2>/dev/null
         log_info "✓ 服务已停止"
     fi
-    
+
     # Uninstall service
     log_info "正在卸载 mosdns 服务..."
     /usr/local/bin/mosdns service uninstall 2>/dev/null
     log_info "✓ 服务已卸载"
-    
+
     # Restore DNS configuration
     log_info "正在还原系统DNS配置..."
     chattr -i /etc/resolv.conf 2>/dev/null
@@ -473,15 +474,15 @@ nameserver 8.8.8.8
 nameserver 1.1.1.1
 EOF
     log_info "✓ DNS配置已还原"
-    
+
     # Remove files
     log_info "正在删除 mosdns 文件..."
     rm -f /usr/local/bin/mosdns
     rm -rf /etc/mosdns
     log_info "✓ 文件已删除"
-    
+
     systemctl daemon-reload >/dev/null 2>&1
-    
+
     log_info "✓ mosdns 卸载完成！"
 }
 
@@ -491,7 +492,7 @@ parse_args() {
         INTERACTIVE_MODE=1
         return 0
     fi
-    
+
     # First pass: check for uninstall flag
     for arg in "$@"; do
         if [ "$arg" = "-u" ] || [ "$arg" = "--uninstall" ]; then
@@ -500,7 +501,7 @@ parse_args() {
             return 0
         fi
     done
-    
+
     # Second pass: parse installation parameters
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -542,10 +543,10 @@ parse_args() {
                 ;;
         esac
     done
-    
+
     # Set ECS IP based on location (default: TYO)
     set_ecs_ip "$ECS_LOCATION"
-    
+
     # If custom DNS is enabled but no domain list selected, use all available lists
     if [ $USE_CUSTOM_DNS -eq 1 ] && [ -z "$DOMAIN_SELECTION" ]; then
         # Generate default selection: all available lists
@@ -556,7 +557,7 @@ parse_args() {
         DOMAIN_SELECTION="${default_selection# }"
         log_info "未指定域名列表，使用所有可用列表: $DOMAIN_SELECTION"
     fi
-    
+
     # Display operation summary
     if [ $USE_CUSTOM_DNS -eq 1 ]; then
         log_info "自定义DNS服务器: $CUSTOM_DNS_SERVER"
@@ -579,12 +580,12 @@ show_menu() {
     echo "3) 退出"
     echo "========================================="
     read -p "请选择操作 [1-3]: " choice
-    
+
     case $choice in
         1)
             log_info "选择：安装 mosdns 服务"
             echo ""
-            
+
             # ECS location selection
             echo "请选择ECS位置："
             echo "  1) HK  - 香港 (42.2.2.2)"
@@ -593,7 +594,7 @@ show_menu() {
             echo "  4) SEA - 西雅图 (68.86.93.93)"
             echo ""
             read -p "请选择 [1-4] (默认: 2): " ecs_choice
-            
+
             case $ecs_choice in
                 1)
                     ECS_LOCATION="HK"
@@ -608,7 +609,7 @@ show_menu() {
                     ECS_LOCATION="TYO"
                     ;;
             esac
-            
+
             set_ecs_ip "$ECS_LOCATION"
             echo ""
 
@@ -617,7 +618,7 @@ show_menu() {
                 IP_PRIORITY="prefer_ipv6"
             fi
             echo ""
-            
+
             read -p "是否配置额外的DNS解析？(y/n) [n]: " use_custom
             if [[ "$use_custom" == "y" || "$use_custom" == "Y" ]]; then
                 USE_CUSTOM_DNS=1
@@ -626,7 +627,7 @@ show_menu() {
                     log_error "DNS服务器地址不能为空"
                     exit 1
                 fi
-                
+
                 echo ""
                 echo "可用的域名列表："
                 for i in "${!DOMAIN_LISTS[@]}"; do
@@ -641,7 +642,7 @@ show_menu() {
                     exit 1
                 fi
             fi
-            
+
             check_installed
             check_arch
             install_dependencies
@@ -669,7 +670,7 @@ show_menu() {
 main() {
     check_root
     parse_args "$@"
-    
+
     if [ $INTERACTIVE_MODE -eq 1 ]; then
         show_menu
     elif [ $UNINSTALL -eq 1 ]; then

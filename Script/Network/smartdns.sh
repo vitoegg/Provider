@@ -19,6 +19,7 @@ declare -A ECS_IPS=(
     ["HK"]="42.2.2.2"
     ["TYO"]="106.152.210.210"
     ["LA"]="107.119.53.53"
+    ["OR"]="12.75.216.200"
     ["SEA"]="68.86.93.93"
 )
 
@@ -76,7 +77,7 @@ install_jq() {
         log_info "jq is already installed"
         return 0
     fi
-    
+
     log_info "Installing jq..."
     if [ -f /etc/debian_version ]; then
         apt-get update -qq && apt-get install -y jq >/dev/null 2>&1
@@ -86,7 +87,7 @@ install_jq() {
         log_error "Unsupported distribution for automatic jq installation"
         exit 1
     fi
-    
+
     if command -v jq &>/dev/null; then
         log_info "jq installed successfully"
     else
@@ -98,30 +99,30 @@ install_jq() {
 # Get the latest SmartDNS versions from GitHub
 get_latest_version() {
     install_jq
-    
+
     # Get the latest release page content
     local release_page
     release_page=$(wget -qO- https://api.github.com/repos/pymumu/smartdns/releases/latest)
-    
+
     if [ -z "$release_page" ]; then
         log_error "Failed to fetch release information"
         exit 1
     fi
-    
+
     # Extract Release number
     RELEASE_NUMBER=$(echo "$release_page" | jq -r '.tag_name' | sed 's/Release//')
     if [ -z "$RELEASE_NUMBER" ]; then
         log_error "Failed to extract Release number"
         exit 1
     fi
-    
+
     # Extract package version from assets
     PACKAGE_VERSION=$(echo "$release_page" | jq -r '.assets[0].name' | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+-[0-9]\+')
     if [ -z "$PACKAGE_VERSION" ]; then
         log_error "Failed to extract package version"
         exit 1
     fi
-    
+
     log_info "Latest versions - Release: ${RELEASE_NUMBER}, Package: ${PACKAGE_VERSION}"
     return 0
 }
@@ -129,13 +130,13 @@ get_latest_version() {
 # Parse command line arguments
 parse_args() {
     UNINSTALL=0
-    
+
     # If no arguments provided, use default installation
     if [ $# -eq 0 ]; then
         log_info "No parameters specified, proceeding with default installation"
         return 0
     fi
-    
+
     while [[ $# -gt 0 ]]; do
         case $1 in
             -u|--uninstall)
@@ -179,30 +180,30 @@ install_smartdns() {
     local tmp_dir
     tmp_dir=$(mktemp -d)
     cd "$tmp_dir" || exit 1
-    
+
     log_info "Downloading SmartDNS..."
     local download_url="https://github.com/pymumu/smartdns/releases/download/Release${RELEASE_NUMBER}/smartdns.${PACKAGE_VERSION}.${ARCH_TYPE}-linux-all.tar.gz"
-    
+
     wget --no-check-certificate -q "$download_url" -O smartdns.tar.gz || {
         log_error "Download failed"
         cd / && rm -rf "$tmp_dir"
         exit 1
     }
-    
+
     log_info "Installing SmartDNS..."
     tar zxf smartdns.tar.gz >/dev/null 2>&1 || {
         log_error "Failed to extract archive"
         cd / && rm -rf "$tmp_dir"
         exit 1
     }
-    
+
     cd smartdns && chmod +x ./install
     ./install -i >/dev/null 2>&1 || {
         log_error "SmartDNS installation failed"
         cd / && rm -rf "$tmp_dir"
         exit 1
     }
-    
+
     log_info "SmartDNS installed successfully"
     cd / && rm -rf "$tmp_dir"
 }
@@ -242,18 +243,18 @@ EOF
     systemctl enable smartdns >/dev/null 2>&1
     log_info "Starting SmartDNS service..."
     systemctl start smartdns
-    
+
     if systemctl is-active smartdns &>/dev/null; then
         log_info "SmartDNS installed and started successfully!"
-        
+
         log_info "Configuring system DNS..."
         chattr -i /etc/resolv.conf 2>/dev/null
         rm -f /etc/resolv.conf
         echo "nameserver 127.0.0.1" > /etc/resolv.conf
         chattr +i /etc/resolv.conf
-        
+
         log_info "System DNS configuration completed!"
-        
+
         echo "----------------------------------------"
         systemctl status smartdns
         echo "----------------------------------------"
@@ -266,29 +267,29 @@ EOF
 # Uninstall SmartDNS
 uninstall_smartdns() {
     log_info "Starting SmartDNS uninstallation..."
-    
+
     if systemctl is-active smartdns &>/dev/null; then
         log_info "Stopping SmartDNS service..."
         systemctl stop smartdns
     fi
-    
+
     if systemctl is-enabled smartdns &>/dev/null; then
         log_info "Disabling SmartDNS service..."
         systemctl disable smartdns >/dev/null 2>&1
     fi
-    
+
     log_info "Restoring system DNS configuration..."
     chattr -i /etc/resolv.conf 2>/dev/null
     echo "nameserver 1.1.1.1" > /etc/resolv.conf
     echo "nameserver 8.8.8.8" >> /etc/resolv.conf
-    
+
     log_info "Removing SmartDNS files..."
     rm -rf /etc/smartdns
     rm -f /usr/sbin/smartdns
     rm -f /usr/lib/systemd/system/smartdns.service
-    
+
     systemctl daemon-reload >/dev/null 2>&1
-    
+
     log_info "SmartDNS uninstallation completed!"
 }
 
@@ -296,7 +297,7 @@ uninstall_smartdns() {
 main() {
     check_root
     parse_args "$@"
-    
+
     if [ $UNINSTALL -eq 1 ]; then
         uninstall_smartdns
     else
