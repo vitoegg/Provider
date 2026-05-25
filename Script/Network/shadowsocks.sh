@@ -48,10 +48,11 @@ log() {
 # Usage function for script help
 ################################################################################
 usage() {
-    echo -e "Usage: $0 [-s password] [-p port] [-h]\n"
+    echo -e "Usage: $0 [-s password] [-p port] [-u] [-h]\n"
     echo "Options:"
     echo "  -s    Specify Shadowsocks password"
     echo "  -p    Specify Shadowsocks port"
+    echo "  -u    Uninstall Shadowsocks and remove related files"
     echo "  -h    Show this help message"
     exit 1
 }
@@ -59,10 +60,13 @@ usage() {
 ################################################################################
 # Parse command line arguments
 ################################################################################
-while getopts "s:p:h" opt; do
+uninstall_requested=0
+
+while getopts "s:p:uh" opt; do
     case $opt in
         s) sspasswd="$OPTARG" ;;
         p) ssport="$OPTARG" ;;
+        u) uninstall_requested=1 ;;
         h) usage ;;
         \?) log error "Invalid option: -$OPTARG"; usage ;;
     esac
@@ -564,30 +568,40 @@ update_shadowsocks() {
 ################################################################################
 uninstall_service() {
     echo -e "\n=== Uninstalling Shadowsocks ===\n"
-    
-    # Check if service exists before attempting to uninstall
+
     if ! check_service_exists; then
-        log error "Shadowsocks service is not installed. Nothing to uninstall."
-        exit 1
+        log warn "Shadowsocks service is not installed, continuing cleanup"
     fi
     
     log progress "Stopping and disabling Shadowsocks service"
     systemctl stop shadowsocks.service 2>/dev/null
     systemctl disable shadowsocks.service 2>/dev/null
+    systemctl reset-failed shadowsocks.service 2>/dev/null
     log progress_end "Service stopped and disabled"
 
     log progress "Removing service files"
     rm -f /lib/systemd/system/shadowsocks.service
+    rm -f /etc/systemd/system/shadowsocks.service
+    rm -f /etc/systemd/system/multi-user.target.wants/shadowsocks.service
+    rm -rf /etc/systemd/system/shadowsocks.service.d
     log progress_end "Service files removed"
 
     log progress "Removing configuration files"
     rm -rf /etc/shadowsocks
-    rm -f /etc/systemd/system/systemd-networkd-wait-online.service.d/override.conf
     log progress_end "Configuration files removed"
 
     log progress "Removing binary files"
     rm -f /usr/local/bin/ssserver
+    rm -f /usr/local/bin/sslocal
+    rm -f /usr/local/bin/ssmanager
+    rm -f /usr/local/bin/ssservice
+    rm -f /usr/local/bin/ssurl
     log progress_end "Binary files removed"
+
+    log progress "Removing temporary files"
+    rm -f /tmp/wget_error.log
+    rm -f /tmp/tar_error.log
+    log progress_end "Temporary files removed"
 
     log progress "Reloading systemd daemon"
     systemctl daemon-reload
@@ -601,14 +615,16 @@ uninstall_service() {
 # Check if Shadowsocks service exists
 ################################################################################
 check_service_exists() {
-    # Check if service file exists
-    if [[ -f "/lib/systemd/system/shadowsocks.service" ]]; then
-        # Also verify the service is known to systemd
-        if systemctl list-unit-files | grep -q shadowsocks.service; then
-            return 0  # Service exists
-        fi
+    if [[ -f "/lib/systemd/system/shadowsocks.service" ]] ||
+       [[ -f "/etc/systemd/system/shadowsocks.service" ]]; then
+        return 0
     fi
-    return 1  # Service does not exist
+
+    if systemctl list-unit-files 2>/dev/null | grep -q "^shadowsocks.service"; then
+        return 0
+    fi
+
+    return 1
 }
 
 ################################################################################
@@ -620,7 +636,7 @@ run_installation() {
     # Check if service already exists
     if check_service_exists; then
         log error "Shadowsocks service is already installed. Please uninstall it first."
-        echo -e "\nTo uninstall, run: $0 uninstall\n"
+        echo -e "\nTo uninstall, run: $0 -u\n"
         exit 1
     fi
     
@@ -649,6 +665,11 @@ main() {
     log info "Shadowsocks installation script v1.2"
     log info "Operating System: $(uname -s) $(uname -r)"
     log info "Architecture: $(uname -m)"
+
+    if [ "$uninstall_requested" -eq 1 ]; then
+        uninstall_service
+        exit 0
+    fi
     
     # If parameters are provided (beyond script name) then execute non-interactive mode.
     if [ "$#" -gt 0 ]; then

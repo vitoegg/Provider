@@ -82,6 +82,7 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 ```
 * `-s`: Specify Shadowsocks password.
 * `-p`: Specify Shadowsocks port.
+* `-u`: Uninstall Shadowsocks-rust service and remove related files.
 
 ### smartdns.sh
 Install and manage SmartDNS service.
