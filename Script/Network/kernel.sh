@@ -77,16 +77,11 @@ write_sysctl_config() {
 net.ipv4.tcp_syncookies = 1
 
 # TCP Performance
-net.ipv4.tcp_timestamps = 1
 net.ipv4.tcp_sack = 1
 net.ipv4.tcp_window_scaling = 1
 net.ipv4.tcp_moderate_rcvbuf = 1
 net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_slow_start_after_idle = 0
-
-# ECN
-net.ipv4.tcp_ecn = 2
-net.ipv4.tcp_ecn_fallback = 1
 EOF
 
         if [[ "$IPV6" == "no" ]]; then
