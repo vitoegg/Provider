@@ -524,7 +524,7 @@ make_state_line() {
     echo "${src_port}|${mode}|${target}|${dest_port}|${target_type}|${resolved_ip}|${status}|${updated_at}|${snat_ip}|${mss}"
 }
 
-state_rule_exact_exists() {
+state_rule_status() {
     local file="$1"
     local src_port="$2"
     local mode="$3"
@@ -533,34 +533,21 @@ state_rule_exact_exists() {
     local snat_ip="${6:-}"
     local mss="${7:-}"
 
-    [ -s "$file" ] || return 1
-    awk -F'|' -v sp="$src_port" -v mode="$mode" -v target="$target" -v dp="$dest_port" -v snat="$snat_ip" -v mss="$mss" \
-        'NF>=8 && $1==sp && $2==mode && $3==target && $4==dp && $9==snat && $10==mss { found=1; exit } END { exit(found ? 0 : 1) }' "$file"
-}
-
-state_base_rule_exists() {
-    local file="$1"
-    local src_port="$2"
-    local mode="$3"
-    local target="$4"
-    local dest_port="$5"
-
-    [ -s "$file" ] || return 1
-    awk -F'|' -v sp="$src_port" -v mode="$mode" -v target="$target" -v dp="$dest_port" \
-        'NF>=8 && $1==sp && $2==mode && $3==target && $4==dp { found=1; exit } END { exit(found ? 0 : 1) }' "$file"
-}
-
-state_port_conflicts() {
-    local file="$1"
-    local src_port="$2"
-    local mode="$3"
-    local target="$4"
-    local dest_port="$5"
-
-    [ -s "$file" ] || return 1
-    awk -F'|' -v sp="$src_port" -v mode="$mode" -v target="$target" -v dp="$dest_port" '
-        NF>=8 && $1==sp && !($2==mode && $3==target && $4==dp) { found=1; exit }
-        END { exit(found ? 0 : 1) }
+    [ -s "$file" ] || { echo "none"; return 0; }
+    awk -F'|' -v sp="$src_port" -v mode="$mode" -v target="$target" -v dp="$dest_port" -v snat="$snat_ip" -v mss="$mss" '
+        BEGIN { result="none" }
+        NF>=8 && $1==sp {
+            if ($2==mode && $3==target && $4==dp) {
+                if ($9==snat && $10==mss) {
+                    result="exact"
+                    exit
+                }
+                result="base"
+            } else if (result=="none") {
+                result="port_conflict"
+            }
+        }
+        END { print result }
     ' "$file"
 }
 
@@ -582,14 +569,16 @@ migrate_legacy_ddns_state() {
 
     local tmp_file="${RULES_STATE_FILE}.migrate.$$"
     local migrated=0
+    local now
     ensure_state_dir || return 1
+    now=$(date +%s)
 
     while IFS='|' read -r src_port domain dest_port last_ip status updated_at; do
         validate_port "$src_port" || continue
         validate_port "$dest_port" || continue
         validate_domain_name "$domain" || continue
         validate_ip_address "$last_ip" || continue
-        make_state_line "$src_port" "remote" "$domain" "$dest_port" "domain" "$last_ip" "${status:-ok}" "${updated_at:-$(date +%s)}" >> "$tmp_file"
+        make_state_line "$src_port" "remote" "$domain" "$dest_port" "domain" "$last_ip" "${status:-ok}" "${updated_at:-$now}" >> "$tmp_file"
         migrated=$((migrated + 1))
     done < "$LEGACY_DDNS_STATE_FILE"
 
@@ -608,6 +597,12 @@ prepare_state_file() {
     ensure_state_dir || return 1
     migrate_legacy_ddns_state || return 1
     [ -f "$RULES_STATE_FILE" ] || : > "$RULES_STATE_FILE"
+}
+
+prepare_state_file_for_read() {
+    [ -f "$RULES_STATE_FILE" ] && return 0
+    [ -s "$LEGACY_DDNS_STATE_FILE" ] && [ -w "$STATE_DIR" ] && prepare_state_file
+    return 0
 }
 
 copy_current_state_to() {
@@ -686,13 +681,22 @@ render_filter_table() {
     local state_file="$1"
     local protect_flag="$2"
     local allow_ports="${3:-}"
-    local remote_ips
+    local render_flags
+    local has_remote
     local has_mss
 
-    remote_ips=$(awk -F'|' 'NF>=8 && $2=="remote" && $6 ~ /^[0-9.]+$/ { print $6 }' "$state_file" | sort -u | tr '\n' ',' | sed 's/,$//')
-    has_mss=$(awk -F'|' 'NF>=10 && $10 != "" { found=1; exit } END { print found ? 1 : 0 }' "$state_file")
+    render_flags=$(awk -F'|' '
+        NF>=8 && $2=="remote" && $6 ~ /^[0-9.]+$/ {
+            has_remote=1
+            if (NF>=10 && $10 != "") {
+                has_mss=1
+            }
+        }
+        END { print has_remote+0, has_mss+0 }
+    ' "$state_file")
+    read -r has_remote has_mss <<< "$render_flags"
 
-    if [ "$protect_flag" != "1" ] && [ -z "$remote_ips" ] && [ "$has_mss" != "1" ]; then
+    if [ "$protect_flag" != "1" ] && [ "$has_remote" != "1" ] && [ "$has_mss" != "1" ]; then
         return 0
     fi
 
@@ -740,7 +744,7 @@ EOF
 EOF
     fi
 
-    if [ -n "$remote_ips" ]; then
+    if [ "$has_remote" = "1" ]; then
         cat << EOF
     chain ${CHAIN_FORWARD} {
         type filter hook forward priority 0; policy accept;
@@ -998,17 +1002,25 @@ append_rule_to_state() {
     local rule="$2"
     local now="$3"
     local duplicate_mode="$4"
+    local status
 
     parse_rule "$rule" 1 || return 1
-    if state_rule_exact_exists "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_SNAT_IP" "$PARSED_MSS"; then
-        [ "$duplicate_mode" = "skip" ] && { log_warn "规则已存在，跳过: $rule"; return 2; }
-        log_error "重复规则: $rule"
-        return 1
-    fi
-    if state_port_conflicts "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT"; then
-        [ "$duplicate_mode" = "skip" ] && log_error "端口冲突，跳过: $rule" || log_error "端口冲突: $rule"
-        return 1
-    fi
+    status=$(state_rule_status "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_SNAT_IP" "$PARSED_MSS")
+    case "$status" in
+        exact)
+            [ "$duplicate_mode" = "skip" ] && { log_warn "规则已存在，跳过: $rule"; return 2; }
+            log_error "重复规则: $rule"
+            return 1
+            ;;
+        base)
+            [ "$duplicate_mode" = "skip" ] && log_error "规则已存在但 SNAT/MSS 不一致，跳过: $rule" || log_error "规则已存在但 SNAT/MSS 不一致: $rule"
+            return 1
+            ;;
+        port_conflict)
+            [ "$duplicate_mode" = "skip" ] && log_error "端口冲突，跳过: $rule" || log_error "端口冲突: $rule"
+            return 1
+            ;;
+    esac
     make_state_line "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_TYPE" "$PARSED_IP" "ok" "$now" "$PARSED_SNAT_IP" "$PARSED_MSS" >> "$candidate"
 }
 
@@ -1016,12 +1028,17 @@ remove_rule_from_state() {
     local candidate="$1"
     local rule="$2"
     local next_candidate
+    local status
 
     parse_rule "$rule" 0 || return 1
-    if ! state_base_rule_exists "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT"; then
-        log_warn "规则不存在，跳过: $rule"
-        return 2
-    fi
+    status=$(state_rule_status "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_SNAT_IP" "$PARSED_MSS")
+    case "$status" in
+        exact|base) ;;
+        *)
+            log_warn "规则不存在，跳过: $rule"
+            return 2
+            ;;
+    esac
     next_candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 3
     awk -F'|' -v sp="$PARSED_SRC_PORT" -v mode="$PARSED_MODE" -v target="$PARSED_TARGET" -v dp="$PARSED_DEST_PORT" \
         'NF>=8 && !($1==sp && $2==mode && $3==target && $4==dp) { print $0 }' "$candidate" > "$next_candidate" || {
@@ -1155,10 +1172,10 @@ sync_ddns_rules() {
 
     candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 1
     : > "$candidate"
+    now=$(date +%s)
 
     while IFS='|' read -r src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss; do
         [ -n "$src_port$mode$target$dest_port" ] || continue
-        now=$(date +%s)
 
         if [ "$target_type" != "domain" ]; then
             make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" "$resolved_ip" "$status" "$updated_at" "$snat_ip" "$mss" >> "$candidate"
@@ -1243,7 +1260,7 @@ show_protection_status() {
     local timer_status
     local auto_ports
 
-    prepare_state_file >/dev/null 2>&1 || true
+    prepare_state_file_for_read
     protect_flag=$(get_protection_flag)
     timer_status=$(get_protect_timer_status)
 
@@ -1269,7 +1286,7 @@ show_protection_status() {
 }
 
 show_ddns_rules() {
-    prepare_state_file || return 1
+    prepare_state_file_for_read
     if [ "$(state_domain_count "$RULES_STATE_FILE")" -eq 0 ]; then
         log_warn "未找到 DDNS 域名规则"
         return 0
@@ -1288,7 +1305,7 @@ show_ddns_rules() {
 }
 
 display_rules() {
-    prepare_state_file || return 1
+    prepare_state_file_for_read
     if [ ! -s "$RULES_STATE_FILE" ]; then
         log_warn "未找到转发规则"
         return 0
@@ -1345,7 +1362,7 @@ run_mutation() {
 
 ensure_for_read() {
     ensure_supported_bash || return 1
-    prepare_state_file || return 1
+    prepare_state_file_for_read
 }
 
 ensure_for_write() {
