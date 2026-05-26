@@ -43,6 +43,7 @@ readonly RED GREEN YELLOW BLUE NC
 
 FORWARDAWS_LOCK_HELD=0
 APT_UPDATED=0
+APPLY_CANDIDATE_CHANGED=0
 
 log_info()  { printf '%b\n' "${GREEN}[INFO]${NC} $1"; }
 log_warn()  { printf '%b\n' "${YELLOW}[WARNING]${NC} $1" >&2; }
@@ -494,7 +495,8 @@ run_nft_file() {
 
 apply_candidate_state() {
     local candidate_state="$1" protect_flag="$2" desc="$3" protect_ports="${4:-}"
-    local nft_tmp state_tmp config_tmp rules_changed=0 include_missing=0 forwarding_needs_update=0
+    local nft_tmp state_tmp config_tmp rules_changed=0 include_missing=0 forwarding_needs_update=0 state_changed=0 config_changed=0
+    APPLY_CANDIDATE_CHANGED=0
     ensure_state_dir || return 1
     if [ "$protect_flag" = "1" ] && [ -z "$protect_ports" ]; then
         protect_ports=$(get_auto_allow_ports "$candidate_state") || return 1
@@ -509,12 +511,15 @@ apply_candidate_state() {
     write_config_file "$config_tmp" "$protect_flag" || { rm -f "$nft_tmp" "$state_tmp" "$config_tmp"; log_error "写入配置临时文件失败"; return 1; }
     cmp -s "$nft_tmp" "$FORWARDAWS_RULES_FILE" || rules_changed=1
     nft_main_config_has_forwardaws_include || include_missing=1
+    cmp -s "$state_tmp" "$RULES_STATE_FILE" || state_changed=1
+    cmp -s "$config_tmp" "$CONFIG_FILE" || config_changed=1
 
     if [ "$rules_changed$include_missing$forwarding_needs_update" = "000" ] && \
-        cmp -s "$state_tmp" "$RULES_STATE_FILE" && cmp -s "$config_tmp" "$CONFIG_FILE"; then
+        [ "$state_changed$config_changed" = "00" ]; then
         rm -f "$nft_tmp" "$state_tmp" "$config_tmp"
         return 0
     fi
+    APPLY_CANDIDATE_CHANGED=1
     [ "$rules_changed" -eq 0 ] || run_nft_file "-c" "预检" "$nft_tmp" "$desc" || { rm -f "$nft_tmp" "$state_tmp" "$config_tmp"; return 1; }
     [ "$forwarding_needs_update" -eq 0 ] || ensure_ipv4_forwarding_enabled || { rm -f "$nft_tmp" "$state_tmp" "$config_tmp"; return 1; }
     if [ "$rules_changed" -eq 1 ]; then
@@ -556,7 +561,7 @@ Description=${timer_desc}
 
 [Timer]
 OnBootSec=30s
-OnUnitActiveSec=60s
+OnUnitActiveSec=10min
 AccuracySec=5s
 Unit=${service_name}
 
@@ -572,8 +577,8 @@ has_systemctl() { command -v systemctl >/dev/null 2>&1; }
 enable_timer_if_available() {
     local service_name="$1" timer_name="$2" service_desc="$3" timer_desc="$4" exec_args="$5" success_msg="$6" fail_msg="$7"
     has_systemctl || { log_error "未检测到 systemctl，无法启用自动同步"; return 1; }
-    install_systemd_units_if_needed "$service_name" "$timer_name" "$service_desc" "$timer_desc" "$exec_args" || return 1
     systemctl is-enabled --quiet "$timer_name" 2>/dev/null && systemctl is-active --quiet "$timer_name" 2>/dev/null && return 0
+    install_systemd_units_if_needed "$service_name" "$timer_name" "$service_desc" "$timer_desc" "$exec_args" || return 1
     systemctl enable --now "$timer_name" >/dev/null 2>&1 && { log_info_noisy "$success_msg"; return 0; }
     log_warn "$fail_msg"
     return 1
@@ -589,12 +594,12 @@ reconcile_timers() {
     domain_count=$(state_domain_count "$RULES_STATE_FILE")
     protect_flag=$(get_protection_flag)
     if [ "$domain_count" -gt 0 ]; then
-        enable_timer_if_available "$DDNS_SERVICE_NAME" "$DDNS_TIMER_NAME" "ForwardAWS DDNS sync service" "Run ForwardAWS DDNS sync every 60 seconds" "--ddns-sync" "DDNS 定时同步已启用" "启用 DDNS 定时同步失败，请手动检查 systemd 状态"
+        enable_timer_if_available "$DDNS_SERVICE_NAME" "$DDNS_TIMER_NAME" "ForwardAWS DDNS sync service" "Run ForwardAWS DDNS sync every 10 minutes" "--ddns-sync" "DDNS 定时同步已启用" "启用 DDNS 定时同步失败，请手动检查 systemd 状态"
     else
         disable_timer_if_available "$DDNS_TIMER_NAME" "无 DDNS 域名规则，已停用 DDNS 定时同步"
     fi
     if [ "$protect_flag" = "1" ]; then
-        enable_timer_if_available "$PROTECT_SERVICE_NAME" "$PROTECT_TIMER_NAME" "ForwardAWS protection sync service" "Run ForwardAWS protection sync every 60 seconds" "--protect sync" "保护端口自动同步已启用" "启用保护同步定时器失败，请手动检查 systemd 状态"
+        enable_timer_if_available "$PROTECT_SERVICE_NAME" "$PROTECT_TIMER_NAME" "ForwardAWS protection sync service" "Run ForwardAWS protection sync every 10 minutes" "--protect sync" "保护端口自动同步已启用" "启用保护同步定时器失败，请手动检查 systemd 状态"
     else
         disable_timer_if_available "$PROTECT_TIMER_NAME" "保护端口自动同步已停用"
     fi
@@ -733,7 +738,11 @@ apply_protection_state() {
     apply_candidate_state "$candidate" "$protect_flag" "$desc" "$current_ports" || { rm -f "$candidate"; return 1; }
     rm -f "$candidate"
     reconcile_timers
-    [ "$protect_flag" = "1" ] && log_info "${success_msg}: $current_ports" || log_info "$success_msg"
+    if [ "${APPLY_CANDIDATE_CHANGED:-0}" = "1" ]; then
+        [ "$protect_flag" = "1" ] && log_info "${success_msg}: $current_ports" || log_info "$success_msg"
+    else
+        [ "$protect_flag" = "1" ] && log_info_noisy "${success_msg}: $current_ports" || log_info_noisy "$success_msg"
+    fi
 }
 
 sync_protection_ports() {
