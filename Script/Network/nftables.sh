@@ -849,7 +849,7 @@ ensure_for_write() {
 
 main() {
     ensure_supported_bash || exit 1
-    [ $# -eq 0 ] && { show_help; exit 0; }
+    [ $# -eq 0 ] && { log_error "请使用参数模式执行，例如: $0 --help"; show_help; exit 1; }
     case "$1" in
         --help|-h) show_help ;;
         --list|-l) ensure_for_read && display_rules || exit 1 ;;

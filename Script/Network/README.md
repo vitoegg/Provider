@@ -107,7 +107,7 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 ### nftables.sh
 Manage NFTables port forwarding and firewall protection with declarative state.
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/nftables.sh && bash nftables.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/nftables.sh && bash nftables.sh --help
 ```
 **Rule Format:** `source_port:target(IPv4/domain/local):target_port[:snat_ip[:mss]]`
 * Remote forwarding: `8080:192.168.1.10:80`
