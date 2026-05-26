@@ -43,6 +43,7 @@ readonly RED GREEN YELLOW BLUE NC
 FORWARDAWS_LOCK_HELD=0
 APT_UPDATED=0
 APPLY_CANDIDATE_CHANGED=0
+SYSTEMD_UNITS_CHANGED=0
 
 log_info()  { printf '%b\n' "${GREEN}[INFO]${NC} $1"; }
 log_warn()  { printf '%b\n' "${YELLOW}[WARNING]${NC} $1" >&2; }
@@ -513,14 +514,21 @@ apply_candidate_state() {
     fi
 }
 
-install_systemd_units_if_needed() {
-    local service_name="$1" timer_name="$2" service_desc="$3" timer_desc="$4" exec_args="$5"
-    local script_path service_file="${SYSTEMD_SYSTEM_DIR}/${service_name}" timer_file="${SYSTEMD_SYSTEM_DIR}/${timer_name}"
-    command -v systemctl >/dev/null 2>&1 || return 1
-    script_path=$(get_script_absolute_path)
-    [ -n "$script_path" ] || { log_error "无法确定脚本绝对路径，systemd 定时器安装失败"; return 1; }
+commit_systemd_unit_if_changed() {
+    local tmp_file="$1" target_file="$2"
+    if cmp -s "$tmp_file" "$target_file"; then
+        rm -f "$tmp_file"
+        return 0
+    fi
+    mv "$tmp_file" "$target_file" || { rm -f "$tmp_file"; log_error "写入 systemd unit 失败: $target_file"; return 1; }
+    chmod 644 "$target_file" 2>/dev/null || true
+    SYSTEMD_UNITS_CHANGED=1
+}
 
-    cat > "$service_file" << EOF || { log_error "写入 systemd service 失败: $service_file"; return 1; }
+write_systemd_service_if_changed() {
+    local service_file="$1" service_desc="$2" script_path="$3" exec_args="$4" tmp_file
+    tmp_file=$(mktemp "${service_file}.XXXXXX") || { log_error "创建 systemd service 临时文件失败: $service_file"; return 1; }
+    cat > "$tmp_file" << EOF || { rm -f "$tmp_file"; log_error "生成 systemd service 失败: $service_file"; return 1; }
 [Unit]
 Description=${service_desc}
 After=network-online.target nftables.service
@@ -532,7 +540,13 @@ Environment=FORWARDAWS_QUIET=1
 Environment=FORWARDAWS_LOCK_WAIT=10
 ExecStart=/bin/bash "${script_path}" ${exec_args}
 EOF
-    cat > "$timer_file" << EOF || { log_error "写入 systemd timer 失败: $timer_file"; return 1; }
+    commit_systemd_unit_if_changed "$tmp_file" "$service_file"
+}
+
+write_systemd_timer_if_changed() {
+    local timer_file="$1" timer_desc="$2" service_name="$3" tmp_file
+    tmp_file=$(mktemp "${timer_file}.XXXXXX") || { log_error "创建 systemd timer 临时文件失败: $timer_file"; return 1; }
+    cat > "$tmp_file" << EOF || { rm -f "$tmp_file"; log_error "生成 systemd timer 失败: $timer_file"; return 1; }
 [Unit]
 Description=${timer_desc}
 
@@ -545,41 +559,59 @@ Unit=${service_name}
 [Install]
 WantedBy=timers.target
 EOF
-    chmod 644 "$service_file" "$timer_file" 2>/dev/null || true
-    systemctl daemon-reload >/dev/null 2>&1
+    commit_systemd_unit_if_changed "$tmp_file" "$timer_file"
+}
+
+install_systemd_units_if_needed() {
+    local service_name="$1" timer_name="$2" service_desc="$3" timer_desc="$4" exec_args="$5"
+    local script_path service_file="${SYSTEMD_SYSTEM_DIR}/${service_name}" timer_file="${SYSTEMD_SYSTEM_DIR}/${timer_name}"
+    command -v systemctl >/dev/null 2>&1 || return 1
+    script_path=$(get_script_absolute_path)
+    [ -n "$script_path" ] || { log_error "无法确定脚本绝对路径，systemd 定时器安装失败"; return 1; }
+
+    write_systemd_service_if_changed "$service_file" "$service_desc" "$script_path" "$exec_args" || return 1
+    write_systemd_timer_if_changed "$timer_file" "$timer_desc" "$service_name"
 }
 
 has_systemctl() { command -v systemctl >/dev/null 2>&1; }
 
 enable_timer_if_available() {
-    local service_name="$1" timer_name="$2" service_desc="$3" timer_desc="$4" exec_args="$5" success_msg="$6" fail_msg="$7"
+    local timer_name="$1" success_msg="$2" fail_msg="$3"
     has_systemctl || { log_error "未检测到 systemctl，无法启用自动同步"; return 1; }
     systemctl is-enabled --quiet "$timer_name" 2>/dev/null && systemctl is-active --quiet "$timer_name" 2>/dev/null && return 0
-    install_systemd_units_if_needed "$service_name" "$timer_name" "$service_desc" "$timer_desc" "$exec_args" || return 1
-    systemctl enable --now "$timer_name" >/dev/null 2>&1 && { log_info_noisy "$success_msg"; return 0; }
+    systemctl enable --now --no-reload "$timer_name" >/dev/null 2>&1 && { log_info_noisy "$success_msg"; return 0; }
     log_warn "$fail_msg"
     return 1
 }
 
 disable_timer_if_available() {
     has_systemctl || return 0
-    systemctl disable --now "$1" >/dev/null 2>&1 && log_info_noisy "$2"
+    systemctl disable --now --no-reload "$1" >/dev/null 2>&1 && log_info_noisy "$2"
 }
 
 reconcile_timers() {
-    local domain_count protect_flag
+    local domain_count protect_flag enable_ddns=0 enable_protect=0 failed=0
     domain_count=$(state_domain_count "$RULES_STATE_FILE")
     protect_flag=$(get_protection_flag)
+    SYSTEMD_UNITS_CHANGED=0
     if [ "$domain_count" -gt 0 ]; then
-        enable_timer_if_available "$DDNS_SERVICE_NAME" "$DDNS_TIMER_NAME" "ForwardAWS DDNS sync service" "Run ForwardAWS DDNS sync every 10 minutes" "--ddns-sync" "DDNS 定时同步已启用" "启用 DDNS 定时同步失败，请手动检查 systemd 状态"
+        install_systemd_units_if_needed "$DDNS_SERVICE_NAME" "$DDNS_TIMER_NAME" "ForwardAWS DDNS sync service" "Run ForwardAWS DDNS sync every 10 minutes" "--ddns-sync" || return 1
+        enable_ddns=1
     else
         disable_timer_if_available "$DDNS_TIMER_NAME" "无 DDNS 域名规则，已停用 DDNS 定时同步"
     fi
     if [ "$protect_flag" = "1" ]; then
-        enable_timer_if_available "$PROTECT_SERVICE_NAME" "$PROTECT_TIMER_NAME" "ForwardAWS protection sync service" "Run ForwardAWS protection sync every 10 minutes" "--protect sync" "保护端口自动同步已启用" "启用保护同步定时器失败，请手动检查 systemd 状态"
+        install_systemd_units_if_needed "$PROTECT_SERVICE_NAME" "$PROTECT_TIMER_NAME" "ForwardAWS protection sync service" "Run ForwardAWS protection sync every 10 minutes" "--protect sync" || return 1
+        enable_protect=1
     else
         disable_timer_if_available "$PROTECT_TIMER_NAME" "保护端口自动同步已停用"
     fi
+    if [ "$SYSTEMD_UNITS_CHANGED" = "1" ]; then
+        systemctl daemon-reload >/dev/null 2>&1 || { log_warn "systemd daemon-reload 失败，请手动检查 systemd 状态"; return 1; }
+    fi
+    [ "$enable_ddns" -eq 0 ] || enable_timer_if_available "$DDNS_TIMER_NAME" "DDNS 定时同步已启用" "启用 DDNS 定时同步失败，请手动检查 systemd 状态" || failed=1
+    [ "$enable_protect" -eq 0 ] || enable_timer_if_available "$PROTECT_TIMER_NAME" "保护端口自动同步已启用" "启用保护同步定时器失败，请手动检查 systemd 状态" || failed=1
+    [ "$failed" -eq 0 ]
 }
 
 get_protect_timer_status() {
@@ -591,6 +623,13 @@ remove_path() {
     local path="$1"
     [ -e "$path" ] || [ -L "$path" ] || return 0
     rm -rf "$path" || { log_error "删除失败: $path"; return 1; }
+}
+
+remove_systemd_unit_path() {
+    local path="$1"
+    [ -e "$path" ] || [ -L "$path" ] || return 0
+    rm -rf "$path" || { log_error "删除失败: $path"; return 1; }
+    SYSTEMD_UNITS_CHANGED=1
 }
 
 nft_include_dir_has_other_files() {
@@ -650,20 +689,21 @@ remove_active_nft_tables() {
 }
 
 remove_systemd_units() {
+    SYSTEMD_UNITS_CHANGED=0
     if has_systemctl; then
-        systemctl disable --now "$DDNS_TIMER_NAME" "$PROTECT_TIMER_NAME" >/dev/null 2>&1 || true
+        systemctl disable --now --no-reload "$DDNS_TIMER_NAME" "$PROTECT_TIMER_NAME" >/dev/null 2>&1 || true
         systemctl stop "$DDNS_SERVICE_NAME" "$PROTECT_SERVICE_NAME" >/dev/null 2>&1 || true
         systemctl reset-failed "$DDNS_TIMER_NAME" "$DDNS_SERVICE_NAME" "$PROTECT_TIMER_NAME" "$PROTECT_SERVICE_NAME" >/dev/null 2>&1 || true
     fi
 
-    remove_path "${SYSTEMD_SYSTEM_DIR}/${DDNS_SERVICE_NAME}" || return 1
-    remove_path "${SYSTEMD_SYSTEM_DIR}/${DDNS_TIMER_NAME}" || return 1
-    remove_path "${SYSTEMD_SYSTEM_DIR}/${PROTECT_SERVICE_NAME}" || return 1
-    remove_path "${SYSTEMD_SYSTEM_DIR}/${PROTECT_TIMER_NAME}" || return 1
-    remove_path "${SYSTEMD_SYSTEM_DIR}/timers.target.wants/${DDNS_TIMER_NAME}" || return 1
-    remove_path "${SYSTEMD_SYSTEM_DIR}/timers.target.wants/${PROTECT_TIMER_NAME}" || return 1
+    remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/${DDNS_SERVICE_NAME}" || return 1
+    remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/${DDNS_TIMER_NAME}" || return 1
+    remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/${PROTECT_SERVICE_NAME}" || return 1
+    remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/${PROTECT_TIMER_NAME}" || return 1
+    remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/timers.target.wants/${DDNS_TIMER_NAME}" || return 1
+    remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/timers.target.wants/${PROTECT_TIMER_NAME}" || return 1
 
-    has_systemctl && systemctl daemon-reload >/dev/null 2>&1 || true
+    [ "$SYSTEMD_UNITS_CHANGED" != "1" ] || { has_systemctl && systemctl daemon-reload >/dev/null 2>&1 || true; }
 }
 
 uninstall_forwardaws() {
