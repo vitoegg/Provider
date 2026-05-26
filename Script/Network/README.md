@@ -129,6 +129,7 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 * `--protect off`: Disable port protection.
 * `--protect status`: Show protection status.
 * `--protect sync`: Rebuild protection ports from current state.
+* `--uninstall`, `-u`: Remove generated rules, state, timers and sysctl configuration.
 
 **Examples:**
 ```bash
@@ -143,6 +144,9 @@ bash nftables.sh -r 8080:192.168.1.10:80
 
 # Check protection status
 bash nftables.sh -p status
+
+# Uninstall nftables.sh artifacts
+bash nftables.sh -u
 ```
 
 ### kernel.sh
