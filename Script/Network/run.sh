@@ -539,21 +539,37 @@ dns_meta() {
   esac
 }
 
+other_dns_script() {
+  case "$1" in
+    mosdns) printf 'smartdns.sh' ;;
+    smartdns) printf 'mosdns.sh' ;;
+    *) return 1 ;;
+  esac
+}
+
+cleanup_other_dns_script() {
+  local script
+  script="$(other_dns_script "$1")" || return 0
+  if [ -e "${PROVIDER_SCRIPT_DIR}/${script}" ]; then
+    rm -f "${PROVIDER_SCRIPT_DIR}/${script}" || fail "DNS 辅助脚本清理失败: ${script}"
+    log "dns: cleaned | script=${script} | reason=unused"
+  fi
+}
+
 remove_other_dns() {
   local target="$1" other other_script other_service other_config other_uninstall other_port other_binary
   case "$target" in
     mosdns)
       other="smartdns"
-      other_script="smartdns.sh"
       ;;
     smartdns)
       other="mosdns"
-      other_script="mosdns.sh"
       ;;
     *)
       return 0
       ;;
   esac
+  other_script="$(other_dns_script "$target")" || return 0
 
   IFS='|' read -r other_service other_config other_uninstall other_port other_binary <<< "$(dns_meta "$other")" || return 0
   if service_exists "$other_service" || [ -e "$other_config" ] || [ -e "$other_binary" ]; then
@@ -568,6 +584,7 @@ step_dns() {
   IFS='|' read -r service config uninstall port binary <<< "$(dns_meta "$type")" || fail "未知 DNS 类型: $type"
 
   if service_usable "$service" "$config" "$port"; then
+    cleanup_other_dns_script "$type"
     log "dns: skipped | type=${type}"
     return 0
   fi
@@ -580,6 +597,7 @@ step_dns() {
   remove_other_dns "$type"
   provider_run "dns install ${type}" "$script" "$@" || fail "${type} 安装失败"
   service_usable "$service" "$config" "$port" || fail "${type} 安装后不可用"
+  cleanup_other_dns_script "$type"
   log "dns: installed | type=${type}"
 }
 
