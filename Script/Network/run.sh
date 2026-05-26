@@ -77,7 +77,7 @@ ensure_packages() {
   done
   [ "${#missing[@]}" -eq 0 ] && return 0
   run_quiet "deps install" install_packages "${missing[@]}" || fail "依赖安装失败: ${missing[*]}"
-  log "deps: installed=${missing[*]}"
+  log "deps: installed | packages=${missing[*]}"
 }
 
 script_path() {
@@ -291,7 +291,7 @@ apply_ssh_hardening_config() {
     restore_ssh_hardening "$backup" "$had_old"
     fail "SSH 服务重载失败"
   fi
-  log "ssh: hardened"
+  log "ssh: applied"
 }
 
 detect_ssh_ports() {
@@ -455,7 +455,7 @@ step_hostname() {
   fi
   run_quiet "hostname" hostnamectl set-hostname "$target" || fail "hostname 设置失败"
   run_quiet "hosts" update_hosts "$target" || fail "/etc/hosts 更新失败"
-  log "hostname: ${target}"
+  log "hostname: applied | target=${target}"
 }
 
 proxy_meta() {
@@ -486,7 +486,7 @@ step_proxy() {
 
   if service_exists "$service" || [ -e "$config" ]; then
     provider_run "proxy uninstall ${type}" "$script" "$uninstall" || fail "${type} 卸载失败"
-    log "proxy: stale removed | type=${type}"
+    log "proxy: removed | type=${type} | reason=stale"
   fi
 
   provider_run "proxy install ${type}" "$script" "$@" || fail "${type} 安装失败"
@@ -524,7 +524,7 @@ step_kernel() {
   fi
   if [ -f "$file" ]; then
     provider_run "kernel uninstall" "$script" -u || fail "kernel 旧配置清理失败"
-    log "kernel: stale removed"
+    log "kernel: removed | reason=stale"
   fi
   provider_run "kernel apply" "$script" "$@" || fail "kernel 配置失败"
   kernel_config_matches "$@" || fail "kernel 配置后校验失败"
@@ -558,7 +558,7 @@ remove_other_dns() {
   IFS='|' read -r other_service other_config other_uninstall other_port other_binary <<< "$(dns_meta "$other")" || return 0
   if service_exists "$other_service" || [ -e "$other_config" ] || [ -e "$other_binary" ]; then
     provider_run "dns uninstall ${other}" "$other_script" "$other_uninstall" || fail "${other} 卸载失败"
-    log "dns: conflict removed | type=${other}"
+    log "dns: removed | type=${other} | reason=conflict"
   fi
 }
 
@@ -574,7 +574,7 @@ step_dns() {
 
   if service_exists "$service" || [ -e "$config" ] || [ -e "$binary" ]; then
     provider_run "dns uninstall ${type}" "$script" "$uninstall" || fail "${type} 卸载失败"
-    log "dns: stale removed | type=${type}"
+    log "dns: removed | type=${type} | reason=stale"
   fi
 
   remove_other_dns "$type"
@@ -598,18 +598,18 @@ step_traffic() {
     forward)
       if forwardaws_exists; then
         provider_run "nftables replace" "$script" -r "$@" || fail "nftables 替换失败"
-        log "traffic: forward replaced"
+        log "traffic: applied | mode=forward | action=replace"
       else
         provider_run "nftables add" "$script" -a "$@" || fail "nftables 配置失败"
-        log "traffic: forward added"
+        log "traffic: applied | mode=forward | action=add"
       fi
       ;;
     protect)
       if forwardaws_exists; then
-        log "traffic: protect skipped"
+        log "traffic: skipped | mode=protect"
       else
         provider_run "nftables protect" "$script" --protect on || fail "nftables 防护配置失败"
-        log "traffic: protect enabled"
+        log "traffic: applied | mode=protect"
       fi
       ;;
     *)
@@ -637,7 +637,7 @@ main() {
   require_apt
   ensure_packages iproute2
   run_plan
-  log "done"
+  log "workflow: done"
 }
 
 main "$@"
