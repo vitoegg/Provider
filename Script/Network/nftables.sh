@@ -26,6 +26,7 @@ readonly RULES_STATE_FILE="${STATE_DIR}/rules.db"
 readonly LEGACY_DDNS_STATE_FILE="${STATE_DIR}/ddns-rules.db"
 readonly CONFIG_FILE="${STATE_DIR}/config.env"
 readonly GLOBAL_LOCK_FILE="/run/forwardaws.lock"
+readonly IPV4_FORWARD_SYSCTL_FILE="/etc/sysctl.d/99-forwardaws.conf"
 
 readonly DDNS_SERVICE_NAME="forwardaws-ddns.service"
 readonly DDNS_TIMER_NAME="forwardaws-ddns.timer"
@@ -42,18 +43,26 @@ else
     export TZ="$FORWARDAWS_TIMEZONE_FALLBACK"
 fi
 
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[0;33m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m'
+if [ -t 1 ]; then
+    RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+else
+    RED=''; GREEN=''; YELLOW=''; BLUE=''; NC=''
+fi
+readonly RED GREEN YELLOW BLUE NC
 
 FORWARDAWS_LOCK_HELD=0
 
-log_info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn()  { echo -e "${YELLOW}[WARNING]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-log_debug() { echo -e "${BLUE}[DEBUG]${NC} $1"; }
+log_info()  { printf '%b\n' "${GREEN}[INFO]${NC} $1"; }
+log_warn()  { printf '%b\n' "${YELLOW}[WARNING]${NC} $1" >&2; }
+log_error() { printf '%b\n' "${RED}[ERROR]${NC} $1" >&2; }
+
+quiet_mode() {
+    [ "${FORWARDAWS_QUIET:-0}" = "1" ]
+}
+
+log_info_noisy() {
+    quiet_mode || log_info "$1"
+}
 
 validate_port() {
     local port="$1"
@@ -85,9 +94,6 @@ resolve_ddns_ipv4() {
     local ip=""
 
     ip=$(getent ahostsv4 "$domain" 2>/dev/null | awk '/STREAM/ {print $1; exit}')
-    if [ -z "$ip" ] && command -v dig >/dev/null 2>&1; then
-        ip=$(dig +time=3 +tries=1 +short A "$domain" @1.1.1.1 2>/dev/null | head -n1)
-    fi
 
     validate_ip_address "$ip" || return 1
     echo "$ip"
@@ -134,20 +140,44 @@ ensure_supported_bash() {
     fi
 }
 
-ensure_dependencies() {
-    local missing=""
-    command -v nft >/dev/null 2>&1 || missing="${missing}${missing:+ }nft"
-    command -v flock >/dev/null 2>&1 || missing="${missing}${missing:+ }flock"
+APT_UPDATED=0
 
-    if [ -n "$missing" ]; then
-        log_error "缺失依赖: $missing，请先安装: apt install -y nftables util-linux"
+install_package() {
+    local package="$1"
+
+    command -v apt-get >/dev/null 2>&1 || {
+        log_error "缺失依赖包 ${package}，且未检测到 apt-get，无法自动安装"
         return 1
+    }
+
+    if [ "$APT_UPDATED" != "1" ]; then
+        DEBIAN_FRONTEND=noninteractive apt-get update >/dev/null 2>&1 || { log_error "apt-get update 失败"; return 1; }
+        APT_UPDATED=1
     fi
+
+    DEBIAN_FRONTEND=noninteractive apt-get install -y "$package" >/dev/null 2>&1 || { log_error "安装依赖失败: $package"; return 1; }
+    log_info_noisy "已安装缺失依赖: $package"
 }
 
-ensure_runtime_tools() {
-    command -v ss >/dev/null 2>&1 || log_warn "未检测到 ss，保护端口自动识别将忽略运行中监听端口"
-    command -v dig >/dev/null 2>&1 || log_warn "未检测到 dig，域名解析仅使用 getent"
+ensure_dependencies() {
+    local command_name
+    local package_name
+
+    while read -r command_name package_name; do
+        [ -n "$command_name" ] || continue
+        command -v "$command_name" >/dev/null 2>&1 && continue
+        install_package "$package_name" || return 1
+        command -v "$command_name" >/dev/null 2>&1 || {
+            log_error "安装 ${package_name} 后仍未检测到命令: ${command_name}"
+            return 1
+        }
+    done << EOF
+nft nftables
+flock util-linux
+ss iproute2
+sysctl procps
+getent libc-bin
+EOF
 }
 
 ensure_state_dir() {
@@ -155,16 +185,32 @@ ensure_state_dir() {
 }
 
 acquire_global_lock() {
+    local lock_wait="${FORWARDAWS_LOCK_WAIT:-0}"
+    local lock_error="检测到其他任务正在执行中，请稍后重试"
+
     [ "$FORWARDAWS_LOCK_HELD" = "1" ] && return 0
     exec 9>"$GLOBAL_LOCK_FILE" || {
         log_error "无法创建全局锁文件: $GLOBAL_LOCK_FILE"
         return 1
     }
-    flock -n 9 || {
-        log_error "检测到其他任务正在执行中，请稍后重试"
-        return 1
-    }
+
+    if [[ "$lock_wait" =~ ^[0-9]+$ ]] && [ "$lock_wait" -gt 0 ]; then
+        lock_error="等待全局锁超时，请稍后重试"
+        flock -w "$lock_wait" 9
+    else
+        flock -n 9
+    fi || { log_error "$lock_error"; return 1; }
+
     FORWARDAWS_LOCK_HELD=1
+}
+
+ensure_nftables_service_enabled() {
+    command -v systemctl >/dev/null 2>&1 || return 0
+    if ! systemctl is-enabled nftables.service >/dev/null 2>&1; then
+        systemctl enable nftables.service >/dev/null 2>&1 && \
+            log_info_noisy "已启用 nftables.service 开机自启" || \
+            log_warn "无法启用 nftables.service，重启后规则可能丢失"
+    fi
 }
 
 nft_main_config_has_forwardaws_include() {
@@ -186,36 +232,35 @@ ensure_nft_main_config_include() {
         }
     fi
 
-    if command -v systemctl >/dev/null 2>&1; then
-        if ! systemctl is-enabled nftables.service >/dev/null 2>&1; then
-            systemctl enable nftables.service >/dev/null 2>&1 && \
-                log_info "已启用 nftables.service 开机自启" || \
-                log_warn "无法启用 nftables.service，重启后规则可能丢失"
-        fi
-    fi
+    ensure_nftables_service_enabled
 }
 
 ensure_ipv4_forwarding_enabled() {
     local current
-    current=$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo "0")
+    current=$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo "0")
 
     if [ "$current" != "1" ]; then
-        if command -v sysctl >/dev/null 2>&1 && sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1; then
-            log_info "已启用 net.ipv4.ip_forward=1（运行时）"
-        elif [ -w /proc/sys/net/ipv4/ip_forward ] && echo 1 > /proc/sys/net/ipv4/ip_forward 2>/dev/null; then
-            log_info "已启用 /proc/sys/net/ipv4/ip_forward"
-        else
-            log_warn "无法自动启用 IP 转发，远程端口转发可能无法生效"
+        sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || {
+            log_error "无法启用 net.ipv4.ip_forward=1，远程端口转发无法生效"
             return 1
-        fi
+        }
+        log_info_noisy "已启用 net.ipv4.ip_forward=1（运行时）"
     fi
 
-    local sysctl_conf="/etc/sysctl.d/99-forwardaws.conf"
-    if [ ! -f "$sysctl_conf" ] || ! grep -q 'net.ipv4.ip_forward=1' "$sysctl_conf" 2>/dev/null; then
-        echo "net.ipv4.ip_forward=1" > "$sysctl_conf" 2>/dev/null && \
-            log_info "已持久化 net.ipv4.ip_forward=1 至 $sysctl_conf" || \
-            log_warn "无法持久化 IP 转发设置，重启后可能失效"
+    if [ ! -f "$IPV4_FORWARD_SYSCTL_FILE" ] || ! grep -q 'net.ipv4.ip_forward=1' "$IPV4_FORWARD_SYSCTL_FILE" 2>/dev/null; then
+        echo "net.ipv4.ip_forward=1" > "$IPV4_FORWARD_SYSCTL_FILE" 2>/dev/null || {
+            log_error "无法持久化 IP 转发设置: $IPV4_FORWARD_SYSCTL_FILE"
+            return 1
+        }
+        log_info_noisy "已持久化 net.ipv4.ip_forward=1 至 $IPV4_FORWARD_SYSCTL_FILE"
     fi
+}
+
+ipv4_forwarding_needs_update() {
+    [ "$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo "0")" = "1" ] && \
+        grep -q 'net.ipv4.ip_forward=1' "$IPV4_FORWARD_SYSCTL_FILE" 2>/dev/null && \
+        return 1
+    return 0
 }
 
 get_config_value() {
@@ -227,6 +272,15 @@ get_config_value() {
 
 get_protection_flag() {
     get_config_value "PROTECTION_ENABLED" "0"
+}
+
+write_config_file() {
+    local target="$1"
+    local protect_flag="$2"
+
+    {
+        echo "PROTECTION_ENABLED=${protect_flag}"
+    } > "$target"
 }
 
 normalize_ports() {
@@ -278,13 +332,9 @@ apply_exclude_ports_filter() {
     echo "$filtered"
 }
 
-detect_ssh_port() {
-    local port=""
-    if command -v sshd >/dev/null 2>&1; then
-        port=$(sshd -T 2>/dev/null | awk '$1=="port" { print $2; exit }')
-    fi
-    validate_port "$port" || port="22"
-    echo "$port"
+detect_ssh_ports() {
+    command -v sshd >/dev/null 2>&1 || { echo ""; return 0; }
+    sshd -T 2>/dev/null | awk '$1=="port" && $2 ~ /^[0-9]+$/ && $2>=1 && $2<=65535 { print $2 }' | sort -un | tr '\n' ',' | sed 's/,$//'
 }
 
 parse_local_endpoint() {
@@ -312,7 +362,10 @@ is_loopback_address() {
 }
 
 detect_runtime_public_ports() {
-    command -v ss >/dev/null 2>&1 || { echo ""; return 0; }
+    command -v ss >/dev/null 2>&1 || {
+        log_error "缺失依赖: ss"
+        return 1
+    }
 
     local ports=""
     local endpoint=""
@@ -329,10 +382,7 @@ detect_runtime_public_ports() {
         is_loopback_address "$addr" && continue
         ports="${ports}${ports:+,}${port}"
     done < <(
-        {
-            ss -H -ltn4 2>/dev/null
-            ss -H -ltn6 2>/dev/null
-        } | awk '{print $(NF-1)}'
+        ss -H -ltn 2>/dev/null | awk '{print $(NF-1)}'
     )
 
     normalize_ports "$ports"
@@ -346,27 +396,31 @@ get_forwarding_ports_from_file() {
 
 get_auto_allow_ports() {
     local state_file="${1:-$RULES_STATE_FILE}"
-    local ssh_port
+    local ssh_ports
     local forward_ports
     local runtime_ports
     local exclude_ports
     local merged
     local filtered
+    local port
+    local -a ssh_ports_arr
 
-    ssh_port=$(detect_ssh_port)
+    ssh_ports=$(detect_ssh_ports)
     forward_ports=$(get_forwarding_ports_from_file "$state_file")
-    runtime_ports=$(detect_runtime_public_ports)
+    runtime_ports=$(detect_runtime_public_ports) || return 1
     exclude_ports=$(get_exclude_ports)
 
-    merged="$ssh_port"
+    merged="$ssh_ports"
     [ -n "$forward_ports" ] && merged="${merged},${forward_ports}"
     [ -n "$runtime_ports" ] && merged="${merged},${runtime_ports}"
     merged=$(normalize_ports "$merged")
 
     filtered=$(apply_exclude_ports_filter "$merged" "$exclude_ports")
-    if ! is_port_in_list "$ssh_port" "$filtered"; then
-        filtered=$(normalize_ports "${filtered},${ssh_port}")
-    fi
+    IFS=',' read -ra ssh_ports_arr <<< "$ssh_ports"
+    for port in "${ssh_ports_arr[@]}"; do
+        validate_port "$port" || continue
+        is_port_in_list "$port" "$filtered" || filtered=$(normalize_ports "${filtered},${port}")
+    done
 
     echo "$filtered"
 }
@@ -565,7 +619,7 @@ copy_current_state_to() {
 render_delete_headers() {
     cat << EOF
 #!/usr/sbin/nft -f
-# forwardaws generated at $(date +'%Y-%m-%dT%H:%M:%S%z')
+# forwardaws generated by nftables.sh
 
 table ip ${LEGACY_TABLE_NAME}
 delete table ip ${LEGACY_TABLE_NAME}
@@ -631,7 +685,7 @@ EOF
 render_filter_table() {
     local state_file="$1"
     local protect_flag="$2"
-    local allow_ports
+    local allow_ports="${3:-}"
     local remote_ips
     local has_mss
 
@@ -667,7 +721,7 @@ EOF
     fi
 
     if [ "$protect_flag" = "1" ]; then
-        allow_ports=$(get_auto_allow_ports "$state_file")
+        [ -n "$allow_ports" ] || allow_ports=$(get_auto_allow_ports "$state_file") || return 1
         if [ -z "$allow_ports" ]; then
             log_error "保护端口列表为空，拒绝渲染保护链"
             return 1
@@ -710,41 +764,58 @@ render_ruleset() {
     local state_file="$1"
     local protect_flag="$2"
     local output_file="$3"
+    local protect_ports="${4:-}"
 
     {
         render_delete_headers
         render_nat_table "$state_file"
-        render_filter_table "$state_file" "$protect_flag"
+        render_filter_table "$state_file" "$protect_flag" "$protect_ports"
     } > "$output_file"
+}
+
+run_nft_file() {
+    local check_flag="$1"
+    local label="$2"
+    local file="$3"
+    local desc="$4"
+    local output
+
+    if [ -n "$check_flag" ]; then
+        output=$(nft "$check_flag" -f "$file" 2>&1)
+    else
+        output=$(nft -f "$file" 2>&1)
+    fi
+    [ $? -eq 0 ] && return 0
+    log_error "nft ${label}失败: $desc"
+    [ -n "$output" ] && log_error "$output"
+    return 1
 }
 
 apply_candidate_state() {
     local candidate_state="$1"
     local protect_flag="$2"
     local desc="$3"
+    local protect_ports="${4:-}"
     local nft_tmp
     local state_tmp
     local config_tmp
+    local rules_changed=0
+    local include_missing=0
+    local forwarding_needs_update=0
 
     ensure_state_dir || return 1
+    if [ "$protect_flag" = "1" ] && [ -z "$protect_ports" ]; then
+        protect_ports=$(get_auto_allow_ports "$candidate_state") || return 1
+    fi
 
     nft_tmp="${FORWARDAWS_RULES_FILE}.tmp.$$"
-    render_ruleset "$candidate_state" "$protect_flag" "$nft_tmp" || {
+    render_ruleset "$candidate_state" "$protect_flag" "$nft_tmp" "$protect_ports" || {
         rm -f "$nft_tmp"
         return 1
     }
 
     if state_has_remote_rules "$candidate_state"; then
-        ensure_ipv4_forwarding_enabled || true
-    fi
-
-    local nft_output=""
-    nft_output=$(nft -c -f "$nft_tmp" 2>&1)
-    if [ $? -ne 0 ]; then
-        rm -f "$nft_tmp"
-        log_error "nft 预检失败: $desc"
-        [ -n "$nft_output" ] && log_error "$nft_output"
-        return 1
+        ipv4_forwarding_needs_update && forwarding_needs_update=1
     fi
 
     state_tmp="${RULES_STATE_FILE}.tmp.$$"
@@ -754,40 +825,46 @@ apply_candidate_state() {
         log_error "写入状态临时文件失败"
         return 1
     }
-    {
-        echo "PROTECTION_ENABLED=${protect_flag}"
-    } > "$config_tmp" || {
+    write_config_file "$config_tmp" "$protect_flag" || {
         rm -f "$nft_tmp" "$state_tmp" "$config_tmp"
         log_error "写入配置临时文件失败"
         return 1
     }
 
-    nft_output=$(nft -f "$nft_tmp" 2>&1)
-    if [ $? -ne 0 ]; then
+    cmp -s "$nft_tmp" "$FORWARDAWS_RULES_FILE" || rules_changed=1
+    nft_main_config_has_forwardaws_include || include_missing=1
+
+    if [ "$rules_changed$include_missing$forwarding_needs_update" = "000" ] && \
+        cmp -s "$state_tmp" "$RULES_STATE_FILE" && cmp -s "$config_tmp" "$CONFIG_FILE"; then
         rm -f "$nft_tmp" "$state_tmp" "$config_tmp"
-        log_error "nft 应用失败: $desc"
-        [ -n "$nft_output" ] && log_error "$nft_output"
-        return 1
+        return 0
     fi
 
-    mv "$nft_tmp" "$FORWARDAWS_RULES_FILE" || {
-        rm -f "$state_tmp" "$config_tmp"
-        log_error "写入持久化规则文件失败: $FORWARDAWS_RULES_FILE"
-        return 1
-    }
-    chmod 600 "$FORWARDAWS_RULES_FILE" 2>/dev/null || true
+    if [ "$rules_changed" -eq 1 ]; then
+        run_nft_file "-c" "预检" "$nft_tmp" "$desc" || { rm -f "$nft_tmp" "$state_tmp" "$config_tmp"; return 1; }
+    fi
 
-    mv "$state_tmp" "$RULES_STATE_FILE" || {
-        rm -f "$config_tmp"
-        log_error "写入规则状态文件失败: $RULES_STATE_FILE"
-        return 1
-    }
-    mv "$config_tmp" "$CONFIG_FILE" || {
-        log_error "写入配置状态文件失败: $CONFIG_FILE"
-        return 1
-    }
+    if [ "$forwarding_needs_update" -eq 1 ]; then
+        ensure_ipv4_forwarding_enabled || { rm -f "$nft_tmp" "$state_tmp" "$config_tmp"; return 1; }
+    fi
 
-    ensure_nft_main_config_include || return 1
+    if [ "$rules_changed" -eq 1 ]; then
+        run_nft_file "" "应用" "$nft_tmp" "$desc" || {
+            rm -f "$nft_tmp" "$state_tmp" "$config_tmp"
+            return 1
+        }
+        mv "$nft_tmp" "$FORWARDAWS_RULES_FILE" || { rm -f "$state_tmp" "$config_tmp"; log_error "写入持久化规则文件失败: $FORWARDAWS_RULES_FILE"; return 1; }
+        chmod 600 "$FORWARDAWS_RULES_FILE" 2>/dev/null || true
+    else
+        rm -f "$nft_tmp"
+    fi
+
+    mv "$state_tmp" "$RULES_STATE_FILE" || { rm -f "$config_tmp"; log_error "写入规则状态文件失败: $RULES_STATE_FILE"; return 1; }
+    mv "$config_tmp" "$CONFIG_FILE" || { log_error "写入配置状态文件失败: $CONFIG_FILE"; return 1; }
+
+    if [ "$include_missing" -eq 1 ] || [ "$rules_changed" -eq 1 ]; then
+        ensure_nft_main_config_include || return 1
+    fi
 }
 
 install_systemd_units_if_needed() {
@@ -797,6 +874,8 @@ install_systemd_units_if_needed() {
     local timer_desc="$4"
     local exec_args="$5"
     local script_path
+    local service_file="/etc/systemd/system/${service_name}"
+    local timer_file="/etc/systemd/system/${timer_name}"
 
     command -v systemctl >/dev/null 2>&1 || return 1
     script_path=$(get_script_absolute_path)
@@ -805,7 +884,7 @@ install_systemd_units_if_needed() {
         return 1
     }
 
-    cat > "/etc/systemd/system/${service_name}" << EOF
+    cat > "$service_file" << EOF || { log_error "写入 systemd service 失败: $service_file"; return 1; }
 [Unit]
 Description=${service_desc}
 After=network-online.target nftables.service
@@ -813,10 +892,12 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+Environment=FORWARDAWS_QUIET=1
+Environment=FORWARDAWS_LOCK_WAIT=10
 ExecStart=/bin/bash "${script_path}" ${exec_args}
 EOF
 
-    cat > "/etc/systemd/system/${timer_name}" << EOF
+    cat > "$timer_file" << EOF || { log_error "写入 systemd timer 失败: $timer_file"; return 1; }
 [Unit]
 Description=${timer_desc}
 
@@ -830,56 +911,31 @@ Unit=${service_name}
 WantedBy=timers.target
 EOF
 
+    chmod 644 "$service_file" "$timer_file" 2>/dev/null || true
     systemctl daemon-reload >/dev/null 2>&1
-}
-
-install_ddns_systemd_units_if_needed() {
-    install_systemd_units_if_needed \
-        "$DDNS_SERVICE_NAME" \
-        "$DDNS_TIMER_NAME" \
-        "ForwardAWS DDNS sync service" \
-        "Run ForwardAWS DDNS sync every 60 seconds" \
-        "--ddns-sync"
-}
-
-install_protect_systemd_units_if_needed() {
-    install_systemd_units_if_needed \
-        "$PROTECT_SERVICE_NAME" \
-        "$PROTECT_TIMER_NAME" \
-        "ForwardAWS protection sync service" \
-        "Run ForwardAWS protection sync every 60 seconds" \
-        "--protect sync"
 }
 
 has_systemctl() {
     command -v systemctl >/dev/null 2>&1
 }
 
-log_external_scheduler_hint() {
-    local exec_args="$1"
-    local script_path
-    script_path=$(get_script_absolute_path)
-    [ -n "$script_path" ] || script_path="$0"
-    log_info "可使用外部调度（例如 cron）执行: */1 * * * * /bin/bash ${script_path} ${exec_args}"
-}
+enable_timer_if_available() {
+    local service_name="$1"
+    local timer_name="$2"
+    local service_desc="$3"
+    local timer_desc="$4"
+    local exec_args="$5"
+    local success_msg="$6"
+    local fail_msg="$7"
 
-enable_timer_with_fallback() {
-    local timer_name="$1"
-    local install_func="$2"
-    local no_systemctl_msg="$3"
-    local fallback_exec_args="$4"
-    local success_msg="$5"
-    local fail_msg="$6"
-
-    if ! has_systemctl; then
-        log_warn "$no_systemctl_msg"
-        log_external_scheduler_hint "$fallback_exec_args"
+    has_systemctl || { log_error "未检测到 systemctl，无法启用自动同步"; return 1; }
+    install_systemd_units_if_needed "$service_name" "$timer_name" "$service_desc" "$timer_desc" "$exec_args" || return 1
+    if systemctl is-enabled --quiet "$timer_name" 2>/dev/null && systemctl is-active --quiet "$timer_name" 2>/dev/null; then
         return 0
     fi
 
-    "$install_func" || return 1
     if systemctl enable --now "$timer_name" >/dev/null 2>&1; then
-        log_info "$success_msg"
+        log_info_noisy "$success_msg"
         return 0
     fi
 
@@ -893,36 +949,36 @@ disable_timer_if_available() {
 
     has_systemctl || return 0
     if systemctl disable --now "$timer_name" >/dev/null 2>&1; then
-        log_info "$success_msg"
+        log_info_noisy "$success_msg"
     fi
 }
 
-reconcile_ddns_timer_state() {
+reconcile_timers() {
     local domain_count
+    local protect_flag
+
     domain_count=$(state_domain_count "$RULES_STATE_FILE")
+    protect_flag=$(get_protection_flag)
 
     if [ "$domain_count" -gt 0 ]; then
-        enable_timer_with_fallback \
+        enable_timer_if_available \
+            "$DDNS_SERVICE_NAME" \
             "$DDNS_TIMER_NAME" \
-            "install_ddns_systemd_units_if_needed" \
-            "未检测到 systemctl，跳过内置 DDNS 定时器" \
+            "ForwardAWS DDNS sync service" \
+            "Run ForwardAWS DDNS sync every 60 seconds" \
             "--ddns-sync" \
             "DDNS 定时同步已启用" \
             "启用 DDNS 定时同步失败，请手动检查 systemd 状态"
     else
         disable_timer_if_available "$DDNS_TIMER_NAME" "无 DDNS 域名规则，已停用 DDNS 定时同步"
     fi
-}
-
-reconcile_protect_timer_state() {
-    local protect_flag
-    protect_flag=$(get_protection_flag)
 
     if [ "$protect_flag" = "1" ]; then
-        enable_timer_with_fallback \
+        enable_timer_if_available \
+            "$PROTECT_SERVICE_NAME" \
             "$PROTECT_TIMER_NAME" \
-            "install_protect_systemd_units_if_needed" \
-            "未检测到 systemctl，跳过内置保护同步定时器" \
+            "ForwardAWS protection sync service" \
+            "Run ForwardAWS protection sync every 60 seconds" \
             "--protect sync" \
             "保护端口自动同步已启用" \
             "启用保护同步定时器失败，请手动检查 systemd 状态"
@@ -937,9 +993,66 @@ get_protect_timer_status() {
     echo "inactive"
 }
 
-reconcile_timers() {
-    reconcile_ddns_timer_state
-    reconcile_protect_timer_state
+append_rule_to_state() {
+    local candidate="$1"
+    local rule="$2"
+    local now="$3"
+    local duplicate_mode="$4"
+
+    parse_rule "$rule" 1 || return 1
+    if state_rule_exact_exists "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_SNAT_IP" "$PARSED_MSS"; then
+        [ "$duplicate_mode" = "skip" ] && { log_warn "规则已存在，跳过: $rule"; return 2; }
+        log_error "重复规则: $rule"
+        return 1
+    fi
+    if state_port_conflicts "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT"; then
+        [ "$duplicate_mode" = "skip" ] && log_error "端口冲突，跳过: $rule" || log_error "端口冲突: $rule"
+        return 1
+    fi
+    make_state_line "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_TYPE" "$PARSED_IP" "ok" "$now" "$PARSED_SNAT_IP" "$PARSED_MSS" >> "$candidate"
+}
+
+remove_rule_from_state() {
+    local candidate="$1"
+    local rule="$2"
+    local next_candidate
+
+    parse_rule "$rule" 0 || return 1
+    if ! state_base_rule_exists "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT"; then
+        log_warn "规则不存在，跳过: $rule"
+        return 2
+    fi
+    next_candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 3
+    awk -F'|' -v sp="$PARSED_SRC_PORT" -v mode="$PARSED_MODE" -v target="$PARSED_TARGET" -v dp="$PARSED_DEST_PORT" \
+        'NF>=8 && !($1==sp && $2==mode && $3==target && $4==dp) { print $0 }' "$candidate" > "$next_candidate" || {
+        rm -f "$next_candidate"
+        return 3
+    }
+    mv "$next_candidate" "$candidate" || return 3
+}
+
+finish_rule_batch() {
+    local candidate="$1"
+    local success="$2"
+    local skipped="$3"
+    local failed="$4"
+    local protect_flag="$5"
+    local desc="$6"
+    local action="$7"
+    local empty_action="$8"
+    local show_status="${9:-0}"
+
+    if [ "$success" -gt 0 ]; then
+        apply_candidate_state "$candidate" "$protect_flag" "$desc" || { rm -f "$candidate"; return 1; }
+        log_info "${action}完成: 成功 ${success} 条，跳过 ${skipped} 条，失败 ${failed} 条"
+        reconcile_timers
+        [ "$show_status" = "1" ] && show_protection_status
+    else
+        log_warn "没有${empty_action}: 跳过 ${skipped} 条，失败 ${failed} 条"
+    fi
+
+    rm -f "$candidate"
+    [ "$failed" -eq 0 ]
 }
 
 add_rule_batch() {
@@ -958,43 +1071,21 @@ add_rule_batch() {
 
     for rule in "${rules[@]}"; do
         log_info "处理规则: $rule"
-        if ! parse_rule "$rule" 1; then
-            failed=$((failed + 1))
-            continue
-        fi
-
-        if state_rule_exact_exists "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_SNAT_IP" "$PARSED_MSS"; then
-            log_warn "规则已存在，跳过: $rule"
-            skipped=$((skipped + 1))
-            continue
-        fi
-        if state_port_conflicts "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT"; then
-            log_error "端口冲突，跳过: $rule"
-            failed=$((failed + 1))
-            continue
-        fi
-
-        make_state_line "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_TYPE" "$PARSED_IP" "ok" "$now" "$PARSED_SNAT_IP" "$PARSED_MSS" >> "$candidate"
-        success=$((success + 1))
+        append_rule_to_state "$candidate" "$rule" "$now" "skip"
+        case $? in
+            0) success=$((success + 1)) ;;
+            2) skipped=$((skipped + 1)) ;;
+            3) rm -f "$candidate"; return 1 ;;
+            *) failed=$((failed + 1)) ;;
+        esac
     done
 
-    if [ "$success" -gt 0 ]; then
-        apply_candidate_state "$candidate" "1" "批量添加转发规则" || { rm -f "$candidate"; return 1; }
-        log_info "批量添加完成: 成功 ${success} 条，跳过 ${skipped} 条，失败 ${failed} 条"
-        reconcile_timers
-        show_protection_status
-    else
-        log_warn "没有新增规则: 跳过 ${skipped} 条，失败 ${failed} 条"
-    fi
-
-    rm -f "$candidate"
-    [ "$failed" -eq 0 ]
+    finish_rule_batch "$candidate" "$success" "$skipped" "$failed" "1" "批量添加转发规则" "批量添加" "新增规则" "1"
 }
 
 delete_rule_batch() {
     local -a rules=("$@")
     local candidate
-    local next_candidate
     local success=0
     local skipped=0
     local failed=0
@@ -1006,37 +1097,15 @@ delete_rule_batch() {
 
     for rule in "${rules[@]}"; do
         log_info "处理规则: $rule"
-        if ! parse_rule "$rule" 0; then
-            failed=$((failed + 1))
-            continue
-        fi
-
-        if ! state_base_rule_exists "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT"; then
-            log_warn "规则不存在，跳过: $rule"
-            skipped=$((skipped + 1))
-            continue
-        fi
-
-        next_candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || { rm -f "$candidate"; return 1; }
-        awk -F'|' -v sp="$PARSED_SRC_PORT" -v mode="$PARSED_MODE" -v target="$PARSED_TARGET" -v dp="$PARSED_DEST_PORT" \
-            'NF>=8 && !($1==sp && $2==mode && $3==target && $4==dp) { print $0 }' "$candidate" > "$next_candidate" || {
-            rm -f "$candidate" "$next_candidate"
-            return 1
-        }
-        mv "$next_candidate" "$candidate"
-        success=$((success + 1))
+        remove_rule_from_state "$candidate" "$rule"
+        case $? in
+            0) success=$((success + 1)) ;;
+            2) skipped=$((skipped + 1)) ;;
+            *) failed=$((failed + 1)) ;;
+        esac
     done
 
-    if [ "$success" -gt 0 ]; then
-        apply_candidate_state "$candidate" "$(get_protection_flag)" "批量删除转发规则" || { rm -f "$candidate"; return 1; }
-        log_info "批量删除完成: 成功 ${success} 条，跳过 ${skipped} 条，失败 ${failed} 条"
-        reconcile_timers
-    else
-        log_warn "没有删除规则: 跳过 ${skipped} 条，失败 ${failed} 条"
-    fi
-
-    rm -f "$candidate"
-    [ "$failed" -eq 0 ]
+    finish_rule_batch "$candidate" "$success" "$skipped" "$failed" "$(get_protection_flag)" "批量删除转发规则" "批量删除" "删除规则"
 }
 
 replace_rules_batch() {
@@ -1053,21 +1122,7 @@ replace_rules_batch() {
 
     for rule in "${rules[@]}"; do
         log_info "校验规则: $rule"
-        if ! parse_rule "$rule" 1; then
-            failed=$((failed + 1))
-            continue
-        fi
-        if state_rule_exact_exists "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_SNAT_IP" "$PARSED_MSS"; then
-            log_error "重复规则: $rule"
-            failed=$((failed + 1))
-            continue
-        fi
-        if state_port_conflicts "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT"; then
-            log_error "端口冲突: $rule"
-            failed=$((failed + 1))
-            continue
-        fi
-        make_state_line "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_TYPE" "$PARSED_IP" "ok" "$now" "$PARSED_SNAT_IP" "$PARSED_MSS" >> "$candidate"
+        append_rule_to_state "$candidate" "$rule" "$now" "fail" || failed=$((failed + 1))
     done
 
     if [ "$failed" -gt 0 ]; then
@@ -1085,6 +1140,7 @@ replace_rules_batch() {
 
 sync_ddns_rules() {
     local candidate
+    local candidate_changed=0
     local changed=0
     local unchanged=0
     local failed=0
@@ -1092,7 +1148,7 @@ sync_ddns_rules() {
 
     prepare_state_file || return 1
     if [ "$(state_domain_count "$RULES_STATE_FILE")" -eq 0 ]; then
-        log_warn "未配置 DDNS 域名规则，无需同步"
+        log_info_noisy "未配置 DDNS 域名规则，无需同步"
         reconcile_timers
         return 0
     fi
@@ -1126,40 +1182,49 @@ sync_ddns_rules() {
         fi
     done < "$RULES_STATE_FILE"
 
+    cmp -s "$candidate" "$RULES_STATE_FILE" || candidate_changed=1
+
     apply_candidate_state "$candidate" "$(get_protection_flag)" "DDNS 同步" || { rm -f "$candidate"; return 1; }
     rm -f "$candidate"
-    reconcile_timers
-    log_info "DDNS 同步完成: 更新 ${changed} 条，未变化 ${unchanged} 条，失败 ${failed} 条"
+    if [ "$candidate_changed" -eq 1 ]; then
+        log_info "DDNS 同步完成: 更新 ${changed} 条，未变化 ${unchanged} 条，失败 ${failed} 条"
+    else
+        log_info_noisy "DDNS 同步完成: 无变化，未变化 ${unchanged} 条，失败 ${failed} 条"
+    fi
     [ "$failed" -eq 0 ]
 }
 
 sync_protection_ports() {
     local candidate
     local protect_flag
+    local current_ports
 
     protect_flag=$(get_protection_flag)
     if [ "$protect_flag" != "1" ]; then
-        log_warn "保护模式未开启，跳过端口同步"
+        log_info_noisy "保护模式未开启，跳过端口同步"
         return 0
     fi
 
     candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 1
     copy_current_state_to "$candidate" || { rm -f "$candidate"; return 1; }
-    apply_candidate_state "$candidate" "1" "同步端口保护" || { rm -f "$candidate"; return 1; }
+    current_ports=$(get_auto_allow_ports "$candidate") || { rm -f "$candidate"; return 1; }
+
+    apply_candidate_state "$candidate" "1" "同步端口保护" "$current_ports" || { rm -f "$candidate"; return 1; }
     rm -f "$candidate"
-    reconcile_timers
-    log_info "保护端口已同步: $(get_auto_allow_ports "$RULES_STATE_FILE")"
+    log_info_noisy "保护端口同步完成: $current_ports"
 }
 
 enable_protection() {
     local candidate
+    local current_ports
 
     candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 1
     copy_current_state_to "$candidate" || { rm -f "$candidate"; return 1; }
-    apply_candidate_state "$candidate" "1" "开启端口保护" || { rm -f "$candidate"; return 1; }
+    current_ports=$(get_auto_allow_ports "$candidate") || { rm -f "$candidate"; return 1; }
+    apply_candidate_state "$candidate" "1" "开启端口保护" "$current_ports" || { rm -f "$candidate"; return 1; }
     rm -f "$candidate"
     reconcile_timers
-    log_info "端口保护已开启，开放端口: $(get_auto_allow_ports "$RULES_STATE_FILE")"
+    log_info "端口保护已开启，开放端口: $current_ports"
 }
 
 disable_protection() {
@@ -1187,7 +1252,7 @@ show_protection_status() {
     echo -e "${BLUE}========================================${NC}"
 
     if [ "$protect_flag" = "1" ]; then
-        auto_ports=$(get_auto_allow_ports "$RULES_STATE_FILE")
+        auto_ports=$(get_auto_allow_ports "$RULES_STATE_FILE") || return 1
         echo -e "保护状态: ${GREEN}已开启${NC}"
         echo -e "当前放行端口: ${YELLOW}${auto_ports}${NC}"
     else
@@ -1274,7 +1339,7 @@ run_mutation() {
     local desc="$1"
     shift
     acquire_global_lock || return 1
-    log_info "$desc"
+    log_info_noisy "$desc"
     "$@"
 }
 
@@ -1287,7 +1352,6 @@ ensure_for_write() {
     ensure_supported_bash || return 1
     require_root || return 1
     ensure_dependencies || return 1
-    ensure_runtime_tools
     prepare_state_file || return 1
 }
 
