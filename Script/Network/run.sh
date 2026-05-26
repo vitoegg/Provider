@@ -381,7 +381,7 @@ ensure_nft_main_config_ssh_include() {
   mkdir -p "$NFT_INCLUDE_DIR"
   touch "$NFT_MAIN_CONFIG" || return 1
   nft_main_config_has_ssh_include && return 0
-  printf '\ninclude "/etc/nftables.d/cloudserver-ssh.nft"\n' >> "$NFT_MAIN_CONFIG"
+  printf '\ninclude "/etc/nftables.d/*.nft"\n' >> "$NFT_MAIN_CONFIG"
 }
 
 ssh_nft_live_ready() {
