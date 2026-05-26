@@ -5,7 +5,7 @@ PROVIDER_SCRIPT_DIR="/root"
 PLAN_FILE=""
 TMP_DIR=""
 LOG_FILE=""
-SSH_HARDENING_CONF="/etc/ssh/sshd_config.d/99-cloudserver-hardening.conf"
+SSH_HARDENING_CONF="/etc/ssh/sshd_config.d/00-cloudserver-hardening.conf"
 SSH_MAIN_CONFIG="/etc/ssh/sshd_config"
 SSH_NFT_CONF="/etc/nftables.d/cloudserver-ssh.nft"
 SSH_NFT_TABLE="cloudserver_ssh_guard"
@@ -140,6 +140,16 @@ normalize_block() {
   printf '%s\n' "$1" | sed 's/[[:space:]]*$//' | awk 'NF > 0'
 }
 
+normalize_sshd_value() {
+  local key value
+  key="$(lower "$1")"
+  value="$(lower "$2")"
+  case "${key}:${value}" in
+    permitrootlogin:without-password) printf 'prohibit-password' ;;
+    *) printf '%s' "$value" ;;
+  esac
+}
+
 content_matches_file() {
   local file="$1" content="$2" tmp
   [ -f "$file" ] || return 1
@@ -177,7 +187,7 @@ sshd_config_valid() {
   "$sshd" -t >/dev/null 2>&1
 }
 
-sshd_effective_config_matches() {
+sshd_effective_config_mismatch() {
   local target="$1" effective_file line key value actual
   tmpdir
   effective_file="${TMP_DIR}/sshd-effective.$$"
@@ -200,10 +210,18 @@ sshd_effective_config_matches() {
         }
       ' "$effective_file"
     )"
-    [ "$(lower "$actual")" = "$(lower "$value")" ] || return 1
+    if [ "$(normalize_sshd_value "$key" "$actual")" != "$(normalize_sshd_value "$key" "$value")" ]; then
+      printf '%s expected=%s actual=%s; ' "$(lower "$key")" "$value" "${actual:-missing}"
+    fi
   done <<EOF
 $target
 EOF
+}
+
+sshd_effective_config_matches() {
+  local mismatch
+  mismatch="$(sshd_effective_config_mismatch "$1")" || return 1
+  [ -z "$mismatch" ]
 }
 
 ssh_hardening_ready() {
@@ -240,7 +258,7 @@ reload_ssh_service() {
 }
 
 apply_ssh_hardening_config() {
-  local target="$1" backup had_old=0
+  local target="$1" backup had_old=0 mismatch
   sshd_config_has_dropin_include || fail "sshd 主配置未启用 /etc/ssh/sshd_config.d/*.conf"
   mkdir -p "$(dirname "$SSH_HARDENING_CONF")"
 
@@ -257,9 +275,17 @@ apply_ssh_hardening_config() {
   fi
 
   install_content_file "$SSH_HARDENING_CONF" 644 "$target" || fail "SSH 独立配置写入失败"
-  if ! sshd_config_valid || ! sshd_effective_config_matches "$target"; then
+  if ! sshd_config_valid; then
     restore_ssh_hardening "$backup" "$had_old"
-    fail "SSH 配置校验失败，可能被其它 sshd 配置覆盖"
+    fail "SSH 配置语法校验失败"
+  fi
+  mismatch="$(sshd_effective_config_mismatch "$target")" || {
+    restore_ssh_hardening "$backup" "$had_old"
+    fail "SSH 有效配置读取失败"
+  }
+  if [ -n "$mismatch" ]; then
+    restore_ssh_hardening "$backup" "$had_old"
+    fail "SSH 配置未生效: ${mismatch}"
   fi
   if ! run_quiet "ssh reload" reload_ssh_service; then
     restore_ssh_hardening "$backup" "$had_old"
