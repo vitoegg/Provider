@@ -1,7 +1,0 @@
-payload:
-  # SSH Direct
-  - DST-PORT,22/5168
-  # Turkey Giftcard
-  - DOMAIN-SUFFIX,oyunfor.com
-  # Zimuku
-  - DOMAIN-SUFFIX,zimuku.org
