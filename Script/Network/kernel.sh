@@ -3,18 +3,14 @@
 set -o pipefail
 
 SYSCTL_FILE="/etc/sysctl.d/99-network-kernel.conf"
-
 IPV6="yes"
-REMOVE_CONFIG="no"
+MODE="apply"
+BBR_STATUS="unavailable"
+KEYS=()
+VALUES=()
 
-log() {
-    printf '[%s] %s\n' "$1" "$2"
-}
-
-die() {
-    log "ERR" "$1"
-    exit 1
-}
+log() { printf '[%s] %s\n' "$1" "$2"; }
+die() { log "ERR" "$1"; exit 1; }
 
 show_help() {
     cat << EOF
@@ -26,53 +22,30 @@ Options:
   -6  IPv6: yes, no. Default: yes
   -u  Remove kernel optimization configuration
   -h  Show this help
-
-Examples:
-  bash kernel.sh
-  bash kernel.sh -6 no
-  bash kernel.sh -u
 EOF
     exit 0
 }
 
-contains() {
+trim() {
     local value=$1
-    shift
-
-    local item
-    for item in "$@"; do
-        [[ "$item" == "$value" ]] && return 0
-    done
-
-    return 1
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    printf '%s' "$value"
 }
 
-while getopts ":6:uh" opt; do
-    case "$opt" in
-        6) IPV6="$OPTARG" ;;
-        u) REMOVE_CONFIG="yes" ;;
-        h) show_help ;;
-        :) die "Option -$OPTARG requires a value" ;;
-        \?) die "Invalid option: -$OPTARG" ;;
-    esac
-done
+require_root() { [[ "$(id -u)" == "0" ]] || die "Root privileges required"; }
+validate_args() { [[ "$IPV6" == "yes" || "$IPV6" == "no" ]] || die "Invalid IPv6 value: $IPV6"; }
 
-validate_config() {
-    contains "$IPV6" yes no || die "Invalid IPv6 value: $IPV6"
+bbr_supported() {
+    command -v modprobe >/dev/null 2>&1 && modprobe tcp_bbr >/dev/null 2>&1 || true
+    grep -wq bbr /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null
 }
 
-remove_config() {
-    rm -f "$SYSCTL_FILE"
+write_config() {
+    install -d "$(dirname "$SYSCTL_FILE")" || die "Failed to create sysctl directory"
+    cat > "$SYSCTL_FILE" << 'EOF' || die "Failed to write $SYSCTL_FILE"
+# Managed by Provider kernel.sh
 
-    sysctl --system >/dev/null 2>&1 || log "WARN" "Some sysctl values failed to reload"
-    log "OK" "Kernel optimization configuration removed. Reboot recommended."
-}
-
-write_sysctl_config() {
-    install -d /etc/sysctl.d
-
-    {
-        cat << 'EOF'
 # TCP Adjustment
 net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_fastopen = 0
@@ -80,69 +53,122 @@ net.ipv4.tcp_ecn = 0
 net.ipv4.tcp_fin_timeout = 30
 EOF
 
-        if [[ "$IPV6" == "no" ]]; then
-            cat << 'EOF'
+    if bbr_supported; then
+        BBR_STATUS="enabled"
+        cat >> "$SYSCTL_FILE" << 'EOF' || die "Failed to write BBR config"
+
+# BBR Congestion Control
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+EOF
+    fi
+
+    if [[ "$IPV6" == "no" ]]; then
+        cat >> "$SYSCTL_FILE" << 'EOF' || die "Failed to write IPv6 config"
 
 # Disable IPv6
 net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 EOF
-        fi
+    fi
+}
 
-        if modprobe tcp_bbr 2>/dev/null && grep -wq bbr /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null; then
-            cat << EOF
+read_config() {
+    local line key value
+    KEYS=()
+    VALUES=()
+    [[ -f "$SYSCTL_FILE" ]] || return 0
 
-# BBR Congestion Control
-net.core.default_qdisc = fq
-net.ipv4.tcp_congestion_control = bbr
-EOF
-            BBR_ENABLED="yes"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line=$(trim "${line%%#*}")
+        [[ -z "$line" ]] && continue
+        [[ "$line" == *"="* ]] || die "Invalid config line: $line"
+
+        key=$(trim "${line%%=*}")
+        value=$(trim "${line#*=}")
+        [[ "$key" =~ ^[A-Za-z0-9_.-]+$ ]] || die "Invalid sysctl key: $key"
+        [[ -n "$value" ]] || die "Empty value for sysctl key: $key"
+
+        KEYS+=("$key")
+        VALUES+=("$value")
+    done < "$SYSCTL_FILE"
+}
+
+reload_sysctl() { sysctl --system >/dev/null 2>&1 || die "Failed to reload sysctl configuration"; }
+sysctl_value() { sysctl -n "$1" 2>/dev/null || true; }
+
+verify_apply() {
+    local i key expected actual passed=0 failed=0
+
+    read_config
+    for ((i = 0; i < ${#KEYS[@]}; i++)); do
+        key=${KEYS[$i]}
+        expected=${VALUES[$i]}
+        actual=$(sysctl_value "$key")
+        if [[ "$actual" == "$expected" ]]; then
+            passed=$((passed + 1))
         else
-            BBR_ENABLED="no"
+            failed=$((failed + 1))
+            log "WARN" "verify: $key expected=$expected actual=${actual:-unavailable}"
         fi
-    } > "$SYSCTL_FILE"
+    done
+
+    [[ "$failed" -eq 0 ]] || die "verify failed: passed=$passed failed=$failed"
+    log "OK" "verify: passed=$passed failed=0"
 }
 
-apply_config() {
-    sysctl --system >/dev/null 2>&1 || log "WARN" "Some sysctl values failed to apply"
+summary_apply() {
+    local bbr="unavailable" ipv6="enabled"
+    if [[ "$BBR_STATUS" == "enabled" ]]; then
+        bbr="$(sysctl_value net.ipv4.tcp_congestion_control)/$(sysctl_value net.core.default_qdisc)"
+    fi
+    [[ "$IPV6" == "no" ]] && ipv6="disabled"
+    log "OK" "summary: BBR=$bbr IPv6=$ipv6 TCP=applied"
 }
 
-verify_config() {
-    local congestion qdisc_actual ipv6_actual
+apply_profile() {
+    validate_args
+    require_root
+    log "INFO" "mode=apply ipv6=$IPV6 file=$SYSCTL_FILE"
+    write_config
+    read_config
+    log "OK" "write: file saved keys=${#KEYS[@]}"
+    reload_sysctl
+    log "OK" "apply: system config reloaded"
+    verify_apply
+    summary_apply
+}
 
-    if [[ "$BBR_ENABLED" == "yes" ]]; then
-        qdisc_actual=$(cat /proc/sys/net/core/default_qdisc 2>/dev/null || true)
-        congestion=$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null || true)
-        [[ "$qdisc_actual" == "fq" && "$congestion" == "bbr" ]] \
-            && log "OK" "BBR and fq applied" \
-            || log "WARN" "BBR configuration may require reboot"
+remove_profile() {
+    require_root
+    log "INFO" "mode=remove file=$SYSCTL_FILE"
+
+    if [[ -f "$SYSCTL_FILE" ]]; then
+        rm -f "$SYSCTL_FILE" || die "Failed to delete $SYSCTL_FILE"
+        log "OK" "remove: file deleted"
     else
-        log "WARN" "BBR is not available"
+        log "OK" "remove: file already absent"
     fi
 
-    if [[ "$IPV6" == "no" ]]; then
-        ipv6_actual=$(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null || echo 0)
-        [[ "$ipv6_actual" == "1" ]] && log "OK" "IPv6 disabled" || log "WARN" "IPv6 disable may require reboot"
-    else
-        log "OK" "IPv6 remains enabled"
-    fi
+    reload_sysctl
+    [[ ! -f "$SYSCTL_FILE" ]] || die "remove failed: config file still exists"
+    log "OK" "verify: config removed"
+    log "WARN" "need to reboot to restore default settings"
+    log "OK" "summary: kernel config removed"
 }
 
-if [[ "$REMOVE_CONFIG" == "yes" ]]; then
-    [[ "$(id -u)" == "0" ]] || die "Root privileges required"
-    remove_config
-    exit 0
-fi
+while getopts ":6:uh" opt; do
+    case "$opt" in
+        6) IPV6="$OPTARG" ;;
+        u) MODE="remove" ;;
+        h) show_help ;;
+        :) die "Option -$OPTARG requires a value" ;;
+        \?) die "Invalid option: -$OPTARG" ;;
+    esac
+done
 
-validate_config
-log "INFO" "IPv6=$IPV6"
-
-[[ "$(id -u)" == "0" ]] || die "Root privileges required"
-
-log "INFO" "Writing sysctl configuration to $SYSCTL_FILE"
-write_sysctl_config
-apply_config
-verify_config
-
-log "OK" "Optimization completed. Reboot recommended."
+case "$MODE" in
+    apply) apply_profile ;;
+    remove) remove_profile ;;
+esac
