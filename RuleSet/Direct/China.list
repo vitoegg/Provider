@@ -1,5 +1,5 @@
-# 更新时间: 2026-05-26 16:26:16
-# 规则条数: 113482
+# 更新时间: 2026-05-28 16:37:42
+# 规则条数: 113484
 # 规则来源:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/vitoegg/Provider
@@ -39979,6 +39979,7 @@
 .green-cpc.com
 .green-holdings.com
 .green-sh.com
+.green.cloud
 .green12306.com
 .greencharm.com
 .greenchengjian.com
@@ -74102,6 +74103,7 @@
 .pnwww.com
 .pnzpw.com
 .po.co
+.po0.com
 .po7ryumvkx34.com
 .pobaby.net
 .pobasoft.com
