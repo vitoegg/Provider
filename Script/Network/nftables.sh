@@ -19,8 +19,6 @@ readonly CONFIG_FILE="${STATE_DIR}/config.env"
 readonly GLOBAL_LOCK_FILE="/run/forwardaws.lock"
 readonly IPV4_FORWARD_SYSCTL_FILE="/etc/sysctl.d/99-forwardaws.conf"
 readonly SYSTEMD_SYSTEM_DIR="/etc/systemd/system"
-readonly OLD_DDNS_SERVICE_NAME="forwardaws-ddns.service"
-readonly OLD_DDNS_TIMER_NAME="forwardaws-ddns.timer"
 readonly PROTECT_SERVICE_NAME="forwardaws-protect.service"
 readonly PROTECT_TIMER_NAME="forwardaws-protect.timer"
 readonly PROVIDERDNS_DIR="/etc/provider/dns"
@@ -81,13 +79,6 @@ validate_domain_name() {
     local domain="$1"
     [ -n "$domain" ] && [ "${#domain}" -le 253 ] && \
         [[ "$domain" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?([.][A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]]
-}
-
-resolve_ddns_ipv4() {
-    local domain="$1" ip
-    ip=$(getent ahostsv4 "$domain" 2>/dev/null | awk '/STREAM/ { print $1; exit }')
-    validate_ip_address "$ip" || return 1
-    echo "$ip"
 }
 
 format_epoch_time() {
@@ -197,17 +188,6 @@ providerdns_refresh() {
 providerdns_cleanup_if_unused() {
     [ -f "$PROVIDERDNS_BIN" ] || return 0
     /bin/bash "$PROVIDERDNS_BIN" --cleanup unused
-}
-
-remove_old_ddns_units() {
-    if command -v systemctl >/dev/null 2>&1; then
-        systemctl disable --now --no-reload "$OLD_DDNS_TIMER_NAME" >/dev/null 2>&1 || true
-        systemctl stop "$OLD_DDNS_SERVICE_NAME" >/dev/null 2>&1 || true
-        systemctl reset-failed "$OLD_DDNS_TIMER_NAME" "$OLD_DDNS_SERVICE_NAME" >/dev/null 2>&1 || true
-    fi
-    remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/${OLD_DDNS_SERVICE_NAME}" || return 1
-    remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/${OLD_DDNS_TIMER_NAME}" || return 1
-    remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/timers.target.wants/${OLD_DDNS_TIMER_NAME}" || return 1
 }
 
 require_root() {
@@ -455,9 +435,7 @@ parse_rule() {
             elif validate_domain_name "$target"; then
                 PARSED_TYPE="domain"
                 if [ "$resolve_domain" = "1" ]; then
-                    if PARSED_IP=$(resolve_ddns_ipv4 "$target"); then
-                        PARSED_STATUS="ok"
-                    elif PARSED_IP=$(providerdns_cache_ip "$target"); then
+                    if PARSED_IP=$(providerdns_cache_ip "$target"); then
                         PARSED_STATUS=$(providerdns_cache_status "$target")
                     else
                         log_error "域名解析失败: $target"
@@ -739,7 +717,6 @@ EOF
 reconcile_forwardaws_dns() {
     local domain_count
     domain_count=$(state_domain_count "$RULES_STATE_FILE")
-    remove_old_ddns_units || return 1
     if [ "$domain_count" -gt 0 ]; then
         write_forwardaws_dns_subscription || return 1
         write_forwardaws_dns_hook || return 1
@@ -846,16 +823,13 @@ remove_active_nft_tables() {
 remove_systemd_units() {
     SYSTEMD_UNITS_CHANGED=0
     if has_systemctl; then
-        systemctl disable --now --no-reload "$OLD_DDNS_TIMER_NAME" "$PROTECT_TIMER_NAME" >/dev/null 2>&1 || true
-        systemctl stop "$OLD_DDNS_SERVICE_NAME" "$PROTECT_SERVICE_NAME" >/dev/null 2>&1 || true
-        systemctl reset-failed "$OLD_DDNS_TIMER_NAME" "$OLD_DDNS_SERVICE_NAME" "$PROTECT_TIMER_NAME" "$PROTECT_SERVICE_NAME" >/dev/null 2>&1 || true
+        systemctl disable --now --no-reload "$PROTECT_TIMER_NAME" >/dev/null 2>&1 || true
+        systemctl stop "$PROTECT_SERVICE_NAME" >/dev/null 2>&1 || true
+        systemctl reset-failed "$PROTECT_TIMER_NAME" "$PROTECT_SERVICE_NAME" >/dev/null 2>&1 || true
     fi
 
-    remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/${OLD_DDNS_SERVICE_NAME}" || return 1
-    remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/${OLD_DDNS_TIMER_NAME}" || return 1
     remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/${PROTECT_SERVICE_NAME}" || return 1
     remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/${PROTECT_TIMER_NAME}" || return 1
-    remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/timers.target.wants/${OLD_DDNS_TIMER_NAME}" || return 1
     remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/timers.target.wants/${PROTECT_TIMER_NAME}" || return 1
     remove_path "$FORWARDAWS_DNS_SUBSCRIPTION" || return 1
     remove_path "$FORWARDAWS_DNS_HOOK" || return 1
