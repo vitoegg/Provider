@@ -7,7 +7,6 @@ NFT_TABLE="sshg"
 PROVIDERDNS_BIN="${PROVIDERDNS_BIN:-/usr/local/sbin/providerdns.sh}"
 PROVIDERDNS_LOCAL_NAME="providerdns.sh"
 PROVIDERDNS_DOWNLOAD_URL="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/providerdns.sh"
-PROVIDERDNS_REQUIRED_API="1"
 SSHG_LOCK_HELD=0
 
 log() { printf '[sshg] %s\n' "$*"; }
@@ -328,13 +327,6 @@ run_providerdns() {
     PROVIDERDNS_ROOT="$ROOT" /bin/bash "$PROVIDERDNS_BIN" "$@"
 }
 
-providerdns_api_ok() {
-    local bin="$1" api
-    [ -f "$bin" ] || return 1
-    api=$(PROVIDERDNS_ROOT="$ROOT" /bin/bash "$bin" --api 2>/dev/null || true)
-    [ "$api" = "$PROVIDERDNS_REQUIRED_API" ]
-}
-
 providerdns_is_managed() {
     [ -f "$1" ] && grep -q 'PROVIDERDNS_MANAGED=1' "$1" 2>/dev/null
 }
@@ -350,13 +342,11 @@ providerdns_local_source() {
 install_providerdns_from_file() {
     local source_file="$1" tmp target_dir
     /bin/bash -n "$source_file" || fail "providerdns syntax"
-    providerdns_api_ok "$source_file" || fail "providerdns api"
     target_dir="$(dirname "$PROVIDERDNS_BIN")"
     mkdir -p "$target_dir" || fail "providerdns dir"
     tmp="${PROVIDERDNS_BIN}.tmp.$$"
     cp "$source_file" "$tmp" || { rm -f "$tmp"; fail "providerdns copy"; }
     chmod 755 "$tmp" 2>/dev/null || true
-    providerdns_api_ok "$tmp" || { rm -f "$tmp"; fail "providerdns api"; }
     mv "$tmp" "$PROVIDERDNS_BIN" || { rm -f "$tmp"; fail "providerdns install"; }
 }
 
@@ -389,11 +379,8 @@ install_providerdns_from_available_source() {
 
 ensure_providerdns() {
     if [ -f "$PROVIDERDNS_BIN" ]; then
-        if providerdns_api_ok "$PROVIDERDNS_BIN"; then
-            chmod 755 "$PROVIDERDNS_BIN" 2>/dev/null || true
-            return 0
-        fi
-        providerdns_is_managed "$PROVIDERDNS_BIN" || fail "providerdns incompatible"
+        chmod 755 "$PROVIDERDNS_BIN" 2>/dev/null || true
+        return 0
     fi
     install_providerdns_from_available_source
 }
@@ -547,7 +534,6 @@ allow_has_domain() {
 
 providerdns_cleanup_if_unused() {
     [ -f "$PROVIDERDNS_BIN" ] || return 0
-    providerdns_api_ok "$PROVIDERDNS_BIN" || return 0
     run_providerdns --cleanup unused
 }
 

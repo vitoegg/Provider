@@ -5,7 +5,6 @@
 set -o pipefail
 
 ROOT="${PROVIDERDNS_ROOT:-/}"
-API_VERSION="1"
 DEFAULT_TIMEOUT="5"
 
 log() { printf '[providerdns] %s\n' "$*"; }
@@ -60,17 +59,10 @@ ensure_self_at_fixed_location() {
     
     # 如果目标位置已存在，检查是否需要更新
     if [ -f "$target_path" ]; then
-        # 简单版本检查：当前 API 版本和目标 API 版本一致则跳过
-        local current_api target_api
-        current_api=$(/bin/bash "$current_path" --api 2>/dev/null || echo "0")
-        target_api=$(/bin/bash "$target_path" --api 2>/dev/null || echo "0")
-        
-        if [ "$current_api" = "$target_api" ]; then
-            log "self-placement: target already exists with same version, skipping"
-            rm -f "$current_path" 2>/dev/null || true
-            return 0
-        fi
-        log "self-placement: updating to newer version"
+        # 目标已存在，跳过安装
+        log "self-placement: target already exists, skipping"
+        rm -f "$current_path" 2>/dev/null || true
+        return 0
     fi
     
     # 原子写入：使用临时文件 + 重命名
@@ -346,7 +338,6 @@ lookup_domain() {
 show_help() {
     cat << 'EOF'
 Usage:
-  providerdns.sh --api
   providerdns.sh --install
   providerdns.sh --refresh
   providerdns.sh --refresh hooks
@@ -358,7 +349,6 @@ EOF
 main() {
     local action="${1:-}" mode="${2:-}"
     case "$action" in
-        --api) printf '%s\n' "$API_VERSION" ;;
         --install) install_units ;;
         --refresh)
             case "$mode" in

@@ -33,7 +33,6 @@ readonly FORWARDAWS_DNS_HOOK="${PROVIDERDNS_HOOK_DIR}/forwardaws"
 PROVIDERDNS_BIN="${PROVIDERDNS_BIN:-/usr/local/sbin/providerdns.sh}"
 readonly PROVIDERDNS_LOCAL_NAME="providerdns.sh"
 readonly PROVIDERDNS_DOWNLOAD_URL="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/providerdns.sh"
-readonly PROVIDERDNS_REQUIRED_API="1"
 readonly DEFAULT_EXCLUDE_PORTS="53"
 readonly FORWARDAWS_TIMEZONE="Asia/Shanghai"
 readonly FORWARDAWS_TIMEZONE_FALLBACK="UTC-8"
@@ -124,13 +123,6 @@ providerdns_cache_status() {
     providerdns_cache_field "$1" 3 2>/dev/null || printf 'missing\n'
 }
 
-providerdns_api_ok() {
-    local bin="$1" api
-    [ -f "$bin" ] || return 1
-    api=$(/bin/bash "$bin" --api 2>/dev/null || true)
-    [ "$api" = "$PROVIDERDNS_REQUIRED_API" ]
-}
-
 providerdns_is_managed() {
     [ -f "$1" ] && grep -q 'PROVIDERDNS_MANAGED=1' "$1" 2>/dev/null
 }
@@ -146,13 +138,11 @@ providerdns_local_source() {
 install_providerdns_from_file() {
     local source_file="$1" tmp target_dir
     /bin/bash -n "$source_file" || { log_error "providerdns.sh 语法检查失败: $source_file"; return 1; }
-    providerdns_api_ok "$source_file" || { log_error "providerdns.sh API 不兼容: $source_file"; return 1; }
     target_dir=$(dirname "$PROVIDERDNS_BIN")
     mkdir -p "$target_dir" || { log_error "创建 Provider DNS 目录失败: $target_dir"; return 1; }
     tmp="${PROVIDERDNS_BIN}.tmp.$$"
     cp "$source_file" "$tmp" || { rm -f "$tmp"; log_error "复制 providerdns.sh 失败"; return 1; }
     chmod 755 "$tmp" 2>/dev/null || true
-    providerdns_api_ok "$tmp" || { rm -f "$tmp"; log_error "providerdns.sh 安装前 API 校验失败"; return 1; }
     mv "$tmp" "$PROVIDERDNS_BIN" || { rm -f "$tmp"; log_error "安装 providerdns.sh 失败: $PROVIDERDNS_BIN"; return 1; }
 }
 
@@ -188,14 +178,8 @@ install_providerdns_from_available_source() {
 
 ensure_providerdns() {
     if [ -f "$PROVIDERDNS_BIN" ]; then
-        if providerdns_api_ok "$PROVIDERDNS_BIN"; then
-            chmod 755 "$PROVIDERDNS_BIN" 2>/dev/null || true
-            return 0
-        fi
-        providerdns_is_managed "$PROVIDERDNS_BIN" || {
-            log_error "已存在不兼容的 providerdns.sh，且不是 Provider 管理文件: $PROVIDERDNS_BIN"
-            return 1
-        }
+        chmod 755 "$PROVIDERDNS_BIN" 2>/dev/null || true
+        return 0
     fi
     install_providerdns_from_available_source
 }
@@ -212,7 +196,6 @@ providerdns_refresh() {
 
 providerdns_cleanup_if_unused() {
     [ -f "$PROVIDERDNS_BIN" ] || return 0
-    providerdns_api_ok "$PROVIDERDNS_BIN" || return 0
     /bin/bash "$PROVIDERDNS_BIN" --cleanup unused
 }
 
