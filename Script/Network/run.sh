@@ -122,8 +122,21 @@ provider_run() {
   run_quiet "$label" bash "$path" "$@"
 }
 
+allowlist_count() {
+  printf '%s\n' "$1" | awk -F, '
+    {
+      for (i = 1; i <= NF; i++) {
+        item = $i
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
+        if (item == "") continue
+        total++
+      }
+      printf "%d", total
+    }'
+}
+
 step_ssh_guard() {
-  local script="$1" allowlist="${2:-}" public_key="${3:-}" key_status="existing"
+  local script="$1" allowlist="${2:-}" public_key="${3:-}" allow_count key_success="" key_failed=""
   local -a args
   [ "$#" -ge 2 ] && [ "$#" -le 3 ] || fail "step_ssh_guard 需要脚本、白名单和可选公钥"
   [ -n "$allowlist" ] || fail "SSH 白名单为空"
@@ -132,12 +145,14 @@ step_ssh_guard() {
   args=(--reset config=ssh "allow=${allowlist}")
   if [ -n "$public_key" ]; then
     args+=("key=${public_key}")
-    key_status="provided"
+    key_success=" | key=applied"
+    key_failed=" | key=failed"
   fi
 
-  log "ssh: applying | script=${script}"
-  provider_run "ssh guard" "$script" "${args[@]}" || fail "SSH 防护配置失败"
-  log "ssh: applied | key=${key_status}"
+  allow_count="$(allowlist_count "$allowlist")"
+  log "ssh: applying | allow=${allow_count}"
+  provider_run "ssh guard" "$script" "${args[@]}" || fail "SSH 防护配置失败 | allow=${allow_count}${key_failed}"
+  log "ssh: applied | allow=${allow_count}${key_success}"
 }
 
 update_hosts() {
