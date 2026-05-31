@@ -351,10 +351,6 @@ install_providerdns_from_file() {
     local source_file="$1" tmp target_dir
     /bin/bash -n "$source_file" || fail "providerdns syntax"
     providerdns_api_ok "$source_file" || fail "providerdns api"
-    if [ "$source_file" = "$PROVIDERDNS_BIN" ]; then
-        chmod 755 "$PROVIDERDNS_BIN" 2>/dev/null || true
-        return 0
-    fi
     target_dir="$(dirname "$PROVIDERDNS_BIN")"
     mkdir -p "$target_dir" || fail "providerdns dir"
     tmp="${PROVIDERDNS_BIN}.tmp.$$"
@@ -378,10 +374,12 @@ download_providerdns_to() {
 install_providerdns_from_available_source() {
     local local_source tmp rc
     if local_source="$(providerdns_local_source)"; then
+        log "using local providerdns: $local_source"
         install_providerdns_from_file "$local_source"
         return $?
     fi
     tmp="$(mktemp /tmp/providerdns.XXXXXX)" || fail "providerdns temp"
+    log "downloading providerdns.sh from remote"
     download_providerdns_to "$tmp" || { rm -f "$tmp"; fail "providerdns download"; }
     install_providerdns_from_file "$tmp"
     rc=$?

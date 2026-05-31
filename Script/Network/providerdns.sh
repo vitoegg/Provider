@@ -38,6 +38,63 @@ require_root() {
     [ "$(id -u)" = "0" ] || fail "need root"
 }
 
+ensure_self_at_fixed_location() {
+    local current_path target_path tmp_path
+    
+    # 禁用 ROOT 环境下的自我安置（容器/chroot 场景）
+    [ "$ROOT" != "/" ] && return 0
+    
+    current_path="$(script_path)"
+    target_path="/usr/local/sbin/providerdns.sh"
+    
+    # 已在正确位置，无需处理
+    if [ "$current_path" = "$target_path" ]; then
+        return 0
+    fi
+    
+    # 验证当前脚本合法性
+    if ! bash -n "$current_path" 2>/dev/null; then
+        log "self-placement: syntax check failed"
+        return 1
+    fi
+    
+    # 如果目标位置已存在，检查是否需要更新
+    if [ -f "$target_path" ]; then
+        # 简单版本检查：当前 API 版本和目标 API 版本一致则跳过
+        local current_api target_api
+        current_api=$(/bin/bash "$current_path" --api 2>/dev/null || echo "0")
+        target_api=$(/bin/bash "$target_path" --api 2>/dev/null || echo "0")
+        
+        if [ "$current_api" = "$target_api" ]; then
+            log "self-placement: target already exists with same version, skipping"
+            rm -f "$current_path" 2>/dev/null || true
+            return 0
+        fi
+        log "self-placement: updating to newer version"
+    fi
+    
+    # 原子写入：使用临时文件 + 重命名
+    tmp_path="${target_path}.tmp.$$"
+    if ! cp "$current_path" "$tmp_path" 2>/dev/null; then
+        log "self-placement: copy to temp failed"
+        return 1
+    fi
+    
+    if ! mv "$tmp_path" "$target_path" 2>/dev/null; then
+        rm -f "$tmp_path" 2>/dev/null || true
+        log "self-placement: move to target failed"
+        return 1
+    fi
+    
+    chmod 755 "$target_path" 2>/dev/null || true
+    log "self-placement: installed at $target_path"
+    
+    # 删除原文件（已安全复制）
+    rm -f "$current_path" 2>/dev/null || true
+    
+    return 0
+}
+
 subscription_dir() { path "/etc/provider/dns/subscriptions"; }
 hook_dir() { path "/etc/provider/dns/hooks"; }
 state_dir() { path "/var/lib/provider/dns"; }
@@ -208,9 +265,10 @@ write_if_changed() {
 install_units() {
     local service timer script tmp changed=0 systemctl
     require_root
+    ensure_self_at_fixed_location
     service="$(service_file)"
     timer="$(timer_file)"
-    script="$(script_path)"
+    script="/usr/local/sbin/providerdns.sh"
     mkdir -p "$(systemd_dir)" || fail "systemd dir"
 
     tmp="${service}.tmp.$$"

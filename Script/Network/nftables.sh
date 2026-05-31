@@ -147,10 +147,6 @@ install_providerdns_from_file() {
     local source_file="$1" tmp target_dir
     /bin/bash -n "$source_file" || { log_error "providerdns.sh 语法检查失败: $source_file"; return 1; }
     providerdns_api_ok "$source_file" || { log_error "providerdns.sh API 不兼容: $source_file"; return 1; }
-    if [ "$source_file" = "$PROVIDERDNS_BIN" ]; then
-        chmod 755 "$PROVIDERDNS_BIN" 2>/dev/null || true
-        return 0
-    fi
     target_dir=$(dirname "$PROVIDERDNS_BIN")
     mkdir -p "$target_dir" || { log_error "创建 Provider DNS 目录失败: $target_dir"; return 1; }
     tmp="${PROVIDERDNS_BIN}.tmp.$$"
@@ -177,10 +173,12 @@ download_providerdns_to() {
 install_providerdns_from_available_source() {
     local local_source tmp
     if local_source=$(providerdns_local_source); then
+        log_info_noisy "使用本地 providerdns: $local_source"
         install_providerdns_from_file "$local_source"
         return $?
     fi
     tmp=$(mktemp /tmp/providerdns.XXXXXX) || return 1
+    log_info_noisy "从远程下载 providerdns.sh"
     download_providerdns_to "$tmp" || { rm -f "$tmp"; log_error "下载 providerdns.sh 失败"; return 1; }
     install_providerdns_from_file "$tmp"
     local rc=$?
