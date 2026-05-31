@@ -140,8 +140,11 @@ Shared DNS runtime used by `nftables.sh` and `sshg.sh`.
 wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/providerdns.sh && bash providerdns.sh --help
 ```
 * `--install`: Install or repair `providerdns.service` and `providerdns.timer`.
+* `--set <consumer> <domain-file> <hook-command>`: Register a consumer's domain list and cache-change hook.
+* `--unset <consumer>`: Remove a consumer registration.
 * `--refresh`: Resolve subscribed domains and update cache.
-* `--refresh hooks`: Resolve subscribed domains and run hooks only when cache changes.
+* `--refresh hooks`: Resolve subscribed domains and run affected hooks only when their domains change.
+* `--cache <domain>`: Print one cached DNS record.
 * `--lookup <domain>`: Print cached or freshly resolved IPv4.
 * `--cleanup unused`: Remove Provider DNS runtime when no subscriptions remain.
 
@@ -153,7 +156,7 @@ Provider DNS files:
 * `/etc/systemd/system/providerdns.service`
 * `/etc/systemd/system/providerdns.timer`
 
-When `nftables.sh` or `sshg.sh` needs Provider DNS, it uses `PROVIDERDNS_BIN` if set, otherwise `/usr/local/sbin/providerdns.sh`. If the script is missing, it installs the local `providerdns.sh` next to the caller, or downloads it from this repository.
+When `nftables.sh` or `sshg.sh` needs Provider DNS, it uses `PROVIDERDNS_BIN` when that file exists (`/usr/local/sbin/providerdns.sh` by default), otherwise the `providerdns.sh` next to the caller. If none exists, domain-based operations fail before changing state.
 
 ### nftables.sh
 Manage NFTables port forwarding and firewall protection with declarative state.
@@ -183,9 +186,7 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 * `--protect sync`: Rebuild protection ports from current state.
 * `--uninstall`, `-u`: Remove generated rules, state, timers and sysctl configuration.
 
-Domain rules use the shared Provider DNS runtime:
-* `/etc/provider/dns/subscriptions/forwardaws.list`
-* `/etc/provider/dns/hooks/forwardaws`
+Domain rules use Provider DNS consumer registration. Unresolved domains are saved as pending, do not render forwarding rules, and do not open protect ports until DNS resolves.
 
 **Examples:**
 ```bash

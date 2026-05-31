@@ -6,7 +6,7 @@ ROOT="${SSHG_ROOT:-/}"
 NFT_TABLE="sshg"
 PROVIDERDNS_BIN="${PROVIDERDNS_BIN:-/usr/local/sbin/providerdns.sh}"
 PROVIDERDNS_LOCAL_NAME="providerdns.sh"
-PROVIDERDNS_DOWNLOAD_URL="https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/providerdns.sh"
+PROVIDERDNS_CONSUMER="sshg"
 SSHG_LOCK_HELD=0
 
 log() { printf '[sshg] %s\n' "$*"; }
@@ -71,11 +71,6 @@ state_dir() { path "/etc/provider/sshg"; }
 allow_file() { path "/etc/provider/sshg/allow.list"; }
 nft_file() { path "/etc/nftables.d/sshg.nft"; }
 nft_main_file() { path "/etc/nftables.conf"; }
-providerdns_subscription_dir() { path "/etc/provider/dns/subscriptions"; }
-providerdns_hook_dir() { path "/etc/provider/dns/hooks"; }
-providerdns_cache_file() { path "/var/lib/provider/dns/cache.tsv"; }
-sshg_dns_subscription() { path "/etc/provider/dns/subscriptions/sshg.list"; }
-sshg_dns_hook() { path "/etc/provider/dns/hooks/sshg"; }
 sshg_lock_file() { path "/run/sshg.lock"; }
 
 validate_ipv4() {
@@ -326,6 +321,12 @@ write_allow_state() {
     fi
     sort -u "$tmp" -o "$tmp"
     [ -s "$tmp" ] || { rm -f "$tmp"; fail "allow empty"; }
+    if awk '$1=="domain"{found=1} END{exit(found ? 0 : 1)}' "$tmp"; then
+        if ! find_providerdns; then
+            rm -f "$tmp"
+            fail "need providerdns.sh: set PROVIDERDNS_BIN, or place providerdns.sh at /usr/local/sbin/providerdns.sh, or place it next to sshg.sh"
+        fi
+    fi
     mv "$tmp" "$file" || fail "state install"
     cidr_count="$(awk '$1=="cidr"{c++} END{print c+0}' "$file")"
     domain_count="$(awk '$1=="domain"{c++} END{print c+0}' "$file")"
@@ -333,10 +334,10 @@ write_allow_state() {
 }
 
 providerdns_cache_field() {
-    local domain="$1" field="$2" file
-    file="$(providerdns_cache_file)"
-    [ -s "$file" ] || return 1
-    awk -v d="$domain" -v f="$field" '$1==d { print $f; found=1; exit } END { exit(found ? 0 : 1) }' "$file"
+    local domain="$1" field="$2" record
+    find_providerdns || return 1
+    record="$(run_providerdns --cache "$domain" 2>/dev/null)" || return 1
+    awk -v f="$field" '{ print $f }' <<< "$record"
 }
 
 providerdns_cache_ip() {
@@ -350,10 +351,6 @@ run_providerdns() {
     PROVIDERDNS_ROOT="$ROOT" /bin/bash "$PROVIDERDNS_BIN" "$@"
 }
 
-providerdns_is_managed() {
-    [ -f "$1" ] && grep -q 'PROVIDERDNS_MANAGED=1' "$1" 2>/dev/null
-}
-
 providerdns_local_source() {
     local script_dir local_path
     script_dir="$(cd "$(dirname "$(script_path)")" 2>/dev/null && pwd)"
@@ -362,60 +359,38 @@ providerdns_local_source() {
     printf '%s\n' "$local_path"
 }
 
-install_providerdns_from_file() {
-    local source_file="$1" tmp target_dir
-    /bin/bash -n "$source_file" || fail "providerdns syntax"
-    target_dir="$(dirname "$PROVIDERDNS_BIN")"
-    mkdir -p "$target_dir" || fail "providerdns dir"
-    tmp="${PROVIDERDNS_BIN}.tmp.$$"
-    cp "$source_file" "$tmp" || { rm -f "$tmp"; fail "providerdns copy"; }
-    chmod 755 "$tmp" 2>/dev/null || true
-    mv "$tmp" "$PROVIDERDNS_BIN" || { rm -f "$tmp"; fail "providerdns install"; }
-}
-
-download_providerdns_to() {
-    local output="$1"
-    if command -v curl >/dev/null 2>&1; then
-        curl -fsSL "$PROVIDERDNS_DOWNLOAD_URL" -o "$output"
-    elif command -v wget >/dev/null 2>&1; then
-        wget -qO "$output" "$PROVIDERDNS_DOWNLOAD_URL"
-    else
-        return 1
-    fi
-}
-
-install_providerdns_from_available_source() {
-    local local_source tmp rc
+find_providerdns() {
+    local local_source
+    [ -f "$PROVIDERDNS_BIN" ] && return 0
     if local_source="$(providerdns_local_source)"; then
-        log "using local providerdns: $local_source"
-        install_providerdns_from_file "$local_source"
-        return $?
-    fi
-    tmp="$(mktemp /tmp/providerdns.XXXXXX)" || fail "providerdns temp"
-    log "downloading providerdns.sh from remote"
-    download_providerdns_to "$tmp" || { rm -f "$tmp"; fail "providerdns download"; }
-    install_providerdns_from_file "$tmp"
-    rc=$?
-    rm -f "$tmp"
-    return "$rc"
-}
-
-ensure_providerdns() {
-    if [ -f "$PROVIDERDNS_BIN" ]; then
-        chmod 755 "$PROVIDERDNS_BIN" 2>/dev/null || true
+        PROVIDERDNS_BIN="$local_source"
         return 0
     fi
-    install_providerdns_from_available_source
+    return 1
 }
 
-providerdns_install() {
-    ensure_providerdns
-    run_providerdns --install
+require_providerdns() {
+    find_providerdns && return 0
+    fail "need providerdns.sh: set PROVIDERDNS_BIN, or place providerdns.sh at /usr/local/sbin/providerdns.sh, or place it next to sshg.sh"
 }
 
 providerdns_refresh() {
-    ensure_providerdns
+    require_providerdns
     run_providerdns --refresh
+}
+
+providerdns_set_sshg() {
+    local domains_file="$1" script quoted_script hook_command
+    require_providerdns
+    script="$(script_path)"
+    printf -v quoted_script '%q' "$script"
+    hook_command="/bin/bash ${quoted_script} --apply cache"
+    run_providerdns --set "$PROVIDERDNS_CONSUMER" "$domains_file" "$hook_command"
+}
+
+providerdns_unset_sshg() {
+    find_providerdns || return 0
+    run_providerdns --unset "$PROVIDERDNS_CONSUMER"
 }
 
 build_sources_file() {
@@ -430,7 +405,11 @@ build_sources_file() {
                 ;;
             domain)
                 ip="$(providerdns_cache_ip "$value" || true)"
-                validate_ipv4 "$ip" && ipv4_to_24_cidr "$ip" >> "$output"
+                if validate_ipv4 "$ip"; then
+                    ipv4_to_24_cidr "$ip" >> "$output"
+                else
+                    log "warn: domain unresolved, skipped from nft allow set: $value"
+                fi
                 ;;
         esac
     done < "$allow"
@@ -555,44 +534,16 @@ allow_has_domain() {
     [ -s "$(allow_file)" ] && awk '$1=="domain"{found=1} END{exit(found ? 0 : 1)}' "$(allow_file)"
 }
 
-providerdns_cleanup_if_unused() {
-    [ -f "$PROVIDERDNS_BIN" ] || return 0
-    run_providerdns --cleanup unused
-}
-
-write_sshg_dns_subscription() {
-    local tmp
-    mkdir -p "$(providerdns_subscription_dir)" "$(providerdns_hook_dir)" || fail "dns dir"
-    tmp="$(sshg_dns_subscription).tmp.$$"
-    awk '$1=="domain"{print $2}' "$(allow_file)" | sort -u > "$tmp" || { rm -f "$tmp"; fail "dns write"; }
-    if [ -s "$tmp" ]; then
-        mv "$tmp" "$(sshg_dns_subscription)" || fail "dns install"
-        chmod 644 "$(sshg_dns_subscription)" 2>/dev/null || true
-    else
-        rm -f "$tmp" "$(sshg_dns_subscription)"
-    fi
-}
-
-write_sshg_dns_hook() {
-    local script
-    script="$(script_path)"
-    mkdir -p "$(providerdns_hook_dir)" || fail "dns dir"
-    cat > "$(sshg_dns_hook)" << EOF || fail "hook write"
-#!/bin/bash
-/bin/bash "${script}" --apply cache
-EOF
-    chmod 755 "$(sshg_dns_hook)" || fail "hook mode"
-}
-
 reconcile_sshg_dns() {
+    local domains_file
     if allow_has_domain; then
-        write_sshg_dns_subscription
-        write_sshg_dns_hook
-        providerdns_install
+        domains_file="$(mktemp /tmp/sshg-domains.XXXXXX)" || fail "dns temp"
+        awk '$1=="domain"{print $2}' "$(allow_file)" | sort -u > "$domains_file" || { rm -f "$domains_file"; fail "dns write"; }
+        providerdns_set_sshg "$domains_file"
+        rm -f "$domains_file"
         providerdns_refresh
     else
-        rm -f "$(sshg_dns_subscription)" "$(sshg_dns_hook)"
-        providerdns_cleanup_if_unused
+        providerdns_unset_sshg
     fi
 }
 
@@ -608,9 +559,9 @@ apply_cache_rules() {
 
 clear_allow_state() {
     remove_active_nft
-    rm -f "$(allow_file)" "$(nft_file)" "$(sshg_dns_subscription)" "$(sshg_dns_hook)"
+    rm -f "$(allow_file)" "$(nft_file)"
     rmdir "$(state_dir)" 2>/dev/null || true
-    providerdns_cleanup_if_unused
+    providerdns_unset_sshg
     log "allow: cleared"
 }
 
@@ -631,9 +582,9 @@ remove_all() {
     local systemctl
     [ "$ROOT" = "/" ] && systemctl="$(systemctl_cmd 2>/dev/null || true)" || systemctl=""
     remove_active_nft
-    rm -f "$(sshd_dropin)" "$(key_file)" "$(nft_file)" "$(sshg_dns_subscription)" "$(sshg_dns_hook)"
+    rm -f "$(sshd_dropin)" "$(key_file)" "$(nft_file)"
     rm -rf "$(state_dir)"
-    providerdns_cleanup_if_unused
+    providerdns_unset_sshg
     [ -z "$systemctl" ] || "$systemctl" daemon-reload >/dev/null 2>&1 || true
     reload_ssh
     log "remove: done"
@@ -768,7 +719,7 @@ main() {
             sync_rules
             ;;
         dns)
-            ensure_providerdns
+            require_providerdns
             run_providerdns --refresh hooks
             ;;
         --remove|remove)

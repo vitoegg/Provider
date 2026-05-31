@@ -124,6 +124,14 @@ validate_domain() {
         [[ "$domain" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?([.][A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]]
 }
 
+validate_consumer() {
+    local consumer="$1"
+    [ -n "$consumer" ] && [[ "$consumer" =~ ^[A-Za-z0-9._-]+$ ]]
+}
+
+consumer_subscription_file() { path "/etc/provider/dns/subscriptions/$1.list"; }
+consumer_hook_file() { path "/etc/provider/dns/hooks/$1"; }
+
 cache_field() {
     local domain="$1" field="$2" file
     file="$(cache_file)"
@@ -136,6 +144,14 @@ cache_ip() {
     ip="$(cache_field "$1" 2 2>/dev/null || true)"
     validate_ipv4 "$ip" || return 1
     printf '%s\n' "$ip"
+}
+
+cache_record() {
+    local domain="$1" file
+    validate_domain "$domain" || return 1
+    file="$(cache_file)"
+    [ -s "$file" ] || return 1
+    awk -v d="$domain" '$1==d && NF>=4 { print $1 "\t" $2 "\t" $3 "\t" $4; found=1; exit } END { exit(found ? 0 : 1) }' "$file"
 }
 
 resolve_ipv4() {
@@ -172,6 +188,13 @@ collect_domains() {
     sort -u "$output" -o "$output"
 }
 
+consumer_has_changed_domain() {
+    local subscription="$1" changed="$2"
+    [ -s "$changed" ] || return 1
+    [ -s "$subscription" ] || return 0
+    awk 'NR==FNR { changed[$1]=1; next } $1 in changed { found=1; exit } END { exit(found ? 0 : 1) }' "$changed" "$subscription"
+}
+
 write_cache_line() {
     local domain="$1" ip="$2" status="$3" now="$4" old_ip="${5:-}" old_status="${6:-}" old_time="${7:-}" updated_at
     if [ "$old_ip" = "$ip" ] && [ "$old_status" = "$status" ] && [ -n "$old_time" ]; then
@@ -183,18 +206,23 @@ write_cache_line() {
 }
 
 run_hooks() {
-    local dir hook failed=0
+    local changed="${1:-}" dir hook name subscription failed=0
     dir="$(hook_dir)"
     [ -d "$dir" ] || return 0
     for hook in "$dir"/*; do
         [ -x "$hook" ] || continue
+        if [ -n "$changed" ]; then
+            name="$(basename "$hook")"
+            subscription="$(consumer_subscription_file "$name")"
+            consumer_has_changed_domain "$subscription" "$changed" || continue
+        fi
         "$hook" || failed=$((failed + 1))
     done
     [ "$failed" -eq 0 ] || { log "hookfail=${failed}"; return 1; }
 }
 
 refresh_cache() {
-    local run_hooks="${1:-0}" domains tmp oldcache cache domain old_domain now ip old_ip old_status old_time changed=0
+    local run_hooks="${1:-0}" domains tmp oldcache changed_domains cache domain old_domain now ip old_ip old_status old_time changed=0 new_ip new_status hook_rc=0
     mkdir -p "$(subscription_dir)" "$(hook_dir)" "$(state_dir)" || fail "dir"
     if command -v flock >/dev/null 2>&1; then
         exec 8>"$(lock_file)" || fail "lock"
@@ -204,12 +232,13 @@ refresh_cache() {
     domains="$(mktemp /tmp/providerdns-domains.XXXXXX)" || fail "temp"
     tmp="$(mktemp /tmp/providerdns-cache.XXXXXX)" || { rm -f "$domains"; fail "temp"; }
     oldcache="$(mktemp /tmp/providerdns-old.XXXXXX)" || { rm -f "$domains" "$tmp"; fail "temp"; }
+    changed_domains="$(mktemp /tmp/providerdns-changed.XXXXXX)" || { rm -f "$domains" "$tmp" "$oldcache"; fail "temp"; }
     cache="$(cache_file)"
 
-    collect_domains "$domains" || { rm -f "$domains" "$tmp" "$oldcache"; fail "collect"; }
+    collect_domains "$domains" || { rm -f "$domains" "$tmp" "$oldcache" "$changed_domains"; fail "collect"; }
     if [ -s "$cache" ]; then
         awk 'NF>=4 { print $1 "\t" $2 "\t" $3 "\t" $4 }' "$cache" | sort -u > "$oldcache" || {
-            rm -f "$domains" "$tmp" "$oldcache"
+            rm -f "$domains" "$tmp" "$oldcache" "$changed_domains"
             fail "old"
         }
     else
@@ -228,27 +257,34 @@ refresh_cache() {
             old_ip=""; old_status=""; old_time=""
         fi
         if ip="$(resolve_ipv4 "$domain")"; then
-            write_cache_line "$domain" "$ip" ok "$now" "$old_ip" "$old_status" "$old_time" >> "$tmp"
+            new_ip="$ip"; new_status="ok"
         else
             validate_ipv4 "$old_ip" || old_ip="-"
-            write_cache_line "$domain" "$old_ip" failed "$now" "$old_ip" "$old_status" "$old_time" >> "$tmp"
+            new_ip="$old_ip"; new_status="failed"
         fi
+        write_cache_line "$domain" "$new_ip" "$new_status" "$now" "$old_ip" "$old_status" "$old_time" >> "$tmp"
+        [ "$new_ip" = "$old_ip" ] && [ "$new_status" = "$old_status" ] || printf '%s\n' "$domain" >> "$changed_domains"
     done < "$domains"
     sort -u "$tmp" -o "$tmp"
+    sort -u "$changed_domains" -o "$changed_domains"
 
     if cmp -s "$tmp" "$cache" 2>/dev/null; then
-        rm -f "$domains" "$tmp" "$oldcache"
+        rm -f "$domains" "$tmp" "$oldcache" "$changed_domains"
         command -v flock >/dev/null 2>&1 && { flock -u 8 2>/dev/null || true; exec 8>&-; }
         log "unchanged"
         return 0
     fi
 
-    mv "$tmp" "$cache" || { rm -f "$domains" "$tmp" "$oldcache"; fail "install"; }
+    mv "$tmp" "$cache" || { rm -f "$domains" "$tmp" "$oldcache" "$changed_domains"; fail "install"; }
     rm -f "$domains" "$oldcache"
     changed=1
     command -v flock >/dev/null 2>&1 && { flock -u 8 2>/dev/null || true; exec 8>&-; }
     log "updated"
-    [ "$run_hooks" != "1" ] || [ "$changed" -ne 1 ] || run_hooks
+    if [ "$run_hooks" = "1" ] && [ "$changed" -eq 1 ]; then
+        run_hooks "$changed_domains" || hook_rc=1
+    fi
+    rm -f "$changed_domains"
+    return "$hook_rc"
 }
 
 systemctl_cmd() {
@@ -337,6 +373,50 @@ cleanup_unused() {
     log "cleanup: done"
 }
 
+set_consumer() {
+    local consumer="$1" domains_file="$2" hook_command="$3" subscription hook tmp
+    require_root
+    validate_consumer "$consumer" || fail "consumer"
+    [ -f "$domains_file" ] || fail "domains"
+    [ -n "$hook_command" ] || fail "hook"
+    mkdir -p "$(subscription_dir)" "$(hook_dir)" || fail "dir"
+    subscription="$(consumer_subscription_file "$consumer")"
+    hook="$(consumer_hook_file "$consumer")"
+    tmp="${subscription}.tmp.$$"
+    : > "$tmp" || fail "subscription"
+    while IFS= read -r domain || [ -n "$domain" ]; do
+        domain="$(trim "${domain%%#*}")"
+        [ -n "$domain" ] || continue
+        validate_domain "$domain" || fail "domain $domain"
+        printf '%s\n' "$domain" >> "$tmp"
+    done < "$domains_file"
+    sort -u "$tmp" -o "$tmp"
+    if [ -s "$tmp" ]; then
+        mv "$tmp" "$subscription" || { rm -f "$tmp"; fail "subscription"; }
+        chmod 644 "$subscription" 2>/dev/null || true
+        {
+            printf '%s\n' '#!/bin/bash'
+            printf '%s\n' "$hook_command"
+        } > "$hook" || fail "hook"
+        chmod 755 "$hook" || fail "hook mode"
+        install_units
+        log "set: $consumer"
+    else
+        rm -f "$tmp" "$subscription" "$hook"
+        cleanup_unused
+        log "unset: $consumer"
+    fi
+}
+
+unset_consumer() {
+    local consumer="$1"
+    require_root
+    validate_consumer "$consumer" || fail "consumer"
+    rm -f "$(consumer_subscription_file "$consumer")" "$(consumer_hook_file "$consumer")"
+    cleanup_unused
+    log "unset: $consumer"
+}
+
 lookup_domain() {
     local domain="$1" ip
     validate_domain "$domain" || fail "domain"
@@ -351,8 +431,11 @@ show_help() {
     cat << 'EOF'
 Usage:
   providerdns.sh --install
+  providerdns.sh --set <consumer> <domain-file> <hook-command>
+  providerdns.sh --unset <consumer>
   providerdns.sh --refresh
   providerdns.sh --refresh hooks
+  providerdns.sh --cache <domain>
   providerdns.sh --lookup example.com
   providerdns.sh --cleanup unused
 EOF
@@ -362,12 +445,27 @@ main() {
     local action="${1:-}" mode="${2:-}"
     case "$action" in
         --install) install_units ;;
+        --set)
+            [ $# -ge 4 ] || fail "set args"
+            action="$2"
+            mode="$3"
+            shift 3
+            set_consumer "$action" "$mode" "$*"
+            ;;
+        --unset)
+            [ -n "$mode" ] || fail "unset consumer"
+            unset_consumer "$mode"
+            ;;
         --refresh)
             case "$mode" in
                 "") refresh_cache 0 ;;
                 hooks) refresh_cache 1 ;;
                 *) fail "refresh mode" ;;
             esac
+            ;;
+        --cache)
+            [ -n "${2:-}" ] || fail "cache domain"
+            cache_record "$2"
             ;;
         --lookup)
             [ -n "${2:-}" ] || fail "lookup domain"
