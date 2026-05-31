@@ -752,15 +752,17 @@ get_protect_timer_status() {
 }
 
 remove_path() {
-    local path="$1"
+    local path="$1" path_type="${2:-文件}"
     [ -e "$path" ] || [ -L "$path" ] || return 0
     rm -rf "$path" || { log_error "删除失败: $path"; return 1; }
+    log_info_noisy "  ✓ 删除${path_type}: $path"
 }
 
 remove_systemd_unit_path() {
     local path="$1"
     [ -e "$path" ] || [ -L "$path" ] || return 0
     rm -rf "$path" || { log_error "删除失败: $path"; return 1; }
+    log_info_noisy "  ✓ 删除 systemd 单元: $path"
     SYSTEMD_UNITS_CHANGED=1
 }
 
@@ -814,40 +816,83 @@ remove_active_nft_tables() {
     command -v nft >/dev/null 2>&1 || { log_warn "未检测到 nft，跳过运行时规则清理"; return 0; }
     nft_tmp=$(mktemp /tmp/forwardaws-cleanup.XXXXXX) || return 1
     write_nft_cleanup_ruleset "$nft_tmp" || { rm -f "$nft_tmp"; return 1; }
+    log_info_noisy "  ✓ 清除 nftables 表:"
     run_nft_file "" "清理" "$nft_tmp" "卸载 forwardaws nftables 表"
     local rc=$?
     rm -f "$nft_tmp"
+    if [ $rc -eq 0 ]; then
+        log_info_noisy "    - 已删除: table ip ${NAT_TABLE_NAME}"
+        log_info_noisy "    - 已删除: table inet ${FILTER_TABLE_NAME}"
+        log_info_noisy "    - 已删除: table ip forwardaws"
+        log_info_noisy "    - 已删除: table ip6 forwardaws"
+    fi
     return "$rc"
 }
 
 remove_systemd_units() {
+    local service_removed=0 timer_removed=0 dns_removed=0
     SYSTEMD_UNITS_CHANGED=0
+    
+    log_info_noisy "  清理 systemd 服务和定时器:"
     if has_systemctl; then
-        systemctl disable --now --no-reload "$PROTECT_TIMER_NAME" >/dev/null 2>&1 || true
-        systemctl stop "$PROTECT_SERVICE_NAME" >/dev/null 2>&1 || true
+        systemctl disable --now --no-reload "$PROTECT_TIMER_NAME" >/dev/null 2>&1 && { service_removed=1; log_info_noisy "    - 已停用定时器: ${PROTECT_TIMER_NAME}"; } || true
+        systemctl stop "$PROTECT_SERVICE_NAME" >/dev/null 2>&1 && { service_removed=1; } || true
         systemctl reset-failed "$PROTECT_TIMER_NAME" "$PROTECT_SERVICE_NAME" >/dev/null 2>&1 || true
     fi
 
+    log_info_noisy "  删除 systemd 单元文件:"
     remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/${PROTECT_SERVICE_NAME}" || return 1
     remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/${PROTECT_TIMER_NAME}" || return 1
     remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/timers.target.wants/${PROTECT_TIMER_NAME}" || return 1
-    remove_path "$FORWARDAWS_DNS_SUBSCRIPTION" || return 1
-    remove_path "$FORWARDAWS_DNS_HOOK" || return 1
+    
+    log_info_noisy "  清理 DNS 相关文件:"
+    [ -f "$FORWARDAWS_DNS_SUBSCRIPTION" ] && { remove_path "$FORWARDAWS_DNS_SUBSCRIPTION" "DNS 订阅文件" || return 1; dns_removed=1; } || true
+    [ -f "$FORWARDAWS_DNS_HOOK" ] && { remove_path "$FORWARDAWS_DNS_HOOK" "DNS Hook 脚本" || return 1; } || true
+    
+    log_info_noisy "  执行 Provider DNS 清理:"
     providerdns_cleanup_if_unused || return 1
 
-    [ "$SYSTEMD_UNITS_CHANGED" != "1" ] || { has_systemctl && systemctl daemon-reload >/dev/null 2>&1 || true; }
+    [ "$SYSTEMD_UNITS_CHANGED" != "1" ] || { has_systemctl && systemctl daemon-reload >/dev/null 2>&1 || true; log_info_noisy "    - 已重新加载 systemd daemon"; }
 }
 
 uninstall_forwardaws() {
+    local nft_removed=0 config_removed=0 sysctl_removed=0
+    
+    log_info "开始清理 nftables.sh 产物..."
+    echo -e "${BLUE}─────────────────────────────────────${NC}"
+    
+    # 步骤 1: 清理 systemd 服务和定时器
+    log_info_noisy "步骤 1/5: 清理 systemd 服务和定时器"
     remove_systemd_units || return 1
+    
+    # 步骤 2: 清理运行时 nftables 规则
+    log_info_noisy "步骤 2/5: 清理运行时 nftables 规则"
     remove_active_nft_tables || return 1
-    remove_path "$FORWARDAWS_RULES_FILE" || return 1
+    
+    # 步骤 3: 删除规则配置文件
+    log_info_noisy "步骤 3/5: 删除规则配置文件"
+    [ -f "$FORWARDAWS_RULES_FILE" ] && { remove_path "$FORWARDAWS_RULES_FILE" "NFT 规则文件" || return 1; nft_removed=1; } || true
+    
+    # 步骤 4: 清理 nftables 主配置包含行
+    log_info_noisy "步骤 4/5: 清理 nftables 主配置"
     remove_nft_main_config_include_if_unused || return 1
     rmdir "$NFT_INCLUDE_DIR" 2>/dev/null || true
-    remove_path "$STATE_DIR" || return 1
-    remove_path "$IPV4_FORWARD_SYSCTL_FILE" || return 1
-    remove_path "$GLOBAL_LOCK_FILE" || return 1
-    log_info "nftables.sh 产物已清理完成"
+    
+    # 步骤 5: 删除状态文件和系统配置
+    log_info_noisy "步骤 5/5: 删除状态目录和系统配置"
+    [ -d "$STATE_DIR" ] && { remove_path "$STATE_DIR" "状态目录" || return 1; } || true
+    [ -f "$IPV4_FORWARD_SYSCTL_FILE" ] && { remove_path "$IPV4_FORWARD_SYSCTL_FILE" "sysctl 配置文件" || return 1; sysctl_removed=1; } || true
+    [ -f "$GLOBAL_LOCK_FILE" ] && { remove_path "$GLOBAL_LOCK_FILE" "全局锁文件" || return 1; } || true
+    
+    # 输出清理摘要
+    echo -e "${BLUE}─────────────────────────────────────${NC}"
+    log_info "清理完成，已移除:"
+    [ "$nft_removed" = "1" ] && log_info_noisy "  • NFT 规则文件"
+    [ "$config_removed" = "1" ] && log_info_noisy "  • nftables 配置包含"
+    [ "$sysctl_removed" = "1" ] && log_info_noisy "  • IP 转发 sysctl 配置"
+    log_info_noisy "  • systemd 服务和定时器"
+    log_info_noisy "  • 状态数据库和配置"
+    log_info_noisy "  • DNS 订阅和 Hook"
 }
 
 append_rule_to_state() {
@@ -933,8 +978,10 @@ replace_rules_batch() { rule_batch replace "$@"; }
 apply_ddns_cache() {
     local candidate candidate_changed=0 changed=0 unchanged=0 failed=0 now
     local src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss new_ip new_status
+    local total_domains
     prepare_state_file || return 1
-    if [ "$(state_domain_count "$RULES_STATE_FILE")" -eq 0 ]; then
+    total_domains=$(state_domain_count "$RULES_STATE_FILE")
+    if [ "$total_domains" -eq 0 ]; then
         log_info_noisy "未配置 DDNS 域名规则，无需同步"
         reconcile_timers
         return 0
@@ -942,6 +989,11 @@ apply_ddns_cache() {
     candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 1
     : > "$candidate"
     now=$(date +%s)
+    
+    # 打印 DDNS 同步开始信息
+    log_info "DDNS 缓存同步开始 (共 ${total_domains} 条域名规则)"
+    echo -e "${BLUE}─────────────────────────────────────${NC}"
+    
     while IFS='|' read -r src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss; do
         [ -n "$src_port$mode$target$dest_port" ] || continue
         if [ "$target_type" != "domain" ]; then
@@ -951,21 +1003,31 @@ apply_ddns_cache() {
             if [ "$new_ip" = "$resolved_ip" ] && [ "$status" = "$new_status" ]; then
                 make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" "$resolved_ip" "$status" "$updated_at" "$snat_ip" "$mss" >> "$candidate"
                 unchanged=$((unchanged + 1))
+                log_info_noisy "  ✓ 无变化 ${target} -> ${new_ip}"
             else
                 make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" "$new_ip" "$new_status" "$now" "$snat_ip" "$mss" >> "$candidate"
                 changed=$((changed + 1))
-                log_info "DDNS 更新: ${target} ${resolved_ip:-N/A} -> ${new_ip}"
+                log_info "  ✓ 更新 ${target}: ${resolved_ip:-N/A} → ${new_ip}"
             fi
         else
             make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" "$resolved_ip" cache_missing "$updated_at" "$snat_ip" "$mss" >> "$candidate"
             failed=$((failed + 1))
-            log_warn "DDNS 缓存缺失，保留原 IP: $target"
+            log_warn "  ✗ 缓存缺失 ${target}，保留原 IP (${resolved_ip:-unknown})"
         fi
     done < "$RULES_STATE_FILE"
     cmp -s "$candidate" "$RULES_STATE_FILE" || candidate_changed=1
+    
+    # 应用候选状态
     apply_candidate_state "$candidate" "$(get_protection_flag)" "DDNS 同步" || { rm -f "$candidate"; return 1; }
     rm -f "$candidate"
-    [ "$candidate_changed" -eq 1 ] && log_info "DDNS 同步完成: 更新 ${changed} 条，未变化 ${unchanged} 条，失败 ${failed} 条" || log_info_noisy "DDNS 同步完成: 无变化，未变化 ${unchanged} 条，失败 ${failed} 条"
+    
+    # 输出 DDNS 同步结果汇总
+    echo -e "${BLUE}─────────────────────────────────────${NC}"
+    if [ "$candidate_changed" -eq 1 ]; then
+        log_info "DDNS 缓存同步完成: 已更新 ${GREEN}${changed}${NC} 条，无变化 ${unchanged} 条，失败 ${RED}${failed}${NC} 条"
+    else
+        log_info_noisy "DDNS 缓存同步完成: 无变化，无变化 ${unchanged} 条，失败 ${failed} 条"
+    fi
     [ "$failed" -eq 0 ]
 }
 
