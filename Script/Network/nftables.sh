@@ -438,8 +438,10 @@ parse_rule() {
                     if PARSED_IP=$(providerdns_cache_ip "$target"); then
                         PARSED_STATUS=$(providerdns_cache_status "$target")
                     else
-                        log_error "域名解析失败: $target"
-                        return 1
+                        # 缓存中未找到该域名，允许以 cache_missing 状态先入库
+                        # Provider DNS 会在后续通过 providerdns_refresh 补充解析
+                        PARSED_IP=""; PARSED_STATUS="cache_missing"
+                        log_info_noisy "域名缓存缺失，规则将待 Provider DNS 初始解析: $target"
                     fi
                 fi
             else
@@ -923,53 +925,61 @@ remove_rule_from_state() {
 }
 
 rule_batch() {
-    local action="$1" candidate now success=0 skipped=0 failed=0 rule rc protect_flag desc success_msg empty_msg show_status=0
-    shift
-    [ $# -gt 0 ] || { log_error "未提供任何规则"; return 1; }
-    candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 1
-    case "$action" in
-        add)
-            copy_current_state_to "$candidate" || { rm -f "$candidate"; return 1; }
-            protect_flag=1; desc="批量添加转发规则"; success_msg="批量添加"; empty_msg="新增规则"; show_status=1
-            ;;
-        delete)
-            copy_current_state_to "$candidate" || { rm -f "$candidate"; return 1; }
-            protect_flag=$(get_protection_flag); desc="批量删除转发规则"; success_msg="批量删除"; empty_msg="删除规则"
-            ;;
-        replace) : > "$candidate"; protect_flag=1; desc="原子替换转发规则"; success_msg="原子替换"; empty_msg="新规则"; show_status=1 ;;
-    esac
-    now=$(date +%s)
-    for rule in "$@"; do
-        log_info "$([ "$action" = "replace" ] && echo "校验规则" || echo "处理规则"): $rule"
-        case "$action" in
-            delete) remove_rule_from_state "$candidate" "$rule" ;;
-            replace) append_rule_to_state "$candidate" "$rule" "$now" "fail" ;;
-            *) append_rule_to_state "$candidate" "$rule" "$now" "skip" ;;
-        esac
-        rc=$?
-        case "$rc" in
-            0) success=$((success + 1)) ;;
-            2) skipped=$((skipped + 1)) ;;
-            3) rm -f "$candidate"; return 1 ;;
-            *) failed=$((failed + 1)) ;;
-        esac
-    done
-    if [ "$action" = "replace" ] && [ "$failed" -gt 0 ]; then
-        rm -f "$candidate"
-        log_error "替换前校验失败，已取消所有变更"
-        return 1
-    fi
-    if [ "$success" -gt 0 ]; then
-        apply_candidate_state "$candidate" "$protect_flag" "$desc" || { rm -f "$candidate"; return 1; }
-        [ "$action" = "replace" ] && log_info "原子替换完成，共应用 ${success} 条规则" || log_info "${success_msg}完成: 成功 ${success} 条，跳过 ${skipped} 条，失败 ${failed} 条"
-        reconcile_timers
-        [ "$show_status" = "1" ] && show_protection_status
-    else
-        log_warn "没有${empty_msg}: 跳过 ${skipped} 条，失败 ${failed} 条"
-    fi
-    rm -f "$candidate"
-    [ "$failed" -eq 0 ]
-}
+     local action="$1" candidate now success=0 skipped=0 failed=0 rule rc protect_flag desc success_msg empty_msg show_status=0 has_domain=0
+     shift
+     [ $# -gt 0 ] || { log_error "未提供任何规则"; return 1; }
+     candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 1
+     case "$action" in
+         add)
+             copy_current_state_to "$candidate" || { rm -f "$candidate"; return 1; }
+             protect_flag=1; desc="批量添加转发规则"; success_msg="批量添加"; empty_msg="新增规则"; show_status=1
+             ;;
+         delete)
+             copy_current_state_to "$candidate" || { rm -f "$candidate"; return 1; }
+             protect_flag=$(get_protection_flag); desc="批量删除转发规则"; success_msg="批量删除"; empty_msg="删除规则"
+             ;;
+         replace) : > "$candidate"; protect_flag=1; desc="原子替换转发规则"; success_msg="原子替换"; empty_msg="新规则"; show_status=1 ;;
+     esac
+     now=$(date +%s)
+     for rule in "$@"; do
+         log_info "$([ "$action" = "replace" ] && echo "校验规则" || echo "处理规则"): $rule"
+         case "$action" in
+             delete) remove_rule_from_state "$candidate" "$rule" ;;
+             replace) append_rule_to_state "$candidate" "$rule" "$now" "fail" && { [[ "$rule" == *":"* ]] && [[ ! "$rule" =~ :[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+: ]] && has_domain=1; } ;;
+             *) append_rule_to_state "$candidate" "$rule" "$now" "skip" && { [[ "$rule" == *":"* ]] && [[ ! "$rule" =~ :[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+: ]] && has_domain=1; } ;;
+         esac
+         rc=$?
+         case "$rc" in
+             0) success=$((success + 1)) ;;
+             2) skipped=$((skipped + 1)) ;;
+             3) rm -f "$candidate"; return 1 ;;
+             *) failed=$((failed + 1)) ;;
+         esac
+     done
+     if [ "$action" = "replace" ] && [ "$failed" -gt 0 ]; then
+         rm -f "$candidate"
+         log_error "替换前校验失败，已取消所有变更"
+         return 1
+     fi
+     if [ "$success" -gt 0 ]; then
+         apply_candidate_state "$candidate" "$protect_flag" "$desc" || { rm -f "$candidate"; return 1; }
+         [ "$action" = "replace" ] && log_info "原子替换完成，共应用 ${success} 条规则" || log_info "${success_msg}完成: 成功 ${success} 条，跳过 ${skipped} 条，失败 ${failed} 条"
+         
+         # 如果是添加操作且包含域名规则，立即触发 DDNS 初始解析
+         if [ "$action" = "add" ] && [ "$has_domain" = "1" ]; then
+             log_info "检测到新增域名规则，触发 Provider DNS 初始解析..."
+             sync_ddns_rules || log_warn "DDNS 初始解析失败，请稍后手动执行 --ddns sync"
+         else
+             reconcile_timers
+         fi
+         
+         [ "$show_status" = "1" ] && show_protection_status
+     else
+         log_warn "没有${empty_msg}: 跳过 ${skipped} 条，失败 ${failed} 条"
+     fi
+     rm -f "$candidate"
+     [ "$failed" -eq 0 ]
+ }
 
 add_rule_batch() { rule_batch add "$@"; }
 delete_rule_batch() { rule_batch delete "$@"; }
