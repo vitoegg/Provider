@@ -112,7 +112,6 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 * `--apply`: Merge new allow entries with current state.
 * `--reset`: Replace current allow entries.
 * `--sync`: Resolve domain entries and refresh nftables.
-* `--apply cache`: Apply shared DNS cache to nftables.
 * `--remove`: Remove sshg files and nftables table.
 * `allow=`: Comma-separated IPv4, IPv4 CIDR, or domain entries.
 * `key=`: Optional root public key, written to `/root/.ssh/authorized_keys3`.
@@ -120,7 +119,8 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 Generated files:
 * `/etc/ssh/sshd_config.d/00-sshg.conf`
 * `/root/.ssh/authorized_keys3`
-* `/etc/provider/sshg/allow.list`
+* `/etc/sshg/allow.ipv4`
+* `/etc/sshg/allow.domain`
 * `/etc/nftables.d/sshg.nft`
 * `/etc/provider/dns/subscriptions/sshg.list`
 * `/etc/provider/dns/hooks/sshg`
@@ -130,7 +130,6 @@ Examples:
 bash sshg.sh --reset allow=1.2.3.4,1.2.3.0/24,example.com key='ssh-ed25519 AAAA...'
 bash sshg.sh --apply allow=5.6.7.8
 bash sshg.sh --sync
-bash sshg.sh --apply cache
 bash sshg.sh --remove
 ```
 

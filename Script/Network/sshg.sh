@@ -8,11 +8,11 @@ PROVIDERDNS_BIN="${PROVIDERDNS_BIN:-/usr/local/sbin/providerdns.sh}"
 PROVIDERDNS_LOCAL_NAME="providerdns.sh"
 PROVIDERDNS_CONSUMER="sshg"
 SSHG_LOCK_HELD=0
-SSHG_ALLOW_DROPPED=0
 SSHG_DNS_ROLLBACK_ON_FAIL=0
 
-log() { printf '[sshg] %s\n' "$*"; }
-fail() { printf '[sshg] FAIL %s\n' "$*" >&2; exit 1; }
+log_info() { [ "${SSHG_QUIET:-0}" = "1" ] || printf '[INFO] %s\n' "$*"; }
+log_warn() { printf '[WARNING] %s\n' "$*" >&2; }
+fail() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 
 path() {
     if [ "$ROOT" = "/" ]; then
@@ -28,17 +28,17 @@ trim() {
 
 require_root() {
     [ "$ROOT" != "/" ] && return 0
-    [ "$(id -u)" = "0" ] || fail "need root"
+    [ "$(id -u)" = "0" ] || fail "此操作必须以 root 权限运行"
 }
 
 acquire_lock() {
     local lock
     [ "$SSHG_LOCK_HELD" = "1" ] && return 0
     lock="$(sshg_lock_file)"
-    mkdir -p "$(dirname "$lock")" || fail "lock dir"
-    exec 9>"$lock" || fail "lock"
+    mkdir -p "$(dirname "$lock")" || fail "无法创建锁目录"
+    exec 9>"$lock" || fail "无法创建锁文件"
     if command -v flock >/dev/null 2>&1; then
-        flock -n 9 || fail "locked"
+        flock -n 9 || fail "检测到其他任务正在执行中，请稍后重试"
     fi
     SSHG_LOCK_HELD=1
 }
@@ -69,11 +69,12 @@ systemctl_cmd() {
 sshd_config() { path "/etc/ssh/sshd_config"; }
 sshd_dropin() { path "/etc/ssh/sshd_config.d/00-sshg.conf"; }
 key_file() { path "/root/.ssh/authorized_keys3"; }
-state_dir() { path "/etc/provider/sshg"; }
-allow_file() { path "/etc/provider/sshg/allow.list"; }
+state_dir() { path "/etc/sshg"; }
+allow_ipv4_file() { path "/etc/sshg/allow.ipv4"; }
+allow_domain_file() { path "/etc/sshg/allow.domain"; }
 nft_file() { path "/etc/nftables.d/sshg.nft"; }
 nft_main_file() { path "/etc/nftables.conf"; }
-sshg_lock_file() { path "/run/sshg.lock"; }
+sshg_lock_file() { path "/run/sshg/lock"; }
 
 validate_ipv4() {
     local ip="$1" a b c d old_ifs
@@ -113,17 +114,6 @@ validate_domain() {
         [[ "$domain" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?([.][A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]]
 }
 
-classify_allow() {
-    local value="$1"
-    if validate_cidr "$value"; then
-        printf 'cidr %s\n' "$value"
-    elif validate_domain "$value"; then
-        printf 'domain %s\n' "$value"
-    else
-        return 1
-    fi
-}
-
 public_key_valid() {
     local key="$1" type body
     case "$key" in
@@ -144,20 +134,20 @@ write_key() {
     local key="$1" file tmp
     [ -n "$key" ] || return 0
     key="$(trim "$key")"
-    public_key_valid "$key" || fail "key invalid"
+    public_key_valid "$key" || fail "SSH 公钥格式无效"
     file="$(key_file)"
     tmp="${file}.tmp.$$"
-    mkdir -p "$(dirname "$file")" || fail "key dir"
+    mkdir -p "$(dirname "$file")" || fail "无法创建密钥目录"
     chmod 700 "$(dirname "$file")" 2>/dev/null || true
-    printf '%s\n' "$key" > "$tmp" || fail "key write"
+    printf '%s\n' "$key" > "$tmp" || fail "无法写入托管密钥"
     chmod 600 "$tmp" 2>/dev/null || true
-    mv "$tmp" "$file" || fail "key install"
-    log "key: written"
+    mv "$tmp" "$file" || fail "无法安装托管密钥"
+    log_info "已写入托管密钥"
 }
 
 remove_key() {
-    rm -f "$(key_file)" || fail "key remove"
-    log "key: removed"
+    rm -f "$(key_file)" || fail "无法删除托管密钥"
+    log_info "已删除托管密钥"
 }
 
 root_key_exists() {
@@ -234,14 +224,14 @@ sshd_effective_config_ok() {
 
 write_ssh_config() {
     local file tmp backup had_old=0 sshd
-    sshd_has_dropin_include || fail "ssh include"
-    sshd="$(sshd_cmd)" || fail "sshd missing"
+    sshd_has_dropin_include || fail "sshd_config 未包含 /etc/ssh/sshd_config.d/*.conf"
+    sshd="$(sshd_cmd)" || fail "未检测到 sshd"
     ensure_sshd_runtime
     file="$(sshd_dropin)"
     tmp="${file}.tmp.$$"
     backup="${file}.bak.$$"
-    mkdir -p "$(dirname "$file")" || fail "ssh dir"
-    cat > "$tmp" << 'EOF' || fail "ssh write"
+    mkdir -p "$(dirname "$file")" || fail "无法创建 SSH 配置目录"
+    cat > "$tmp" << 'EOF' || fail "无法写入 SSH 配置"
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PubkeyAuthentication yes
@@ -251,17 +241,17 @@ MaxStartups 10:30:60
 AuthorizedKeysFile .ssh/authorized_keys .ssh/authorized_keys2 .ssh/authorized_keys3
 EOF
     if [ -f "$file" ]; then
-        cp "$file" "$backup" || fail "ssh backup"
+        cp "$file" "$backup" || fail "无法备份 SSH 配置"
         had_old=1
     fi
-    mv "$tmp" "$file" || fail "ssh install"
+    mv "$tmp" "$file" || fail "无法安装 SSH 配置"
     if ! "$sshd" -t >/dev/null 2>&1; then
         if [ "$had_old" = "1" ]; then
             mv "$backup" "$file" 2>/dev/null || true
         else
             rm -f "$file"
         fi
-        fail "ssh check"
+        fail "SSH 配置预检失败"
     fi
     if ! sshd_effective_config_ok "$sshd"; then
         if [ "$had_old" = "1" ]; then
@@ -269,15 +259,15 @@ EOF
         else
             rm -f "$file"
         fi
-        fail "ssh effective"
+        fail "SSH 生效配置不符合预期"
     fi
     rm -f "$backup"
-    log "ssh: applied"
+    log_info "SSH 配置已应用"
 }
 
 remove_ssh_config() {
-    rm -f "$(sshd_dropin)" || fail "ssh remove"
-    log "ssh: removed"
+    rm -f "$(sshd_dropin)" || fail "无法删除 SSH 配置"
+    log_info "SSH 配置已删除"
 }
 
 reload_ssh() {
@@ -287,47 +277,60 @@ reload_ssh() {
     if [ -n "$systemctl" ]; then
         for unit in ssh.service sshd.service; do
             "$systemctl" is-active --quiet "$unit" >/dev/null 2>&1 || continue
-            "$systemctl" reload "$unit" >/dev/null 2>&1 && { log "ssh: reloaded"; return 0; }
+            "$systemctl" reload "$unit" >/dev/null 2>&1 && { log_info "SSH 已重载: $unit"; return 0; }
         done
-        "$systemctl" reload ssh.service >/dev/null 2>&1 && { log "ssh: reloaded"; return 0; }
-        "$systemctl" reload sshd.service >/dev/null 2>&1 && { log "ssh: reloaded"; return 0; }
+        "$systemctl" reload ssh.service >/dev/null 2>&1 && { log_info "SSH 已重载: ssh.service"; return 0; }
+        "$systemctl" reload sshd.service >/dev/null 2>&1 && { log_info "SSH 已重载: sshd.service"; return 0; }
     fi
     if command -v service >/dev/null 2>&1; then
-        service ssh reload >/dev/null 2>&1 && { log "ssh: reloaded"; return 0; }
-        service sshd reload >/dev/null 2>&1 && { log "ssh: reloaded"; return 0; }
+        service ssh reload >/dev/null 2>&1 && { log_info "SSH 已重载: service ssh"; return 0; }
+        service sshd reload >/dev/null 2>&1 && { log_info "SSH 已重载: service sshd"; return 0; }
     fi
-    pkill -HUP -x sshd >/dev/null 2>&1 && { log "ssh: reloaded"; return 0; }
-    fail "ssh reload"
+    pkill -HUP -x sshd >/dev/null 2>&1 && { log_info "SSH 已重载: HUP"; return 0; }
+    fail "SSH 重载失败"
 }
 
 append_allow_values() {
-    local values="$1" value
+    local values="$1" ipv4_output="$2" domain_output="$3" value
     printf '%s' "$values" | tr ',' '\n' | while IFS= read -r value || [ -n "$value" ]; do
         value="$(trim "$value")"
         [ -n "$value" ] || continue
-        classify_allow "$value" || fail "allow invalid: $value"
+        if validate_cidr "$value"; then
+            printf '%s\n' "$value" >> "$ipv4_output"
+        elif validate_domain "$value"; then
+            printf '%s\n' "$value" >> "$domain_output"
+        else
+            fail "白名单格式无效: $value"
+        fi
     done
 }
 
-build_allow_candidate() {
-    local mode="$1" values="$2" output="$3"
-    : > "$output" || fail "state write"
-    if [ "$mode" = "apply" ] && [ -s "$(allow_file)" ]; then
-        cat "$(allow_file)" >> "$output"
+build_allow_candidates() {
+    local mode="$1" values="$2" ipv4_output="$3" domain_output="$4"
+    : > "$ipv4_output" || fail "无法写入 IPv4 白名单"
+    : > "$domain_output" || fail "无法写入域名白名单"
+    if [ "$mode" = "apply" ]; then
+        [ ! -s "$(allow_ipv4_file)" ] || cat "$(allow_ipv4_file)" >> "$ipv4_output"
+        [ ! -s "$(allow_domain_file)" ] || cat "$(allow_domain_file)" >> "$domain_output"
     fi
     if [ -n "$values" ]; then
-        append_allow_values "$values" >> "$output" || { rm -f "$output"; exit 1; }
+        append_allow_values "$values" "$ipv4_output" "$domain_output" || {
+            rm -f "$ipv4_output" "$domain_output"
+            exit 1
+        }
     fi
-    sort -u "$output" -o "$output"
-    [ -s "$output" ] || fail "allow empty"
+    sort -u "$ipv4_output" -o "$ipv4_output"
+    sort -u "$domain_output" -o "$domain_output"
+    [ -s "$ipv4_output" ] || [ -s "$domain_output" ] || fail "白名单为空"
 }
 
 log_allow_state() {
-    local file cidr_count domain_count
-    file="$(allow_file)"
-    cidr_count="$(awk '$1=="cidr"{c++} END{print c+0}' "$file")"
-    domain_count="$(awk '$1=="domain"{c++} END{print c+0}' "$file")"
-    log "allow: updated | cidr=${cidr_count} domain=${domain_count}"
+    local cidr_count domain_count
+    cidr_count=0
+    domain_count=0
+    [ ! -s "$(allow_ipv4_file)" ] || cidr_count="$(awk 'NF{c++} END{print c+0}' "$(allow_ipv4_file)")"
+    [ ! -s "$(allow_domain_file)" ] || domain_count="$(awk 'NF{c++} END{print c+0}' "$(allow_domain_file)")"
+    log_info "白名单: ${cidr_count} 个 IP/CIDR，${domain_count} 个域名"
 }
 
 providerdns_cache_field() {
@@ -373,12 +376,12 @@ find_providerdns() {
 
 require_providerdns() {
     find_providerdns && return 0
-    fail "need providerdns.sh: set PROVIDERDNS_BIN, or place providerdns.sh at /usr/local/sbin/providerdns.sh, or place it next to sshg.sh"
+    fail "缺少 providerdns.sh"
 }
 
 providerdns_refresh() {
     require_providerdns
-    PROVIDERDNS_LOCK_WAIT="${PROVIDERDNS_LOCK_WAIT:-10}" run_providerdns --refresh
+    PROVIDERDNS_LOCK_WAIT="${PROVIDERDNS_LOCK_WAIT:-10}" run_providerdns --refresh >/dev/null 2>&1
 }
 
 providerdns_set_sshg() {
@@ -386,90 +389,57 @@ providerdns_set_sshg() {
     require_providerdns
     script="$(script_path)"
     printf -v quoted_script '%q' "$script"
-    hook_command="/bin/bash ${quoted_script} --apply cache"
-    run_providerdns --set "$PROVIDERDNS_CONSUMER" "$domains_file" "$hook_command"
+    hook_command="SSHG_QUIET=1 /bin/bash ${quoted_script} hook"
+    run_providerdns --set "$PROVIDERDNS_CONSUMER" "$domains_file" "$hook_command" >/dev/null 2>&1
 }
 
 providerdns_unset_sshg() {
-    find_providerdns || return 0
-    run_providerdns --unset "$PROVIDERDNS_CONSUMER"
+    find_providerdns || return 2
+    run_providerdns --unset "$PROVIDERDNS_CONSUMER" >/dev/null 2>&1
 }
 
-allow_has_domain_file() {
-    [ -s "$1" ] && awk '$1=="domain"{found=1} END{exit(found ? 0 : 1)}' "$1"
-}
-
-write_allow_domains() {
-    local allow="$1" output="$2"
-    awk '$1=="domain"{print $2}' "$allow" | sort -u > "$output"
-}
-
-set_providerdns_for_allow() {
-    local allow="$1" domains_file
-    if allow_has_domain_file "$allow"; then
-        domains_file="$(mktemp /tmp/sshg-domains.XXXXXX)" || fail "dns temp"
-        write_allow_domains "$allow" "$domains_file" || { rm -f "$domains_file"; fail "dns write"; }
+set_providerdns_for_domains() {
+    local domains_file="$1"
+    if [ -s "$domains_file" ]; then
         providerdns_set_sshg "$domains_file"
-        rm -f "$domains_file"
     else
         providerdns_unset_sshg
     fi
 }
 
-refresh_providerdns_for_allow() {
-    allow_has_domain_file "$1" || { providerdns_unset_sshg; return 0; }
-    set_providerdns_for_allow "$1"
+refresh_providerdns_for_domains() {
+    [ -s "$1" ] || { providerdns_unset_sshg; return 0; }
+    set_providerdns_for_domains "$1"
     providerdns_refresh
 }
 
-filter_allow_domains() {
-    local allow="$1" tmp type value ip
-    SSHG_ALLOW_DROPPED=0
-    allow_has_domain_file "$allow" || return 0
-    tmp="${allow}.filtered.$$"
-    : > "$tmp" || fail "allow filter"
-    while read -r type value; do
-        case "$type" in
-            cidr)
-                printf '%s %s\n' "$type" "$value" >> "$tmp"
-                ;;
-            domain)
-                ip="$(providerdns_cache_ip "$value" || true)"
-                if validate_ipv4 "$ip"; then
-                    printf '%s %s\n' "$type" "$value" >> "$tmp"
-                else
-                    SSHG_ALLOW_DROPPED=$((SSHG_ALLOW_DROPPED + 1))
-                    log "warn: domain unresolved, skipped from allow state: $value"
-                fi
-                ;;
-        esac
-    done < "$allow"
-    sort -u "$tmp" -o "$tmp"
-    mv "$tmp" "$allow" || { rm -f "$tmp"; fail "allow filter"; }
-    [ "$SSHG_ALLOW_DROPPED" -eq 0 ] || set_providerdns_for_allow "$allow"
-}
-
 build_sources_file() {
-    local output="$1" allow="${2:-$(allow_file)}" type value ip
-    [ -s "$allow" ] || fail "allow empty"
-    : > "$output" || fail "source write"
-    while read -r type value; do
-        case "$type" in
-            cidr)
-                printf '%s\n' "$value" >> "$output"
-                ;;
-            domain)
-                ip="$(providerdns_cache_ip "$value" || true)"
-                if validate_ipv4 "$ip"; then
-                    ipv4_to_24_cidr "$ip" >> "$output"
-                else
-                    log "warn: domain unresolved, skipped from nft allow set: $value"
-                fi
-                ;;
-        esac
-    done < "$allow"
+    local output="$1" ipv4_input="$2" domain_input="$3" value ip
+    [ -s "$ipv4_input" ] || [ -s "$domain_input" ] || fail "白名单为空"
+    : > "$output" || fail "无法写入放行来源"
+    if [ -s "$ipv4_input" ]; then
+        while IFS= read -r value || [ -n "$value" ]; do
+            value="$(trim "$value")"
+            [ -n "$value" ] || continue
+            validate_cidr "$value" || fail "IPv4 白名单格式无效: $value"
+            printf '%s\n' "$value" >> "$output"
+        done < "$ipv4_input"
+    fi
+    if [ -s "$domain_input" ]; then
+        while IFS= read -r value || [ -n "$value" ]; do
+            value="$(trim "$value")"
+            [ -n "$value" ] || continue
+            validate_domain "$value" || fail "域名白名单格式无效: $value"
+            ip="$(providerdns_cache_ip "$value" || true)"
+            if validate_ipv4 "$ip"; then
+                ipv4_to_24_cidr "$ip" >> "$output"
+            else
+                log_warn "域名解析失败，已跳过: $value"
+            fi
+        done < "$domain_input"
+    fi
     sort -u "$output" -o "$output"
-    [ -s "$output" ] || fail "source empty"
+    [ -s "$output" ] || fail "放行来源为空"
 }
 
 detect_ssh_ports() {
@@ -491,7 +461,7 @@ detect_ssh_ports() {
 
 render_nft() {
     local sources="$1" output="$2" ports="$3" first=1 source
-    cat > "$output" << EOF || fail "nft render"
+    cat > "$output" << EOF || fail "无法生成 NFT 规则"
 #!/usr/sbin/nft -f
 # generated by sshg.sh
 
@@ -513,7 +483,7 @@ EOF
             printf ',\n            %s' "$source" >> "$output"
         fi
     done < "$sources"
-    cat >> "$output" << EOF || fail "nft render"
+    cat >> "$output" << EOF || fail "无法生成 NFT 规则"
 
         }
     }
@@ -544,7 +514,7 @@ ensure_nft_service() {
     [ "$ROOT" != "/" ] && [ -z "${SSHG_SYSTEMCTL:-}" ] && return 0
     systemctl="$(systemctl_cmd 2>/dev/null || true)"
     [ -n "$systemctl" ] || return 0
-    "$systemctl" enable nftables.service >/dev/null 2>&1 || log "nft: service skipped"
+    "$systemctl" enable nftables.service >/dev/null 2>&1 || log_warn "nftables.service 未启用，重启后规则可能失效"
 }
 
 nft_live_ready() {
@@ -573,55 +543,81 @@ fail_transaction() {
 }
 
 apply_nft() {
-    apply_nft_from_allow "$(allow_file)" "0"
+    apply_nft_from_files "$(allow_ipv4_file)" "$(allow_domain_file)" "0"
 }
 
-apply_nft_from_allow() {
-    local allow="$1" commit_allow="${2:-0}"
-    local nft file tmp sources ports source_count allow_path allow_tmp allow_backup nft_backup had_allow=0 had_nft=0
-    nft="$(nft_cmd)" || fail_transaction "nft missing"
+rollback_allow_state() {
+    rollback_file "$(allow_ipv4_file)" "$1" "$2"
+    rollback_file "$(allow_domain_file)" "$3" "$4"
+}
+
+apply_nft_from_files() {
+    local ipv4_input="$1" domain_input="$2" commit_allow="${3:-0}"
+    local nft file tmp sources ports source_count ipv4_path domain_path ipv4_tmp domain_tmp ipv4_backup domain_backup nft_backup
+    local had_ipv4=0 had_domain=0 had_nft=0
+    nft="$(nft_cmd)" || fail_transaction "未检测到 nft"
     file="$(nft_file)"
-    allow_path="$(allow_file)"
-    mkdir -p "$(dirname "$file")" || fail_transaction "nft dir"
+    ipv4_path="$(allow_ipv4_file)"
+    domain_path="$(allow_domain_file)"
+    mkdir -p "$(dirname "$file")" || fail_transaction "无法创建 NFT 规则目录"
     tmp="${file}.tmp.$$"
     sources="${file}.sources.$$"
-    build_sources_file "$sources" "$allow"
-    ports="$(detect_ssh_ports)" || fail_transaction "ssh port"
+    build_sources_file "$sources" "$ipv4_input" "$domain_input"
+    ports="$(detect_ssh_ports)" || fail_transaction "无法检测 SSH 端口"
     render_nft "$sources" "$tmp" "$ports"
-    "$nft" -c -f "$tmp" >/dev/null 2>&1 || { rm -f "$tmp" "$sources"; fail_transaction "nft check"; }
-    ensure_nft_include || fail_transaction "nft include"
+    "$nft" -c -f "$tmp" >/dev/null 2>&1 || { rm -f "$tmp" "$sources"; fail_transaction "NFT 规则预检失败"; }
+    ensure_nft_include || fail_transaction "无法写入 nftables include"
     ensure_nft_service
     source_count="$(wc -l < "$sources" | tr -d ' ')"
     if [ "$commit_allow" = "0" ] && cmp -s "$tmp" "$file" 2>/dev/null && nft_live_ready "$nft"; then
         rm -f "$tmp" "$sources"
-        log "nft: skipped | ports=${ports} sources=${source_count}"
+        log_info "SSH 端口: ${ports}"
+        log_info "放行来源: ${source_count} 个"
+        log_info "NFT 规则未变化"
         return 0
     fi
     if [ "$commit_allow" = "1" ]; then
-        mkdir -p "$(dirname "$allow_path")" || fail_transaction "state dir"
-        allow_tmp="${allow_path}.tmp.$$"
-        allow_backup="${allow_path}.bak.$$"
-        [ ! -f "$allow_path" ] || { cp "$allow_path" "$allow_backup" || fail_transaction "state backup"; had_allow=1; }
-        cp "$allow" "$allow_tmp" || { rm -f "$allow_backup"; fail_transaction "state write"; }
-        mv "$allow_tmp" "$allow_path" || { rm -f "$allow_tmp" "$allow_backup"; fail_transaction "state install"; }
+        mkdir -p "$(state_dir)" || fail_transaction "无法创建状态目录"
+        ipv4_tmp="${ipv4_path}.tmp.$$"
+        domain_tmp="${domain_path}.tmp.$$"
+        ipv4_backup="${ipv4_path}.bak.$$"
+        domain_backup="${domain_path}.bak.$$"
+        [ ! -f "$ipv4_path" ] || { cp "$ipv4_path" "$ipv4_backup" || fail_transaction "无法备份 IPv4 白名单"; had_ipv4=1; }
+        [ ! -f "$domain_path" ] || { cp "$domain_path" "$domain_backup" || { rollback_file "$ipv4_path" "$ipv4_backup" "$had_ipv4"; fail_transaction "无法备份域名白名单"; }; had_domain=1; }
+        if [ -s "$ipv4_input" ]; then
+            cp "$ipv4_input" "$ipv4_tmp" || { rollback_allow_state "$ipv4_backup" "$had_ipv4" "$domain_backup" "$had_domain"; fail_transaction "无法写入 IPv4 白名单"; }
+            mv "$ipv4_tmp" "$ipv4_path" || { rm -f "$ipv4_tmp"; rollback_allow_state "$ipv4_backup" "$had_ipv4" "$domain_backup" "$had_domain"; fail_transaction "无法安装 IPv4 白名单"; }
+            chmod 600 "$ipv4_path" 2>/dev/null || true
+        else
+            rm -f "$ipv4_path" || { rollback_allow_state "$ipv4_backup" "$had_ipv4" "$domain_backup" "$had_domain"; fail_transaction "无法清理 IPv4 白名单"; }
+        fi
+        if [ -s "$domain_input" ]; then
+            cp "$domain_input" "$domain_tmp" || { rollback_allow_state "$ipv4_backup" "$had_ipv4" "$domain_backup" "$had_domain"; fail_transaction "无法写入域名白名单"; }
+            mv "$domain_tmp" "$domain_path" || { rm -f "$domain_tmp"; rollback_allow_state "$ipv4_backup" "$had_ipv4" "$domain_backup" "$had_domain"; fail_transaction "无法安装域名白名单"; }
+            chmod 600 "$domain_path" 2>/dev/null || true
+        else
+            rm -f "$domain_path" || { rollback_allow_state "$ipv4_backup" "$had_ipv4" "$domain_backup" "$had_domain"; fail_transaction "无法清理域名白名单"; }
+        fi
     fi
     nft_backup="${file}.bak.$$"
-    [ ! -f "$file" ] || { cp "$file" "$nft_backup" || { [ "$commit_allow" = "0" ] || rollback_file "$allow_path" "$allow_backup" "$had_allow"; fail_transaction "nft backup"; }; had_nft=1; }
+    [ ! -f "$file" ] || { cp "$file" "$nft_backup" || { [ "$commit_allow" = "0" ] || rollback_allow_state "$ipv4_backup" "$had_ipv4" "$domain_backup" "$had_domain"; fail_transaction "无法备份 NFT 规则"; }; had_nft=1; }
     if ! mv "$tmp" "$file"; then
-        [ "$commit_allow" = "0" ] || rollback_file "$allow_path" "$allow_backup" "$had_allow"
+        [ "$commit_allow" = "0" ] || rollback_allow_state "$ipv4_backup" "$had_ipv4" "$domain_backup" "$had_domain"
         rm -f "$sources" "$nft_backup"
-        fail_transaction "nft install"
+        fail_transaction "无法安装 NFT 规则"
     fi
     chmod 600 "$file" 2>/dev/null || true
     if ! "$nft" -f "$file" >/dev/null 2>&1; then
         rollback_file "$file" "$nft_backup" "$had_nft"
-        [ "$commit_allow" = "0" ] || rollback_file "$allow_path" "$allow_backup" "$had_allow"
+        [ "$commit_allow" = "0" ] || rollback_allow_state "$ipv4_backup" "$had_ipv4" "$domain_backup" "$had_domain"
         rm -f "$sources"
-        fail_transaction "nft apply"
+        fail_transaction "NFT 规则应用失败"
     fi
-    rm -f "$sources" "$nft_backup" "$allow_backup"
+    rm -f "$sources" "$nft_backup" "$ipv4_backup" "$domain_backup"
     [ "$commit_allow" = "0" ] || log_allow_state
-    log "nft: applied | ports=${ports} sources=${source_count}"
+    log_info "SSH 端口: ${ports}"
+    log_info "放行来源: ${source_count} 个"
+    log_info "NFT 规则已应用"
 }
 
 script_path() {
@@ -631,80 +627,117 @@ script_path() {
     printf '%s\n' "$resolved"
 }
 
-allow_has_domain() {
-    allow_has_domain_file "$(allow_file)"
-}
-
 reconcile_sshg_dns() {
-    refresh_providerdns_for_allow "$(allow_file)"
+    set_providerdns_for_domains "$(allow_domain_file)" >/dev/null 2>&1 || true
 }
 
-sync_rules_from_candidate() {
-    local candidate="$1"
-    if allow_has_domain_file "$candidate"; then
+sync_rules_from_candidates() {
+    local ipv4_candidate="$1" domain_candidate="$2"
+    if [ -s "$domain_candidate" ]; then
         SSHG_DNS_ROLLBACK_ON_FAIL=1
-        refresh_providerdns_for_allow "$candidate" || fail_transaction "dns refresh"
-        filter_allow_domains "$candidate"
+        refresh_providerdns_for_domains "$domain_candidate" || fail_transaction "域名刷新失败"
     fi
-    [ -s "$candidate" ] || fail_transaction "allow empty"
-    apply_nft_from_allow "$candidate" "1"
+    [ -s "$ipv4_candidate" ] || [ -s "$domain_candidate" ] || fail_transaction "白名单为空"
+    apply_nft_from_files "$ipv4_candidate" "$domain_candidate" "1"
     SSHG_DNS_ROLLBACK_ON_FAIL=0
-    allow_has_domain_file "$candidate" || set_providerdns_for_allow "$candidate"
+    set_providerdns_for_domains "$domain_candidate" || {
+        local rc=$?
+        [ "$rc" = "2" ] || return "$rc"
+    }
+    return 0
 }
 
 sync_rules() {
-    local candidate
-    [ -s "$(allow_file)" ] || fail "allow empty"
-    candidate="$(mktemp /tmp/sshg-allow.XXXXXX)" || fail "allow temp"
-    cp "$(allow_file)" "$candidate" || { rm -f "$candidate"; fail "allow read"; }
-    sync_rules_from_candidate "$candidate"
-    rm -f "$candidate"
+    local ipv4_candidate domain_candidate
+    [ -s "$(allow_ipv4_file)" ] || [ -s "$(allow_domain_file)" ] || fail "白名单为空"
+    ipv4_candidate="$(mktemp /tmp/sshg-allow-ipv4.XXXXXX)" || fail "无法创建 IPv4 白名单临时文件"
+    domain_candidate="$(mktemp /tmp/sshg-allow-domain.XXXXXX)" || { rm -f "$ipv4_candidate"; fail "无法创建域名白名单临时文件"; }
+    [ ! -s "$(allow_ipv4_file)" ] || cp "$(allow_ipv4_file)" "$ipv4_candidate" || { rm -f "$ipv4_candidate" "$domain_candidate"; fail "无法读取 IPv4 白名单"; }
+    [ ! -s "$(allow_domain_file)" ] || cp "$(allow_domain_file)" "$domain_candidate" || { rm -f "$ipv4_candidate" "$domain_candidate"; fail "无法读取域名白名单"; }
+    sync_rules_from_candidates "$ipv4_candidate" "$domain_candidate"
+    rm -f "$ipv4_candidate" "$domain_candidate"
 }
 
 update_allow_state() {
-    local mode="$1" values="$2" candidate
-    candidate="$(mktemp /tmp/sshg-allow.XXXXXX)" || fail "allow temp"
-    build_allow_candidate "$mode" "$values" "$candidate"
-    sync_rules_from_candidate "$candidate"
-    rm -f "$candidate"
+    local mode="$1" values="$2" ipv4_candidate domain_candidate
+    ipv4_candidate="$(mktemp /tmp/sshg-allow-ipv4.XXXXXX)" || fail "无法创建 IPv4 白名单临时文件"
+    domain_candidate="$(mktemp /tmp/sshg-allow-domain.XXXXXX)" || { rm -f "$ipv4_candidate"; fail "无法创建域名白名单临时文件"; }
+    build_allow_candidates "$mode" "$values" "$ipv4_candidate" "$domain_candidate"
+    sync_rules_from_candidates "$ipv4_candidate" "$domain_candidate"
+    rm -f "$ipv4_candidate" "$domain_candidate"
 }
 
-apply_cache_rules() {
-    [ -s "$(allow_file)" ] || fail "allow empty"
+apply_cached_rules() {
+    [ -s "$(allow_ipv4_file)" ] || [ -s "$(allow_domain_file)" ] || fail "白名单为空"
     apply_nft
 }
 
 clear_allow_state() {
     remove_active_nft
-    rm -f "$(allow_file)" "$(nft_file)"
+    rm -f "$(allow_ipv4_file)" "$(allow_domain_file)" "$(nft_file)"
     rmdir "$(state_dir)" 2>/dev/null || true
     providerdns_unset_sshg
-    log "allow: cleared"
+    log_info "白名单已清空"
 }
 
 remove_active_nft() {
-    local nft tmp
+    local nft tmp existed=0
     nft="$(nft_cmd 2>/dev/null || true)"
-    [ -n "$nft" ] || return 0
-    tmp="$(mktemp /tmp/sshg-clean.XXXXXX)" || return 0
+    [ -n "$nft" ] || return 2
+    "$nft" list table inet "$NFT_TABLE" >/dev/null 2>&1 && existed=1
+    tmp="$(mktemp /tmp/sshg-clean.XXXXXX)" || return 3
     cat > "$tmp" << EOF
 table inet ${NFT_TABLE}
 delete table inet ${NFT_TABLE}
 EOF
     "$nft" -f "$tmp" >/dev/null 2>&1 || true
     rm -f "$tmp"
+    [ "$existed" = "1" ] || return 1
+}
+
+remove_file_report() {
+    local file="$1" label="$2"
+    if [ -e "$file" ]; then
+        rm -f "$file" || fail "无法删除${label}: $file"
+        log_info "已删除: ${label} | $file"
+    else
+        log_info "未发现: ${label} | $file"
+    fi
+}
+
+remove_dir_report() {
+    local dir="$1" label="$2"
+    if [ -d "$dir" ]; then
+        rm -rf "$dir" || fail "无法删除${label}: $dir"
+        log_info "已删除: ${label} | $dir"
+    else
+        log_info "未发现: ${label} | $dir"
+    fi
 }
 
 remove_all() {
-    local systemctl
-    [ "$ROOT" = "/" ] && systemctl="$(systemctl_cmd 2>/dev/null || true)" || systemctl=""
+    local rc
     remove_active_nft
-    rm -f "$(sshd_dropin)" "$(key_file)" "$(nft_file)"
-    rm -rf "$(state_dir)"
-    providerdns_unset_sshg
-    [ -z "$systemctl" ] || "$systemctl" daemon-reload >/dev/null 2>&1 || true
+    rc=$?
+    case "$rc" in
+        0) log_info "已删除 live NFT table: ${NFT_TABLE}" ;;
+        1) log_info "未发现 live NFT table: ${NFT_TABLE}" ;;
+        2) log_warn "未检测到 nft，跳过 live NFT table 清理" ;;
+        *) log_warn "无法创建临时文件，跳过 live NFT table 清理" ;;
+    esac
+    remove_file_report "$(sshd_dropin)" "SSH 配置"
+    remove_file_report "$(key_file)" "托管 root 公钥"
+    remove_file_report "$(nft_file)" "NFT 持久规则"
+    remove_dir_report "$(state_dir)" "sshg 业务状态目录"
+    if providerdns_unset_sshg; then
+        log_info "已取消 Provider DNS 注册: ${PROVIDERDNS_CONSUMER}"
+    else
+        rc=$?
+        [ "$rc" = "2" ] && log_info "未检测到 Provider DNS，跳过 DNS 注册清理" || fail "无法取消 Provider DNS 注册"
+    fi
     reload_ssh
-    log "remove: done"
+    log_info "保留共享配置: $(nft_main_file) include 与 Provider DNS runtime"
+    log_info "SSH 防护已移除"
 }
 
 show_help() {
@@ -713,14 +746,12 @@ Usage:
   sshg.sh --apply config=ssh allow=1.2.3.4,1.2.3.0/24,example.com key='ssh-ed25519 AAAA...'
   sshg.sh --reset config=ssh allow=1.2.3.4,example.com key='ssh-ed25519 AAAA...'
   sshg.sh --sync
-  sshg.sh --apply cache
   sshg.sh --remove
 
 Actions:
   --apply        apply provided config/key/allow changes
   --reset        set target config/key/allow state, missing fields are removed
   --sync         resolve domains and refresh nft
-  --apply cache  apply shared DNS cache to nft
   --remove       remove sshg files and nft table
 
 Parameters:
@@ -736,19 +767,14 @@ main() {
     case "$action" in
         --apply|apply)
             shift
-            if [ "${1:-}" = "cache" ]; then
-                mode="cache"
-                shift
-            else
-                mode="state"
-            fi
+            mode="state"
             ;;
         --reset|reset) mode="state"; shift ;;
         --sync|sync) shift ;;
         --remove|remove) shift ;;
-        dns) shift ;;
+        hook) shift ;;
         help|-h|--help|"") show_help; [ -n "$action" ]; exit $? ;;
-        *) fail "action unknown" ;;
+        *) fail "未知操作" ;;
     esac
 
     while [ "$#" -gt 0 ]; do
@@ -767,7 +793,7 @@ main() {
                 config_value="${arg#config=}"
                 ;;
             *)
-                fail "arg unknown: $arg"
+                fail "未知参数: $arg"
                 ;;
         esac
         shift
@@ -775,18 +801,14 @@ main() {
 
     require_root
     case "$action" in
-        --apply|apply|--reset|reset|--sync|sync|--remove|remove) acquire_lock ;;
+        --apply|apply|--reset|reset|--sync|sync|--remove|remove|hook) acquire_lock ;;
     esac
     case "$action" in
         --apply|apply)
-            if [ "$mode" = "cache" ]; then
-                apply_cache_rules
-                exit 0
-            fi
-            [ "$config_seen" = "0" ] || [ "$config_value" = "ssh" ] || fail "config invalid"
-            [ "$key_seen" = "0" ] || public_key_valid "$(trim "$key_value")" || fail "key invalid"
+            [ "$config_seen" = "0" ] || [ "$config_value" = "ssh" ] || fail "配置参数无效"
+            [ "$key_seen" = "0" ] || public_key_valid "$(trim "$key_value")" || fail "SSH 公钥格式无效"
             if [ "$config_seen" = "1" ] && [ "$key_seen" = "0" ]; then
-                root_key_exists || fail "root key missing"
+                root_key_exists || fail "未检测到 root SSH 公钥"
             fi
             if [ "$allow_seen" = "1" ]; then
                 update_allow_state "apply" "$allow_values"
@@ -797,19 +819,19 @@ main() {
                 did_change=1
             fi
             if [ "$config_seen" = "1" ]; then
-                root_key_exists || fail "root key missing"
+                root_key_exists || fail "未检测到 root SSH 公钥"
                 write_ssh_config
                 ssh_reload_needed=1
                 did_change=1
             fi
-            [ "$did_change" = "1" ] || fail "nothing to do"
+            [ "$did_change" = "1" ] || fail "没有需要执行的操作"
             [ "$ssh_reload_needed" = "0" ] || reload_ssh
             ;;
         --reset|reset)
-            [ "$config_seen" = "0" ] || [ "$config_value" = "ssh" ] || fail "config invalid"
-            [ "$key_seen" = "0" ] || public_key_valid "$(trim "$key_value")" || fail "key invalid"
+            [ "$config_seen" = "0" ] || [ "$config_value" = "ssh" ] || fail "配置参数无效"
+            [ "$key_seen" = "0" ] || public_key_valid "$(trim "$key_value")" || fail "SSH 公钥格式无效"
             if [ "$config_seen" = "1" ] && [ "$key_seen" = "0" ]; then
-                root_key_exists_without_managed || fail "root key missing"
+                root_key_exists_without_managed || fail "未检测到 root SSH 公钥"
             fi
             if [ "$allow_seen" = "1" ]; then
                 update_allow_state "reset" "$allow_values"
@@ -822,7 +844,7 @@ main() {
                 remove_key
             fi
             if [ "$config_seen" = "1" ]; then
-                root_key_exists || fail "root key missing"
+                root_key_exists || fail "未检测到 root SSH 公钥"
                 write_ssh_config
             else
                 remove_ssh_config
@@ -830,12 +852,12 @@ main() {
             reload_ssh
             ;;
         --sync|sync)
-            [ -s "$(allow_file)" ] || fail "allow empty"
+            [ -s "$(allow_ipv4_file)" ] || [ -s "$(allow_domain_file)" ] || fail "白名单为空"
             sync_rules
             ;;
-        dns)
-            require_providerdns
-            run_providerdns --refresh hooks
+        hook)
+            SSHG_QUIET=1
+            apply_cached_rules
             ;;
         --remove|remove)
             remove_all
