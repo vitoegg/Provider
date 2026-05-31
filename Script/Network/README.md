@@ -104,6 +104,57 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 * `-6`, `--ipv6`: Prefer IPv6 when resolving dual-stack domains.
 * `-u`: Uninstall MosDNS service.
 
+### sshg.sh
+Harden SSH and restrict SSH access by nftables allowlist.
+```bash
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/sshg.sh && bash sshg.sh --help
+```
+* `--apply`: Merge new allow entries with current state.
+* `--reset`: Replace current allow entries.
+* `--sync`: Resolve domain entries and refresh nftables.
+* `--apply cache`: Apply shared DNS cache to nftables.
+* `--remove`: Remove sshg files and nftables table.
+* `allow=`: Comma-separated IPv4, IPv4 CIDR, or domain entries.
+* `key=`: Optional root public key, written to `/root/.ssh/authorized_keys3`.
+
+Generated files:
+* `/etc/ssh/sshd_config.d/00-sshg.conf`
+* `/root/.ssh/authorized_keys3`
+* `/etc/provider/sshg/allow.list`
+* `/etc/nftables.d/sshg.nft`
+* `/etc/provider/dns/subscriptions/sshg.list`
+* `/etc/provider/dns/hooks/sshg`
+
+Examples:
+```bash
+bash sshg.sh --reset allow=1.2.3.4,1.2.3.0/24,example.com key='ssh-ed25519 AAAA...'
+bash sshg.sh --apply allow=5.6.7.8
+bash sshg.sh --sync
+bash sshg.sh --apply cache
+bash sshg.sh --remove
+```
+
+### providerdns.sh
+Shared DNS runtime used by `nftables.sh` and `sshg.sh`.
+```bash
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/providerdns.sh && bash providerdns.sh --help
+```
+* `--install`: Install or repair `providerdns.service` and `providerdns.timer`.
+* `--refresh`: Resolve subscribed domains and update cache.
+* `--refresh hooks`: Resolve subscribed domains and run hooks only when cache changes.
+* `--lookup <domain>`: Print cached or freshly resolved IPv4.
+* `--cleanup unused`: Remove Provider DNS runtime when no subscriptions remain.
+
+Provider DNS files:
+* `/usr/local/sbin/providerdns.sh`
+* `/etc/provider/dns/subscriptions/*.list`
+* `/etc/provider/dns/hooks/*`
+* `/var/lib/provider/dns/cache.tsv`
+* `/etc/systemd/system/providerdns.service`
+* `/etc/systemd/system/providerdns.timer`
+
+When `nftables.sh` or `sshg.sh` needs Provider DNS, it first uses `PROVIDERDNS_BIN` if set, then `/usr/local/sbin/providerdns.sh` if it exists and reports a compatible `--api`. If the script is missing, it installs the local `providerdns.sh` next to the caller, or downloads it from this repository. Existing compatible scripts are not overwritten; incompatible unmanaged scripts are refused.
+
 ### nftables.sh
 Manage NFTables port forwarding and firewall protection with declarative state.
 ```bash
@@ -123,30 +174,39 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 * `--add`, `-a`: Add forwarding rules (auto-enable protection).
 * `--delete`, `-d`: Delete forwarding rules.
 * `--replace`, `-r`: Clear existing rules and add new rules.
-* `--ddns-sync`: Resolve domain rules and rebuild rules when IP changes.
-* `--ddns-list`: List domain forwarding state.
+* `--ddns sync`: Resolve shared DNS subscriptions.
+* `--ddns apply`: Apply shared DNS cache to forwarding rules.
+* `--ddns list`: List domain forwarding state.
 * `--protect on`: Enable port protection.
 * `--protect off`: Disable port protection.
 * `--protect status`: Show protection status.
 * `--protect sync`: Rebuild protection ports from current state.
 * `--uninstall`, `-u`: Remove generated rules, state, timers and sysctl configuration.
 
+Domain rules use the shared Provider DNS runtime:
+* `/etc/provider/dns/subscriptions/forwardaws.list`
+* `/etc/provider/dns/hooks/forwardaws`
+
 **Examples:**
 ```bash
 # Add forwarding rules
-bash nftables.sh -a 21443:1.2.3.4:51080 31443:1.2.3.4:52080
+bash nftables.sh --add 21443:1.2.3.4:51080 31443:1.2.3.4:52080
 
 # Add private-line forwarding with explicit SNAT
-bash nftables.sh -a 10086:82.40.1.2:33333:10.100.1.2:auto
+bash nftables.sh --add 10086:82.40.1.2:33333:10.100.1.2:auto
 
 # Replace all rules
-bash nftables.sh -r 8080:192.168.1.10:80
+bash nftables.sh --replace 8080:192.168.1.10:80
 
 # Check protection status
-bash nftables.sh -p status
+bash nftables.sh --protect status
+
+# Sync domain rules
+bash nftables.sh --ddns sync
+bash nftables.sh --ddns apply
 
 # Uninstall nftables.sh artifacts
-bash nftables.sh -u
+bash nftables.sh --uninstall
 ```
 
 ### kernel.sh
