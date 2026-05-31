@@ -8,6 +8,8 @@ PROVIDERDNS_BIN="${PROVIDERDNS_BIN:-/usr/local/sbin/providerdns.sh}"
 PROVIDERDNS_LOCAL_NAME="providerdns.sh"
 PROVIDERDNS_CONSUMER="sshg"
 SSHG_LOCK_HELD=0
+SSHG_ALLOW_DROPPED=0
+SSHG_DNS_ROLLBACK_ON_FAIL=0
 
 log() { printf '[sshg] %s\n' "$*"; }
 fail() { printf '[sshg] FAIL %s\n' "$*" >&2; exit 1; }
@@ -307,27 +309,22 @@ append_allow_values() {
     done
 }
 
-write_allow_state() {
-    local mode="$1" values="$2" file tmp cidr_count domain_count
-    file="$(allow_file)"
-    tmp="${file}.tmp.$$"
-    mkdir -p "$(dirname "$file")" || fail "state dir"
-    : > "$tmp" || fail "state write"
-    if [ "$mode" = "apply" ] && [ -s "$file" ]; then
-        cat "$file" >> "$tmp"
+build_allow_candidate() {
+    local mode="$1" values="$2" output="$3"
+    : > "$output" || fail "state write"
+    if [ "$mode" = "apply" ] && [ -s "$(allow_file)" ]; then
+        cat "$(allow_file)" >> "$output"
     fi
     if [ -n "$values" ]; then
-        append_allow_values "$values" >> "$tmp" || { rm -f "$tmp"; exit 1; }
+        append_allow_values "$values" >> "$output" || { rm -f "$output"; exit 1; }
     fi
-    sort -u "$tmp" -o "$tmp"
-    [ -s "$tmp" ] || { rm -f "$tmp"; fail "allow empty"; }
-    if awk '$1=="domain"{found=1} END{exit(found ? 0 : 1)}' "$tmp"; then
-        if ! find_providerdns; then
-            rm -f "$tmp"
-            fail "need providerdns.sh: set PROVIDERDNS_BIN, or place providerdns.sh at /usr/local/sbin/providerdns.sh, or place it next to sshg.sh"
-        fi
-    fi
-    mv "$tmp" "$file" || fail "state install"
+    sort -u "$output" -o "$output"
+    [ -s "$output" ] || fail "allow empty"
+}
+
+log_allow_state() {
+    local file cidr_count domain_count
+    file="$(allow_file)"
     cidr_count="$(awk '$1=="cidr"{c++} END{print c+0}' "$file")"
     domain_count="$(awk '$1=="domain"{c++} END{print c+0}' "$file")"
     log "allow: updated | cidr=${cidr_count} domain=${domain_count}"
@@ -335,7 +332,6 @@ write_allow_state() {
 
 providerdns_cache_field() {
     local domain="$1" field="$2" record
-    find_providerdns || return 1
     record="$(run_providerdns --cache "$domain" 2>/dev/null)" || return 1
     awk -v f="$field" '{ print $f }' <<< "$record"
 }
@@ -348,7 +344,9 @@ providerdns_cache_ip() {
 }
 
 run_providerdns() {
-    PROVIDERDNS_ROOT="$ROOT" /bin/bash "$PROVIDERDNS_BIN" "$@"
+    local bin
+    bin="$(providerdns_bin)" || return 1
+    PROVIDERDNS_ROOT="$ROOT" /bin/bash "$bin" "$@"
 }
 
 providerdns_local_source() {
@@ -359,14 +357,18 @@ providerdns_local_source() {
     printf '%s\n' "$local_path"
 }
 
-find_providerdns() {
-    local local_source
-    [ -f "$PROVIDERDNS_BIN" ] && return 0
+providerdns_bin() {
+    local bin="${PROVIDERDNS_BIN:-/usr/local/sbin/providerdns.sh}" local_source
+    [ -f "$bin" ] && { printf '%s\n' "$bin"; return 0; }
     if local_source="$(providerdns_local_source)"; then
-        PROVIDERDNS_BIN="$local_source"
+        printf '%s\n' "$local_source"
         return 0
     fi
     return 1
+}
+
+find_providerdns() {
+    providerdns_bin >/dev/null
 }
 
 require_providerdns() {
@@ -393,9 +395,62 @@ providerdns_unset_sshg() {
     run_providerdns --unset "$PROVIDERDNS_CONSUMER"
 }
 
+allow_has_domain_file() {
+    [ -s "$1" ] && awk '$1=="domain"{found=1} END{exit(found ? 0 : 1)}' "$1"
+}
+
+write_allow_domains() {
+    local allow="$1" output="$2"
+    awk '$1=="domain"{print $2}' "$allow" | sort -u > "$output"
+}
+
+set_providerdns_for_allow() {
+    local allow="$1" domains_file
+    if allow_has_domain_file "$allow"; then
+        domains_file="$(mktemp /tmp/sshg-domains.XXXXXX)" || fail "dns temp"
+        write_allow_domains "$allow" "$domains_file" || { rm -f "$domains_file"; fail "dns write"; }
+        providerdns_set_sshg "$domains_file"
+        rm -f "$domains_file"
+    else
+        providerdns_unset_sshg
+    fi
+}
+
+refresh_providerdns_for_allow() {
+    allow_has_domain_file "$1" || { providerdns_unset_sshg; return 0; }
+    set_providerdns_for_allow "$1"
+    providerdns_refresh
+}
+
+filter_allow_domains() {
+    local allow="$1" tmp type value ip
+    SSHG_ALLOW_DROPPED=0
+    allow_has_domain_file "$allow" || return 0
+    tmp="${allow}.filtered.$$"
+    : > "$tmp" || fail "allow filter"
+    while read -r type value; do
+        case "$type" in
+            cidr)
+                printf '%s %s\n' "$type" "$value" >> "$tmp"
+                ;;
+            domain)
+                ip="$(providerdns_cache_ip "$value" || true)"
+                if validate_ipv4 "$ip"; then
+                    printf '%s %s\n' "$type" "$value" >> "$tmp"
+                else
+                    SSHG_ALLOW_DROPPED=$((SSHG_ALLOW_DROPPED + 1))
+                    log "warn: domain unresolved, skipped from allow state: $value"
+                fi
+                ;;
+        esac
+    done < "$allow"
+    sort -u "$tmp" -o "$tmp"
+    mv "$tmp" "$allow" || { rm -f "$tmp"; fail "allow filter"; }
+    [ "$SSHG_ALLOW_DROPPED" -eq 0 ] || set_providerdns_for_allow "$allow"
+}
+
 build_sources_file() {
-    local output="$1" allow type value ip
-    allow="$(allow_file)"
+    local output="$1" allow="${2:-$(allow_file)}" type value ip
     [ -s "$allow" ] || fail "allow empty"
     : > "$output" || fail "source write"
     while read -r type value; do
@@ -478,10 +533,10 @@ EOF
 ensure_nft_include() {
     local config
     config="$(nft_main_file)"
-    mkdir -p "$(dirname "$config")" || fail "nft dir"
-    touch "$config" || fail "nft config"
+    mkdir -p "$(dirname "$config")" || return 1
+    touch "$config" || return 1
     grep -Eq '^[[:space:]]*include[[:space:]]+"?/etc/nftables\.d/\*\.nft"?[[:space:]]*$' "$config" && return 0
-    printf '\ninclude "/etc/nftables.d/*.nft"\n' >> "$config" || fail "nft include"
+    printf '\ninclude "/etc/nftables.d/*.nft"\n' >> "$config" || return 1
 }
 
 ensure_nft_service() {
@@ -497,29 +552,75 @@ nft_live_ready() {
     "$nft" list table inet "$NFT_TABLE" >/dev/null 2>&1
 }
 
+rollback_file() {
+    local target="$1" backup="$2" had_backup="$3"
+    if [ "$had_backup" = "1" ]; then
+        mv "$backup" "$target" 2>/dev/null || true
+    else
+        rm -f "$target" 2>/dev/null || true
+    fi
+}
+
+rollback_dns_if_needed() {
+    [ "$SSHG_DNS_ROLLBACK_ON_FAIL" = "1" ] || return 0
+    SSHG_DNS_ROLLBACK_ON_FAIL=0
+    reconcile_sshg_dns >/dev/null 2>&1 || true
+}
+
+fail_transaction() {
+    rollback_dns_if_needed
+    fail "$1"
+}
+
 apply_nft() {
-    local nft file tmp sources ports source_count
-    nft="$(nft_cmd)" || fail "nft missing"
+    apply_nft_from_allow "$(allow_file)" "0"
+}
+
+apply_nft_from_allow() {
+    local allow="$1" commit_allow="${2:-0}"
+    local nft file tmp sources ports source_count allow_path allow_tmp allow_backup nft_backup had_allow=0 had_nft=0
+    nft="$(nft_cmd)" || fail_transaction "nft missing"
     file="$(nft_file)"
-    mkdir -p "$(dirname "$file")" || fail "nft dir"
+    allow_path="$(allow_file)"
+    mkdir -p "$(dirname "$file")" || fail_transaction "nft dir"
     tmp="${file}.tmp.$$"
     sources="${file}.sources.$$"
-    build_sources_file "$sources"
-    ports="$(detect_ssh_ports)" || fail "ssh port"
+    build_sources_file "$sources" "$allow"
+    ports="$(detect_ssh_ports)" || fail_transaction "ssh port"
     render_nft "$sources" "$tmp" "$ports"
-    "$nft" -c -f "$tmp" >/dev/null 2>&1 || { rm -f "$tmp" "$sources"; fail "nft check"; }
-    ensure_nft_include
+    "$nft" -c -f "$tmp" >/dev/null 2>&1 || { rm -f "$tmp" "$sources"; fail_transaction "nft check"; }
+    ensure_nft_include || fail_transaction "nft include"
     ensure_nft_service
     source_count="$(wc -l < "$sources" | tr -d ' ')"
-    if cmp -s "$tmp" "$file" 2>/dev/null && nft_live_ready "$nft"; then
+    if [ "$commit_allow" = "0" ] && cmp -s "$tmp" "$file" 2>/dev/null && nft_live_ready "$nft"; then
         rm -f "$tmp" "$sources"
         log "nft: skipped | ports=${ports} sources=${source_count}"
         return 0
     fi
-    mv "$tmp" "$file" || { rm -f "$sources"; fail "nft install"; }
+    if [ "$commit_allow" = "1" ]; then
+        mkdir -p "$(dirname "$allow_path")" || fail_transaction "state dir"
+        allow_tmp="${allow_path}.tmp.$$"
+        allow_backup="${allow_path}.bak.$$"
+        [ ! -f "$allow_path" ] || { cp "$allow_path" "$allow_backup" || fail_transaction "state backup"; had_allow=1; }
+        cp "$allow" "$allow_tmp" || { rm -f "$allow_backup"; fail_transaction "state write"; }
+        mv "$allow_tmp" "$allow_path" || { rm -f "$allow_tmp" "$allow_backup"; fail_transaction "state install"; }
+    fi
+    nft_backup="${file}.bak.$$"
+    [ ! -f "$file" ] || { cp "$file" "$nft_backup" || { [ "$commit_allow" = "0" ] || rollback_file "$allow_path" "$allow_backup" "$had_allow"; fail_transaction "nft backup"; }; had_nft=1; }
+    if ! mv "$tmp" "$file"; then
+        [ "$commit_allow" = "0" ] || rollback_file "$allow_path" "$allow_backup" "$had_allow"
+        rm -f "$sources" "$nft_backup"
+        fail_transaction "nft install"
+    fi
     chmod 600 "$file" 2>/dev/null || true
-    "$nft" -f "$file" >/dev/null 2>&1 || { rm -f "$sources"; fail "nft apply"; }
-    rm -f "$sources"
+    if ! "$nft" -f "$file" >/dev/null 2>&1; then
+        rollback_file "$file" "$nft_backup" "$had_nft"
+        [ "$commit_allow" = "0" ] || rollback_file "$allow_path" "$allow_backup" "$had_allow"
+        rm -f "$sources"
+        fail_transaction "nft apply"
+    fi
+    rm -f "$sources" "$nft_backup" "$allow_backup"
+    [ "$commit_allow" = "0" ] || log_allow_state
     log "nft: applied | ports=${ports} sources=${source_count}"
 }
 
@@ -531,25 +632,41 @@ script_path() {
 }
 
 allow_has_domain() {
-    [ -s "$(allow_file)" ] && awk '$1=="domain"{found=1} END{exit(found ? 0 : 1)}' "$(allow_file)"
+    allow_has_domain_file "$(allow_file)"
 }
 
 reconcile_sshg_dns() {
-    local domains_file
-    if allow_has_domain; then
-        domains_file="$(mktemp /tmp/sshg-domains.XXXXXX)" || fail "dns temp"
-        awk '$1=="domain"{print $2}' "$(allow_file)" | sort -u > "$domains_file" || { rm -f "$domains_file"; fail "dns write"; }
-        providerdns_set_sshg "$domains_file"
-        rm -f "$domains_file"
-        providerdns_refresh
-    else
-        providerdns_unset_sshg
+    refresh_providerdns_for_allow "$(allow_file)"
+}
+
+sync_rules_from_candidate() {
+    local candidate="$1"
+    if allow_has_domain_file "$candidate"; then
+        refresh_providerdns_for_allow "$candidate"
+        SSHG_DNS_ROLLBACK_ON_FAIL=1
+        filter_allow_domains "$candidate"
     fi
+    [ -s "$candidate" ] || fail_transaction "allow empty"
+    apply_nft_from_allow "$candidate" "1"
+    SSHG_DNS_ROLLBACK_ON_FAIL=0
+    allow_has_domain_file "$candidate" || set_providerdns_for_allow "$candidate"
 }
 
 sync_rules() {
-    reconcile_sshg_dns
-    apply_nft
+    local candidate
+    [ -s "$(allow_file)" ] || fail "allow empty"
+    candidate="$(mktemp /tmp/sshg-allow.XXXXXX)" || fail "allow temp"
+    cp "$(allow_file)" "$candidate" || { rm -f "$candidate"; fail "allow read"; }
+    sync_rules_from_candidate "$candidate"
+    rm -f "$candidate"
+}
+
+update_allow_state() {
+    local mode="$1" values="$2" candidate
+    candidate="$(mktemp /tmp/sshg-allow.XXXXXX)" || fail "allow temp"
+    build_allow_candidate "$mode" "$values" "$candidate"
+    sync_rules_from_candidate "$candidate"
+    rm -f "$candidate"
 }
 
 apply_cache_rules() {
@@ -672,8 +789,7 @@ main() {
                 root_key_exists || fail "root key missing"
             fi
             if [ "$allow_seen" = "1" ]; then
-                write_allow_state "apply" "$allow_values"
-                sync_rules
+                update_allow_state "apply" "$allow_values"
                 did_change=1
             fi
             if [ "$key_seen" = "1" ]; then
@@ -696,8 +812,7 @@ main() {
                 root_key_exists_without_managed || fail "root key missing"
             fi
             if [ "$allow_seen" = "1" ]; then
-                write_allow_state "reset" "$allow_values"
-                sync_rules
+                update_allow_state "reset" "$allow_values"
             else
                 clear_allow_state
             fi

@@ -45,6 +45,7 @@ FORWARDAWS_LOCK_HELD=0
 APT_UPDATED=0
 APPLY_CANDIDATE_CHANGED=0
 SYSTEMD_UNITS_CHANGED=0
+DOMAIN_RULES_DROPPED=0
 
 log_info()  { printf '%b\n' "${GREEN}[INFO]${NC} $1"; }
 log_warn()  { printf '%b\n' "${YELLOW}[WARNING]${NC} $1" >&2; }
@@ -109,8 +110,7 @@ providerdns_cache_status() {
 
 providerdns_cache_record() {
     local domain="$1"
-    find_providerdns || return 1
-    /bin/bash "$PROVIDERDNS_BIN" --cache "$domain" 2>/dev/null
+    run_providerdns --cache "$domain" 2>/dev/null
 }
 
 providerdns_local_source() {
@@ -121,14 +121,18 @@ providerdns_local_source() {
     printf '%s\n' "$local_path"
 }
 
-find_providerdns() {
-    local local_source
-    [ -f "$PROVIDERDNS_BIN" ] && return 0
+providerdns_bin() {
+    local bin="${PROVIDERDNS_BIN:-/usr/local/sbin/providerdns.sh}" local_source
+    [ -f "$bin" ] && { printf '%s\n' "$bin"; return 0; }
     if local_source=$(providerdns_local_source); then
-        PROVIDERDNS_BIN="$local_source"
+        printf '%s\n' "$local_source"
         return 0
     fi
     return 1
+}
+
+find_providerdns() {
+    providerdns_bin >/dev/null
 }
 
 require_providerdns() {
@@ -137,14 +141,20 @@ require_providerdns() {
     return 1
 }
 
+run_providerdns() {
+    local bin
+    bin=$(providerdns_bin) || return 1
+    /bin/bash "$bin" "$@"
+}
+
 providerdns_refresh() {
     require_providerdns || return 1
-    /bin/bash "$PROVIDERDNS_BIN" --refresh
+    run_providerdns --refresh
 }
 
 providerdns_refresh_hooks() {
     require_providerdns || return 1
-    /bin/bash "$PROVIDERDNS_BIN" --refresh hooks
+    run_providerdns --refresh hooks
 }
 
 providerdns_set_forwardaws() {
@@ -153,12 +163,12 @@ providerdns_set_forwardaws() {
     script_path=$(get_script_absolute_path)
     printf -v quoted_script_path '%q' "$script_path"
     hook_command="FORWARDAWS_QUIET=1 FORWARDAWS_LOCK_WAIT=10 /bin/bash ${quoted_script_path} --ddns apply"
-    /bin/bash "$PROVIDERDNS_BIN" --set "$PROVIDERDNS_CONSUMER" "$domains_file" "$hook_command"
+    run_providerdns --set "$PROVIDERDNS_CONSUMER" "$domains_file" "$hook_command"
 }
 
 providerdns_unset_forwardaws() {
     find_providerdns || return 0
-    /bin/bash "$PROVIDERDNS_BIN" --unset "$PROVIDERDNS_CONSUMER"
+    run_providerdns --unset "$PROVIDERDNS_CONSUMER"
 }
 
 require_root() {
@@ -459,9 +469,28 @@ state_has_remote_rules() {
     awk -F'|' 'NF>=8 && $2=="remote" && $6 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ { found=1; exit } END { exit(found ? 0 : 1) }' "$1"
 }
 
-refresh_candidate_domain_cache() {
+write_state_domains() {
+    local state_file="$1" output_file="$2"
+    awk -F'|' 'NF>=8 && $5=="domain" { print $3 }' "$state_file" | sort -u > "$output_file"
+}
+
+apply_providerdns_for_state() {
+    local state_file="$1" domains_file
+    if state_has_domain "$state_file"; then
+        domains_file=$(mktemp /tmp/forwardaws-domains.XXXXXX) || return 1
+        write_state_domains "$state_file" "$domains_file" || { rm -f "$domains_file"; return 1; }
+        providerdns_set_forwardaws "$domains_file" || { rm -f "$domains_file"; return 1; }
+        rm -f "$domains_file"
+        providerdns_refresh
+    else
+        providerdns_unset_forwardaws
+    fi
+}
+
+filter_candidate_domain_cache() {
     local candidate="$1" next now src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss
     local record record_domain new_ip new_status cache_updated_at
+    DOMAIN_RULES_DROPPED=0
     next=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 1
     : > "$next"
     now=$(date +%s)
@@ -477,18 +506,24 @@ refresh_candidate_domain_cache() {
                 make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" "$resolved_ip" "${new_status:-failed}" "$now" "$snat_ip" "$mss" >> "$next"
                 log_warn "域名 ${target} 当前解析失败，继续使用旧 IP: ${resolved_ip}"
             else
-                make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" "" "pending" "$now" "$snat_ip" "$mss" >> "$next"
-                log_warn "域名 ${target} 尚未解析，配置已保存但当前不生成转发规则"
+                DOMAIN_RULES_DROPPED=$((DOMAIN_RULES_DROPPED + 1))
+                log_warn "域名 ${target} 解析失败，已跳过该规则，未写入配置、未生成转发、未放行端口"
             fi
         elif validate_ip_address "$resolved_ip"; then
             make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" "$resolved_ip" "cache_missing" "$now" "$snat_ip" "$mss" >> "$next"
-            log_warn "域名 ${target} 缓存缺失，继续使用旧 IP: ${resolved_ip}"
+            log_warn "域名 ${target} 解析结果缺失，继续使用旧 IP: ${resolved_ip}"
         else
-            make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" "" "pending" "$now" "$snat_ip" "$mss" >> "$next"
-            log_warn "域名 ${target} 缓存缺失，配置已保存但当前不生成转发规则"
+            DOMAIN_RULES_DROPPED=$((DOMAIN_RULES_DROPPED + 1))
+            log_warn "域名 ${target} 解析结果缺失，已跳过该规则，未写入配置、未生成转发、未放行端口"
         fi
     done < "$candidate"
     mv "$next" "$candidate" || { rm -f "$next"; return 1; }
+}
+
+resolve_candidate_domains() {
+    state_has_domain "$1" || return 0
+    apply_providerdns_for_state "$1" || return 1
+    filter_candidate_domain_cache "$1"
 }
 
 prepare_state_file() {
@@ -515,7 +550,7 @@ render_ruleset() {
     awk -F'|' -v nat="$NAT_TABLE_NAME" -v filter="$FILTER_TABLE_NAME" \
         -v protect="$protect_flag" -v allow="$allow_ports" '
         function rule(s) { return "        " s "\n" }
-        NF>=8 && $6 ~ /^[0-9.]+$/ {
+        NF>=8 && $6 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {
             if ($2=="remote") {
                 pre=pre rule("tcp dport " $1 " dnat to " $6 ":" $4) rule("udp dport " $1 " dnat to " $6 ":" $4)
                 fwd=fwd rule("ct status dnat ip daddr " $6 " tcp dport " $4 " accept") rule("ct status dnat ip daddr " $6 " udp dport " $4 " accept")
@@ -700,21 +735,13 @@ disable_timer_if_available() {
 }
 
 reconcile_forwardaws_dns() {
-    local domain_count domains_file
+    local domain_count
     domain_count=$(state_domain_count "$RULES_STATE_FILE")
     if [ "$domain_count" -gt 0 ]; then
-        domains_file=$(mktemp /tmp/forwardaws-domains.XXXXXX) || return 1
-        awk -F'|' 'NF>=8 && $5=="domain" { print $3 }' "$RULES_STATE_FILE" | sort -u > "$domains_file" || {
-            rm -f "$domains_file"
-            return 1
-        }
-        providerdns_set_forwardaws "$domains_file" || {
-            rm -f "$domains_file"
+        apply_providerdns_for_state "$RULES_STATE_FILE" || {
             log_warn "注册 Provider DNS 订阅失败，请手动检查 systemd 状态"
             return 1
         }
-        rm -f "$domains_file"
-        providerdns_refresh || return 1
     else
         providerdns_unset_forwardaws || return 1
     fi
@@ -734,7 +761,7 @@ reconcile_protection_timer() {
         systemctl daemon-reload >/dev/null 2>&1 || { log_warn "systemd daemon-reload 失败，请手动检查 systemd 状态"; return 1; }
     fi
     [ "$enable_protect" -eq 0 ] || enable_timer_if_available "$PROTECT_TIMER_NAME" "保护端口自动同步已启用" "启用保护同步定时器失败，请手动检查 systemd 状态" || failed=1
-    return 0
+    [ "$failed" -eq 0 ]
 }
 
 reconcile_timers() {
@@ -915,7 +942,7 @@ remove_rule_from_state() {
 }
 
 rule_batch() {
-     local action="$1" candidate now success=0 skipped=0 failed=0 rule rc protect_flag desc success_msg empty_msg show_status=0 has_domain=0
+     local action="$1" candidate now success=0 skipped=0 failed=0 rule rc protect_flag desc success_msg empty_msg show_status=0 prepared_domains=0 applied_success=0
      shift
      [ $# -gt 0 ] || { log_error "未提供任何规则"; return 1; }
      candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 1
@@ -940,7 +967,6 @@ rule_batch() {
                  ;;
              replace)
                  if append_rule_to_state "$candidate" "$rule" "$now" "fail"; then
-                     [ "$PARSED_TYPE" = "domain" ] && has_domain=1
                      rc=0
                  else
                      rc=$?
@@ -948,7 +974,6 @@ rule_batch() {
                  ;;
              *)
                  if append_rule_to_state "$candidate" "$rule" "$now" "skip"; then
-                     [ "$PARSED_TYPE" = "domain" ] && has_domain=1
                      rc=0
                  else
                      rc=$?
@@ -969,19 +994,29 @@ rule_batch() {
      fi
      if [ "$success" -gt 0 ]; then
          if state_has_domain "$candidate"; then
-             require_providerdns || { rm -f "$candidate"; return 1; }
-             refresh_candidate_domain_cache "$candidate" || { rm -f "$candidate"; return 1; }
+             log_info "检测到域名规则，触发 Provider DNS 解析..."
+             resolve_candidate_domains "$candidate" || { rm -f "$candidate"; return 1; }
+             prepared_domains=1
+             if [ "$DOMAIN_RULES_DROPPED" -gt 0 ]; then
+                 skipped=$((skipped + DOMAIN_RULES_DROPPED))
+                 success=$((success - DOMAIN_RULES_DROPPED))
+                 [ "$success" -lt 0 ] && success=0
+             fi
          fi
-         apply_candidate_state "$candidate" "$protect_flag" "$desc" || { rm -f "$candidate"; return 1; }
-         [ "$action" = "replace" ] && log_info "原子替换完成，共应用 ${success} 条规则" || log_info "${success_msg}完成: 成功 ${success} 条，跳过 ${skipped} 条，失败 ${failed} 条"
-         
-         if [ "$action" != "delete" ] && [ "$has_domain" = "1" ]; then
-             log_info "检测到域名规则，触发 Provider DNS 初始解析..."
-             sync_ddns_rules || log_warn "DDNS 初始解析失败，请稍后手动执行 --ddns sync"
-             reconcile_protection_timer
-         else
-             reconcile_timers
+         applied_success=$success
+         if [ "$action" != "delete" ] && [ "$applied_success" -eq 0 ]; then
+             log_warn "没有${empty_msg}: 跳过 ${skipped} 条，失败 ${failed} 条"
+             [ "$prepared_domains" -eq 0 ] || reconcile_forwardaws_dns || log_warn "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
+             rm -f "$candidate"
+             return 0
          fi
+         apply_candidate_state "$candidate" "$protect_flag" "$desc" || {
+             [ "$prepared_domains" -eq 0 ] || reconcile_forwardaws_dns || log_warn "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
+             rm -f "$candidate"
+             return 1
+         }
+         [ "$action" = "replace" ] && log_info "原子替换完成，共应用 ${applied_success} 条规则" || log_info "${success_msg}完成: 成功 ${applied_success} 条，跳过 ${skipped} 条，失败 ${failed} 条"
+         reconcile_timers || { rm -f "$candidate"; return 1; }
          
          [ "$show_status" = "1" ] && show_protection_status
      else
@@ -1042,15 +1077,9 @@ apply_ddns_cache() {
                 failed=$((failed + 1))
                 log_warn "  ✗ 解析失败 ${target}，保留原 IP (${resolved_ip})"
             else
-                new_status="pending"
-                if [ -z "$resolved_ip" ] && [ "$status" = "$new_status" ]; then
-                    make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" "" "$status" "$updated_at" "$snat_ip" "$mss" >> "$candidate"
-                else
-                    make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" "" "$new_status" "$now" "$snat_ip" "$mss" >> "$candidate"
-                    changed=$((changed + 1))
-                fi
+                changed=$((changed + 1))
                 pending=$((pending + 1))
-                log_warn "  ⏳ 等待解析 ${target}，当前未生成转发规则"
+                log_warn "  ✗ 解析失败 ${target}，已移除未生效规则"
             fi
         else
             if validate_ip_address "$resolved_ip"; then
@@ -1065,15 +1094,9 @@ apply_ddns_cache() {
                 failed=$((failed + 1))
                 log_warn "  ✗ 缓存缺失 ${target}，保留原 IP (${resolved_ip})"
             else
-                new_status="pending"
-                if [ "$status" = "$new_status" ]; then
-                    make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" "" "$status" "$updated_at" "$snat_ip" "$mss" >> "$candidate"
-                else
-                    make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" "" "$new_status" "$now" "$snat_ip" "$mss" >> "$candidate"
-                    changed=$((changed + 1))
-                fi
+                changed=$((changed + 1))
                 pending=$((pending + 1))
-                log_warn "  ⏳ 缓存缺失 ${target}，当前未生成转发规则"
+                log_warn "  ✗ 缓存缺失 ${target}，已移除未生效规则"
             fi
         fi
     done < "$RULES_STATE_FILE"
@@ -1082,6 +1105,7 @@ apply_ddns_cache() {
     # 应用候选状态
     apply_candidate_state "$candidate" "$(get_protection_flag)" "DDNS 同步" || { rm -f "$candidate"; return 1; }
     rm -f "$candidate"
+    reconcile_timers || return 1
     
     # 输出 DDNS 同步结果汇总
     echo -e "${BLUE}─────────────────────────────────────${NC}"
