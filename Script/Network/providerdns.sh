@@ -222,11 +222,15 @@ run_hooks() {
 }
 
 refresh_cache() {
-    local run_hooks="${1:-0}" domains tmp oldcache changed_domains cache domain old_domain now ip old_ip old_status old_time changed=0 new_ip new_status hook_rc=0
+    local run_hooks="${1:-0}" lock_wait="${PROVIDERDNS_LOCK_WAIT:-0}" domains tmp oldcache changed_domains cache domain old_domain now ip old_ip old_status old_time changed=0 new_ip new_status hook_rc=0
     mkdir -p "$(subscription_dir)" "$(hook_dir)" "$(state_dir)" || fail "dir"
     if command -v flock >/dev/null 2>&1; then
         exec 8>"$(lock_file)" || fail "lock"
-        flock -n 8 || { log "locked"; return 0; }
+        if [[ "$lock_wait" =~ ^[0-9]+$ ]] && [ "$lock_wait" -gt 0 ]; then
+            flock -w "$lock_wait" 8 || { log "locked"; return 75; }
+        else
+            flock -n 8 || { log "locked"; return 0; }
+        fi
     fi
 
     domains="$(mktemp /tmp/providerdns-domains.XXXXXX)" || fail "temp"
@@ -330,7 +334,7 @@ EOF
 Description=Provider DNS refresh timer
 
 [Timer]
-OnBootSec=30s
+OnActiveSec=30s
 OnUnitActiveSec=10min
 AccuracySec=5s
 Unit=providerdns.service

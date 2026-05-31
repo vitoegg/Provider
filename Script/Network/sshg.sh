@@ -378,7 +378,7 @@ require_providerdns() {
 
 providerdns_refresh() {
     require_providerdns
-    run_providerdns --refresh
+    PROVIDERDNS_LOCK_WAIT="${PROVIDERDNS_LOCK_WAIT:-10}" run_providerdns --refresh
 }
 
 providerdns_set_sshg() {
@@ -642,8 +642,8 @@ reconcile_sshg_dns() {
 sync_rules_from_candidate() {
     local candidate="$1"
     if allow_has_domain_file "$candidate"; then
-        refresh_providerdns_for_allow "$candidate"
         SSHG_DNS_ROLLBACK_ON_FAIL=1
+        refresh_providerdns_for_allow "$candidate" || fail_transaction "dns refresh"
         filter_allow_domains "$candidate"
     fi
     [ -s "$candidate" ] || fail_transaction "allow empty"

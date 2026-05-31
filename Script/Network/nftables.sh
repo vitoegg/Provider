@@ -149,7 +149,7 @@ run_providerdns() {
 
 providerdns_refresh() {
     require_providerdns || return 1
-    run_providerdns --refresh
+    PROVIDERDNS_LOCK_WAIT="${PROVIDERDNS_LOCK_WAIT:-10}" run_providerdns --refresh
 }
 
 providerdns_refresh_hooks() {
@@ -995,8 +995,12 @@ rule_batch() {
      if [ "$success" -gt 0 ]; then
          if state_has_domain "$candidate"; then
              log_info "检测到域名规则，触发 Provider DNS 解析..."
-             resolve_candidate_domains "$candidate" || { rm -f "$candidate"; return 1; }
              prepared_domains=1
+             resolve_candidate_domains "$candidate" || {
+                 reconcile_forwardaws_dns || log_warn "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
+                 rm -f "$candidate"
+                 return 1
+             }
              if [ "$DOMAIN_RULES_DROPPED" -gt 0 ]; then
                  skipped=$((skipped + DOMAIN_RULES_DROPPED))
                  success=$((success - DOMAIN_RULES_DROPPED))
