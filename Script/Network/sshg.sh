@@ -131,22 +131,33 @@ public_key_valid() {
 }
 
 write_key() {
-    local key="$1" file tmp
+    local key="$1" file tmp existed=0
     [ -n "$key" ] || return 0
     key="$(trim "$key")"
     public_key_valid "$key" || fail "SSH 公钥格式无效"
     file="$(key_file)"
+    if [ -e "$file" ] || [ -L "$file" ]; then
+        existed=1
+        [ "$(cat "$file" 2>/dev/null)" = "$key" ] && return 0
+    fi
     tmp="${file}.tmp.$$"
     mkdir -p "$(dirname "$file")" || fail "无法创建密钥目录"
     chmod 700 "$(dirname "$file")" 2>/dev/null || true
     printf '%s\n' "$key" > "$tmp" || fail "无法写入托管密钥"
     chmod 600 "$tmp" 2>/dev/null || true
     mv "$tmp" "$file" || fail "无法安装托管密钥"
-    log_info "已写入托管密钥"
+    if [ "$existed" = "1" ]; then
+        log_info "已更新托管密钥"
+    else
+        log_info "已添加托管密钥"
+    fi
 }
 
 remove_key() {
-    rm -f "$(key_file)" || fail "无法删除托管密钥"
+    local file
+    file="$(key_file)"
+    [ -e "$file" ] || [ -L "$file" ] || return 0
+    rm -f "$file" || fail "无法删除托管密钥"
     log_info "已删除托管密钥"
 }
 
