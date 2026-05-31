@@ -158,9 +158,27 @@ write_key() {
     log "key: written"
 }
 
+remove_key() {
+    rm -f "$(key_file)" || fail "key remove"
+    log "key: removed"
+}
+
 root_key_exists() {
     local file line value
     for file in "$(path "/root/.ssh/authorized_keys")" "$(path "/root/.ssh/authorized_keys2")" "$(key_file)"; do
+        [ -s "$file" ] || continue
+        while IFS= read -r line || [ -n "$line" ]; do
+            value="$(trim "${line%%#*}")"
+            [ -n "$value" ] || continue
+            public_key_valid "$value" && return 0
+        done < "$file"
+    done
+    return 1
+}
+
+root_key_exists_without_managed() {
+    local file line value
+    for file in "$(path "/root/.ssh/authorized_keys")" "$(path "/root/.ssh/authorized_keys2")"; do
         [ -s "$file" ] || continue
         while IFS= read -r line || [ -n "$line" ]; do
             value="$(trim "${line%%#*}")"
@@ -258,6 +276,11 @@ EOF
     fi
     rm -f "$backup"
     log "ssh: applied"
+}
+
+remove_ssh_config() {
+    rm -f "$(sshd_dropin)" || fail "ssh remove"
+    log "ssh: removed"
 }
 
 reload_ssh() {
@@ -583,6 +606,14 @@ apply_cache_rules() {
     apply_nft
 }
 
+clear_allow_state() {
+    remove_active_nft
+    rm -f "$(allow_file)" "$(nft_file)" "$(sshg_dns_subscription)" "$(sshg_dns_hook)"
+    rmdir "$(state_dir)" 2>/dev/null || true
+    providerdns_cleanup_if_unused
+    log "allow: cleared"
+}
+
 remove_active_nft() {
     local nft tmp
     nft="$(nft_cmd 2>/dev/null || true)"
@@ -611,23 +642,29 @@ remove_all() {
 show_help() {
     cat << 'EOF'
 Usage:
-  sshg.sh --apply allow=1.2.3.4,1.2.3.0/24,example.com key='ssh-ed25519 AAAA...'
-  sshg.sh --reset allow=1.2.3.4,example.com key='ssh-ed25519 AAAA...'
+  sshg.sh --apply config=ssh allow=1.2.3.4,1.2.3.0/24,example.com key='ssh-ed25519 AAAA...'
+  sshg.sh --reset config=ssh allow=1.2.3.4,example.com key='ssh-ed25519 AAAA...'
   sshg.sh --sync
   sshg.sh --apply cache
   sshg.sh --remove
 
 Actions:
-  --apply        merge allow list, write ssh config, refresh nft
-  --reset        replace allow list, write ssh config, refresh nft
+  --apply        apply provided config/key/allow changes
+  --reset        set target config/key/allow state, missing fields are removed
   --sync         resolve domains and refresh nft
   --apply cache  apply shared DNS cache to nft
   --remove       remove sshg files and nft table
+
+Parameters:
+  config=ssh     write ssh hardening config
+  key=...        write root authorized_keys3
+  allow=...      comma-separated IPv4, IPv4 CIDR, or domain entries
 EOF
 }
 
 main() {
-    local action="${1:-}" mode="" allow_values="" key_value="" arg
+    local action="${1:-}" mode="" allow_values="" key_value="" config_value="" arg
+    local allow_seen=0 key_seen=0 config_seen=0 did_change=0 ssh_reload_needed=0
     case "$action" in
         --apply|apply)
             shift
@@ -650,10 +687,16 @@ main() {
         arg="$1"
         case "$arg" in
             allow=*)
+                allow_seen=1
                 allow_values="${allow_values}${allow_values:+,}${arg#allow=}"
                 ;;
             key=*)
+                key_seen=1
                 key_value="${arg#key=}"
+                ;;
+            config=*)
+                config_seen=1
+                config_value="${arg#config=}"
                 ;;
             *)
                 fail "arg unknown: $arg"
@@ -672,21 +715,52 @@ main() {
                 apply_cache_rules
                 exit 0
             fi
-            [ -z "$key_value" ] || public_key_valid "$(trim "$key_value")" || fail "key invalid"
-            [ -n "$key_value" ] || root_key_exists || fail "root key missing"
-            write_allow_state "apply" "$allow_values"
-            write_ssh_config
-            write_key "$key_value"
-            sync_rules
-            reload_ssh
+            [ "$config_seen" = "0" ] || [ "$config_value" = "ssh" ] || fail "config invalid"
+            [ "$key_seen" = "0" ] || public_key_valid "$(trim "$key_value")" || fail "key invalid"
+            if [ "$config_seen" = "1" ] && [ "$key_seen" = "0" ]; then
+                root_key_exists || fail "root key missing"
+            fi
+            if [ "$allow_seen" = "1" ]; then
+                write_allow_state "apply" "$allow_values"
+                sync_rules
+                did_change=1
+            fi
+            if [ "$key_seen" = "1" ]; then
+                write_key "$key_value"
+                did_change=1
+            fi
+            if [ "$config_seen" = "1" ]; then
+                root_key_exists || fail "root key missing"
+                write_ssh_config
+                ssh_reload_needed=1
+                did_change=1
+            fi
+            [ "$did_change" = "1" ] || fail "nothing to do"
+            [ "$ssh_reload_needed" = "0" ] || reload_ssh
             ;;
         --reset|reset)
-            [ -z "$key_value" ] || public_key_valid "$(trim "$key_value")" || fail "key invalid"
-            [ -n "$key_value" ] || root_key_exists || fail "root key missing"
-            write_allow_state "reset" "$allow_values"
-            write_ssh_config
-            write_key "$key_value"
-            sync_rules
+            [ "$config_seen" = "0" ] || [ "$config_value" = "ssh" ] || fail "config invalid"
+            [ "$key_seen" = "0" ] || public_key_valid "$(trim "$key_value")" || fail "key invalid"
+            if [ "$config_seen" = "1" ] && [ "$key_seen" = "0" ]; then
+                root_key_exists_without_managed || fail "root key missing"
+            fi
+            if [ "$allow_seen" = "1" ]; then
+                write_allow_state "reset" "$allow_values"
+                sync_rules
+            else
+                clear_allow_state
+            fi
+            if [ "$key_seen" = "1" ]; then
+                write_key "$key_value"
+            else
+                remove_key
+            fi
+            if [ "$config_seen" = "1" ]; then
+                root_key_exists || fail "root key missing"
+                write_ssh_config
+            else
+                remove_ssh_config
+            fi
             reload_ssh
             ;;
         --sync|sync)

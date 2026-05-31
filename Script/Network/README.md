@@ -153,7 +153,7 @@ Provider DNS files:
 * `/etc/systemd/system/providerdns.service`
 * `/etc/systemd/system/providerdns.timer`
 
-When `nftables.sh` or `sshg.sh` needs Provider DNS, it first uses `PROVIDERDNS_BIN` if set, then `/usr/local/sbin/providerdns.sh` if it exists and reports a compatible `--api`. If the script is missing, it installs the local `providerdns.sh` next to the caller, or downloads it from this repository. Existing compatible scripts are not overwritten; incompatible unmanaged scripts are refused.
+When `nftables.sh` or `sshg.sh` needs Provider DNS, it uses `PROVIDERDNS_BIN` if set, otherwise `/usr/local/sbin/providerdns.sh`. If the script is missing, it installs the local `providerdns.sh` next to the caller, or downloads it from this repository.
 
 ### nftables.sh
 Manage NFTables port forwarding and firewall protection with declarative state.

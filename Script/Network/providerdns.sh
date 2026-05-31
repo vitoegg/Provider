@@ -32,6 +32,19 @@ script_path() {
     printf '%s\n' "$resolved"
 }
 
+path_in_git_worktree() {
+    command -v git >/dev/null 2>&1 || return 1
+    git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1
+}
+
+remove_self_after_install() {
+    local current_path="$1" current_dir
+    [ -f "$current_path" ] || return 0
+    current_dir="$(cd "$(dirname "$current_path")" 2>/dev/null && pwd)" || return 0
+    path_in_git_worktree "$current_dir" && return 0
+    rm -f "$current_path" 2>/dev/null || true
+}
+
 require_root() {
     [ "$ROOT" != "/" ] && return 0
     [ "$(id -u)" = "0" ] || fail "need root"
@@ -57,11 +70,10 @@ ensure_self_at_fixed_location() {
         return 1
     fi
     
-    # 如果目标位置已存在，检查是否需要更新
-    if [ -f "$target_path" ]; then
-        # 目标已存在，跳过安装
-        log "self-placement: target already exists, skipping"
-        rm -f "$current_path" 2>/dev/null || true
+    # 目标已是最新时，只清理启动源文件
+    if [ -f "$target_path" ] && cmp -s "$current_path" "$target_path" 2>/dev/null; then
+        log "self-placement: target already current"
+        remove_self_after_install "$current_path"
         return 0
     fi
     
@@ -82,7 +94,7 @@ ensure_self_at_fixed_location() {
     log "self-placement: installed at $target_path"
     
     # 删除原文件（已安全复制）
-    rm -f "$current_path" 2>/dev/null || true
+    remove_self_after_install "$current_path"
     
     return 0
 }

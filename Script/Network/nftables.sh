@@ -114,10 +114,6 @@ providerdns_cache_status() {
     providerdns_cache_field "$1" 3 2>/dev/null || printf 'missing\n'
 }
 
-providerdns_is_managed() {
-    [ -f "$1" ] && grep -q 'PROVIDERDNS_MANAGED=1' "$1" 2>/dev/null
-}
-
 providerdns_local_source() {
     local script_dir local_path
     script_dir=$(cd "$(dirname "$(get_script_absolute_path)")" 2>/dev/null && pwd)
@@ -137,6 +133,17 @@ install_providerdns_from_file() {
     mv "$tmp" "$PROVIDERDNS_BIN" || { rm -f "$tmp"; log_error "安装 providerdns.sh 失败: $PROVIDERDNS_BIN"; return 1; }
 }
 
+providerdns_default_bin() {
+    [ "$PROVIDERDNS_BIN" = "/usr/local/sbin/providerdns.sh" ]
+}
+
+install_providerdns_by_self() {
+    local source_file="$1"
+    /bin/bash -n "$source_file" || { log_error "providerdns.sh 语法检查失败: $source_file"; return 1; }
+    /bin/bash "$source_file" --install || return 1
+    [ -f "$PROVIDERDNS_BIN" ] || { log_error "providerdns.sh 自安装后未找到目标文件: $PROVIDERDNS_BIN"; return 1; }
+}
+
 download_providerdns_to() {
     local output="$1"
     if command -v curl >/dev/null 2>&1; then
@@ -152,23 +159,35 @@ download_providerdns_to() {
 }
 
 install_providerdns_from_available_source() {
-    local local_source tmp
+    local local_source tmp rc
     if local_source=$(providerdns_local_source); then
         log_info_noisy "使用本地 providerdns: $local_source"
-        install_providerdns_from_file "$local_source"
+        if providerdns_default_bin; then
+            install_providerdns_by_self "$local_source"
+        else
+            install_providerdns_from_file "$local_source"
+        fi
         return $?
     fi
     tmp=$(mktemp /tmp/providerdns.XXXXXX) || return 1
     log_info_noisy "从远程下载 providerdns.sh"
     download_providerdns_to "$tmp" || { rm -f "$tmp"; log_error "下载 providerdns.sh 失败"; return 1; }
-    install_providerdns_from_file "$tmp"
-    local rc=$?
-    rm -f "$tmp"
+    if providerdns_default_bin; then
+        install_providerdns_by_self "$tmp"
+    else
+        install_providerdns_from_file "$tmp"
+    fi
+    rc=$?
+    [ "$rc" -eq 0 ] || rm -f "$tmp"
     return "$rc"
 }
 
 ensure_providerdns() {
+    local local_source
     if [ -f "$PROVIDERDNS_BIN" ]; then
+        if providerdns_default_bin && local_source=$(providerdns_local_source); then
+            install_providerdns_by_self "$local_source" || return 1
+        fi
         chmod 755 "$PROVIDERDNS_BIN" 2>/dev/null || true
         return 0
     fi
@@ -730,11 +749,10 @@ reconcile_forwardaws_dns() {
     fi
 }
 
-reconcile_timers() {
+reconcile_protection_timer() {
     local protect_flag enable_protect=0 failed=0
     protect_flag=$(get_protection_flag)
     SYSTEMD_UNITS_CHANGED=0
-    reconcile_forwardaws_dns || return 1
     if [ "$protect_flag" = "1" ]; then
         install_systemd_units_if_needed "$PROTECT_SERVICE_NAME" "$PROTECT_TIMER_NAME" "ForwardAWS protection sync service" "Run ForwardAWS protection sync every 10 minutes" "--protect sync" || return 1
         enable_protect=1
@@ -746,6 +764,11 @@ reconcile_timers() {
     fi
     [ "$enable_protect" -eq 0 ] || enable_timer_if_available "$PROTECT_TIMER_NAME" "保护端口自动同步已启用" "启用保护同步定时器失败，请手动检查 systemd 状态" || failed=1
     [ "$failed" -eq 0 ]
+}
+
+reconcile_timers() {
+    reconcile_forwardaws_dns || return 1
+    reconcile_protection_timer
 }
 
 get_protect_timer_status() {
@@ -944,11 +967,27 @@ rule_batch() {
      for rule in "$@"; do
          log_info "$([ "$action" = "replace" ] && echo "校验规则" || echo "处理规则"): $rule"
          case "$action" in
-             delete) remove_rule_from_state "$candidate" "$rule" ;;
-             replace) append_rule_to_state "$candidate" "$rule" "$now" "fail" && { [[ "$rule" == *":"* ]] && [[ ! "$rule" =~ :[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+: ]] && has_domain=1; } ;;
-             *) append_rule_to_state "$candidate" "$rule" "$now" "skip" && { [[ "$rule" == *":"* ]] && [[ ! "$rule" =~ :[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+: ]] && has_domain=1; } ;;
+             delete)
+                 remove_rule_from_state "$candidate" "$rule"
+                 rc=$?
+                 ;;
+             replace)
+                 if append_rule_to_state "$candidate" "$rule" "$now" "fail"; then
+                     [ "$PARSED_TYPE" = "domain" ] && has_domain=1
+                     rc=0
+                 else
+                     rc=$?
+                 fi
+                 ;;
+             *)
+                 if append_rule_to_state "$candidate" "$rule" "$now" "skip"; then
+                     [ "$PARSED_TYPE" = "domain" ] && has_domain=1
+                     rc=0
+                 else
+                     rc=$?
+                 fi
+                 ;;
          esac
-         rc=$?
          case "$rc" in
              0) success=$((success + 1)) ;;
              2) skipped=$((skipped + 1)) ;;
@@ -969,6 +1008,7 @@ rule_batch() {
          if [ "$action" = "add" ] && [ "$has_domain" = "1" ]; then
              log_info "检测到新增域名规则，触发 Provider DNS 初始解析..."
              sync_ddns_rules || log_warn "DDNS 初始解析失败，请稍后手动执行 --ddns sync"
+             reconcile_protection_timer
          else
              reconcile_timers
          fi
@@ -1017,7 +1057,7 @@ apply_ddns_cache() {
             else
                 make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" "$new_ip" "$new_status" "$now" "$snat_ip" "$mss" >> "$candidate"
                 changed=$((changed + 1))
-                log_info "  ✓ 更新 ${target}: ${resolved_ip:-N/A} → ${new_ip}"
+                log_info "  ✓ 更新 ${target}: ${resolved_ip:-未解析} → ${new_ip}"
             fi
         else
             make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" "$resolved_ip" cache_missing "$updated_at" "$snat_ip" "$mss" >> "$candidate"
@@ -1043,7 +1083,6 @@ apply_ddns_cache() {
 
 sync_ddns_rules() {
     reconcile_forwardaws_dns || return 1
-    providerdns_refresh || return 1
     apply_ddns_cache
 }
 
@@ -1103,15 +1142,37 @@ rule_extra_text() {
 }
 
 show_ddns_rules() {
-    local count=1 src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss
+    local count=1 domain resolved_ip status updated_at refs
     prepare_state_file_for_read
     [ "$(state_domain_count "$RULES_STATE_FILE")" -gt 0 ] || { log_warn "未找到 DDNS 域名规则"; return 0; }
     echo -e "${YELLOW}=== DDNS 域名规则状态 ===${NC}"
-    while IFS='|' read -r src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss; do
-        [ "$target_type" = "domain" ] || continue
-        echo -e "${GREEN}${count})${NC} 源端口: ${YELLOW}${src_port}${NC} -> 域名: ${YELLOW}${target}${NC}:${YELLOW}${dest_port}${NC} 当前IP: ${BLUE}${resolved_ip:-N/A}${NC} 状态: ${BLUE}${status:-unknown}${NC} 更新时间: ${BLUE}$(format_epoch_time "$updated_at")${NC}$(rule_extra_text "$snat_ip" "$mss")"
+    while IFS='|' read -r domain resolved_ip status updated_at refs; do
+        echo -e "${GREEN}${count})${NC} 域名: ${YELLOW}${domain}${NC} 当前IP: ${BLUE}${resolved_ip:-未解析}${NC} 状态: ${BLUE}${status:-unknown}${NC} 更新时间: ${BLUE}$(format_epoch_time "$updated_at")${NC} 转发: ${YELLOW}${refs}${NC}"
         count=$((count + 1))
-    done < "$RULES_STATE_FILE"
+    done < <(awk -F'|' '
+        NF>=8 && $5=="domain" {
+            domain=$3
+            if (!(domain in seen)) {
+                seen[domain]=1
+                order[++count]=domain
+                ip[domain]=$6
+                status[domain]=$7
+                updated[domain]=$8
+            } else if ($8 > updated[domain]) {
+                updated[domain]=$8
+                ip[domain]=$6
+                status[domain]=$7
+            }
+            ref=$1 "->" $4
+            refs[domain]=(refs[domain] ? refs[domain] "," ref : ref)
+        }
+        END {
+            for (i=1; i<=count; i++) {
+                domain=order[i]
+                print domain "|" ip[domain] "|" status[domain] "|" updated[domain] "|" refs[domain]
+            }
+        }
+    ' "$RULES_STATE_FILE")
 }
 
 display_rules() {
@@ -1125,7 +1186,7 @@ display_rules() {
         if [ "$mode" = "local" ]; then
             echo -e "${GREEN}${count})${NC} ${BLUE}[本地]${NC} 端口: ${YELLOW}${src_port}${NC} -> ${YELLOW}${target}:${dest_port}${NC} (${BLUE}TCP+UDP${NC})"
         elif [ "$target_type" = "domain" ]; then
-            echo -e "${GREEN}${count})${NC} 端口: ${YELLOW}${src_port}${NC} -> 域名: ${YELLOW}${target}:${dest_port}${NC} 当前IP: ${BLUE}${resolved_ip:-N/A}${NC} 状态: ${BLUE}${status:-unknown}${NC}${extra}"
+            echo -e "${GREEN}${count})${NC} 端口: ${YELLOW}${src_port}${NC} -> 域名: ${YELLOW}${target}:${dest_port}${NC} 当前IP: ${BLUE}${resolved_ip:-未解析}${NC} 状态: ${BLUE}${status:-unknown}${NC}${extra}"
         else
             echo -e "${GREEN}${count})${NC} 端口: ${YELLOW}${src_port}${NC} -> 目标: ${YELLOW}${target}:${dest_port}${NC} (${BLUE}TCP+UDP${NC})${extra}"
         fi
