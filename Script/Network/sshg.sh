@@ -89,6 +89,13 @@ validate_ipv4() {
     done
 }
 
+ipv4_to_24_cidr() {
+    local ip="$1" old_ifs
+    validate_ipv4 "$ip" || return 1
+    old_ifs="$IFS"; IFS=.; set -- $ip; IFS="$old_ifs"
+    printf '%s.%s.%s.0/24\n' "$1" "$2" "$3"
+}
+
 validate_cidr() {
     local value="$1" ip prefix
     case "$value" in
@@ -415,7 +422,7 @@ build_sources_file() {
                 ;;
             domain)
                 ip="$(providerdns_cache_ip "$value" || true)"
-                validate_ipv4 "$ip" && printf '%s\n' "$ip" >> "$output"
+                validate_ipv4 "$ip" && ipv4_to_24_cidr "$ip" >> "$output"
                 ;;
         esac
     done < "$allow"
@@ -498,6 +505,11 @@ ensure_nft_service() {
     "$systemctl" enable nftables.service >/dev/null 2>&1 || log "nft: service skipped"
 }
 
+nft_live_ready() {
+    local nft="$1"
+    "$nft" list table inet "$NFT_TABLE" >/dev/null 2>&1
+}
+
 apply_nft() {
     local nft file tmp sources ports source_count
     nft="$(nft_cmd)" || fail "nft missing"
@@ -509,12 +521,17 @@ apply_nft() {
     ports="$(detect_ssh_ports)" || fail "ssh port"
     render_nft "$sources" "$tmp" "$ports"
     "$nft" -c -f "$tmp" >/dev/null 2>&1 || { rm -f "$tmp" "$sources"; fail "nft check"; }
-    mv "$tmp" "$file" || { rm -f "$sources"; fail "nft install"; }
-    chmod 600 "$file" 2>/dev/null || true
     ensure_nft_include
     ensure_nft_service
-    "$nft" -f "$file" >/dev/null 2>&1 || { rm -f "$sources"; fail "nft apply"; }
     source_count="$(wc -l < "$sources" | tr -d ' ')"
+    if cmp -s "$tmp" "$file" 2>/dev/null && nft_live_ready "$nft"; then
+        rm -f "$tmp" "$sources"
+        log "nft: skipped | ports=${ports} sources=${source_count}"
+        return 0
+    fi
+    mv "$tmp" "$file" || { rm -f "$sources"; fail "nft install"; }
+    chmod 600 "$file" 2>/dev/null || true
+    "$nft" -f "$file" >/dev/null 2>&1 || { rm -f "$sources"; fail "nft apply"; }
     rm -f "$sources"
     log "nft: applied | ports=${ports} sources=${source_count}"
 }
