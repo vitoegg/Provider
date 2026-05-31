@@ -303,34 +303,18 @@ step_dns() {
   log "dns: installed | type=${type}"
 }
 
-forwardaws_exists() {
-  [ -s /etc/forwardaws/rules.db ] && return 0
-  [ -f /etc/forwardaws/config.env ] && return 0
-  [ -s /etc/nftables.d/forwardaws.nft ] && return 0
-  command -v nft >/dev/null 2>&1 && nft list ruleset 2>/dev/null | grep -q 'forwardaws'
-}
-
 step_traffic() {
   local mode="$1" script="$2"
   shift 2
   ensure_packages nftables
   case "$mode" in
     forward)
-      if forwardaws_exists; then
-        provider_run "nftables replace" "$script" -r "$@" || fail "nftables 替换失败"
-        log "traffic: applied | mode=forward | action=replace"
-      else
-        provider_run "nftables add" "$script" -a "$@" || fail "nftables 配置失败"
-        log "traffic: applied | mode=forward | action=add"
-      fi
+      provider_run "nftables replace" "$script" -r "$@" || fail "nftables 替换失败"
+      log "traffic: applied | mode=forward | action=replace"
       ;;
     protect)
-      if forwardaws_exists; then
-        log "traffic: skipped | mode=protect"
-      else
-        provider_run "nftables protect" "$script" --protect on || fail "nftables 防护配置失败"
-        log "traffic: applied | mode=protect"
-      fi
+      provider_run "nftables protect" "$script" --protect on || fail "nftables 防护配置失败"
+      log "traffic: applied | mode=protect"
       ;;
     *)
       fail "未知 traffic 模式: $mode"
