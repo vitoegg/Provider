@@ -7,15 +7,12 @@ DOMAIN=""
 EMBY_URL=""
 SECRET_PATH=""
 CF_TOKEN=""
-CF_ZONE_ID=""
 CONF_FILE="/etc/nginx/conf.d/00-emby-proxy.conf"
 CERT_ROOT="/etc/nginx/ssl/emby-proxy"
 ACME_HOME="/root/.acme.sh"
 ACME_BIN="${ACME_HOME}/acme.sh"
 POLICY_RC_CREATED=0
-UPSTREAM_SCHEME=""
 UPSTREAM_HOST=""
-UPSTREAM_PORT=""
 log() { printf '[%s] %s\n' "$1" "$2"; }
 fail() { log "ERR" "$1" >&2; exit 1; }
 path() {
@@ -28,14 +25,13 @@ path() {
 show_help() {
     cat << EOF
 Usage:
-  bash ngnix.sh --domain DOMAIN --emby URL --path RANDOM_PATH \\
-    --cf-token TOKEN --cf-zone-id ZONE_ID
+  bash ngnix.sh --domain DOMAIN --emby HOST --path RANDOM_PATH \\
+    --cf-token TOKEN
 Required:
   --domain DOMAIN          HTTPS domain for this reverse proxy
-  --emby URL               Emby upstream URL, for example https://emby.example.com:443
+  --emby HOST              HTTPS Emby upstream host, for example emby.example.com
   --path RANDOM_PATH       Case-sensitive random path, 8-64 chars: A-Z a-z 0-9
   --cf-token TOKEN         Cloudflare API token for acme.sh dns_cf
-  --cf-zone-id ZONE_ID     Cloudflare zone id for this domain
 Other:
   -h, --help               Show this help
 EOF
@@ -51,7 +47,6 @@ parse_args() {
             --emby) need_arg "$@"; EMBY_URL="$2"; shift 2 ;;
             --path) need_arg "$@"; SECRET_PATH="$2"; shift 2 ;;
             --cf-token) need_arg "$@"; CF_TOKEN="$2"; shift 2 ;;
-            --cf-zone-id) need_arg "$@"; CF_ZONE_ID="$2"; shift 2 ;;
             -h|--help) show_help; exit 0 ;;
             *) fail "Unknown option: $1" ;;
         esac
@@ -68,27 +63,14 @@ valid_host() {
     valid_domain "$value" || [[ "$value" =~ ^([0-9]{1,3}[.]){3}[0-9]{1,3}$ ]]
 }
 parse_emby_url() {
-    local authority rest
-    case "$EMBY_URL" in
-        http://*|https://*) ;;
-        *) fail "Invalid --emby: expected http(s)://host[:port]" ;;
-    esac
+    local host
     [[ "$EMBY_URL" != *[[:space:]\{\}\\\;\'\`]* ]] || fail "Invalid --emby: unsafe character"
-    EMBY_URL="${EMBY_URL%/}"
-    UPSTREAM_SCHEME="${EMBY_URL%%://*}"
-    rest="${EMBY_URL#*://}"
-    [[ "$rest" != */* && "$rest" != *@* && -n "$rest" ]] || fail "Invalid --emby: path or userinfo is not supported"
-    authority="$rest"
-    if [[ "$authority" == *:* ]]; then
-        UPSTREAM_HOST="${authority%%:*}"
-        UPSTREAM_PORT="${authority##*:}"
-    else
-        UPSTREAM_HOST="$authority"
-        [[ "$UPSTREAM_SCHEME" == "https" ]] && UPSTREAM_PORT="443" || UPSTREAM_PORT="80"
-    fi
-    valid_host "$UPSTREAM_HOST" || fail "Invalid Emby host: $UPSTREAM_HOST"
-    [[ "$UPSTREAM_PORT" =~ ^[0-9]+$ && "$UPSTREAM_PORT" -ge 1 && "$UPSTREAM_PORT" -le 65535 ]] ||
-        fail "Invalid Emby port: $UPSTREAM_PORT"
+    host="${EMBY_URL#/}"
+    host="${host%/}"
+    [[ "$host" != *://* && "$host" != */* && "$host" != *@* && "$host" != *:* && -n "$host" ]] ||
+        fail "Invalid --emby: expected host only, for example emby.example.com"
+    valid_host "$host" || fail "Invalid Emby host: $host"
+    UPSTREAM_HOST="$host"
 }
 validate_args() {
     DOMAIN="${DOMAIN#/}"; DOMAIN="${DOMAIN%/}"
@@ -97,7 +79,6 @@ validate_args() {
     [[ "$SECRET_PATH" =~ ^[A-Za-z0-9]{8,64}$ ]] ||
         fail "Invalid --path: use 8-64 case-sensitive chars from A-Z a-z 0-9"
     [[ -n "$CF_TOKEN" ]] || fail "Missing --cf-token"
-    [[ -n "$CF_ZONE_ID" ]] || fail "Missing --cf-zone-id"
     parse_emby_url
 }
 require_root() {
@@ -205,7 +186,6 @@ ensure_cert() {
     fi
     ensure_acme
     export CF_Token="$CF_TOKEN"
-    export CF_Zone_ID="$CF_ZONE_ID"
     mkdir -p "$cert_dir" || fail "Failed to create certificate directory"
     reload_cmd='nginx -t >/dev/null 2>&1 && systemctl reload nginx >/dev/null 2>&1 || true'
     log "INFO" "issue certificate by Cloudflare DNS-01"
@@ -234,7 +214,7 @@ map \$http_upgrade \$emby_connection_upgrade {
 limit_req_zone \$binary_remote_addr zone=emby_bad_req:1m rate=1r/m;
 limit_conn_zone \$binary_remote_addr zone=emby_bad_conn:1m;
 upstream emby_upstream {
-    server ${UPSTREAM_HOST}:${UPSTREAM_PORT};
+    server ${UPSTREAM_HOST}:443;
     keepalive 16;
 }
 server {
@@ -276,18 +256,16 @@ server {
     }
     location ^~ /${SECRET_PATH}/ {
         rewrite ^/${SECRET_PATH}(/.*)\$ \$1 break;
-        proxy_pass ${UPSTREAM_SCHEME}://emby_upstream;
+        proxy_pass https://emby_upstream;
         proxy_http_version 1.1;
 EOF
-    if [[ "$UPSTREAM_SCHEME" == "https" ]]; then
-        cat >> "$out" << EOF
+    cat >> "$out" << EOF
         proxy_ssl_server_name on;
         proxy_ssl_name ${UPSTREAM_HOST};
         proxy_ssl_verify on;
         proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
         proxy_ssl_verify_depth 3;
 EOF
-    fi
     cat >> "$out" << EOF
         proxy_set_header Host ${UPSTREAM_HOST};
         proxy_set_header Upgrade \$http_upgrade;
