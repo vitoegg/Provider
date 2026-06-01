@@ -256,11 +256,8 @@ server {
     gzip off;
     client_max_body_size 0;
     proxy_cache off;
-    location = /${SECRET_PATH} {
-        return 302 /${SECRET_PATH}/web/index.html;
-    }
-    location ^~ /${SECRET_PATH}/ {
-        rewrite ^/${SECRET_PATH}(/.*)\$ \$1 break;
+    location ~ ^/${SECRET_PATH}(/|\$) {
+        rewrite ^/${SECRET_PATH}/?(.*)\$ /\$1 break;
         proxy_pass https://emby_upstream;
         proxy_http_version 1.1;
 EOF
@@ -376,6 +373,6 @@ main() {
     ensure_no_unknown_default_443
     ensure_cert
     apply_nginx_config
-    log "OK" "ready: https://${DOMAIN}/${SECRET_PATH}/web/index.html"
+    log "OK" "ready: https://${DOMAIN}/${SECRET_PATH}"
 }
 main "$@"
