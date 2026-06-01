@@ -10,8 +10,6 @@ payload:
   - '+.lilyya.top'
   # Lily Emby Proxy
   - '+.nginxlily.cyou'
-  # ShouHou Emby
-  - '+.cn2gias.uk'
   # Cloud Service
   - '+.greencloudvps.com'
   - '+.green.cloud'
