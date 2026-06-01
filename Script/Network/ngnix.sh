@@ -110,7 +110,12 @@ disable_debian_defaults() {
     for file in /etc/nginx/sites-enabled/default /etc/nginx/conf.d/default.conf; do
         file="$(path "$file")"
         [[ -e "$file" || -L "$file" ]] || continue
-        disabled="${file}.disabled-by-ngnix"
+        if [[ "$file" == "$(path /etc/nginx/sites-enabled/default)" ]]; then
+            disabled="$(path /etc/nginx/disabled-sites/default.disabled-by-ngnix)"
+            mkdir -p "$(dirname "$disabled")" || fail "Failed to create disabled nginx site directory"
+        else
+            disabled="${file}.disabled-by-ngnix"
+        fi
         rm -f "$disabled" 2>/dev/null || true
         mv "$file" "$disabled" || fail "Failed to disable default nginx site: $file"
         log "OK" "disabled default nginx site: $file"
