@@ -280,10 +280,11 @@ EOF
         proxy_set_header Connection \$emby_connection_upgrade;
         proxy_set_header Range \$http_range;
         proxy_set_header If-Range \$http_if_range;
-        proxy_set_header X-Real-IP "";
-        proxy_set_header X-Forwarded-For "";
-        proxy_set_header X-Forwarded-Proto "";
-        proxy_set_header X-Forwarded-Host "";
+        proxy_set_header X-Real-IP \$server_addr;
+        proxy_set_header X-Forwarded-For \$server_addr;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Host \$host;
+        proxy_set_header X-Forwarded-Port \$server_port;
         proxy_set_header Forwarded "";
         proxy_set_header Via "";
         proxy_redirect / /${SECRET_PATH}/;
