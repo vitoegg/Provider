@@ -7,6 +7,8 @@ DOMAIN=""
 EMBY_URL=""
 SECRET_PATH=""
 CF_TOKEN=""
+UNINSTALL=0
+INSTALL_ARG_SEEN=0
 CONF_FILE="/etc/nginx/conf.d/00-emby-proxy.conf"
 CERT_ROOT="/etc/nginx/ssl/emby-proxy"
 ACME_HOME="/root/.acme.sh"
@@ -33,6 +35,7 @@ Required:
   --path RANDOM_PATH       Case-sensitive random path, 8-64 chars: A-Z a-z 0-9
   --cf-token TOKEN         Cloudflare API token for acme.sh dns_cf
 Other:
+  -u, --uninstall         Remove nginx, acme.sh, certs, and script files
   -h, --help               Show this help
 EOF
 }
@@ -43,14 +46,17 @@ parse_args() {
     [[ $# -gt 0 ]] || { show_help; exit 1; }
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --domain) need_arg "$@"; DOMAIN="$2"; shift 2 ;;
-            --emby) need_arg "$@"; EMBY_URL="$2"; shift 2 ;;
-            --path) need_arg "$@"; SECRET_PATH="$2"; shift 2 ;;
-            --cf-token) need_arg "$@"; CF_TOKEN="$2"; shift 2 ;;
+            --domain) need_arg "$@"; DOMAIN="$2"; INSTALL_ARG_SEEN=1; shift 2 ;;
+            --emby) need_arg "$@"; EMBY_URL="$2"; INSTALL_ARG_SEEN=1; shift 2 ;;
+            --path) need_arg "$@"; SECRET_PATH="$2"; INSTALL_ARG_SEEN=1; shift 2 ;;
+            --cf-token) need_arg "$@"; CF_TOKEN="$2"; INSTALL_ARG_SEEN=1; shift 2 ;;
+            -u|--uninstall) UNINSTALL=1; shift ;;
             -h|--help) show_help; exit 0 ;;
             *) fail "Unknown option: $1" ;;
         esac
     done
+    [[ "$UNINSTALL" == "1" && "$INSTALL_ARG_SEEN" == "1" ]] &&
+        fail "Do not mix --uninstall with install options"
 }
 valid_domain() {
     local value="$1"
@@ -324,6 +330,104 @@ reload_nginx() {
 config_is_included() {
     nginx_dump | grep -qF "Managed by Provider ngnix.sh"
 }
+remove_path() {
+    local target="$1" label="$2"
+    if [[ -e "$target" || -L "$target" ]]; then
+        rm -rf "$target" || fail "Failed to remove $label"
+        log "OK" "removed $label"
+    else
+        log "SKIP" "$label missing"
+    fi
+}
+restore_or_remove_default() {
+    local backup="$1" target="$2" label="$3"
+    [[ -e "$backup" || -L "$backup" ]] || {
+        log "SKIP" "$label missing"
+        return 0
+    }
+    mkdir -p "$(dirname "$target")" || fail "Failed to create $label directory"
+    if [[ -e "$target" || -L "$target" ]]; then
+        rm -rf "$backup" || fail "Failed to remove $label backup"
+        log "OK" "removed $label backup"
+    else
+        mv "$backup" "$target" || fail "Failed to restore $label"
+        log "OK" "restored $label"
+    fi
+}
+remove_policy_rc_leftover() {
+    local file content
+    file="$(path /usr/sbin/policy-rc.d)"
+    [[ -f "$file" ]] || {
+        log "SKIP" "policy-rc.d missing"
+        return 0
+    }
+    content="$(cat "$file" 2>/dev/null || true)"
+    [[ "$content" == $'#!/bin/sh\nexit 101' ]] || {
+        log "SKIP" "policy-rc.d unmanaged"
+        return 0
+    }
+    rm -f "$file" || fail "Failed to remove policy-rc.d"
+    log "OK" "removed policy-rc.d"
+}
+stop_nginx_service() {
+    if command -v systemctl >/dev/null 2>&1; then
+        if systemctl disable --now nginx >/dev/null 2>&1; then
+            log "OK" "stopped nginx"
+        else
+            log "SKIP" "nginx service missing"
+        fi
+    elif command -v service >/dev/null 2>&1; then
+        if service nginx stop >/dev/null 2>&1; then
+            log "OK" "stopped nginx"
+        else
+            log "SKIP" "nginx service missing"
+        fi
+    else
+        log "SKIP" "service manager missing"
+    fi
+}
+purge_nginx_package() {
+    command -v apt-get >/dev/null 2>&1 || {
+        log "SKIP" "apt-get missing"
+        return 0
+    }
+    log "INFO" "purge nginx"
+    apt-get purge -y nginx nginx-light nginx-common >/dev/null ||
+        fail "nginx purge failed"
+    apt-get autoremove -y --purge >/dev/null || true
+    log "OK" "purged nginx"
+}
+uninstall_acme() {
+    local bin
+    bin="$(path "$ACME_BIN")"
+    [[ -x "$bin" ]] && "$bin" --uninstall >/dev/null 2>&1 || true
+    remove_path "$(path "$ACME_HOME")" "acme.sh"
+}
+remove_empty_nginx_dirs() {
+    rmdir "$(path /etc/nginx/ssl)" 2>/dev/null || true
+    rmdir "$(path /etc/nginx/disabled-sites)" 2>/dev/null || true
+    rmdir "$(path /etc/nginx/conf.d)" 2>/dev/null || true
+    rmdir "$(path /etc/nginx/sites-enabled)" 2>/dev/null || true
+}
+uninstall_ngnix() {
+    log "INFO" "uninstall start"
+    remove_path "$(path "$CONF_FILE")" "nginx config"
+    remove_path "$(path "$CERT_ROOT")" "certs"
+    restore_or_remove_default \
+        "$(path /etc/nginx/disabled-sites/default.disabled-by-ngnix)" \
+        "$(path /etc/nginx/sites-enabled/default)" \
+        "default site"
+    restore_or_remove_default \
+        "$(path /etc/nginx/conf.d/default.conf.disabled-by-ngnix)" \
+        "$(path /etc/nginx/conf.d/default.conf)" \
+        "default conf"
+    remove_policy_rc_leftover
+    uninstall_acme
+    stop_nginx_service
+    purge_nginx_package
+    remove_empty_nginx_dirs
+    log "OK" "uninstall done"
+}
 apply_nginx_config() {
     local conf tmp backup had_old=0 fallback=0
     conf="$(path "$CONF_FILE")"
@@ -365,6 +469,11 @@ apply_nginx_config() {
 main() {
     trap cleanup_policy_rc_guard EXIT
     parse_args "$@"
+    if [[ "$UNINSTALL" == "1" ]]; then
+        require_root
+        uninstall_ngnix
+        exit 0
+    fi
     validate_args
     require_root
     ensure_nginx
