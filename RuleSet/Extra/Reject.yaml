@@ -1,8 +1,4 @@
 payload:
-  # > WeChat Input
-  - DOMAIN-SUFFIX,wetype.weixin.qq.com
-  # > Quic Reject
-  - AND,((NETWORK,UDP),(DST-PORT,443))
   # > Telegram Pics
   - IP-CIDR,95.161.76.100/31,no-resolve
   # > Fakeip DESC
