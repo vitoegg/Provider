@@ -224,8 +224,8 @@ server-name smartdns
 log-level error
 bind 127.0.0.1:53
 server 1.1.1.1
-server 8.8.8.8
-server 9.9.9.11${ecs_suffix}
+server 45.11.45.11
+server 8.8.8.8${ecs_suffix}
 server 94.140.14.140${ecs_suffix}
 speed-check-mode ping,tcp:80,tcp:443
 serve-expired yes
