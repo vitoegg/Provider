@@ -224,7 +224,7 @@ step_time_sync() {
 
 proxy_meta() {
   case "$1" in
-    ss2022) printf 'shadowsocks.service|/etc/shadowsocks/config.json|-u|-p' ;;
+    shadss|ss2022) printf 'shadowsocks.service|/etc/shadowsocks/config.json|-u|-p' ;;
     singbox) printf 'sing-box.service|/etc/sing-box/config.json|--uninstall|--anytls-port' ;;
     reality) printf 'xray.service|/usr/local/etc/xray/config.json|--uninstall|--reality-port' ;;
     snell) printf 'snell.service|/etc/snell/snell.conf|-u|-p' ;;
@@ -252,35 +252,38 @@ cleanup_proxy_script() {
 }
 
 step_proxy() {
-  local type="$1" script="$2" service config uninstall port_key port detail cleanup_script=""
+  local type="$1" script="$2" service config uninstall port_key port detail
   local protocol anytls_port ss_port
   shift 2
   IFS='|' read -r service config uninstall port_key <<< "$(proxy_meta "$type")" || fail "未知代理类型: $type"
-  port="$(arg_value "$port_key" "$@")" || fail "${type} 缺少端口参数: ${port_key}"
 
   if [ "$type" = "singbox" ]; then
     protocol="$(arg_value --protocol "$@" || true)"
-    anytls_port="$port"
+    anytls_port="$(arg_value --anytls-port "$@" || true)"
     ss_port="$(arg_value --ss-port "$@" || true)"
+    port="${anytls_port:-$ss_port}"
+    [ -n "$port" ] || fail "singbox 缺少端口参数: --anytls-port 或 --ss-port"
     detail="protocol=${protocol:-unknown}"
     [ -z "$anytls_port" ] || detail="${detail} | anytls=${anytls_port}"
     [ -z "$ss_port" ] || detail="${detail} | ss=${ss_port}"
-    if [ -n "$ss_port" ] && { service_exists shadowsocks.service || [ -e /etc/shadowsocks/config.json ]; }; then
-      provider_run "proxy uninstall ss2022" shadowsocks.sh -u || fail "ss2022 卸载失败"
-      log "proxy: service removed | type=ss2022 | reason=conflict"
-    fi
-    [ -z "$ss_port" ] || cleanup_script="shadowsocks.sh"
-  else
+    provider_run "proxy apply ${type}" "$script" "$@" || fail "${type} 配置失败"
+    [ -z "$anytls_port" ] || service_usable "$service" "$config" "$anytls_port" || fail "${type} AnyTLS 配置后不可用"
+    [ -z "$ss_port" ] || service_usable "$service" "$config" "$ss_port" || fail "${type} Shadowsocks 配置后不可用"
+    log "proxy: applied | type=${type} | ${detail}"
+    return 0
+  elif [ "$type" = "shadss" ] || [ "$type" = "ss2022" ]; then
+    port="$(arg_value "$port_key" "$@")" || fail "${type} 缺少端口参数: ${port_key}"
     detail="port=${port}"
-    [ "$type" != "ss2022" ] || cleanup_script="singbox.sh"
-    if [ "$type" = "ss2022" ] && { service_exists sing-box.service || [ -e /etc/sing-box/config.json ]; }; then
-      provider_run "proxy uninstall singbox" singbox.sh --uninstall || fail "singbox 卸载失败"
-      log "proxy: service removed | type=singbox | reason=conflict"
-    fi
+    provider_run "proxy apply ${type}" "$script" "$@" || fail "${type} 配置失败"
+    service_usable "$service" "$config" "$port" || fail "${type} 配置后不可用"
+    log "proxy: applied | type=${type} | ${detail}"
+    return 0
+  else
+    port="$(arg_value "$port_key" "$@")" || fail "${type} 缺少端口参数: ${port_key}"
+    detail="port=${port}"
   fi
 
   if service_usable "$service" "$config" "$port"; then
-    cleanup_proxy_script "$cleanup_script"
     log "proxy: skipped | type=${type} | ${detail}"
     return 0
   fi
@@ -295,8 +298,17 @@ step_proxy() {
 
   provider_run "proxy install ${type}" "$script" "$@" || fail "${type} 安装失败"
   service_usable "$service" "$config" "$port" || fail "${type} 安装后不可用"
-  cleanup_proxy_script "$cleanup_script"
   log "proxy: installed | type=${type} | ${detail}"
+}
+
+step_proxy_remove() {
+  local type="$1" script="$2" service config uninstall port_key
+  shift 2
+  [ "$#" -gt 0 ] || fail "step_proxy_remove 缺少卸载参数: ${type}"
+  IFS='|' read -r service config uninstall port_key <<< "$(proxy_meta "$type")" || fail "未知代理类型: $type"
+  provider_run "proxy remove ${type}" "$script" "$@" || fail "${type} 删除失败"
+  cleanup_proxy_script "$script"
+  log "proxy: removed | type=${type}"
 }
 
 kernel_needs_ipv6_disabled() {

@@ -426,7 +426,7 @@ EOF
     systemctl daemon-reload
     log info "Starting Shadowsocks service..."
     systemctl enable shadowsocks.service >/dev/null 2>&1
-    systemctl start shadowsocks.service
+    systemctl restart shadowsocks.service
 
     if ! systemctl is-active --quiet shadowsocks.service; then
         log error "Shadowsocks service failed to start!"
@@ -584,18 +584,15 @@ check_service_exists() {
 # This function encapsulates all steps needed for a successful installation.
 ################################################################################
 run_installation() {
-    # Check if service already exists
-    if check_service_exists; then
-        log error "Shadowsocks service is already installed. Please uninstall it first."
-        echo -e "\nTo uninstall, run: $0 -u\n"
-        exit 1
-    fi
-    
     install_packages
     ensure_time_sync
     detect_arch
     prepare_configuration
-    install_shadowsocks
+    if command_exists ssserver; then
+        log info "Shadowsocks-rust binary already exists"
+    else
+        install_shadowsocks
+    fi
     configure_shadowsocks
     show_configuration
 }
