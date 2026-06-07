@@ -1,57 +1,6 @@
 # Network Scripts
 
-## reality.sh
-
-### 下载
-```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/reality.sh
-```
-
-### 参数说明
-```text
--h, --help              显示帮助
---install               安装
---update                更新
---uninstall             卸载
---install-type TYPE     reality_only 或 reality_ss
---domain DOMAIN         域名
---reality-port PORT     Reality 端口
---uuid UUID             VLESS UUID
---private-key KEY       Reality 私钥
---public-key KEY        Reality 公钥
---short-id ID           Reality short id
---ss-port PORT          Shadowsocks 端口
---ss-password PASS      Shadowsocks 密码
-```
-
-### 示例命令
-```bash
-bash reality.sh --domain www.google.com --reality-port 55555
-```
-
-## snell.sh
-
-### 下载
-```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/snell.sh
-```
-
-### 参数说明
-```text
--i, --install [VERSION] 安装，可指定版本
--n, --update [VERSION]  更新，可指定版本
--u, --uninstall         卸载
--p, --port PORT         监听端口
--k, --psk PSK           预共享密钥
--h, --help              显示帮助
-```
-
-### 示例命令
-```bash
-bash snell.sh --install 4.1.1 --port 23456 --psk abcdefgh12345678
-```
-
-## singbox.sh
+## **singbox.sh**
 
 ### 下载
 ```bash
@@ -83,7 +32,7 @@ bash singbox.sh --protocol anytls --anytls-domain api.example.com --anytls-token
 bash singbox.sh --protocol anytls,shadowsocks --anytls-domain api.example.com --anytls-token YOUR_CF_TOKEN
 ```
 
-## shadowsocks.sh
+## **shadowsocks.sh**
 
 ### 下载
 ```bash
@@ -103,7 +52,58 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 bash shadowsocks.sh -s password -p 25252
 ```
 
-## smartdns.sh
+## **snell.sh**
+
+### 下载
+```bash
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/snell.sh
+```
+
+### 参数说明
+```text
+-i, --install [VERSION] 安装，可指定版本
+-n, --update [VERSION]  更新，可指定版本
+-u, --uninstall         卸载
+-p, --port PORT         监听端口
+-k, --psk PSK           预共享密钥
+-h, --help              显示帮助
+```
+
+### 示例命令
+```bash
+bash snell.sh --install 4.1.1 --port 23456 --psk abcdefgh12345678
+```
+
+## **reality.sh**
+
+### 下载
+```bash
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/reality.sh
+```
+
+### 参数说明
+```text
+-h, --help              显示帮助
+--install               安装
+--update                更新
+--uninstall             卸载
+--install-type TYPE     reality_only 或 reality_ss
+--domain DOMAIN         域名
+--reality-port PORT     Reality 端口
+--uuid UUID             VLESS UUID
+--private-key KEY       Reality 私钥
+--public-key KEY        Reality 公钥
+--short-id ID           Reality short id
+--ss-port PORT          Shadowsocks 端口
+--ss-password PASS      Shadowsocks 密码
+```
+
+### 示例命令
+```bash
+bash reality.sh --domain www.google.com --reality-port 55555
+```
+
+## **smartdns.sh**
 
 ### 下载
 ```bash
@@ -121,7 +121,7 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 bash smartdns.sh --ecs TYO
 ```
 
-## mosdns.sh
+## **mosdns.sh**
 
 ### 下载
 ```bash
@@ -143,54 +143,26 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 bash mosdns.sh --install --ecs TYO --ipv4
 ```
 
-## sshg.sh
+## **kernel.sh**
 
 ### 下载
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/sshg.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/kernel.sh
 ```
 
 ### 参数说明
 ```text
---apply                 应用传入的 config/key/allow 变更
---reset                 重置为传入的 config/key/allow 状态
---sync                  解析域名并刷新 nft
---remove                移除 sshg 文件和 nft table
-config=ssh              写入 SSH hardening 配置
-key=...                 写入 root authorized_keys3
-allow=...               IPv4、IPv4 CIDR 或域名，逗号分隔
+-6 yes|no               是否保留 IPv6 配置，默认 yes
+-u                      移除内核优化配置
+-h                      显示帮助
 ```
 
 ### 示例命令
 ```bash
-bash sshg.sh --reset config=ssh allow=1.2.3.4,1.2.3.0/24,example.com key='ssh-ed25519 AAAA...'
+bash kernel.sh -6 no
 ```
 
-## providerdns.sh
-
-### 下载
-```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/providerdns.sh
-```
-
-### 参数说明
-```text
---install                           安装或修复 systemd timer
---set <consumer> <file> <hook>      注册订阅和 hook
---unset <consumer>                  移除订阅
---refresh                           刷新 DNS cache
---refresh hooks                     刷新 DNS cache 并运行受影响 hook
---cache <domain>                    输出缓存记录
---lookup <domain>                   输出缓存或即时解析 IPv4
---cleanup unused                    无订阅时清理运行时
-```
-
-### 示例命令
-```bash
-bash providerdns.sh --lookup example.com
-```
-
-## nftables.sh
+## **nftables.sh**
 
 ### 下载
 ```bash
@@ -221,26 +193,54 @@ RULE: <源端口>:<目标(IPv4/域名/local)>:<目标端口>[:SNAT_IP[:MSS]]
 bash nftables.sh --add 10086:82.40.1.2:33333:10.100.1.2:auto
 ```
 
-## kernel.sh
+## **sshg.sh**
 
 ### 下载
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/kernel.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/sshg.sh
 ```
 
 ### 参数说明
 ```text
--6 yes|no               是否保留 IPv6 配置，默认 yes
--u                      移除内核优化配置
--h                      显示帮助
+--apply                 应用传入的 config/key/allow 变更
+--reset                 重置为传入的 config/key/allow 状态
+--sync                  解析域名并刷新 nft
+--remove                移除 sshg 文件和 nft table
+config=ssh              写入 SSH hardening 配置
+key=...                 写入 root authorized_keys3
+allow=...               IPv4、IPv4 CIDR 或域名，逗号分隔
 ```
 
 ### 示例命令
 ```bash
-bash kernel.sh -6 no
+bash sshg.sh --reset config=ssh allow=1.2.3.4,1.2.3.0/24,example.com key='ssh-ed25519 AAAA...'
 ```
 
-## run.sh
+## **providerdns.sh**
+
+### 下载
+```bash
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/providerdns.sh
+```
+
+### 参数说明
+```text
+--install                           安装或修复 systemd timer
+--set <consumer> <file> <hook>      注册订阅和 hook
+--unset <consumer>                  移除订阅
+--refresh                           刷新 DNS cache
+--refresh hooks                     刷新 DNS cache 并运行受影响 hook
+--cache <domain>                    输出缓存记录
+--lookup <domain>                   输出缓存或即时解析 IPv4
+--cleanup unused                    无订阅时清理运行时
+```
+
+### 示例命令
+```bash
+bash providerdns.sh --lookup example.com
+```
+
+## **run.sh**
 
 ### 下载
 ```bash
