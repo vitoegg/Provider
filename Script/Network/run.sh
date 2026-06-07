@@ -52,6 +52,7 @@ sshd_cmd() {
 
 has_pkg() {
   case "$1" in
+    chrony) command -v chronyc >/dev/null 2>&1 ;;
     iproute2) command -v ss >/dev/null 2>&1 ;;
     nftables) command -v nft >/dev/null 2>&1 ;;
     openssh-server) sshd_cmd >/dev/null 2>&1 ;;
@@ -175,10 +176,29 @@ step_hostname() {
   log "hostname: applied | target=${target}"
 }
 
+current_timezone() {
+  timedatectl show --property=Timezone --value 2>/dev/null || true
+}
+
+step_time_sync() {
+  local timezone="${1:-}" service="${2:-}"
+  [ "$#" -eq 2 ] || fail "step_time_sync 需要时区和时间同步服务"
+  [ "$service" = "chrony" ] || fail "不支持的时间同步服务: ${service}"
+
+  ensure_packages chrony
+  if [ "$(current_timezone)" != "$timezone" ]; then
+    run_quiet "timezone" timedatectl set-timezone "$timezone" || fail "时区设置失败: ${timezone}"
+  fi
+  run_quiet "chrony enable" systemctl enable --now chrony || fail "chrony 启动失败"
+  [ "$(current_timezone)" = "$timezone" ] || fail "时区校验失败: ${timezone}"
+  service_active chrony || fail "chrony 未运行"
+  log "time: applied | timezone=${timezone} | sync=chrony"
+}
+
 proxy_meta() {
   case "$1" in
     ss2022) printf 'shadowsocks.service|/etc/shadowsocks/config.json|-u|-p' ;;
-    anytls) printf 'sing-box.service|/etc/sing-box/config.json|--uninstall|--port' ;;
+    singbox) printf 'sing-box.service|/etc/sing-box/config.json|--uninstall|--anytls-port' ;;
     reality) printf 'xray.service|/usr/local/etc/xray/config.json|--uninstall|--reality-port' ;;
     snell) printf 'snell.service|/etc/snell/snell.conf|-u|-p' ;;
     *) return 1 ;;
@@ -191,13 +211,39 @@ service_usable() {
 }
 
 step_proxy() {
-  local type="$1" script="$2" service config uninstall port_key port
+  local type="$1" script="$2" service config uninstall port_key port detail cleanup_script=""
+  local protocol anytls_port ss_port
   shift 2
   IFS='|' read -r service config uninstall port_key <<< "$(proxy_meta "$type")" || fail "未知代理类型: $type"
   port="$(arg_value "$port_key" "$@")" || fail "${type} 缺少端口参数: ${port_key}"
 
+  if [ "$type" = "singbox" ]; then
+    protocol="$(arg_value --protocol "$@" || true)"
+    anytls_port="$port"
+    ss_port="$(arg_value --ss-port "$@" || true)"
+    detail="protocol=${protocol:-unknown}"
+    [ -z "$anytls_port" ] || detail="${detail} | anytls=${anytls_port}"
+    [ -z "$ss_port" ] || detail="${detail} | ss=${ss_port}"
+    if [ -n "$ss_port" ] && { service_exists shadowsocks.service || [ -e /etc/shadowsocks/config.json ]; }; then
+      provider_run "proxy uninstall ss2022" shadowsocks.sh -u || fail "ss2022 卸载失败"
+      log "proxy: removed | type=ss2022 | reason=conflict"
+    fi
+    [ -z "$ss_port" ] || cleanup_script="shadowsocks.sh"
+  else
+    detail="port=${port}"
+    [ "$type" != "ss2022" ] || cleanup_script="singbox.sh"
+    if [ "$type" = "ss2022" ] && { service_exists sing-box.service || [ -e /etc/sing-box/config.json ]; }; then
+      provider_run "proxy uninstall singbox" singbox.sh --uninstall || fail "singbox 卸载失败"
+      log "proxy: removed | type=singbox | reason=conflict"
+    fi
+  fi
+
   if service_usable "$service" "$config" "$port"; then
-    log "proxy: skipped | type=${type} | port=${port}"
+    if [ -n "$cleanup_script" ] && [ -e "${PROVIDER_SCRIPT_DIR}/${cleanup_script}" ]; then
+      rm -f "${PROVIDER_SCRIPT_DIR}/${cleanup_script}" || fail "代理辅助脚本清理失败: ${cleanup_script}"
+      log "proxy: cleaned | script=${cleanup_script} | reason=unused"
+    fi
+    log "proxy: skipped | type=${type} | ${detail}"
     return 0
   fi
 
@@ -208,7 +254,11 @@ step_proxy() {
 
   provider_run "proxy install ${type}" "$script" "$@" || fail "${type} 安装失败"
   service_usable "$service" "$config" "$port" || fail "${type} 安装后不可用"
-  log "proxy: installed | type=${type} | port=${port}"
+  if [ -n "$cleanup_script" ] && [ -e "${PROVIDER_SCRIPT_DIR}/${cleanup_script}" ]; then
+    rm -f "${PROVIDER_SCRIPT_DIR}/${cleanup_script}" || fail "代理辅助脚本清理失败: ${cleanup_script}"
+    log "proxy: cleaned | script=${cleanup_script} | reason=unused"
+  fi
+  log "proxy: installed | type=${type} | ${detail}"
 }
 
 kernel_needs_ipv6_disabled() {
