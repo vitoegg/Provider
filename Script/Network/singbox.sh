@@ -94,6 +94,63 @@ cleanup_temp_files() {
 }
 trap cleanup_temp_files EXIT
 
+package_known() {
+    dpkg-query -W -f='${db:Status-Abbrev}' sing-box >/dev/null 2>&1
+}
+
+service_known() {
+    systemctl list-unit-files --no-legend sing-box.service 2>/dev/null | grep -q '^sing-box\.service[[:space:]]'
+}
+
+remove_path() {
+    local path="$1"
+
+    if [[ ! -e "$path" ]]; then
+        log_info "未发现: $path"
+        return 0
+    fi
+
+    rm -rf "$path" || {
+        log_error "删除失败: $path"
+        return 1
+    }
+    log_info "已删除: $path"
+}
+
+verify_uninstalled() {
+    if systemctl is-active --quiet sing-box 2>/dev/null; then
+        log_error "验证失败: sing-box 服务仍在运行"
+        return 1
+    fi
+
+    if service_known; then
+        log_error "验证失败: sing-box 服务单元仍存在"
+        return 1
+    fi
+
+    if package_known; then
+        log_error "验证失败: sing-box 包仍存在"
+        return 1
+    fi
+
+    if [[ -e /etc/sing-box ]]; then
+        log_error "验证失败: /etc/sing-box 仍存在"
+        return 1
+    fi
+
+    if [[ -e /var/lib/sing-box ]]; then
+        log_error "验证失败: /var/lib/sing-box 仍存在"
+        return 1
+    fi
+
+    if command -v sing-box >/dev/null 2>&1; then
+        log_error "验证失败: sing-box 仍在 PATH 中"
+        return 1
+    fi
+
+    log_success "验证通过: 服务、包、配置、状态目录、命令均已清理"
+}
+
 require_root() {
     if [[ $EUID -ne 0 ]]; then
         log_error "请使用 root 权限执行。"
@@ -944,51 +1001,32 @@ show_configuration() {
 
 uninstall_service() {
     print_header "卸载 sing-box"
-    local file path
-    local systemd_files=(
-        "/etc/systemd/system/sing-box.service"
-        "/lib/systemd/system/sing-box.service"
-        "/usr/lib/systemd/system/sing-box.service"
-    )
-    local cleanup_paths=(
-        "/etc/sing-box"
-        "/var/lib/sing-box"
-        "/var/cache/sing-box"
-        "/run/sing-box"
-        "/var/log/sing-box"
-        "/etc/default/sing-box"
-        "/etc/sing-box.conf"
-        "/tmp/sing-box-config-backup.json"
-        "/root/.sing-box"
-    )
-    local binary_paths=(
-        "/usr/bin/sing-box"
-        "/usr/local/bin/sing-box"
-        "/opt/sing-box/sing-box"
-    )
 
+    log_info "停止服务: sing-box"
     systemctl stop sing-box >/dev/null 2>&1 || true
-    systemctl disable sing-box >/dev/null 2>&1 || true
-    systemctl reset-failed sing-box >/dev/null 2>&1 || true
 
-    if dpkg -l 2>/dev/null | grep -q "^ii  sing-box "; then
-        DEBIAN_FRONTEND=noninteractive dpkg --purge sing-box >/dev/null 2>&1 || true
+    log_info "禁用服务: sing-box"
+    systemctl disable sing-box >/dev/null 2>&1 || true
+
+    if package_known; then
+        log_info "卸载包: sing-box"
+        if ! DEBIAN_FRONTEND=noninteractive dpkg --purge sing-box >/dev/null 2>&1; then
+            log_error "sing-box 包卸载失败"
+            exit 1
+        fi
+    else
+        log_info "包未安装: sing-box"
     fi
 
-    for file in "${systemd_files[@]}"; do
-        [[ -f "$file" ]] && rm -f "$file"
-    done
+    remove_path /etc/sing-box || exit 1
+    remove_path /var/lib/sing-box || exit 1
 
-    for path in "${cleanup_paths[@]}"; do
-        [[ -e "$path" ]] && rm -rf "$path"
-    done
-
-    for path in "${binary_paths[@]}"; do
-        [[ -f "$path" ]] && rm -f "$path"
-    done
-
+    log_info "重载 systemd daemon"
     systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl reset-failed sing-box >/dev/null 2>&1 || true
     cleanup_temp_files
+
+    verify_uninstalled || exit 1
     log_success "sing-box 卸载完成"
 }
 
