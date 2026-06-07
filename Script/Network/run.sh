@@ -260,18 +260,7 @@ step_proxy() {
     port="$(arg_value "$port_key" "$@")" || fail "proxy port missing | service=${service%.service}"
   fi
 
-  if service_usable "$service" "$config" "$port"; then
-    log "proxy active | service=${service%.service} | port=${port}"
-    return 0
-  fi
-
-  if service_port_mismatch "$service" "$config" "$port"; then
-    provider_run "$script" "$uninstall" || fail "proxy removal failed | service=${service%.service}"
-  elif service_exists "$service" || [ -e "$config" ]; then
-    provider_run "$script" "$uninstall" || fail "proxy removal failed | service=${service%.service}"
-  fi
-
-  provider_run "$script" "$@" || fail "proxy installation failed | service=${service%.service}"
+  provider_run "$script" "$@" || fail "proxy configuration failed | service=${service%.service}"
   service_usable "$service" "$config" "$port" || fail "proxy inactive | service=${service%.service}"
   log "proxy active | service=${service%.service} | port=${port}"
 }

@@ -8,9 +8,10 @@ export PATH
 # Constants
 ###################
 CONF="/etc/snell/snell.conf"
-SYSTEMD="/lib/systemd/system/snell.service"
+SYSTEMD="/etc/systemd/system/snell.service"
 DOWNLOAD_BASE="https://dl.nssurge.com/snell"
 SERVER_BIN="/usr/local/bin/snell-server"
+SYSTEMD_CHANGED=0
 
 # Color codes
 RED='\033[0;31m'
@@ -237,14 +238,14 @@ EOF
 }
 
 create_service() {
-    print_message "info" "Creating system service..."
-    cat > "${SYSTEMD}" << EOF
+    local temp_file="${SYSTEMD}.tmp"
+
+    print_message "info" "Checking system service..."
+    mkdir -p "$(dirname "$SYSTEMD")"
+    cat > "${temp_file}" << EOF
 [Unit]
-Description=Snell Service
+Description=Snell Server
 After=network.target
-Before=network-online.target
-StartLimitBurst=0
-StartLimitIntervalSec=60
 
 [Service]
 Type=simple
@@ -257,7 +258,17 @@ TimeoutStopSec=15
 [Install]
 WantedBy=multi-user.target
 EOF
-    print_message "success" "System service created"
+
+    if [[ -f "$SYSTEMD" ]] && cmp -s "$temp_file" "$SYSTEMD"; then
+        rm -f "$temp_file"
+        SYSTEMD_CHANGED=0
+        print_message "info" "System service unchanged"
+        return 0
+    fi
+
+    mv -f "$temp_file" "$SYSTEMD"
+    SYSTEMD_CHANGED=1
+    print_message "success" "System service updated"
 }
 
 ###################
@@ -293,6 +304,25 @@ download_and_install() {
     print_message "success" "Snell server installed"
 }
 
+ensure_snell_installed() {
+    local version=$1
+
+    if [[ -f "$SERVER_BIN" && -z "$version" ]]; then
+        print_message "info" "Snell server already exists, skipping download"
+        return 0
+    fi
+
+    if [ -z "$version" ]; then
+        version=$(prompt_version)
+    else
+        if ! validate_version_format "$version"; then
+            exit 1
+        fi
+    fi
+
+    download_and_install "$version"
+}
+
 update_server() {
     local version=$1
     print_message "info" "Updating Snell server to version ${version}..."
@@ -300,33 +330,28 @@ update_server() {
     # Download and install new version (which includes stopping service and removing old binary)
     download_and_install "$version"
     
-    # Start service
-    print_message "info" "Starting Snell service..."
-    systemctl start snell
-    
-    if systemctl is-active snell &> /dev/null; then
-        print_message "success" "Snell service updated and started successfully"
-        show_service_status
-        return 0
-    else
-        print_message "error" "Failed to start Snell service after update. Checking logs:"
-        show_service_status
-        return 1
-    fi
+    restart_service
 }
 
-start_service() {
-    print_message "info" "Configuring system service..."
-    systemctl daemon-reload
+restart_service() {
+    if [[ "$SYSTEMD_CHANGED" -eq 1 ]]; then
+        print_message "info" "Reloading systemd..."
+        systemctl daemon-reload
+    fi
     
     print_message "info" "Enabling Snell service..."
     systemctl enable snell
     
-    print_message "info" "Starting Snell service..."
-    systemctl start snell
+    if systemctl is-active snell &>/dev/null; then
+        print_message "info" "Restarting Snell service..."
+        systemctl restart snell
+    else
+        print_message "info" "Starting Snell service..."
+        systemctl start snell
+    fi
 
     if systemctl is-active snell &> /dev/null; then
-        print_message "success" "Snell service started successfully!"
+        print_message "success" "Snell service is running"
         show_service_status
         return 0
     else
@@ -358,15 +383,6 @@ do_install() {
     local port=$2
     local psk=$3
     
-    # Handle version input
-    if [ -z "$version" ]; then
-        version=$(prompt_version)
-    else
-        if ! validate_version_format "$version"; then
-            exit 1
-        fi
-    fi
-    
     print_message "info" "Starting installation process..."
     setup_dependencies
     
@@ -374,11 +390,14 @@ do_install() {
     port=$(get_valid_port "$port")
     psk=$(generate_psk "$psk")
     
-    download_and_install "$version"
+    ensure_snell_installed "$version"
     create_config "$port" "$psk"
     create_service
     
-    if start_service; then
+    if restart_service; then
+        if [ -z "$version" ] && [[ -f "$SERVER_BIN" ]]; then
+            version="$("$SERVER_BIN" -v 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)"
+        fi
         show_configuration "$port" "$psk" "$version"
     fi
 }
@@ -405,7 +424,7 @@ do_update() {
         print_message "info" "Update available: ${current_version} -> ${new_version}"
         if update_server "$new_version"; then
             show_configuration \
-                "$(grep -oP 'listen = 0.0.0.0:\K[0-9]+' "$CONF")" \
+                "$(grep -oP 'listen = ::0:\K[0-9]+' "$CONF")" \
                 "$(grep -oP 'psk = \K[A-Za-z0-9]+' "$CONF")" \
                 "$new_version"
         fi

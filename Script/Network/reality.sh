@@ -344,7 +344,12 @@ EOF
 }
 
 # 安装 Xray
-install_xray() {
+ensure_xray_installed() {
+    if command -v xray >/dev/null 2>&1 && systemctl cat xray >/dev/null 2>&1; then
+        log "INFO" "Xray 已存在，跳过安装"
+        return 0
+    fi
+
     log "INFO" "开始安装 Xray..."
     
     if bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install --without-geodata; then
@@ -570,7 +575,7 @@ install_function() {
     log "INFO" "开始安装过程..."
     
     # 安装 Xray
-    if ! install_xray; then
+    if ! ensure_xray_installed; then
         return 1
     fi
     
