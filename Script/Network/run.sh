@@ -3,43 +3,29 @@ set -Eeuo pipefail
 
 PROVIDER_SCRIPT_DIR="/root"
 PLAN_FILE=""
-TMP_DIR=""
 LOG_FILE=""
 
 log() { printf '[RUN] %s\n' "$*" >&2; }
-fail() { printf '[RUN] FAIL %s\n' "$*" >&2; exit 1; }
-
-cleanup_tmp() {
-  [ -z "$TMP_DIR" ] || rm -rf "$TMP_DIR"
-}
-trap cleanup_tmp EXIT HUP INT TERM
-
-tmpdir() {
-  if [ -z "$TMP_DIR" ]; then
-    TMP_DIR="$(mktemp -d /tmp/cloud-run.XXXXXX)"
-    LOG_FILE="${TMP_DIR}/run.log"
+fail() {
+  if [ -n "$LOG_FILE" ] && [ -s "$LOG_FILE" ]; then
+    printf '[RUN] FAIL %s | log=%s\n' "$*" "$LOG_FILE" >&2
+  else
+    printf '[RUN] FAIL %s\n' "$*" >&2
   fi
+  exit 1
 }
 
 run_quiet() {
-  local label="$1" status
-  shift
-  tmpdir
-  set +e
+  [ -n "$LOG_FILE" ] || LOG_FILE="$(mktemp /tmp/cloud-run.XXXXXX)"
   "$@" >>"$LOG_FILE" 2>&1
-  status=$?
-  set -e
-  [ "$status" -eq 0 ] && return 0
-  log "FAIL ${label} | log=${LOG_FILE}"
-  return "$status"
 }
 
 require_root() {
-  [ "${EUID:-$(id -u)}" -eq 0 ] || fail "需要 root 权限执行"
+  [ "${EUID:-$(id -u)}" -eq 0 ] || fail "root required"
 }
 
 require_apt() {
-  command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt 环境"
+  command -v apt-get >/dev/null 2>&1 || fail "Debian/Ubuntu apt required"
 }
 
 sshd_cmd() {
@@ -71,13 +57,12 @@ ensure_packages() {
     has_pkg "$package" || missing+=("$package")
   done
   [ "${#missing[@]}" -eq 0 ] && return 0
-  run_quiet "deps install" install_packages "${missing[@]}" || fail "依赖安装失败: ${missing[*]}"
-  log "deps: installed | packages=${missing[*]}"
+  run_quiet install_packages "${missing[@]}" || fail "dependency install failed | packages=${missing[*]}"
 }
 
 script_path() {
   local path="${PROVIDER_SCRIPT_DIR}/${1}"
-  [ -s "$path" ] || fail "缺少 Provider 脚本: $path"
+  [ -s "$path" ] || fail "provider script missing | path=${path}"
   chmod +x "$path"
   printf '%s' "$path"
 }
@@ -135,10 +120,10 @@ service_port_ready() {
 }
 
 provider_run() {
-  local label="$1" script="$2" path
-  shift 2
+  local script="$1" path
+  shift
   path="$(script_path "$script")"
-  run_quiet "$label" bash "$path" "$@"
+  run_quiet bash "$path" "$@"
 }
 
 allowlist_count() {
@@ -155,23 +140,21 @@ allowlist_count() {
 }
 
 step_ssh_guard() {
-  local script="$1" allowlist="${2:-}" public_key="${3:-}" allow_count key_success="" key_failed=""
+  local script="$1" allowlist="${2:-}" public_key="${3:-}" allow_count key_detail=""
   local -a args
-  [ "$#" -ge 2 ] && [ "$#" -le 3 ] || fail "step_ssh_guard 需要脚本、白名单和可选公钥"
-  [ -n "$allowlist" ] || fail "SSH 白名单为空"
+  [ "$#" -ge 2 ] && [ "$#" -le 3 ] || fail "step_ssh_guard requires script, allowlist, and optional public key"
+  [ -n "$allowlist" ] || fail "ssh allowlist empty"
 
   ensure_packages openssh-server nftables
   args=(--reset config=ssh "allow=${allowlist}")
   if [ -n "$public_key" ]; then
     args+=("key=${public_key}")
-    key_success=" | key=applied"
-    key_failed=" | key=failed"
+    key_detail=" | root_key=installed"
   fi
 
   allow_count="$(allowlist_count "$allowlist")"
-  log "ssh: applying | allow=${allow_count}"
-  provider_run "ssh guard" "$script" "${args[@]}" || fail "SSH 防护配置失败 | allow=${allow_count}${key_failed}"
-  log "ssh: applied | allow=${allow_count}${key_success}"
+  provider_run "$script" "${args[@]}" || fail "ssh guard failed | trusted_sources=${allow_count}"
+  log "ssh guard enabled | trusted_sources=${allow_count}${key_detail}"
 }
 
 update_hosts() {
@@ -186,12 +169,12 @@ step_hostname() {
   local target="$1" current
   current="$(hostname 2>/dev/null || true)"
   if [ "$current" = "$target" ] && grep -Eq "^127\\.0\\.1\\.1[[:space:]]+${target}$" /etc/hosts 2>/dev/null; then
-    log "hostname: skipped | target=${target}"
+    log "hostname configured | name=${target}"
     return 0
   fi
-  run_quiet "hostname" hostnamectl set-hostname "$target" || fail "hostname 设置失败"
-  run_quiet "hosts" update_hosts "$target" || fail "/etc/hosts 更新失败"
-  log "hostname: applied | target=${target}"
+  run_quiet hostnamectl set-hostname "$target" || fail "hostname configuration failed | name=${target}"
+  run_quiet update_hosts "$target" || fail "hosts file update failed | name=${target}"
+  log "hostname configured | name=${target}"
 }
 
 current_timezone() {
@@ -201,25 +184,25 @@ current_timezone() {
 step_time_sync() {
   local timezone="${1:-}" service="${2:-}" old_service
   local old_services=(systemd-timesyncd.service ntp.service ntpsec.service openntpd.service)
-  [ "$#" -eq 2 ] || fail "step_time_sync 需要时区和时间同步服务"
-  [ "$service" = "chrony" ] || fail "不支持的时间同步服务: ${service}"
+  [ "$#" -eq 2 ] || fail "step_time_sync requires timezone and service"
+  [ "$service" = "chrony" ] || fail "unsupported time sync service | service=${service}"
 
   ensure_packages chrony
   if [ "$(current_timezone)" != "$timezone" ]; then
-    run_quiet "timezone" timedatectl set-timezone "$timezone" || fail "时区设置失败: ${timezone}"
+    run_quiet timedatectl set-timezone "$timezone" || fail "timezone configuration failed | timezone=${timezone}"
   fi
 
   for old_service in "${old_services[@]}"; do
     systemctl disable --now "$old_service" >/dev/null 2>&1 || true
   done
 
-  run_quiet "chrony enable" systemctl enable --now chrony || fail "chrony 启动失败"
-  [ "$(current_timezone)" = "$timezone" ] || fail "时区校验失败: ${timezone}"
-  service_active chrony || fail "chrony 未运行"
+  run_quiet systemctl enable --now chrony || fail "time sync start failed | service=chrony"
+  [ "$(current_timezone)" = "$timezone" ] || fail "timezone verification failed | timezone=${timezone}"
+  service_active chrony || fail "time sync inactive | service=chrony"
   for old_service in "${old_services[@]}"; do
-    service_active "$old_service" && fail "旧时间同步服务仍在运行: ${old_service}"
+    service_active "$old_service" && fail "old time sync still active | service=${old_service}"
   done
-  log "time: applied | timezone=${timezone} | sync=chrony"
+  log "time sync active | timezone=${timezone} | service=chrony"
 }
 
 proxy_meta() {
@@ -246,62 +229,63 @@ step_proxy() {
   local type="$1" script="$2" service config uninstall port_key port detail
   local protocol anytls_port ss_port
   shift 2
-  IFS='|' read -r service config uninstall port_key <<< "$(proxy_meta "$type")" || fail "未知代理类型: $type"
+  IFS='|' read -r service config uninstall port_key <<< "$(proxy_meta "$type")" || fail "unknown proxy type | type=${type}"
 
   if [ "$type" = "singbox" ]; then
     protocol="$(arg_value --protocol "$@" || true)"
     anytls_port="$(arg_value --anytls-port "$@" || true)"
     ss_port="$(arg_value --ss-port "$@" || true)"
     port="${anytls_port:-$ss_port}"
-    [ -n "$port" ] || fail "singbox 缺少端口参数: --anytls-port 或 --ss-port"
-    detail="protocol=${protocol:-unknown}"
-    [ -z "$anytls_port" ] || detail="${detail} | anytls=${anytls_port}"
-    [ -z "$ss_port" ] || detail="${detail} | ss=${ss_port}"
-    provider_run "proxy apply ${type}" "$script" "$@" || fail "${type} 配置失败"
-    [ -z "$anytls_port" ] || service_usable "$service" "$config" "$anytls_port" || fail "${type} AnyTLS 配置后不可用"
-    [ -z "$ss_port" ] || service_usable "$service" "$config" "$ss_port" || fail "${type} Shadowsocks 配置后不可用"
-    log "proxy: applied | type=${type} | ${detail}"
+    [ -n "$port" ] || fail "proxy port missing | service=sing-box"
+    detail="protocols=${protocol:-unknown}"
+    if [ -n "$anytls_port" ] && [ -n "$ss_port" ]; then
+      detail="${detail} | ports=anytls:${anytls_port},shadowsocks:${ss_port}"
+    elif [ -n "$anytls_port" ]; then
+      detail="${detail} | ports=anytls:${anytls_port}"
+    else
+      detail="${detail} | ports=shadowsocks:${ss_port}"
+    fi
+    provider_run "$script" "$@" || fail "proxy configuration failed | service=sing-box"
+    [ -z "$anytls_port" ] || service_usable "$service" "$config" "$anytls_port" || fail "proxy inactive | service=sing-box | protocol=anytls"
+    [ -z "$ss_port" ] || service_usable "$service" "$config" "$ss_port" || fail "proxy inactive | service=sing-box | protocol=shadowsocks"
+    log "proxy active | service=${service%.service} | ${detail}"
     return 0
   elif [ "$type" = "shadss" ]; then
-    port="$(arg_value "$port_key" "$@")" || fail "${type} 缺少端口参数: ${port_key}"
-    detail="port=${port}"
-    provider_run "proxy apply ${type}" "$script" "$@" || fail "${type} 配置失败"
-    service_usable "$service" "$config" "$port" || fail "${type} 配置后不可用"
-    log "proxy: applied | type=${type} | ${detail}"
+    port="$(arg_value "$port_key" "$@")" || fail "proxy port missing | service=${service%.service}"
+    provider_run "$script" "$@" || fail "proxy configuration failed | service=${service%.service}"
+    service_usable "$service" "$config" "$port" || fail "proxy inactive | service=${service%.service}"
+    log "proxy active | service=${service%.service} | port=${port}"
     return 0
   else
-    port="$(arg_value "$port_key" "$@")" || fail "${type} 缺少端口参数: ${port_key}"
-    detail="port=${port}"
+    port="$(arg_value "$port_key" "$@")" || fail "proxy port missing | service=${service%.service}"
   fi
 
   if service_usable "$service" "$config" "$port"; then
-    log "proxy: skipped | type=${type} | ${detail}"
+    log "proxy active | service=${service%.service} | port=${port}"
     return 0
   fi
 
   if service_port_mismatch "$service" "$config" "$port"; then
-    provider_run "proxy uninstall ${type}" "$script" "$uninstall" || fail "${type} 卸载失败"
-    log "proxy: service removed | type=${type} | reason=port-mismatch | port=${port}"
+    provider_run "$script" "$uninstall" || fail "proxy removal failed | service=${service%.service}"
   elif service_exists "$service" || [ -e "$config" ]; then
-    provider_run "proxy uninstall ${type}" "$script" "$uninstall" || fail "${type} 卸载失败"
-    log "proxy: service removed | type=${type} | reason=stale"
+    provider_run "$script" "$uninstall" || fail "proxy removal failed | service=${service%.service}"
   fi
 
-  provider_run "proxy install ${type}" "$script" "$@" || fail "${type} 安装失败"
-  service_usable "$service" "$config" "$port" || fail "${type} 安装后不可用"
-  log "proxy: installed | type=${type} | ${detail}"
+  provider_run "$script" "$@" || fail "proxy installation failed | service=${service%.service}"
+  service_usable "$service" "$config" "$port" || fail "proxy inactive | service=${service%.service}"
+  log "proxy active | service=${service%.service} | port=${port}"
 }
 
 step_proxy_remove() {
-  local type="$1" script="$2"
+  local type="$1" script="$2" service config uninstall port_key
   shift 2
-  [ "$#" -gt 0 ] || fail "step_proxy_remove 缺少卸载参数: ${type}"
-  provider_run "proxy remove ${type}" "$script" "$@" || fail "${type} 删除失败"
+  [ "$#" -gt 0 ] || fail "step_proxy_remove requires removal arguments | type=${type}"
+  IFS='|' read -r service config uninstall port_key <<< "$(proxy_meta "$type")" || fail "unknown proxy type | type=${type}"
+  provider_run "$script" "$@" || fail "proxy removal failed | service=${service%.service}"
   if [ -e "${PROVIDER_SCRIPT_DIR}/${script}" ]; then
-    rm -f "${PROVIDER_SCRIPT_DIR}/${script}" || fail "代理辅助脚本清理失败: ${script}"
-    log "proxy: script removed | script=${script} | reason=unused"
+    rm -f "${PROVIDER_SCRIPT_DIR}/${script}" || fail "proxy script cleanup failed | script=${script}"
   fi
-  log "proxy: removed | type=${type}"
+  log "proxy cleared | service=${service%.service}"
 }
 
 kernel_needs_ipv6_disabled() {
@@ -329,16 +313,15 @@ step_kernel() {
   local script="$1" file="/etc/sysctl.d/99-network-kernel.conf"
   shift
   if kernel_config_matches "$@"; then
-    log "kernel: skipped"
+    log "kernel tuning configured"
     return 0
   fi
   if [ -f "$file" ]; then
-    provider_run "kernel uninstall" "$script" -u || fail "kernel 旧配置清理失败"
-    log "kernel: removed | reason=stale"
+    provider_run "$script" -u || fail "kernel tuning cleanup failed"
   fi
-  provider_run "kernel apply" "$script" "$@" || fail "kernel 配置失败"
-  kernel_config_matches "$@" || fail "kernel 配置后校验失败"
-  log "kernel: applied"
+  provider_run "$script" "$@" || fail "kernel tuning configuration failed"
+  kernel_config_matches "$@" || fail "kernel tuning verification failed"
+  log "kernel tuning configured"
 }
 
 dns_meta() {
@@ -361,8 +344,7 @@ cleanup_other_dns_script() {
   local script
   script="$(other_dns_script "$1")" || return 0
   if [ -e "${PROVIDER_SCRIPT_DIR}/${script}" ]; then
-    rm -f "${PROVIDER_SCRIPT_DIR}/${script}" || fail "DNS 辅助脚本清理失败: ${script}"
-    log "dns: script removed | script=${script} | reason=unused"
+    rm -f "${PROVIDER_SCRIPT_DIR}/${script}" || fail "dns script cleanup failed | script=${script}"
   fi
 }
 
@@ -383,35 +365,32 @@ remove_other_dns() {
 
   IFS='|' read -r other_service other_config other_uninstall other_port other_binary <<< "$(dns_meta "$other")" || return 0
   if service_exists "$other_service" || [ -e "$other_config" ] || [ -e "$other_binary" ]; then
-    provider_run "dns uninstall ${other}" "$other_script" "$other_uninstall" || fail "${other} 卸载失败"
-    log "dns: service removed | type=${other} | reason=conflict"
+    provider_run "$other_script" "$other_uninstall" || fail "dns resolver removal failed | service=${other_service%.service}"
   fi
 }
 
 step_dns() {
   local type="$1" script="$2" service config uninstall port binary
   shift 2
-  IFS='|' read -r service config uninstall port binary <<< "$(dns_meta "$type")" || fail "未知 DNS 类型: $type"
+  IFS='|' read -r service config uninstall port binary <<< "$(dns_meta "$type")" || fail "unknown dns resolver | service=${type}"
 
   if service_usable "$service" "$config" "$port"; then
     cleanup_other_dns_script "$type"
-    log "dns: skipped | type=${type}"
+    log "dns resolver active | service=${service%.service}"
     return 0
   fi
 
   if service_port_mismatch "$service" "$config" "$port"; then
-    provider_run "dns uninstall ${type}" "$script" "$uninstall" || fail "${type} 卸载失败"
-    log "dns: service removed | type=${type} | reason=port-mismatch | port=${port}"
+    provider_run "$script" "$uninstall" || fail "dns resolver removal failed | service=${service%.service}"
   elif service_exists "$service" || [ -e "$config" ] || [ -e "$binary" ]; then
-    provider_run "dns uninstall ${type}" "$script" "$uninstall" || fail "${type} 卸载失败"
-    log "dns: service removed | type=${type} | reason=stale"
+    provider_run "$script" "$uninstall" || fail "dns resolver removal failed | service=${service%.service}"
   fi
 
   remove_other_dns "$type"
-  provider_run "dns install ${type}" "$script" "$@" || fail "${type} 安装失败"
-  service_usable "$service" "$config" "$port" || fail "${type} 安装后不可用"
+  provider_run "$script" "$@" || fail "dns resolver installation failed | service=${service%.service}"
+  service_usable "$service" "$config" "$port" || fail "dns resolver inactive | service=${service%.service}"
   cleanup_other_dns_script "$type"
-  log "dns: installed | type=${type}"
+  log "dns resolver active | service=${service%.service}"
 }
 
 step_traffic() {
@@ -420,21 +399,21 @@ step_traffic() {
   ensure_packages nftables
   case "$mode" in
     forward)
-      provider_run "nftables replace" "$script" -r "$@" || fail "nftables 替换失败"
-      log "traffic: applied | mode=forward | action=replace"
+      provider_run "$script" -r "$@" || fail "traffic rules load failed | mode=forward"
+      log "traffic rules loaded | mode=forward"
       ;;
     protect)
-      provider_run "nftables protect" "$script" --protect on || fail "nftables 防护配置失败"
-      log "traffic: applied | mode=protect"
+      provider_run "$script" --protect on || fail "traffic rules load failed | mode=protect"
+      log "traffic rules loaded | mode=protect"
       ;;
     *)
-      fail "未知 traffic 模式: $mode"
+      fail "unknown traffic mode | mode=${mode}"
       ;;
   esac
 }
 
 run_plan() {
-  [ -r "$PLAN_FILE" ] || fail "无法读取 plan: $PLAN_FILE"
+  [ -r "$PLAN_FILE" ] || fail "plan unreadable | file=${PLAN_FILE}"
   # shellcheck disable=SC1090
   source "$PLAN_FILE"
 }
@@ -452,7 +431,7 @@ main() {
   require_apt
   ensure_packages iproute2
   run_plan
-  log "workflow: done"
+  [ -z "$LOG_FILE" ] || rm -f "$LOG_FILE"
 }
 
 main "$@"
