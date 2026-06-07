@@ -224,8 +224,8 @@ step_time_sync() {
 
 proxy_meta() {
   case "$1" in
-    shadss|ss2022) printf 'shadowsocks.service|/etc/shadowsocks/config.json|-u|-p' ;;
-    singbox) printf 'sing-box.service|/etc/sing-box/config.json|--uninstall|--anytls-port' ;;
+    shadss) printf 'shadowsocks.service|/etc/shadowsocks/config.json|-u|-p' ;;
+    singbox) printf 'sing-box.service|/etc/sing-box/config.json|--uninstall|' ;;
     reality) printf 'xray.service|/usr/local/etc/xray/config.json|--uninstall|--reality-port' ;;
     snell) printf 'snell.service|/etc/snell/snell.conf|-u|-p' ;;
     *) return 1 ;;
@@ -240,15 +240,6 @@ service_usable() {
 service_port_mismatch() {
   local service="$1" config="$2" port="$3"
   service_active "$service" && [ -e "$config" ] && ! service_port_ready "$service" "$port"
-}
-
-cleanup_proxy_script() {
-  local script="$1"
-  [ -n "$script" ] || return 0
-  if [ -e "${PROVIDER_SCRIPT_DIR}/${script}" ]; then
-    rm -f "${PROVIDER_SCRIPT_DIR}/${script}" || fail "代理辅助脚本清理失败: ${script}"
-    log "proxy: script removed | script=${script} | reason=unused"
-  fi
 }
 
 step_proxy() {
@@ -271,7 +262,7 @@ step_proxy() {
     [ -z "$ss_port" ] || service_usable "$service" "$config" "$ss_port" || fail "${type} Shadowsocks 配置后不可用"
     log "proxy: applied | type=${type} | ${detail}"
     return 0
-  elif [ "$type" = "shadss" ] || [ "$type" = "ss2022" ]; then
+  elif [ "$type" = "shadss" ]; then
     port="$(arg_value "$port_key" "$@")" || fail "${type} 缺少端口参数: ${port_key}"
     detail="port=${port}"
     provider_run "proxy apply ${type}" "$script" "$@" || fail "${type} 配置失败"
@@ -302,12 +293,14 @@ step_proxy() {
 }
 
 step_proxy_remove() {
-  local type="$1" script="$2" service config uninstall port_key
+  local type="$1" script="$2"
   shift 2
   [ "$#" -gt 0 ] || fail "step_proxy_remove 缺少卸载参数: ${type}"
-  IFS='|' read -r service config uninstall port_key <<< "$(proxy_meta "$type")" || fail "未知代理类型: $type"
   provider_run "proxy remove ${type}" "$script" "$@" || fail "${type} 删除失败"
-  cleanup_proxy_script "$script"
+  if [ -e "${PROVIDER_SCRIPT_DIR}/${script}" ]; then
+    rm -f "${PROVIDER_SCRIPT_DIR}/${script}" || fail "代理辅助脚本清理失败: ${script}"
+    log "proxy: script removed | script=${script} | reason=unused"
+  fi
   log "proxy: removed | type=${type}"
 }
 
