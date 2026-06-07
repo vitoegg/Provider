@@ -1,1076 +1,922 @@
 #!/bin/bash
-################################################################################
-# AnyTLS Installation Script
-# This script installs and manages AnyTLS service using Singbox.
-# It provides friendly output messages and supports both CLI and interactive modes.
-################################################################################
 
-# Color definitions
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'     # No Color
+NC='\033[0m'
 BOLD='\033[1m'
 
-# Default port range
 DEFAULT_PORT_START=50000
 DEFAULT_PORT_END=60000
+DEFAULT_PADDING_SCHEME="stop=3|0=30-30|1=140-320|2=420-780,c,780-1400"
+SS_METHOD="2022-blake3-aes-128-gcm"
 
-################################################################################
-# Logging functions with timestamp and category
-################################################################################
+ARCH=""
+PROTOCOLS=""
+ANYTLS_ENABLED=0
+SS_ENABLED=0
+
+SINGBOX_VERSION=""
+UPDATE_REQUESTED=0
+UNINSTALL_REQUESTED=0
+
+ANYTLS_PORT=""
+ANYTLS_PORT_SET=0
+ANYTLS_PASSWORD=""
+ANYTLS_DOMAIN=""
+ANYTLS_SCHEME=""
+ANYTLS_CERT_MODE=""
+ANYTLS_TOKEN=""
+ANYTLS_CERT_PATH=""
+ANYTLS_KEY_PATH=""
+
+SS_PORT=""
+SS_PORT_SET=0
+SS_PASSWORD=""
+
+USED_PORTS=()
+
 log_info() {
     echo -e "$(date '+%Y-%m-%d %H:%M:%S') [INFO] $*"
 }
 
 log_success() {
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') [SUCCESS] $*"
-}
-
-log_error() {
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] $*" >&2
+    echo -e "$(date '+%Y-%m-%d %H:%M:%S') [SUCCESS] ${GREEN}$*${NC}"
 }
 
 log_warning() {
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') [WARNING] $*"
+    echo -e "$(date '+%Y-%m-%d %H:%M:%S') [WARNING] ${YELLOW}$*${NC}"
+}
+
+log_error() {
+    echo -e "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] ${RED}$*${NC}" >&2
 }
 
 print_header() {
     echo -e "\n${BOLD}=== $1 ===${NC}"
 }
 
-################################################################################
-# Check root privileges
-################################################################################
-if [[ $EUID -ne 0 ]]; then
-    log_error "This script must be run as root!"
-    exit 1
-fi
+show_usage() {
+    local name
+    name="$(basename "$0")"
+    cat << EOF
+用法:
+  bash ${name} --protocol anytls|shadowsocks|anytls,shadowsocks [OPTIONS]
 
-################################################################################
-# Cleanup function for temporary files
-################################################################################
+协议:
+  --protocol LIST
+
+AnyTLS:
+  --anytls-port PORT
+  --anytls-password PASS
+  --anytls-domain DOMAIN
+  --anytls-scheme SCHEME
+  --anytls-cert-mode acme|manual
+  --anytls-token TOKEN
+  --anytls-cert-path PATH
+  --anytls-key-path PATH
+
+Shadowsocks:
+  --ss-port PORT
+  --ss-password PASSWORD
+
+全局:
+  --version VERSION
+  --update
+  --uninstall
+  -h, --help
+EOF
+}
+
 cleanup_temp_files() {
-    local temp_file="/tmp/sing-box.deb"
-    if [[ -f "$temp_file" ]]; then
-        rm -f "$temp_file"
-        log_info "Cleaned up temporary files on exit"
+    rm -f /tmp/sing-box.deb /tmp/sing-box-update.tar.gz /tmp/sing-box-binary-backup 2>/dev/null
+    rm -rf /tmp/sing-box-update 2>/dev/null
+}
+trap cleanup_temp_files EXIT
+
+require_root() {
+    if [[ $EUID -ne 0 ]]; then
+        log_error "请使用 root 权限执行。"
+        exit 1
     fi
 }
 
-# Set trap to cleanup on script exit
-trap cleanup_temp_files EXIT
+need_value() {
+    local option="$1"
+    local value="${2:-}"
+    if [[ -z "$value" ]]; then
+        log_error "$option 缺少参数值。"
+        exit 1
+    fi
+    printf '%s' "$value"
+}
 
-################################################################################
-# Global variables for configuration
-################################################################################
-PORT=""
-PASSWORD=""
-DOMAIN=""
-SINGBOX_VERSION=""
-TOKEN=""
-# Certificate mode: "acme" (default) or "manual"
-CERT_MODE=""
-# Manual certificate paths
-CERT_PATH=""
-KEY_PATH=""
-# Padding scheme (pipe-separated string, e.g., "stop=3|0=30-30|1=140-320")
-PADDING_SCHEME=""
-
-################################################################################
-# Command-line arguments parser
-################################################################################
 parse_args() {
-    local uninstall_requested=false
-    
     while [[ $# -gt 0 ]]; do
-        key="$1"
-        case $key in
-            --port)
-                PORT="$2"
+        case "$1" in
+            --protocol)
+                PROTOCOLS="$(need_value "$1" "${2:-}")"
                 shift 2
                 ;;
-            --password)
-                PASSWORD="$2"
+            --protocol=*)
+                PROTOCOLS="${1#*=}"
+                shift
+                ;;
+            --anytls-port)
+                ANYTLS_PORT="$(need_value "$1" "${2:-}")"
+                ANYTLS_PORT_SET=1
                 shift 2
                 ;;
-            --domain)
-                DOMAIN="$2"
+            --anytls-port=*)
+                ANYTLS_PORT="${1#*=}"
+                ANYTLS_PORT_SET=1
+                shift
+                ;;
+            --anytls-password)
+                ANYTLS_PASSWORD="$(need_value "$1" "${2:-}")"
                 shift 2
+                ;;
+            --anytls-password=*)
+                ANYTLS_PASSWORD="${1#*=}"
+                shift
+                ;;
+            --anytls-domain)
+                ANYTLS_DOMAIN="$(need_value "$1" "${2:-}")"
+                shift 2
+                ;;
+            --anytls-domain=*)
+                ANYTLS_DOMAIN="${1#*=}"
+                shift
+                ;;
+            --anytls-scheme)
+                ANYTLS_SCHEME="$(need_value "$1" "${2:-}")"
+                shift 2
+                ;;
+            --anytls-scheme=*)
+                ANYTLS_SCHEME="${1#*=}"
+                shift
+                ;;
+            --anytls-cert-mode)
+                ANYTLS_CERT_MODE="$(need_value "$1" "${2:-}")"
+                shift 2
+                ;;
+            --anytls-cert-mode=*)
+                ANYTLS_CERT_MODE="${1#*=}"
+                shift
+                ;;
+            --anytls-token)
+                ANYTLS_TOKEN="$(need_value "$1" "${2:-}")"
+                shift 2
+                ;;
+            --anytls-token=*)
+                ANYTLS_TOKEN="${1#*=}"
+                shift
+                ;;
+            --anytls-cert-path)
+                ANYTLS_CERT_PATH="$(need_value "$1" "${2:-}")"
+                shift 2
+                ;;
+            --anytls-cert-path=*)
+                ANYTLS_CERT_PATH="${1#*=}"
+                shift
+                ;;
+            --anytls-key-path)
+                ANYTLS_KEY_PATH="$(need_value "$1" "${2:-}")"
+                shift 2
+                ;;
+            --anytls-key-path=*)
+                ANYTLS_KEY_PATH="${1#*=}"
+                shift
+                ;;
+            --ss-port)
+                SS_PORT="$(need_value "$1" "${2:-}")"
+                SS_PORT_SET=1
+                shift 2
+                ;;
+            --ss-port=*)
+                SS_PORT="${1#*=}"
+                SS_PORT_SET=1
+                shift
+                ;;
+            --ss-password)
+                SS_PASSWORD="$(need_value "$1" "${2:-}")"
+                shift 2
+                ;;
+            --ss-password=*)
+                SS_PASSWORD="${1#*=}"
+                shift
                 ;;
             --version)
-                SINGBOX_VERSION="$2"
+                SINGBOX_VERSION="$(need_value "$1" "${2:-}")"
                 shift 2
                 ;;
-            --token)
-                TOKEN="$2"
-                shift 2
-                ;;
-            --cert-mode)
-                CERT_MODE="$2"
-                if [[ "$CERT_MODE" != "acme" && "$CERT_MODE" != "manual" ]]; then
-                    log_error "Invalid cert-mode: $CERT_MODE. Must be 'acme' or 'manual'."
-                    exit 1
-                fi
-                shift 2
-                ;;
-            --cert-path)
-                CERT_PATH="$2"
-                shift 2
-                ;;
-            --key-path)
-                KEY_PATH="$2"
-                shift 2
-                ;;
-            -s|--scheme)
-                PADDING_SCHEME="$2"
-                shift 2
-                ;;
-            -u|--uninstall)
-                uninstall_requested=true
+            --version=*)
+                SINGBOX_VERSION="${1#*=}"
                 shift
                 ;;
             --update)
-                update_singbox
-                exit $?
+                UPDATE_REQUESTED=1
+                shift
+                ;;
+            -u|--uninstall)
+                UNINSTALL_REQUESTED=1
+                shift
                 ;;
             -h|--help)
                 show_usage
                 exit 0
                 ;;
             *)
-                log_error "Unknown option: $1"
+                log_error "未知参数: $1"
                 show_usage
                 exit 1
                 ;;
         esac
     done
-    
-    # Handle uninstall request
-    if [[ "$uninstall_requested" == true ]]; then
-        uninstall_service
-        exit 0
-    fi
-    
-    # Validate certificate mode parameters
-    if [[ -n "$CERT_PATH" || -n "$KEY_PATH" ]]; then
-        # If cert-path or key-path is provided, auto-set to manual mode
-        if [[ -z "$CERT_MODE" ]]; then
-            CERT_MODE="manual"
-        elif [[ "$CERT_MODE" == "acme" ]]; then
-            log_error "Cannot use --cert-path or --key-path with --cert-mode acme"
-            exit 1
-        fi
-    fi
-    
-    if [[ -n "$TOKEN" && "$CERT_MODE" == "manual" ]]; then
-        log_error "Cannot use --token with --cert-mode manual"
+}
+
+parse_protocols() {
+    local protocol
+
+    if [[ -z "$PROTOCOLS" ]]; then
+        log_error "缺少 --protocol。"
+        show_usage
         exit 1
     fi
-}
 
-################################################################################
-# Show usage information
-################################################################################
-show_usage() {
-    echo "Usage: $0 [OPTIONS]"
-    echo ""
-    echo "Configuration Options:"
-    echo "  --port PORT             Specify AnyTLS port (default: auto-generated 50000-60000)"
-    echo "  --password PASS         Specify AnyTLS password (default: auto-generated)"
-    echo "  --domain DOMAIN         Specify domain name (required if not provided interactively)"
-    echo "  --version VERSION       Specify Singbox version to install (e.g., v1.8.0 or 1.8.0)"
-    echo "  -s, --scheme SCHEME     Specify padding scheme (pipe '|' separated values)"
-    echo "                          Default: stop=3|0=30-30|1=140-320|2=420-780,c,780-1400"
-    echo ""
-    echo "Certificate Options (mutually exclusive modes):"
-    echo "  --cert-mode MODE        Certificate mode: 'acme' (auto-generate) or 'manual' (use existing)"
-    echo "  --token TOKEN           [ACME mode] Cloudflare API Token for DNS-01 certificate challenge"
-    echo "  --cert-path PATH        [Manual mode] Path to TLS certificate file"
-    echo "  --key-path PATH         [Manual mode] Path to TLS private key file"
-    echo ""
-    echo "Management Options:"
-    echo "  --update                Update Singbox to the latest version"
-    echo "  -u, --uninstall         Uninstall Singbox service and remove configuration"
-    echo "  -h, --help              Show this help message"
-    echo ""
-    echo "Examples:"
-    echo "  # ACME mode: Auto-generate certificate using Cloudflare DNS-01 challenge"
-    echo "  $0 --cert-mode acme --domain api.example.com --token YOUR_CF_TOKEN"
-    echo "  $0 --domain api.example.com --token YOUR_CF_TOKEN"
-    echo ""
-    echo "  # Manual mode: Use existing certificate files"
-    echo "  $0 --cert-mode manual --domain api.example.com --cert-path /etc/ssl/certs/cert.crt --key-path /etc/ssl/certs/cert.key"
-    echo "  $0 --domain api.example.com --cert-path /etc/ssl/certs/cert.crt --key-path /etc/ssl/certs/cert.key"
-    echo ""
-    echo "  # Install with specific port and password"
-    echo "  $0 --port 52555 --password mypass123 --domain api.example.com --token YOUR_CF_TOKEN"
-    echo ""
-    echo "  # Install with specific version"
-    echo "  $0 --domain api.example.com --version v1.8.0 --token YOUR_CF_TOKEN"
-    echo ""
-    echo "  # Install with custom padding scheme"
-    echo "  $0 --domain api.example.com --token YOUR_CF_TOKEN -s 'stop=5|0=50-50|1=200-400'"
-    echo ""
-    echo "  # Update or Uninstall"
-    echo "  $0 --update"
-    echo "  $0 --uninstall"
-    echo ""
-    echo "  # Interactive mode (no parameters)"
-    echo "  $0"
-}
-
-################################################################################
-# Detect system architecture
-################################################################################
-detect_arch() {
-    print_header "Detecting System Architecture"
-    local ARCH_RAW=$(uname -m)
-    case "${ARCH_RAW}" in
-        'x86_64')
-            ARCH='amd64'
-            ;;
-        'x86' | 'i686' | 'i386')
-            ARCH='386'
-            ;;
-        'aarch64' | 'arm64')
-            ARCH='arm64'
-            ;;
-        'armv7l')
-            ARCH='armv7'
-            ;;
-        's390x')
-            ARCH='s390x'
-            ;;
-        *)
-            log_error "Unsupported architecture: ${ARCH_RAW}"
-            exit 1
-            ;;
-    esac
-    log_success "Detected architecture: $ARCH"
-}
-
-################################################################################
-# Install required packages
-################################################################################
-install_packages() {
-    print_header "Installing Required Packages"
-    local packages_needed=(wget dpkg jq openssl tar)
-    
-    if command -v apt-get >/dev/null 2>&1; then
-        log_info "Updating package list..."
-        # Update package list silently
-        DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1
-        
-        for pkg in "${packages_needed[@]}"; do
-            if dpkg -s "$pkg" >/dev/null 2>&1; then
-                log_info "Dependency exists: $pkg"
-            else
-                log_info "Installing dependency: $pkg"
-                # Install packages silently with automatic yes and no prompts
-                DEBIAN_FRONTEND=noninteractive apt-get install -y "$pkg" -qq >/dev/null 2>&1
-                if [[ $? -eq 0 ]]; then
-                    log_success "Installed dependency: $pkg"
-                else
-                    log_error "Failed to install dependency: $pkg"
-                    exit 1
-                fi
-            fi
-        done
-    else
-        log_error "This script requires Debian/Ubuntu system with apt package manager!"
-        log_error "sing-box .deb packages are only available for Debian-based systems."
-        exit 1
-    fi
-    log_success "Required packages installed successfully"
-}
-
-################################################################################
-# Generate random port excluding digits "4"
-################################################################################
-generate_port() {
-    local start="$1"
-    local end="$2"
-    while true; do
-        local port
-        port=$(shuf -i "$start"-"$end" -n 1)
-        if [[ ! "$port" =~ "4" ]]; then
-            echo "$port"
-            break
-        fi
-    done
-}
-
-################################################################################
-# Get server's IPv4 address
-################################################################################
-get_ipv4_address() {
-    local ip
-    ip=$(wget -qO- --timeout=5 --tries=2 https://api.ipify.org 2>/dev/null)
-    if [[ -z "$ip" ]]; then
-        echo "Unable to get IP address"
-    else
-        echo "$ip"
-    fi
-}
-
-################################################################################
-# Get current sing-box version
-################################################################################
-get_current_version() {
-    if command -v sing-box >/dev/null 2>&1; then
-        sing-box version 2>/dev/null | head -n1 | awk '{print $3}' | sed 's/^v//'
-    else
-        echo ""
-    fi
-}
-
-################################################################################
-# Compare two version strings
-# Returns: 0 if equal, 1 if version1 > version2, 2 if version1 < version2
-################################################################################
-compare_versions() {
-    local version1="$1"
-    local version2="$2"
-    
-    # Remove 'v' prefix if present
-    version1="${version1#v}"
-    version2="${version2#v}"
-    
-    if [[ "$version1" == "$version2" ]]; then
-        return 0
-    fi
-    
-    # Split versions into arrays
-    IFS='.' read -ra ver1_parts <<< "$version1"
-    IFS='.' read -ra ver2_parts <<< "$version2"
-    
-    # Compare each part
-    local max_parts=$((${#ver1_parts[@]} > ${#ver2_parts[@]} ? ${#ver1_parts[@]} : ${#ver2_parts[@]}))
-    
-    for ((i=0; i<max_parts; i++)); do
-        local part1=${ver1_parts[i]:-0}
-        local part2=${ver2_parts[i]:-0}
-        
-        # Extract numeric part (handle pre-release versions)
-        part1=$(echo "$part1" | sed 's/[^0-9].*//')
-        part2=$(echo "$part2" | sed 's/[^0-9].*//')
-        
-        if [[ $part1 -gt $part2 ]]; then
-            return 1
-        elif [[ $part1 -lt $part2 ]]; then
-            return 2
-        fi
-    done
-    
-    return 0
-}
-
-
-
-################################################################################
-# Download and install Singbox
-################################################################################
-install_singbox() {
-    print_header "Installing Singbox"
-    
-    # Check if Singbox is already installed and running
-    if systemctl is-active --quiet sing-box 2>/dev/null; then
-        log_warning "Singbox service is already installed and running."
-        log_warning "If you want to reinstall, please uninstall first."
-        return 0
-    fi
-    
-    # Determine version to install
-    local target_version
-    if [[ -n "$SINGBOX_VERSION" ]]; then
-        # Use specified version
-        target_version="$SINGBOX_VERSION"
-        # Ensure version starts with 'v' prefix for consistency
-        if [[ ! "$target_version" =~ ^v ]]; then
-            target_version="v$target_version"
-        fi
-        log_info "Using specified version: $target_version"
-    else
-        # Get latest version online
-        log_info "Fetching latest version from GitHub..."
-        target_version=$(wget -qO- --timeout=10 --tries=3 https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null | jq -r .tag_name)
-        if [[ -z "$target_version" ]]; then
-            log_error "Failed to retrieve Singbox release version"
-            exit 1
-        fi
-        log_info "Latest available version: $target_version"
-    fi
-    
-    log_info "Installing Singbox version: $target_version"
-    
-    # Download .deb package
-    local download_url="https://github.com/SagerNet/sing-box/releases/download/${target_version}/sing-box_${target_version#v}_linux_${ARCH}.deb"
-    local temp_file="/tmp/sing-box.deb"
-    
-    log_info "Download URL: $download_url"
-    log_info "Downloading Singbox package..."
-    if ! wget --no-check-certificate -q -O "$temp_file" "$download_url"; then
-        log_error "Failed to download Singbox from: $download_url"
-        log_error "Please check if the URL is correct and accessible"
-        exit 1
-    fi
-    
-    # Install package
-    log_info "Installing Singbox package..."
-    if ! DEBIAN_FRONTEND=noninteractive dpkg -i "$temp_file" >/dev/null 2>&1; then
-        log_error "Failed to install Singbox package!"
-        # Clean up on failure
-        rm -f "$temp_file"
-        exit 1
-    fi
-    
-    # Clean up temporary file
-    rm -f "$temp_file"
-    log_info "Cleaned up temporary files"
-    
-    log_success "Singbox installation completed"
-}
-
-################################################################################
-# Update Singbox (Binary Replacement)
-################################################################################
-update_singbox() {
-    print_header "Updating Singbox (Binary Replacement)"
-    
-    # Check if Singbox is installed
-    if ! command -v sing-box >/dev/null 2>&1; then
-        log_error "Singbox is not installed. Please install it first."
-        return 1
-    fi
-    
-    # Detect architecture
-    detect_arch
-    
-    # Ensure required packages are installed
-    install_packages
-    
-    # Get current version
-    local current_version
-    current_version=$(get_current_version)
-    if [[ -z "$current_version" ]]; then
-        log_error "Failed to get current Singbox version"
-        return 1
-    fi
-    log_info "Current version: $current_version"
-    
-    # Get latest version
-    local latest_version
-    latest_version=$(wget -qO- --timeout=10 --tries=3 https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null | jq -r .tag_name)
-    if [[ -z "$latest_version" ]]; then
-        log_error "Failed to retrieve latest Singbox version"
-        return 1
-    fi
-    log_info "Latest version: $latest_version"
-    
-    # Compare versions
-    compare_versions "$latest_version" "$current_version"
-    local comparison_result=$?
-    
-    case $comparison_result in
-        0)
-            log_info "Singbox is already up to date (version $current_version)"
-            return 0
-            ;;
-        2)
-            log_warning "Current version ($current_version) is newer than latest release ($latest_version)"
-            log_warning "Update cancelled to prevent downgrade"
-            return 0
-            ;;
-        1)
-            log_info "Update available: $current_version -> $latest_version"
-            ;;
-    esac
-    
-    # Stop Singbox service
-    local service_was_running=false
-    if systemctl is-active --quiet sing-box 2>/dev/null; then
-        service_was_running=true
-        log_info "Stopping Singbox service for update..."
-        if ! systemctl stop sing-box >/dev/null 2>&1; then
-            log_error "Failed to stop Singbox service"
-            return 1
-        fi
-        log_success "Service stopped"
-    fi
-    
-    # Backup current binary
-    local binary_backup="/tmp/sing-box-binary-backup"
-    if [[ -f "/usr/bin/sing-box" ]]; then
-        log_info "Backing up current binary..."
-        cp "/usr/bin/sing-box" "$binary_backup"
-        if [[ $? -eq 0 ]]; then
-            log_success "Binary backed up to: $binary_backup"
-        else
-            log_error "Failed to backup binary"
-            return 1
-        fi
-    fi
-    
-    # Download binary archive
-    local download_url="https://github.com/SagerNet/sing-box/releases/download/${latest_version}/sing-box-${latest_version#v}-linux-${ARCH}.tar.gz"
-    local temp_archive="/tmp/sing-box-update.tar.gz"
-    local temp_dir="/tmp/sing-box-update"
-    
-    log_info "Downloading Singbox binary $latest_version..."
-    log_info "Download URL: $download_url"
-    if ! wget --no-check-certificate -q -O "$temp_archive" "$download_url"; then
-        log_error "Failed to download Singbox from: $download_url"
-        # Restore service if it was running
-        if [[ "$service_was_running" == true ]]; then
-            systemctl start sing-box >/dev/null 2>&1
-        fi
-        return 1
-    fi
-    
-    # Extract and replace binary
-    log_info "Extracting and installing binary..."
-    mkdir -p "$temp_dir" >/dev/null 2>&1
-    if ! tar -xzf "$temp_archive" -C "$temp_dir" >/dev/null 2>&1; then
-        log_error "Failed to extract Singbox archive"
-        # Clean up and restore service
-        rm -rf "$temp_archive" "$temp_dir"
-        if [[ "$service_was_running" == true ]]; then
-            systemctl start sing-box >/dev/null 2>&1
-        fi
-        return 1
-    fi
-    
-    # Find and install the binary
-    local binary_file
-    binary_file=$(find "$temp_dir" -name "sing-box" -type f | head -n1)
-    if [[ -z "$binary_file" ]]; then
-        log_error "Singbox binary not found in archive"
-        # Clean up and restore service
-        rm -rf "$temp_archive" "$temp_dir"
-        if [[ "$service_was_running" == true ]]; then
-            systemctl start sing-box >/dev/null 2>&1
-        fi
-        return 1
-    fi
-    
-    # Replace binary
-    log_info "Replacing Singbox binary..."
-    if ! cp "$binary_file" "/usr/bin/sing-box"; then
-        log_error "Failed to replace Singbox binary"
-        # Restore backup if available
-        if [[ -f "$binary_backup" ]]; then
-            cp "$binary_backup" "/usr/bin/sing-box"
-            log_warning "Restored original binary from backup"
-        fi
-        # Clean up and restore service
-        rm -rf "$temp_archive" "$temp_dir"
-        if [[ "$service_was_running" == true ]]; then
-            systemctl start sing-box >/dev/null 2>&1
-        fi
-        return 1
-    fi
-    
-    # Set proper permissions
-    chmod +x "/usr/bin/sing-box" >/dev/null 2>&1
-    log_success "Binary replaced successfully"
-    
-    # Clean up temporary files
-    rm -rf "$temp_archive" "$temp_dir" "$binary_backup"
-    log_info "Cleaned up temporary files"
-    
-    # Verify binary version before starting service
-    print_header "Verifying Update"
-    local new_version
-    new_version=$(get_current_version)
-    if [[ -z "$new_version" ]]; then
-        log_error "Failed to get new Singbox version"
-        return 1
-    fi
-    
-    if [[ "$new_version" != "${latest_version#v}" ]]; then
-        log_error "Version mismatch. Expected: ${latest_version#v}, Got: $new_version"
-        return 1
-    fi
-    log_success "Binary version verified: $new_version"
-    
-    # Ensure service is started (regardless of previous state)
-    log_info "Starting Singbox service..."
-    if systemctl is-active --quiet sing-box 2>/dev/null; then
-        log_info "Service is already running, restarting..."
-        if ! systemctl restart sing-box >/dev/null 2>&1; then
-            log_error "Failed to restart Singbox service"
-            log_error "Check logs with: journalctl -u sing-box"
-            return 1
-        fi
-    else
-        if ! systemctl start sing-box >/dev/null 2>&1; then
-            log_error "Failed to start Singbox service"
-            log_error "Check logs with: journalctl -u sing-box"
-            return 1
-        fi
-    fi
-    
-    # Wait for service to stabilize
-    log_info "Waiting for service to stabilize..."
-    sleep 3
-    
-    # Verify service status
-    if ! systemctl is-active --quiet sing-box; then
-        log_error "Singbox service is not running after update"
-        log_error "Check logs with: journalctl -u sing-box"
-        return 1
-    fi
-    log_success "Service is running"
-    
-    # Final verification: Check running service version
-    log_info "Verifying running service version..."
-    local running_version
-    running_version=$(sing-box version 2>/dev/null | head -n1 | awk '{print $3}' | sed 's/^v//')
-    
-    if [[ -z "$running_version" ]]; then
-        log_warning "Could not verify running version, but service is active"
-    elif [[ "$running_version" == "${latest_version#v}" ]]; then
-        log_success "Running version confirmed: $running_version"
-    else
-        log_warning "Running version ($running_version) differs from expected (${latest_version#v}), but service is active"
-    fi
-    
-    # Display service status
-    echo ""
-    systemctl status sing-box --no-pager --lines=5
-    echo ""
-    
-    log_success "Update completed successfully"
-    log_success "Singbox updated from $current_version to $new_version"
-    log_info "Update method: Binary replacement"
-    return 0
-}
-
-################################################################################
-# Generate configuration parameters
-################################################################################
-generate_config_params() {
-    print_header "Generating Configuration Parameters"
-    
-    # Generate port if not specified
-    if [[ -z "$PORT" ]]; then
-        PORT=$(generate_port "$DEFAULT_PORT_START" "$DEFAULT_PORT_END")
-        log_info "Generated port: $PORT"
-    else
-        log_info "Using specified port: $PORT"
-    fi
-    
-    # Generate password if not specified
-    if [[ -z "$PASSWORD" ]]; then
-        PASSWORD=$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)
-        log_info "Generated password"
-    else
-        log_info "Using specified password"
-    fi
-    
-    # Prompt for domain if not specified
-    if [[ -z "$DOMAIN" ]]; then
-        echo ""
-        read -p "Please enter your domain name: " DOMAIN
-        if [[ -z "$DOMAIN" ]]; then
-            log_error "Domain name is required!"
-            exit 1
-        fi
-        log_info "Using domain: $DOMAIN"
-    else
-        log_info "Using specified domain: $DOMAIN"
-    fi
-    
-    # Prompt for certificate mode if not specified
-    if [[ -z "$CERT_MODE" ]]; then
-        echo ""
-        log_info "Certificate Mode Selection:"
-        echo "  1. ACME mode - Auto-generate certificate using Cloudflare DNS-01 challenge"
-        echo "  2. Manual mode - Use existing certificate files"
-        echo ""
-        read -p "Please select certificate mode (1 or 2): " cert_choice
-        case $cert_choice in
-            1)
-                CERT_MODE="acme"
-                log_info "Selected: ACME mode"
+    IFS=',' read -ra protocol_items <<< "$PROTOCOLS"
+    for protocol in "${protocol_items[@]}"; do
+        protocol="${protocol//[[:space:]]/}"
+        case "$protocol" in
+            anytls)
+                ANYTLS_ENABLED=1
                 ;;
-            2)
-                CERT_MODE="manual"
-                log_info "Selected: Manual mode"
+            shadowsocks)
+                SS_ENABLED=1
+                ;;
+            "")
+                log_error "--protocol 包含空协议。"
+                exit 1
                 ;;
             *)
-                log_error "Invalid choice. Please enter 1 or 2."
+                log_error "不支持的协议: $protocol"
                 exit 1
                 ;;
         esac
-    else
-        log_info "Using specified certificate mode: $CERT_MODE"
-    fi
-    
-    # Handle certificate mode specific parameters
-    if [[ "$CERT_MODE" == "acme" ]]; then
-        # ACME mode: Prompt for Cloudflare API Token
-        if [[ -z "$TOKEN" ]]; then
-            echo ""
-            log_info "DNS-01 certificate challenge requires Cloudflare API Token"
-            read -p "Please enter your Cloudflare API Token: " TOKEN
-            if [[ -z "$TOKEN" ]]; then
-                log_error "Cloudflare API Token is required for DNS-01 certificate challenge!"
-                exit 1
-            fi
-            log_info "Cloudflare API Token configured"
-        else
-            log_info "Using specified Cloudflare API Token"
-        fi
-    elif [[ "$CERT_MODE" == "manual" ]]; then
-        # Manual mode: Prompt for certificate paths
-        if [[ -z "$CERT_PATH" ]]; then
-            echo ""
-            read -p "Please enter certificate file path: " CERT_PATH
-            if [[ -z "$CERT_PATH" ]]; then
-                log_error "Certificate path is required for manual mode!"
-                exit 1
-            fi
-        fi
-        
-        # Verify certificate file exists
-        if [[ ! -f "$CERT_PATH" ]]; then
-            log_error "Certificate file not found: $CERT_PATH"
+    done
+}
+
+validate_protocol_scope() {
+    if [[ "$ANYTLS_ENABLED" -eq 0 ]]; then
+        if [[ -n "$ANYTLS_PORT$ANYTLS_PASSWORD$ANYTLS_DOMAIN$ANYTLS_SCHEME$ANYTLS_CERT_MODE$ANYTLS_TOKEN$ANYTLS_CERT_PATH$ANYTLS_KEY_PATH" ]]; then
+            log_error "AnyTLS 参数需要 --protocol anytls。"
             exit 1
         fi
-        log_info "Using certificate: $CERT_PATH"
-        
-        if [[ -z "$KEY_PATH" ]]; then
-            echo ""
-            read -p "Please enter private key file path: " KEY_PATH
-            if [[ -z "$KEY_PATH" ]]; then
-                log_error "Private key path is required for manual mode!"
-                exit 1
-            fi
-        fi
-        
-        # Verify key file exists
-        if [[ ! -f "$KEY_PATH" ]]; then
-            log_error "Private key file not found: $KEY_PATH"
+    fi
+
+    if [[ "$SS_ENABLED" -eq 0 ]]; then
+        if [[ -n "$SS_PORT$SS_PASSWORD" ]]; then
+            log_error "Shadowsocks 参数需要 --protocol shadowsocks。"
             exit 1
         fi
-        log_info "Using private key: $KEY_PATH"
     fi
-    
-    log_success "Configuration parameters ready"
 }
 
-################################################################################
-# Generate padding scheme JSON array
-# Converts pipe-separated string to JSON array format
-# Input: "stop=3|0=30-30|1=140-320" -> ["stop=3","0=30-30","1=140-320"]
-################################################################################
-generate_padding_scheme_json() {
-    local scheme_str="$1"
-    local default_scheme="stop=3|0=30-30|1=140-320|2=420-780,c,780-1400"
-    
-    # Use default if not specified
-    if [[ -z "$scheme_str" ]]; then
-        scheme_str="$default_scheme"
+detect_arch() {
+    print_header "检测系统架构"
+    case "$(uname -m)" in
+        x86_64)
+            ARCH="amd64"
+            ;;
+        x86|i686|i386)
+            ARCH="386"
+            ;;
+        aarch64|arm64)
+            ARCH="arm64"
+            ;;
+        armv7l)
+            ARCH="armv7"
+            ;;
+        s390x)
+            ARCH="s390x"
+            ;;
+        *)
+            log_error "不支持的系统架构: $(uname -m)"
+            exit 1
+            ;;
+    esac
+    log_success "系统架构: $ARCH"
+}
+
+install_packages() {
+    print_header "安装依赖"
+    local packages_needed=(wget dpkg jq tar)
+    local pkg
+
+    if ! command -v apt-get >/dev/null 2>&1; then
+        log_error "仅支持 Debian/Ubuntu apt 环境。"
+        exit 1
     fi
-    
-    # Convert pipe-separated string to JSON array
-    local json_array="["
-    local first=true
-    
-    # Split by pipe and build JSON array
-    IFS='|' read -ra scheme_parts <<< "$scheme_str"
-    for part in "${scheme_parts[@]}"; do
-        # Trim whitespace
-        part=$(echo "$part" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-        if [[ -n "$part" ]]; then
-            if [[ "$first" == true ]]; then
-                first=false
-            else
-                json_array+=","
-            fi
-            # Escape special characters in JSON string
-            part=$(echo "$part" | sed 's/\\/\\\\/g; s/"/\\"/g')
-            json_array+="\"$part\""
+
+    log_info "更新软件源..."
+    if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1; then
+        log_error "软件源更新失败。"
+        exit 1
+    fi
+
+    for pkg in "${packages_needed[@]}"; do
+        if dpkg -s "$pkg" >/dev/null 2>&1; then
+            log_info "依赖已存在: $pkg"
+            continue
+        fi
+
+        log_info "安装依赖: $pkg"
+        if ! DEBIAN_FRONTEND=noninteractive apt-get install -y "$pkg" -qq >/dev/null 2>&1; then
+            log_error "依赖安装失败: $pkg"
+            exit 1
         fi
     done
-    
-    json_array+="]"
-    echo "$json_array"
+
+    log_success "依赖已就绪"
 }
 
-################################################################################
-# Create Singbox configuration
-################################################################################
-create_singbox_config() {
-    print_header "Creating Singbox Configuration"
-    
-    # Clean existing configuration before creating new one
-    clean_sing_box_config
-    
-    local config_file="/etc/sing-box/config.json"
-    
-    # Generate padding scheme JSON array
-    local padding_json
-    padding_json=$(generate_padding_scheme_json "$PADDING_SCHEME")
-    log_info "Using padding scheme: $padding_json"
-    
-    # Create AnyTLS configuration file based on certificate mode
-    if [[ "$CERT_MODE" == "manual" ]]; then
-        # Manual mode: Use existing certificate files
-        log_info "Creating configuration with manual certificate mode..."
-        cat > "$config_file" << EOF
-{
-  "log": {
-    "disabled": true
-  },
-  "inbounds": [
-    {
-      "type": "anytls",
-      "tag": "anytls-in",
-      "listen": "::",
-      "listen_port": $PORT,
-      "users": [
-        {
-          "name": "AnyCloud",
-          "password": "$PASSWORD"
-        }
-      ],
-      "padding_scheme": $padding_json,
-      "tls": {
-        "enabled": true,
-        "alpn": [
-          "h2",
-          "http/1.1"
-        ],
-        "server_name": "$DOMAIN",
-        "certificate_path": "$CERT_PATH",
-        "key_path": "$KEY_PATH"
-      }
-    }
-  ]
-}
-EOF
-    else
-        # ACME mode: Auto-generate certificate using Cloudflare DNS-01 challenge
-        log_info "Creating configuration with ACME certificate mode..."
-        cat > "$config_file" << EOF
-{
-  "log": {
-    "disabled": true
-  },
-  "inbounds": [
-    {
-      "type": "anytls",
-      "tag": "anytls-in",
-      "listen": "::",
-      "listen_port": $PORT,
-      "users": [
-        {
-          "name": "AnyCloud",
-          "password": "$PASSWORD"
-        }
-      ],
-      "padding_scheme": $padding_json,
-      "tls": {
-        "enabled": true,
-        "alpn": [
-          "h2",
-          "http/1.1"
-        ],
-        "server_name": "$DOMAIN",
-        "acme": {
-          "domain": [
-            "$DOMAIN"
-          ],
-          "email": "admin@xinsight.eu.org",
-          "provider": "letsencrypt",
-          "dns01_challenge": {
-            "provider": "cloudflare",
-            "api_token": "$TOKEN"
-          }
-        }
-      }
-    }
-  ]
-}
-EOF
-    fi
-    
-    log_success "Configuration file created: $config_file"
-    log_info "Certificate mode: $CERT_MODE"
-}
+generate_port() {
+    local start="$1"
+    local end="$2"
+    local port
 
-################################################################################
-# Start and enable Singbox service
-################################################################################
-start_singbox_service() {
-    print_header "Starting Singbox Service"
-    
-    log_info "Enabling Singbox service..."
-    if ! systemctl enable sing-box >/dev/null 2>&1; then
-        log_error "Failed to enable Singbox service"
-        exit 1
-    fi
-    
-    log_info "Starting Singbox service..."
-    if ! systemctl start sing-box >/dev/null 2>&1; then
-        log_error "Failed to start Singbox service"
-        exit 1
-    fi
-    
-    # Wait a moment for service to start
-    sleep 2
-    
-    # Check service status
-    if ! systemctl is-active --quiet sing-box; then
-        log_error "Singbox service failed to start!"
-        log_error "Check logs with: journalctl -u sing-box"
-        exit 1
-    fi
-    
-    log_success "Singbox service started successfully"
-}
-
-################################################################################
-# Display configuration information
-################################################################################
-show_configuration() {
-    print_header "Installation Status"
-    echo "------------------------------------"
-    echo -e "${BOLD}Singbox Service Status:${NC}"
-    systemctl status sing-box --no-pager
-    echo "------------------------------------"
-
-    print_header "Configuration Details"
-    local server_ip
-    server_ip=$(get_ipv4_address)
-    
-    echo ""
-    echo -e "${BOLD}AnyTLS Configuration:${NC}"
-    printf "%-25s %s\n" "Server IP:" "$server_ip"
-    printf "%-25s %s\n" "Port:" "$PORT"
-    printf "%-25s %s\n" "Password:" "$PASSWORD"
-    printf "%-25s %s\n" "Domain:" "$DOMAIN"
-    printf "%-25s %s\n" "Certificate Mode:" "$CERT_MODE"
-    
-    # Display padding scheme
-    local display_scheme="${PADDING_SCHEME:-stop=3|0=30-30|1=140-320|2=420-780,c,780-1400}"
-    printf "%-25s %s\n" "Padding Scheme:" "$display_scheme"
-    
-    if [[ "$CERT_MODE" == "manual" ]]; then
-        printf "%-25s %s\n" "Certificate Path:" "$CERT_PATH"
-        printf "%-25s %s\n" "Private Key Path:" "$KEY_PATH"
-    else
-        printf "%-25s %s\n" "ACME Provider:" "Let's Encrypt (Cloudflare DNS-01)"
-    fi
-    
-    echo "=================================="
-    echo ""
-}
-
-################################################################################
-# Clean Singbox configuration files and directories
-################################################################################
-clean_sing_box_config() {
-    log_info "Cleaning existing Singbox configuration..."
-    
-    # Remove configuration directory and all its contents
-    if [[ -d "/etc/sing-box" ]]; then
-        rm -rf "/etc/sing-box" >/dev/null 2>&1
-        log_info "Removed configuration directory: /etc/sing-box"
-    fi
-    
-    # Remove any cached or temporary configuration files
-    local temp_configs=(
-        "/tmp/sing-box-config-backup.json"
-        "/var/lib/sing-box"
-        "/var/cache/sing-box"
-        "/run/sing-box"
-    )
-    
-    for config_path in "${temp_configs[@]}"; do
-        if [[ -e "$config_path" ]]; then
-            rm -rf "$config_path" >/dev/null 2>&1
-            log_info "Cleaned: $config_path"
+    while true; do
+        port="$(shuf -i "${start}-${end}" -n 1)"
+        if [[ "$port" != *4* ]]; then
+            printf '%s\n' "$port"
+            return 0
         fi
     done
-    
-    # Ensure configuration directory exists with proper permissions
-    mkdir -p "/etc/sing-box" >/dev/null 2>&1
-    chmod 755 "/etc/sing-box" >/dev/null 2>&1
-    
-    log_success "Configuration cleanup completed"
 }
 
-################################################################################
-# Uninstall Singbox service
-################################################################################
-uninstall_service() {
-    print_header "Uninstalling Singbox"
+port_is_used() {
+    local candidate="$1"
+    local port
 
-    # Step 1: Stop and disable service
-    log_info "Stopping and disabling Singbox service..."
+    for port in "${USED_PORTS[@]}"; do
+        [[ "$port" == "$candidate" ]] && return 0
+    done
+
+    return 1
+}
+
+validate_port() {
+    local port="$1"
+    local name="$2"
+
+    if ! [[ "$port" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
+        log_error "$name 端口无效: $port"
+        exit 1
+    fi
+}
+
+add_used_port() {
+    local port="$1"
+    local name="$2"
+
+    validate_port "$port" "$name"
+    if port_is_used "$port"; then
+        log_error "端口冲突: $port"
+        exit 1
+    fi
+
+    USED_PORTS+=("$port")
+}
+
+generate_unique_port() {
+    local port
+
+    while true; do
+        port="$(generate_port "$DEFAULT_PORT_START" "$DEFAULT_PORT_END")"
+        if ! port_is_used "$port"; then
+            printf '%s\n' "$port"
+            return 0
+        fi
+    done
+}
+
+prepare_ports() {
+    USED_PORTS=()
+
+    if [[ "$ANYTLS_ENABLED" -eq 1 && -n "$ANYTLS_PORT" ]]; then
+        add_used_port "$ANYTLS_PORT" "AnyTLS"
+    fi
+
+    if [[ "$SS_ENABLED" -eq 1 && -n "$SS_PORT" ]]; then
+        add_used_port "$SS_PORT" "Shadowsocks"
+    fi
+
+    if [[ "$ANYTLS_ENABLED" -eq 1 && -z "$ANYTLS_PORT" ]]; then
+        ANYTLS_PORT="$(generate_unique_port)"
+        add_used_port "$ANYTLS_PORT" "AnyTLS"
+        log_info "生成 AnyTLS 端口: $ANYTLS_PORT"
+    elif [[ "$ANYTLS_ENABLED" -eq 1 && "$ANYTLS_PORT_SET" -eq 1 ]]; then
+        log_info "使用指定 AnyTLS 端口: $ANYTLS_PORT"
+    fi
+
+    if [[ "$SS_ENABLED" -eq 1 && -z "$SS_PORT" ]]; then
+        SS_PORT="$(generate_unique_port)"
+        add_used_port "$SS_PORT" "Shadowsocks"
+        log_info "生成 Shadowsocks 端口: $SS_PORT"
+    elif [[ "$SS_ENABLED" -eq 1 && "$SS_PORT_SET" -eq 1 ]]; then
+        log_info "使用指定 Shadowsocks 端口: $SS_PORT"
+    fi
+}
+
+get_ipv4_address() {
+    local ip
+    ip="$(wget -qO- --timeout=5 --tries=2 https://api.ipify.org 2>/dev/null)"
+    if [[ -z "$ip" ]]; then
+        printf '无法获取 IP\n'
+    else
+        printf '%s\n' "$ip"
+    fi
+}
+
+get_current_version() {
+    if command -v sing-box >/dev/null 2>&1; then
+        sing-box version 2>/dev/null | head -n1 | awk '{print $3}' | sed 's/^v//'
+    fi
+}
+
+compare_versions() {
+    local version1="${1#v}"
+    local version2="${2#v}"
+    local max_parts i part1 part2
+
+    [[ "$version1" == "$version2" ]] && return 0
+
+    IFS='.' read -ra ver1_parts <<< "$version1"
+    IFS='.' read -ra ver2_parts <<< "$version2"
+    max_parts=$((${#ver1_parts[@]} > ${#ver2_parts[@]} ? ${#ver1_parts[@]} : ${#ver2_parts[@]}))
+
+    for ((i=0; i<max_parts; i++)); do
+        part1="${ver1_parts[i]:-0}"
+        part2="${ver2_parts[i]:-0}"
+        part1="$(echo "$part1" | sed 's/[^0-9].*//')"
+        part2="$(echo "$part2" | sed 's/[^0-9].*//')"
+        part1="${part1:-0}"
+        part2="${part2:-0}"
+
+        if (( part1 > part2 )); then
+            return 1
+        elif (( part1 < part2 )); then
+            return 2
+        fi
+    done
+
+    return 0
+}
+
+install_singbox() {
+    print_header "安装 sing-box"
+    local target_version
+    local download_url
+    local temp_file="/tmp/sing-box.deb"
+
+    if command -v sing-box >/dev/null 2>&1 && [[ -z "$SINGBOX_VERSION" ]]; then
+        log_info "sing-box 已存在: $(command -v sing-box)"
+        return 0
+    fi
+
+    if [[ -n "$SINGBOX_VERSION" ]]; then
+        target_version="$SINGBOX_VERSION"
+        [[ "$target_version" == v* ]] || target_version="v$target_version"
+        log_info "使用指定版本: $target_version"
+    else
+        log_info "获取最新版本..."
+        target_version="$(wget -qO- --timeout=10 --tries=3 https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null | jq -r .tag_name)"
+        if [[ -z "$target_version" || "$target_version" == "null" ]]; then
+            log_error "无法获取 sing-box 发布版本。"
+            exit 1
+        fi
+    fi
+
+    download_url="https://github.com/SagerNet/sing-box/releases/download/${target_version}/sing-box_${target_version#v}_linux_${ARCH}.deb"
+    log_info "下载 sing-box: $download_url"
+    if ! wget --no-check-certificate -q -O "$temp_file" "$download_url"; then
+        log_error "sing-box 安装包下载失败。"
+        exit 1
+    fi
+
+    log_info "安装 sing-box 包..."
+    if ! DEBIAN_FRONTEND=noninteractive dpkg -i "$temp_file" >/dev/null 2>&1; then
+        log_error "sing-box 包安装失败。"
+        exit 1
+    fi
+
+    rm -f "$temp_file"
+    log_success "sing-box 安装完成"
+}
+
+update_singbox() {
+    print_header "更新 sing-box"
+    local current_version latest_version comparison_result
+    local service_was_running=0
+    local binary_backup="/tmp/sing-box-binary-backup"
+    local temp_archive="/tmp/sing-box-update.tar.gz"
+    local temp_dir="/tmp/sing-box-update"
+    local download_url binary_file new_version
+
+    if ! command -v sing-box >/dev/null 2>&1; then
+        log_error "sing-box 未安装。"
+        return 1
+    fi
+
+    detect_arch
+    install_packages
+
+    current_version="$(get_current_version)"
+    if [[ -z "$current_version" ]]; then
+        log_error "无法获取当前 sing-box 版本。"
+        return 1
+    fi
+    log_info "当前版本: $current_version"
+
+    latest_version="$(wget -qO- --timeout=10 --tries=3 https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null | jq -r .tag_name)"
+    if [[ -z "$latest_version" || "$latest_version" == "null" ]]; then
+        log_error "无法获取最新 sing-box 版本。"
+        return 1
+    fi
+    log_info "最新版本: $latest_version"
+
+    compare_versions "$latest_version" "$current_version"
+    comparison_result=$?
+    if [[ "$comparison_result" -eq 0 ]]; then
+        log_info "sing-box 已是最新版本。"
+        return 0
+    elif [[ "$comparison_result" -eq 2 ]]; then
+        log_warning "当前版本高于最新发布版本，跳过更新。"
+        return 0
+    fi
+
     if systemctl is-active --quiet sing-box 2>/dev/null; then
+        service_was_running=1
+        log_info "停止 sing-box 服务..."
         if ! systemctl stop sing-box >/dev/null 2>&1; then
-            log_warning "Failed to stop Singbox service gracefully, forcing stop..."
-            systemctl kill sing-box >/dev/null 2>&1
+            log_error "sing-box 服务停止失败。"
+            return 1
         fi
-        log_success "Service stopped"
-    else
-        log_info "Service is not running"
     fi
 
-    if systemctl is-enabled --quiet sing-box 2>/dev/null; then
-        systemctl disable sing-box >/dev/null 2>&1
-        log_success "Service disabled"
-    else
-        log_info "Service is not enabled"
+    if [[ -f "/usr/bin/sing-box" ]]; then
+        cp "/usr/bin/sing-box" "$binary_backup" || return 1
     fi
 
-    # Step 2: Purge package via dpkg FIRST (before manual file cleanup)
-    # Using --purge instead of --remove to fully clear dpkg database state
-    log_info "Purging Singbox package..."
-    if dpkg -l | grep -q "sing-box" 2>/dev/null; then
-        DEBIAN_FRONTEND=noninteractive dpkg --purge sing-box >/dev/null 2>&1 || {
-            # If purge fails, force remove then purge to clear database
-            DEBIAN_FRONTEND=noninteractive dpkg --remove --force-remove-reinstreq sing-box >/dev/null 2>&1
-            DEBIAN_FRONTEND=noninteractive dpkg --purge sing-box >/dev/null 2>&1
-        }
-        log_success "Package purged"
-    else
-        log_info "Package is not installed"
+    download_url="https://github.com/SagerNet/sing-box/releases/download/${latest_version}/sing-box-${latest_version#v}-linux-${ARCH}.tar.gz"
+    log_info "下载 sing-box 二进制: $download_url"
+    if ! wget --no-check-certificate -q -O "$temp_archive" "$download_url"; then
+        log_error "sing-box 二进制下载失败。"
+        [[ "$service_was_running" -eq 1 ]] && systemctl start sing-box >/dev/null 2>&1
+        return 1
     fi
 
-    # Step 3: Fix any broken dpkg state
-    DEBIAN_FRONTEND=noninteractive dpkg --configure -a >/dev/null 2>&1 || true
+    mkdir -p "$temp_dir"
+    if ! tar -xzf "$temp_archive" -C "$temp_dir" >/dev/null 2>&1; then
+        log_error "sing-box 压缩包解压失败。"
+        [[ "$service_was_running" -eq 1 ]] && systemctl start sing-box >/dev/null 2>&1
+        return 1
+    fi
 
-    # Step 4: Clean up systemd unit files that dpkg may not have removed
-    log_info "Cleaning up systemd configuration..."
+    binary_file="$(find "$temp_dir" -name "sing-box" -type f | head -n1)"
+    if [[ -z "$binary_file" ]]; then
+        log_error "压缩包内未找到 sing-box 二进制。"
+        [[ "$service_was_running" -eq 1 ]] && systemctl start sing-box >/dev/null 2>&1
+        return 1
+    fi
+
+    if ! cp "$binary_file" "/usr/bin/sing-box"; then
+        log_error "sing-box 二进制替换失败。"
+        [[ -f "$binary_backup" ]] && cp "$binary_backup" "/usr/bin/sing-box"
+        [[ "$service_was_running" -eq 1 ]] && systemctl start sing-box >/dev/null 2>&1
+        return 1
+    fi
+
+    chmod +x "/usr/bin/sing-box" >/dev/null 2>&1
+    new_version="$(get_current_version)"
+    if [[ "$new_version" != "${latest_version#v}" ]]; then
+        log_error "版本校验失败，期望 ${latest_version#v}，实际 $new_version。"
+        return 1
+    fi
+
+    cleanup_temp_files
+    if [[ "$service_was_running" -eq 1 ]]; then
+        systemctl start sing-box >/dev/null 2>&1 || return 1
+    fi
+
+    log_success "sing-box 已更新: $current_version -> $new_version"
+}
+
+generate_password() {
+    local password
+
+    password="$(sing-box generate rand --base64 16 2>/dev/null)"
+    if [[ -z "$password" ]]; then
+        log_error "密码生成失败。"
+        exit 1
+    fi
+
+    printf '%s\n' "$password"
+}
+
+prepare_anytls_params() {
+    if [[ "$ANYTLS_ENABLED" -ne 1 ]]; then
+        return 0
+    fi
+
+    if [[ -z "$ANYTLS_PASSWORD" ]]; then
+        ANYTLS_PASSWORD="$(generate_password)"
+        log_info "生成 AnyTLS 密码"
+    else
+        log_info "使用指定 AnyTLS 密码"
+    fi
+
+    if [[ -z "$ANYTLS_DOMAIN" ]]; then
+        log_error "启用 AnyTLS 时必须提供 --anytls-domain。"
+        exit 1
+    fi
+
+    if [[ -z "$ANYTLS_CERT_MODE" ]]; then
+        if [[ -n "$ANYTLS_CERT_PATH$ANYTLS_KEY_PATH" ]]; then
+            ANYTLS_CERT_MODE="manual"
+        elif [[ -n "$ANYTLS_TOKEN" ]]; then
+            ANYTLS_CERT_MODE="acme"
+        else
+            log_error "AnyTLS 需要 --anytls-token 或手动证书路径。"
+            exit 1
+        fi
+    fi
+
+    case "$ANYTLS_CERT_MODE" in
+        acme)
+            if [[ -z "$ANYTLS_TOKEN" ]]; then
+                log_error "AnyTLS ACME 模式需要 --anytls-token。"
+                exit 1
+            fi
+            if [[ -n "$ANYTLS_CERT_PATH$ANYTLS_KEY_PATH" ]]; then
+                log_error "ACME 模式不能使用手动证书路径。"
+                exit 1
+            fi
+            ;;
+        manual)
+            if [[ -n "$ANYTLS_TOKEN" ]]; then
+                log_error "手动证书模式不能使用 --anytls-token。"
+                exit 1
+            fi
+            if [[ -z "$ANYTLS_CERT_PATH" || -z "$ANYTLS_KEY_PATH" ]]; then
+                log_error "手动证书模式需要 --anytls-cert-path 和 --anytls-key-path。"
+                exit 1
+            fi
+            if [[ ! -f "$ANYTLS_CERT_PATH" ]]; then
+                log_error "证书文件不存在: $ANYTLS_CERT_PATH"
+                exit 1
+            fi
+            if [[ ! -f "$ANYTLS_KEY_PATH" ]]; then
+                log_error "私钥文件不存在: $ANYTLS_KEY_PATH"
+                exit 1
+            fi
+            ;;
+        *)
+            log_error "AnyTLS 证书模式无效: $ANYTLS_CERT_MODE"
+            exit 1
+            ;;
+    esac
+}
+
+prepare_shadowsocks_params() {
+    if [[ "$SS_ENABLED" -ne 1 ]]; then
+        return 0
+    fi
+
+    if [[ -z "$SS_PASSWORD" ]]; then
+        SS_PASSWORD="$(generate_password)"
+        log_info "生成 Shadowsocks 密码"
+    else
+        log_info "使用指定 Shadowsocks 密码"
+    fi
+}
+
+prepare_config_params() {
+    print_header "准备配置"
+    prepare_ports
+    prepare_anytls_params
+    prepare_shadowsocks_params
+    log_success "配置参数已就绪"
+}
+
+generate_padding_scheme_json() {
+    local scheme_str="${1:-$DEFAULT_PADDING_SCHEME}"
+
+    jq -n --arg scheme "$scheme_str" '$scheme | split("|") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))'
+}
+
+build_anytls_inbound() {
+    local padding_json
+    padding_json="$(generate_padding_scheme_json "$ANYTLS_SCHEME")"
+
+    if [[ "$ANYTLS_CERT_MODE" == "manual" ]]; then
+        jq -n \
+            --argjson port "$ANYTLS_PORT" \
+            --arg password "$ANYTLS_PASSWORD" \
+            --arg domain "$ANYTLS_DOMAIN" \
+            --argjson padding "$padding_json" \
+            --arg cert_path "$ANYTLS_CERT_PATH" \
+            --arg key_path "$ANYTLS_KEY_PATH" \
+            '{
+              type: "anytls",
+              tag: "anytls-in",
+              listen: "::",
+              listen_port: $port,
+              users: [{ name: "AnyCloud", password: $password }],
+              padding_scheme: $padding,
+              tls: {
+                enabled: true,
+                alpn: ["h2", "http/1.1"],
+                server_name: $domain,
+                certificate_path: $cert_path,
+                key_path: $key_path
+              }
+            }'
+    else
+        jq -n \
+            --argjson port "$ANYTLS_PORT" \
+            --arg password "$ANYTLS_PASSWORD" \
+            --arg domain "$ANYTLS_DOMAIN" \
+            --argjson padding "$padding_json" \
+            --arg token "$ANYTLS_TOKEN" \
+            '{
+              type: "anytls",
+              tag: "anytls-in",
+              listen: "::",
+              listen_port: $port,
+              users: [{ name: "AnyCloud", password: $password }],
+              padding_scheme: $padding,
+              tls: {
+                enabled: true,
+                alpn: ["h2", "http/1.1"],
+                server_name: $domain,
+                acme: {
+                  domain: [$domain],
+                  email: "admin@xinsight.eu.org",
+                  provider: "letsencrypt",
+                  dns01_challenge: {
+                    provider: "cloudflare",
+                    api_token: $token
+                  }
+                }
+              }
+            }'
+    fi
+}
+
+build_shadowsocks_inbound() {
+    jq -n \
+        --argjson port "$SS_PORT" \
+        --arg method "$SS_METHOD" \
+        --arg password "$SS_PASSWORD" \
+        '{
+          type: "shadowsocks",
+          tag: "shadowsocks-in",
+          listen: "::",
+          listen_port: $port,
+          method: $method,
+          password: $password
+        }'
+}
+
+create_singbox_config() {
+    print_header "生成 sing-box 配置"
+    local config_dir="/etc/sing-box"
+    local config_file="${config_dir}/config.json"
+    local temp_file="${config_file}.tmp"
+    local inbounds_json="["
+    local first=1
+    local inbound
+
+    mkdir -p "$config_dir"
+    chmod 755 "$config_dir"
+
+    if [[ "$ANYTLS_ENABLED" -eq 1 ]]; then
+        inbound="$(build_anytls_inbound)"
+        inbounds_json+="$inbound"
+        first=0
+    fi
+
+    if [[ "$SS_ENABLED" -eq 1 ]]; then
+        inbound="$(build_shadowsocks_inbound)"
+        [[ "$first" -eq 0 ]] && inbounds_json+=","
+        inbounds_json+="$inbound"
+    fi
+
+    inbounds_json+="]"
+
+    if ! jq -n --argjson inbounds "$inbounds_json" '{ log: { disabled: true }, inbounds: $inbounds }' > "$temp_file"; then
+        log_error "sing-box 配置生成失败。"
+        rm -f "$temp_file"
+        exit 1
+    fi
+
+    mv "$temp_file" "$config_file"
+    log_success "配置文件已生成: $config_file"
+}
+
+validate_singbox_config() {
+    local config_file="/etc/sing-box/config.json"
+
+    print_header "校验 sing-box 配置"
+    if ! sing-box check -c "$config_file"; then
+        log_error "sing-box 配置校验失败。"
+        exit 1
+    fi
+
+    log_success "sing-box 配置校验通过"
+}
+
+restart_singbox_service() {
+    print_header "启动 sing-box 服务"
+
+    if ! systemctl enable sing-box >/dev/null 2>&1; then
+        log_error "sing-box 服务启用失败。"
+        exit 1
+    fi
+
+    if systemctl is-active --quiet sing-box 2>/dev/null; then
+        log_info "重启 sing-box 服务..."
+        if ! systemctl restart sing-box >/dev/null 2>&1; then
+            log_error "sing-box 服务重启失败。"
+            log_error "查看日志: journalctl -u sing-box"
+            exit 1
+        fi
+    else
+        log_info "启动 sing-box 服务..."
+        if ! systemctl start sing-box >/dev/null 2>&1; then
+            log_error "sing-box 服务启动失败。"
+            log_error "查看日志: journalctl -u sing-box"
+            exit 1
+        fi
+    fi
+
+    sleep 2
+    if ! systemctl is-active --quiet sing-box; then
+        log_error "sing-box 服务未运行。"
+        log_error "查看日志: journalctl -u sing-box"
+        exit 1
+    fi
+
+    log_success "sing-box 服务运行中"
+}
+
+show_configuration() {
+    local server_ip
+    local status
+    local display_scheme
+
+    print_header "配置详情"
+    server_ip="$(get_ipv4_address)"
+    status="$(systemctl is-active sing-box 2>/dev/null || printf 'unknown')"
+
+    printf "%-22s %s\n" "服务:" "sing-box (${status})"
+    printf "%-22s %s\n" "服务器 IP:" "$server_ip"
+
+    if [[ "$ANYTLS_ENABLED" -eq 1 ]]; then
+        display_scheme="${ANYTLS_SCHEME:-$DEFAULT_PADDING_SCHEME}"
+        echo ""
+        echo "AnyTLS:"
+        printf "%-22s %s\n" "端口:" "$ANYTLS_PORT"
+        printf "%-22s %s\n" "密码:" "$ANYTLS_PASSWORD"
+        printf "%-22s %s\n" "域名:" "$ANYTLS_DOMAIN"
+        printf "%-22s %s\n" "证书模式:" "$ANYTLS_CERT_MODE"
+        printf "%-22s %s\n" "Padding Scheme:" "$display_scheme"
+        if [[ "$ANYTLS_CERT_MODE" == "manual" ]]; then
+            printf "%-22s %s\n" "证书路径:" "$ANYTLS_CERT_PATH"
+            printf "%-22s %s\n" "私钥路径:" "$ANYTLS_KEY_PATH"
+        fi
+    fi
+
+    if [[ "$SS_ENABLED" -eq 1 ]]; then
+        echo ""
+        echo "Shadowsocks:"
+        printf "%-22s %s\n" "端口:" "$SS_PORT"
+        printf "%-22s %s\n" "密码:" "$SS_PASSWORD"
+        printf "%-22s %s\n" "加密:" "$SS_METHOD"
+    fi
+
+    echo ""
+}
+
+uninstall_service() {
+    print_header "卸载 sing-box"
+    local file path
     local systemd_files=(
         "/etc/systemd/system/sing-box.service"
         "/lib/systemd/system/sing-box.service"
         "/usr/lib/systemd/system/sing-box.service"
     )
-
-    local found_systemd_file=false
-    for file in "${systemd_files[@]}"; do
-        if [[ -f "$file" ]]; then
-            rm -f "$file" >/dev/null 2>&1
-            found_systemd_file=true
-            log_info "Removed systemd unit file: $file"
-        fi
-    done
-
-    if [[ "$found_systemd_file" == true ]]; then
-        systemctl daemon-reload >/dev/null 2>&1
-        log_success "Systemd daemon reloaded"
-    fi
-
-    # Step 5: Clean up configuration and data directories
-    log_info "Removing configuration files and directories..."
     local cleanup_paths=(
         "/etc/sing-box"
         "/var/lib/sing-box"
@@ -1080,110 +926,76 @@ uninstall_service() {
         "/etc/default/sing-box"
         "/etc/sing-box.conf"
         "/tmp/sing-box-config-backup.json"
-        "/home/*/.sing-box"
         "/root/.sing-box"
     )
-
-    for path in "${cleanup_paths[@]}"; do
-        if [[ -e "$path" ]]; then
-            rm -rf "$path" >/dev/null 2>&1
-            log_info "Removed: $path"
-        fi
-    done
-
-    # Step 6: Clean up any Singbox binary if it still exists
-    log_info "Removing Singbox binary..."
     local binary_paths=(
         "/usr/bin/sing-box"
         "/usr/local/bin/sing-box"
         "/opt/sing-box/sing-box"
     )
 
-    for binary in "${binary_paths[@]}"; do
-        if [[ -f "$binary" ]]; then
-            rm -f "$binary" >/dev/null 2>&1
-            log_info "Removed binary: $binary"
-        fi
+    systemctl stop sing-box >/dev/null 2>&1 || true
+    systemctl disable sing-box >/dev/null 2>&1 || true
+    systemctl reset-failed sing-box >/dev/null 2>&1 || true
+
+    if dpkg -l 2>/dev/null | grep -q "^ii  sing-box "; then
+        DEBIAN_FRONTEND=noninteractive dpkg --purge sing-box >/dev/null 2>&1 || true
+    fi
+
+    for file in "${systemd_files[@]}"; do
+        [[ -f "$file" ]] && rm -f "$file"
     done
 
-    # Step 7: Clean up temporary files from this script
-    cleanup_temp_files
+    for path in "${cleanup_paths[@]}"; do
+        [[ -e "$path" ]] && rm -rf "$path"
+    done
 
-    log_success "Complete uninstallation finished successfully"
-    log_info "All Singbox components have been removed from the system"
-    log_info "The system is ready for normal package operations"
+    for path in "${binary_paths[@]}"; do
+        [[ -f "$path" ]] && rm -f "$path"
+    done
+
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    cleanup_temp_files
+    log_success "sing-box 卸载完成"
 }
 
-################################################################################
-# Main installation function
-################################################################################
 run_installation() {
     detect_arch
     install_packages
     install_singbox
-    generate_config_params
+    prepare_config_params
     create_singbox_config
-    start_singbox_service
+    validate_singbox_config
+    restart_singbox_service
     show_configuration
 }
 
-################################################################################
-# Interactive menu
-################################################################################
-show_menu() {
-    while true; do
-        clear
-        print_header "AnyTLS Installation Script"
-        echo "1. Install AnyTLS service"
-        echo "2. Update Singbox"
-        echo "3. Uninstall Singbox service"
-        echo "4. Exit Script"
-        echo -e "=====================================\n"
-        read -p "Please select an option (1-4): " choice
-        
-        case $choice in
-            1)
-                run_installation
-                exit 0
-                ;;
-            2)
-                update_singbox
-                exit 0
-                ;;
-            3)
-                uninstall_service
-                exit 0
-                ;;
-            4)
-                log_info "Exiting..."
-                exit 0
-                ;;
-            *)
-                log_error "Invalid option. Please try again."
-                read -p "Press Enter to continue..."
-                ;;
-        esac
-    done
-}
-
-################################################################################
-# Main execution
-################################################################################
 main() {
-    log_info "AnyTLS Installation Script v1.0"
-    log_info "Operating System: $(uname -s) $(uname -r)"
-    log_info "Architecture: $(uname -m)"
-    
-    # Parse command line arguments
     parse_args "$@"
-    
-    # If any configuration parameters are provided, run installation
-    if [[ -n "$PORT" || -n "$PASSWORD" || -n "$DOMAIN" || -n "$TOKEN" || -n "$PADDING_SCHEME" ]]; then
-        run_installation
-    else
-        # Show interactive menu
-        show_menu
+
+    if [[ "$UPDATE_REQUESTED" -eq 1 && "$UNINSTALL_REQUESTED" -eq 1 ]]; then
+        log_error "--update 和 --uninstall 不能同时使用。"
+        exit 1
     fi
+
+    if [[ "$UPDATE_REQUESTED" -eq 0 && "$UNINSTALL_REQUESTED" -eq 0 ]]; then
+        parse_protocols
+        validate_protocol_scope
+    fi
+
+    require_root
+
+    if [[ "$UPDATE_REQUESTED" -eq 1 ]]; then
+        update_singbox
+        exit $?
+    fi
+
+    if [[ "$UNINSTALL_REQUESTED" -eq 1 ]]; then
+        uninstall_service
+        exit 0
+    fi
+
+    run_installation
 }
 
 main "$@"

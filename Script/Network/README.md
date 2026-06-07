@@ -72,32 +72,36 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 bash snell.sh --install 4.1.1 --port 23456 --psk abcdefgh12345678
 ```
 
-## anytls.sh
+## singbox.sh
 
 ### 下载
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/anytls.sh
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/singbox.sh
 ```
 
 ### 参数说明
 ```text
---port PORT             AnyTLS 端口
---password PASS         AnyTLS 密码
---domain DOMAIN         域名
---version VERSION       Singbox 版本
--s, --scheme SCHEME     padding scheme
---cert-mode MODE        acme 或 manual
---token TOKEN           Cloudflare API Token
---cert-path PATH        证书路径
---key-path PATH         私钥路径
---update                更新 Singbox
--u, --uninstall         卸载
--h, --help              显示帮助
+--protocol LIST                 anytls、shadowsocks 或 anytls,shadowsocks
+--anytls-port PORT              AnyTLS 端口
+--anytls-password PASS          AnyTLS 密码
+--anytls-domain DOMAIN          AnyTLS 域名
+--anytls-scheme SCHEME          AnyTLS padding scheme
+--anytls-cert-mode acme|manual  AnyTLS 证书模式
+--anytls-token TOKEN            Cloudflare API Token
+--anytls-cert-path PATH         证书路径
+--anytls-key-path PATH          私钥路径
+--ss-port PORT                  Shadowsocks 端口
+--ss-password PASSWORD          Shadowsocks 密码
+--version VERSION               sing-box 版本
+--update                        更新 sing-box
+--uninstall                     卸载 sing-box
+-h, --help                      显示帮助
 ```
 
 ### 示例命令
 ```bash
-bash anytls.sh --domain api.example.com --token YOUR_CF_TOKEN
+bash singbox.sh --protocol anytls --anytls-domain api.example.com --anytls-token YOUR_CF_TOKEN
+bash singbox.sh --protocol anytls,shadowsocks --anytls-domain api.example.com --anytls-token YOUR_CF_TOKEN
 ```
 
 ## shadowsocks.sh
