@@ -340,6 +340,34 @@ install_packages() {
     log_success "依赖已就绪"
 }
 
+ensure_time_sync() {
+    print_header "时间同步"
+
+    if systemctl is-active --quiet chrony 2>/dev/null; then
+        log_success "chrony 已经运行"
+        return 0
+    fi
+
+    log_info "安装 chrony..."
+    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y chrony -qq >/dev/null 2>&1; then
+        log_error "chrony 安装失败。"
+        exit 1
+    fi
+
+    log_info "启动 chrony..."
+    if ! systemctl enable --now chrony >/dev/null 2>&1; then
+        log_error "chrony 启动失败。"
+        exit 1
+    fi
+
+    if ! systemctl is-active --quiet chrony 2>/dev/null; then
+        log_error "chrony 未运行。"
+        exit 1
+    fi
+
+    log_success "chrony 正在运行"
+}
+
 generate_port() {
     local start="$1"
     local end="$2"
@@ -962,6 +990,7 @@ uninstall_service() {
 run_installation() {
     detect_arch
     install_packages
+    ensure_time_sync
     install_singbox
     prepare_config_params
     create_singbox_config
