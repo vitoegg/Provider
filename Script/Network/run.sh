@@ -181,7 +181,8 @@ current_timezone() {
 }
 
 step_time_sync() {
-  local timezone="${1:-}" service="${2:-}"
+  local timezone="${1:-}" service="${2:-}" old_service
+  local old_services=(systemd-timesyncd.service ntp.service ntpsec.service openntpd.service)
   [ "$#" -eq 2 ] || fail "step_time_sync 需要时区和时间同步服务"
   [ "$service" = "chrony" ] || fail "不支持的时间同步服务: ${service}"
 
@@ -189,9 +190,17 @@ step_time_sync() {
   if [ "$(current_timezone)" != "$timezone" ]; then
     run_quiet "timezone" timedatectl set-timezone "$timezone" || fail "时区设置失败: ${timezone}"
   fi
+
+  for old_service in "${old_services[@]}"; do
+    systemctl disable --now "$old_service" >/dev/null 2>&1 || true
+  done
+
   run_quiet "chrony enable" systemctl enable --now chrony || fail "chrony 启动失败"
   [ "$(current_timezone)" = "$timezone" ] || fail "时区校验失败: ${timezone}"
   service_active chrony || fail "chrony 未运行"
+  for old_service in "${old_services[@]}"; do
+    service_active "$old_service" && fail "旧时间同步服务仍在运行: ${old_service}"
+  done
   log "time: applied | timezone=${timezone} | sync=chrony"
 }
 

@@ -165,17 +165,22 @@ install_packages() {
 ################################################################################
 ensure_time_sync() {
     log progress "Checking chrony service"
+    local old_services=(systemd-timesyncd.service ntp.service ntpsec.service openntpd.service)
 
     if systemctl is-active --quiet chrony 2>/dev/null; then
-        log progress_end "Chrony service is already running"
-        return 0
+        log info "Chrony service is already running, skipping installation"
+    else
+        log info "Installing chrony"
+        if ! apt-get install -y chrony -qq >/dev/null 2>&1; then
+            log error "Chrony installation failed"
+            exit 1
+        fi
     fi
 
-    log info "Installing chrony"
-    if ! apt-get install -y chrony -qq >/dev/null 2>&1; then
-        log error "Chrony installation failed"
-        exit 1
-    fi
+    log info "Disabling other time synchronization services"
+    for service in "${old_services[@]}"; do
+        systemctl disable --now "$service" >/dev/null 2>&1 || true
+    done
 
     log info "Starting chrony service"
     if ! systemctl enable --now chrony >/dev/null 2>&1; then

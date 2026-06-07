@@ -342,17 +342,22 @@ install_packages() {
 
 ensure_time_sync() {
     print_header "时间同步"
+    local old_services=(systemd-timesyncd.service ntp.service ntpsec.service openntpd.service)
 
     if systemctl is-active --quiet chrony 2>/dev/null; then
-        log_success "chrony 已经运行"
-        return 0
+        log_info "chrony 已经运行，跳过安装"
+    else
+        log_info "安装 chrony..."
+        if ! DEBIAN_FRONTEND=noninteractive apt-get install -y chrony -qq >/dev/null 2>&1; then
+            log_error "chrony 安装失败。"
+            exit 1
+        fi
     fi
 
-    log_info "安装 chrony..."
-    if ! DEBIAN_FRONTEND=noninteractive apt-get install -y chrony -qq >/dev/null 2>&1; then
-        log_error "chrony 安装失败。"
-        exit 1
-    fi
+    log_info "停用其它时间同步服务..."
+    for service in "${old_services[@]}"; do
+        systemctl disable --now "$service" >/dev/null 2>&1 || true
+    done
 
     log_info "启动 chrony..."
     if ! systemctl enable --now chrony >/dev/null 2>&1; then
