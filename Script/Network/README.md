@@ -29,27 +29,6 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 bash reality.sh --domain www.google.com --reality-port 55555
 ```
 
-## shadowtls.sh
-
-### 下载
-```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/shadowtls.sh
-```
-
-### 参数说明
-```text
---ss-port PORT          Shadowsocks 端口
---ss-pass PASS          Shadowsocks 密码
---tls-port PORT         ShadowTLS 端口
---tls-pass PASS         ShadowTLS 密码
---tls-domain DOMAIN     ShadowTLS 域名
-```
-
-### 示例命令
-```bash
-bash shadowtls.sh --ss-port 25252 --ss-pass password --tls-port 443 --tls-pass password --tls-domain www.microsoft.com
-```
-
 ## snell.sh
 
 ### 下载
