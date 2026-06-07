@@ -112,8 +112,26 @@ service_exists() {
   systemctl list-unit-files "$1" 2>/dev/null | awk -v unit="$1" '$1==unit { found=1 } END { exit !found }'
 }
 
-port_ready() {
-  ss -tulpen 2>/dev/null | grep -Eq ":${1}\\b"
+service_port_ready() {
+  local service="$1" port="$2" cgroup line pid
+  case "$port" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  cgroup="$(systemctl show "$service" --property=ControlGroup --value 2>/dev/null || true)"
+  [ -n "$cgroup" ] || return 1
+
+  while IFS= read -r line; do
+    while IFS= read -r pid; do
+      [ -r "/proc/${pid}/cgroup" ] || continue
+      grep -Fq "$cgroup" "/proc/${pid}/cgroup" && return 0
+    done < <(printf '%s\n' "$line" | grep -oE 'pid=[0-9]+' | cut -d= -f2)
+  done < <(ss -H -tulpen 2>/dev/null | awk -v port="$port" '
+    function port_matches(addr) {
+      return addr ~ (":" port "$") || addr ~ ("\\." port "$")
+    }
+    port_matches($5)
+  ')
+  return 1
 }
 
 provider_run() {
@@ -216,7 +234,21 @@ proxy_meta() {
 
 service_usable() {
   local service="$1" config="$2" port="$3"
-  service_active "$service" && [ -e "$config" ] && port_ready "$port"
+  service_active "$service" && [ -e "$config" ] && service_port_ready "$service" "$port"
+}
+
+service_port_mismatch() {
+  local service="$1" config="$2" port="$3"
+  service_active "$service" && [ -e "$config" ] && ! service_port_ready "$service" "$port"
+}
+
+cleanup_proxy_script() {
+  local script="$1"
+  [ -n "$script" ] || return 0
+  if [ -e "${PROVIDER_SCRIPT_DIR}/${script}" ]; then
+    rm -f "${PROVIDER_SCRIPT_DIR}/${script}" || fail "代理辅助脚本清理失败: ${script}"
+    log "proxy: script removed | script=${script} | reason=unused"
+  fi
 }
 
 step_proxy() {
@@ -235,7 +267,7 @@ step_proxy() {
     [ -z "$ss_port" ] || detail="${detail} | ss=${ss_port}"
     if [ -n "$ss_port" ] && { service_exists shadowsocks.service || [ -e /etc/shadowsocks/config.json ]; }; then
       provider_run "proxy uninstall ss2022" shadowsocks.sh -u || fail "ss2022 卸载失败"
-      log "proxy: removed | type=ss2022 | reason=conflict"
+      log "proxy: service removed | type=ss2022 | reason=conflict"
     fi
     [ -z "$ss_port" ] || cleanup_script="shadowsocks.sh"
   else
@@ -243,30 +275,27 @@ step_proxy() {
     [ "$type" != "ss2022" ] || cleanup_script="singbox.sh"
     if [ "$type" = "ss2022" ] && { service_exists sing-box.service || [ -e /etc/sing-box/config.json ]; }; then
       provider_run "proxy uninstall singbox" singbox.sh --uninstall || fail "singbox 卸载失败"
-      log "proxy: removed | type=singbox | reason=conflict"
+      log "proxy: service removed | type=singbox | reason=conflict"
     fi
   fi
 
   if service_usable "$service" "$config" "$port"; then
-    if [ -n "$cleanup_script" ] && [ -e "${PROVIDER_SCRIPT_DIR}/${cleanup_script}" ]; then
-      rm -f "${PROVIDER_SCRIPT_DIR}/${cleanup_script}" || fail "代理辅助脚本清理失败: ${cleanup_script}"
-      log "proxy: cleaned | script=${cleanup_script} | reason=unused"
-    fi
+    cleanup_proxy_script "$cleanup_script"
     log "proxy: skipped | type=${type} | ${detail}"
     return 0
   fi
 
-  if service_exists "$service" || [ -e "$config" ]; then
+  if service_port_mismatch "$service" "$config" "$port"; then
     provider_run "proxy uninstall ${type}" "$script" "$uninstall" || fail "${type} 卸载失败"
-    log "proxy: removed | type=${type} | reason=stale"
+    log "proxy: service removed | type=${type} | reason=port-mismatch | port=${port}"
+  elif service_exists "$service" || [ -e "$config" ]; then
+    provider_run "proxy uninstall ${type}" "$script" "$uninstall" || fail "${type} 卸载失败"
+    log "proxy: service removed | type=${type} | reason=stale"
   fi
 
   provider_run "proxy install ${type}" "$script" "$@" || fail "${type} 安装失败"
   service_usable "$service" "$config" "$port" || fail "${type} 安装后不可用"
-  if [ -n "$cleanup_script" ] && [ -e "${PROVIDER_SCRIPT_DIR}/${cleanup_script}" ]; then
-    rm -f "${PROVIDER_SCRIPT_DIR}/${cleanup_script}" || fail "代理辅助脚本清理失败: ${cleanup_script}"
-    log "proxy: cleaned | script=${cleanup_script} | reason=unused"
-  fi
+  cleanup_proxy_script "$cleanup_script"
   log "proxy: installed | type=${type} | ${detail}"
 }
 
@@ -328,7 +357,7 @@ cleanup_other_dns_script() {
   script="$(other_dns_script "$1")" || return 0
   if [ -e "${PROVIDER_SCRIPT_DIR}/${script}" ]; then
     rm -f "${PROVIDER_SCRIPT_DIR}/${script}" || fail "DNS 辅助脚本清理失败: ${script}"
-    log "dns: cleaned | script=${script} | reason=unused"
+    log "dns: script removed | script=${script} | reason=unused"
   fi
 }
 
@@ -350,7 +379,7 @@ remove_other_dns() {
   IFS='|' read -r other_service other_config other_uninstall other_port other_binary <<< "$(dns_meta "$other")" || return 0
   if service_exists "$other_service" || [ -e "$other_config" ] || [ -e "$other_binary" ]; then
     provider_run "dns uninstall ${other}" "$other_script" "$other_uninstall" || fail "${other} 卸载失败"
-    log "dns: removed | type=${other} | reason=conflict"
+    log "dns: service removed | type=${other} | reason=conflict"
   fi
 }
 
@@ -365,9 +394,12 @@ step_dns() {
     return 0
   fi
 
-  if service_exists "$service" || [ -e "$config" ] || [ -e "$binary" ]; then
+  if service_port_mismatch "$service" "$config" "$port"; then
     provider_run "dns uninstall ${type}" "$script" "$uninstall" || fail "${type} 卸载失败"
-    log "dns: removed | type=${type} | reason=stale"
+    log "dns: service removed | type=${type} | reason=port-mismatch | port=${port}"
+  elif service_exists "$service" || [ -e "$config" ] || [ -e "$binary" ]; then
+    provider_run "dns uninstall ${type}" "$script" "$uninstall" || fail "${type} 卸载失败"
+    log "dns: service removed | type=${type} | reason=stale"
   fi
 
   remove_other_dns "$type"
