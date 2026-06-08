@@ -15,7 +15,11 @@ DIRECT_TAG="direct"
 WARP_ENDPOINT_HOST="engage.cloudflareclient.com"
 WARP_ENDPOINT_PORT=2408
 WARP_MTU=1280
-WARP_ALLOWED_IP="0.0.0.0/0"
+WARP_ADDRESS_IPV4="172.16.0.2/32"
+WARP_ADDRESS_IPV6="2606:4700:110:8c96:8f5b:a595:f5fe:4451/128"
+WARP_ALLOWED_IP_IPV4="0.0.0.0/0"
+WARP_ALLOWED_IP_IPV6="::/0"
+WARP_PUBLIC_KEY="bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
 WARP_KEEPALIVE=30
 WARP_RULESET_TAG="pureSite"
 WARP_RULESET_FORMAT="source"
@@ -46,8 +50,6 @@ SS_PORT_SET=0
 SS_PASSWORD=""
 
 WARP_KEY=""
-WARP_PUBLIC_KEY=""
-WARP_ADDRESS=""
 
 USED_PORTS=()
 
@@ -97,8 +99,6 @@ Shadowsocks:
 
 WARP:
   --warp-key KEY
-  --warp-public-key KEY
-  --warp-address CIDR
 
 全局:
   --version VERSION
@@ -290,26 +290,6 @@ parse_args() {
                 ;;
             --warp-key=*)
                 WARP_KEY="${1#*=}"
-                WARP_ENABLED=1
-                shift
-                ;;
-            --warp-public-key)
-                WARP_PUBLIC_KEY="$(need_value "$1" "${2:-}")"
-                WARP_ENABLED=1
-                shift 2
-                ;;
-            --warp-public-key=*)
-                WARP_PUBLIC_KEY="${1#*=}"
-                WARP_ENABLED=1
-                shift
-                ;;
-            --warp-address)
-                WARP_ADDRESS="$(need_value "$1" "${2:-}")"
-                WARP_ENABLED=1
-                shift 2
-                ;;
-            --warp-address=*)
-                WARP_ADDRESS="${1#*=}"
                 WARP_ENABLED=1
                 shift
                 ;;
@@ -850,18 +830,6 @@ prepare_warp_params() {
         log_error "启用 WARP 时必须提供 --warp-key。"
         exit 1
     fi
-    if [[ -z "$WARP_PUBLIC_KEY" ]]; then
-        log_error "启用 WARP 时必须提供 --warp-public-key。"
-        exit 1
-    fi
-    if [[ -z "$WARP_ADDRESS" ]]; then
-        log_error "启用 WARP 时必须提供 --warp-address。"
-        exit 1
-    fi
-    if [[ "$WARP_ADDRESS" == *,* ]]; then
-        log_error "WARP Address 只支持单个 CIDR: $WARP_ADDRESS"
-        exit 1
-    fi
 
     log_info "启用 WARP 分流"
 }
@@ -960,12 +928,14 @@ build_warp_config() {
         --arg warp_tag "$WARP_TAG" \
         --arg direct_tag "$DIRECT_TAG" \
         --argjson mtu "$WARP_MTU" \
-        --arg address "$WARP_ADDRESS" \
+        --arg address_ipv4 "$WARP_ADDRESS_IPV4" \
+        --arg address_ipv6 "$WARP_ADDRESS_IPV6" \
         --arg private_key "$WARP_KEY" \
         --arg peer_address "$WARP_ENDPOINT_HOST" \
         --argjson peer_port "$WARP_ENDPOINT_PORT" \
         --arg peer_public_key "$WARP_PUBLIC_KEY" \
-        --arg allowed_ip "$WARP_ALLOWED_IP" \
+        --arg allowed_ip_ipv4 "$WARP_ALLOWED_IP_IPV4" \
+        --arg allowed_ip_ipv6 "$WARP_ALLOWED_IP_IPV6" \
         --argjson keepalive "$WARP_KEEPALIVE" \
         --arg rule_set "$WARP_RULESET_TAG" \
         --arg rule_format "$WARP_RULESET_FORMAT" \
@@ -977,14 +947,14 @@ build_warp_config() {
               tag: $warp_tag,
               system: false,
               mtu: $mtu,
-              address: [$address],
+              address: [$address_ipv4, $address_ipv6],
               private_key: $private_key,
               peers: [
                 {
                   address: $peer_address,
                   port: $peer_port,
                   public_key: $peer_public_key,
-                  allowed_ips: [$allowed_ip],
+                  allowed_ips: [$allowed_ip_ipv4, $allowed_ip_ipv6],
                   persistent_keepalive_interval: $keepalive
                 }
               ]
@@ -1149,7 +1119,7 @@ show_configuration() {
         echo ""
         echo "WARP:"
         printf "%-22s %s\n" "状态:" "enabled"
-        printf "%-22s %s\n" "Address:" "$WARP_ADDRESS"
+        printf "%-22s %s\n" "Address:" "$WARP_ADDRESS_IPV4, $WARP_ADDRESS_IPV6"
         printf "%-22s %s\n" "Ruleset:" "$WARP_RULESET_URL"
         printf "%-22s %s\n" "Final:" "$DIRECT_TAG"
     fi

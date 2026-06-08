@@ -21,8 +21,6 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 --ss-port PORT                  Shadowsocks 端口
 --ss-password PASSWORD          Shadowsocks 密码
 --warp-key KEY                  WARP PrivateKey
---warp-public-key KEY           WARP Peer PublicKey
---warp-address CIDR             WARP Address
 --version VERSION               sing-box 版本
 --update                        更新 sing-box
 --uninstall                     卸载 sing-box
@@ -35,9 +33,7 @@ bash singbox.sh \
   --protocol anytls,shadowsocks \
   --anytls-domain api.example.com \
   --anytls-token YOUR_CF_TOKEN \
-  --warp-key WARP_KEY \
-  --warp-public-key WARP_PUBLIC_KEY \
-  --warp-address 172.16.0.2/32
+  --warp-key WARP_KEY
 ```
 
 ## **shadowsocks.sh**
