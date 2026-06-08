@@ -99,7 +99,7 @@ Shadowsocks:
 
 WARP:
   --warp-key KEY
-  --warp-address IPV6_CIDR
+  --warp-address IPV6_CIDR  可选，提供后启用 IPv6 WARP address
 
 全局:
   --version VERSION
@@ -841,15 +841,6 @@ prepare_warp_params() {
         log_error "启用 WARP 时必须提供 --warp-key。"
         exit 1
     fi
-    if [[ -z "$WARP_ADDRESS" ]]; then
-        log_error "启用 WARP 时必须提供 --warp-address。"
-        exit 1
-    fi
-    if [[ "$WARP_ADDRESS" == *,* ]]; then
-        log_error "WARP Address 只支持单个 IPv6 CIDR: $WARP_ADDRESS"
-        exit 1
-    fi
-
     log_info "启用 WARP 分流"
 }
 
@@ -966,14 +957,14 @@ build_warp_config() {
               tag: $warp_tag,
               system: false,
               mtu: $mtu,
-              address: [$address_ipv4, $address_ipv6],
+              address: ([$address_ipv4] + if $address_ipv6 == "" then [] else [$address_ipv6] end),
               private_key: $private_key,
               peers: [
                 {
                   address: $peer_address,
                   port: $peer_port,
                   public_key: $peer_public_key,
-                  allowed_ips: [$allowed_ip_ipv4, $allowed_ip_ipv6],
+                  allowed_ips: ([$allowed_ip_ipv4] + if $address_ipv6 == "" then [] else [$allowed_ip_ipv6] end),
                   persistent_keepalive_interval: $keepalive
                 }
               ]
@@ -1103,6 +1094,7 @@ show_configuration() {
     local server_ip
     local status
     local display_scheme
+    local warp_address_display
 
     print_header "配置详情"
     server_ip="$(get_ipv4_address)"
@@ -1135,10 +1127,14 @@ show_configuration() {
     fi
 
     if [[ "$WARP_ENABLED" -eq 1 ]]; then
+        warp_address_display="$WARP_ADDRESS_IPV4"
+        if [[ -n "$WARP_ADDRESS" ]]; then
+            warp_address_display+=", $WARP_ADDRESS"
+        fi
         echo ""
         echo "WARP:"
         printf "%-22s %s\n" "状态:" "enabled"
-        printf "%-22s %s\n" "Address:" "$WARP_ADDRESS_IPV4, $WARP_ADDRESS"
+        printf "%-22s %s\n" "Address:" "$warp_address_display"
         printf "%-22s %s\n" "Ruleset:" "$WARP_RULESET_URL"
         printf "%-22s %s\n" "Final:" "$DIRECT_TAG"
     fi
