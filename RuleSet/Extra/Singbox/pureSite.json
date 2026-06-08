@@ -1,0 +1,9 @@
+{
+  "version": 5,
+  "rules": [
+    {
+      "domain": ["challenges.cloudflare.com", "stun.cloudflare.com"],
+      "domain_suffix": ["reddit.com"]
+    }
+  ]
+}
