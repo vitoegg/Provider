@@ -1,0 +1,6 @@
+payload:
+  # >Clouflare
+  - '+.challenges.cloudflare.com'
+  - '+.stun.cloudflare.com'
+  # >Reddit
+  - '+.reddit.com'
