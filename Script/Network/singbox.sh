@@ -423,7 +423,7 @@ install_packages() {
     fi
 
     for pkg in "${packages_needed[@]}"; do
-        if dpkg -s "$pkg" >/dev/null 2>&1; then
+        if dpkg-query -W -f='${db:Status-Abbrev}' "$pkg" 2>/dev/null | grep -q '^ii '; then
             log_info "依赖已存在: $pkg"
             continue
         fi

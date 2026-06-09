@@ -114,7 +114,7 @@ command_exists() {
 }
 
 package_installed() {
-    dpkg -s "$1" >/dev/null 2>&1
+    dpkg-query -W -f='${db:Status-Abbrev}' "$1" 2>/dev/null | grep -q '^ii '
 }
 
 ################################################################################

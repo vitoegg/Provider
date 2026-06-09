@@ -38,7 +38,7 @@ sshd_cmd() {
 
 has_pkg() {
   case "$1" in
-    systemd-timesyncd) dpkg -s systemd-timesyncd >/dev/null 2>&1 ;;
+    systemd-timesyncd) dpkg-query -W -f='${db:Status-Abbrev}' systemd-timesyncd 2>/dev/null | grep -q '^ii ' ;;
     iproute2) command -v ss >/dev/null 2>&1 ;;
     nftables) command -v nft >/dev/null 2>&1 ;;
     openssh-server) sshd_cmd >/dev/null 2>&1 ;;
