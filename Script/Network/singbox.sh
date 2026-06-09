@@ -408,7 +408,7 @@ detect_arch() {
 
 install_packages() {
     print_header "安装依赖"
-    local packages_needed=(wget dpkg jq tar)
+    local packages_needed=(wget dpkg jq tar systemd-timesyncd)
     local pkg
 
     if ! command -v apt-get >/dev/null 2>&1; then
@@ -440,35 +440,36 @@ install_packages() {
 
 ensure_time_sync() {
     print_header "时间同步"
-    local old_services=(systemd-timesyncd.service ntp.service ntpsec.service openntpd.service)
+    local synced="" i
 
-    if systemctl is-active --quiet chrony 2>/dev/null; then
-        log_info "chrony 已经运行，跳过安装"
-    else
-        log_info "安装 chrony..."
-        if ! DEBIAN_FRONTEND=noninteractive apt-get install -y chrony -qq >/dev/null 2>&1; then
-            log_error "chrony 安装失败。"
-            exit 1
-        fi
+    log_info "启动 systemd-timesyncd..."
+    if ! systemctl enable --now systemd-timesyncd >/dev/null 2>&1; then
+        log_error "systemd-timesyncd 启动失败。"
+        exit 1
     fi
 
-    log_info "停用其它时间同步服务..."
-    for service in "${old_services[@]}"; do
-        systemctl disable --now "$service" >/dev/null 2>&1 || true
+    if ! systemctl is-enabled --quiet systemd-timesyncd 2>/dev/null; then
+        log_error "systemd-timesyncd 未启用。"
+        exit 1
+    fi
+
+    if ! systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
+        log_error "systemd-timesyncd 未运行。"
+        exit 1
+    fi
+
+    for i in $(seq 1 30); do
+        synced="$(timedatectl show --property=NTPSynchronized --value 2>/dev/null || true)"
+        [[ "$synced" == "yes" ]] && break
+        sleep 2
     done
 
-    log_info "启动 chrony..."
-    if ! systemctl enable --now chrony >/dev/null 2>&1; then
-        log_error "chrony 启动失败。"
+    if [[ "$synced" != "yes" ]]; then
+        log_error "systemd-timesyncd 已运行，但时间尚未同步。"
         exit 1
     fi
 
-    if ! systemctl is-active --quiet chrony 2>/dev/null; then
-        log_error "chrony 未运行。"
-        exit 1
-    fi
-
-    log_success "chrony 正在运行"
+    log_success "systemd-timesyncd 正在运行且已同步"
 }
 
 generate_port() {

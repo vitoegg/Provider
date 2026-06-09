@@ -113,26 +113,8 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-################################################################################
-# Function to install a dependency if it does not exist
-################################################################################
-install_dependency() {
-    local cmd="$1"
-    local package="$2"
-    if ! command_exists "$cmd"; then
-        log info "Installing dependency: $package"
-        if command_exists apt-get; then
-            apt-get update -qq >/dev/null 2>&1
-            apt-get install -y "$package" -qq >/dev/null 2>&1
-        elif command_exists yum; then
-            yum install -y "$package" -q >/dev/null 2>&1
-        else
-            log error "Unsupported package manager, please install $package manually"
-            exit 1
-        fi
-    else
-        log info "Dependency $cmd already exists"
-    fi
+package_installed() {
+    dpkg -s "$1" >/dev/null 2>&1
 }
 
 ################################################################################
@@ -140,19 +122,32 @@ install_dependency() {
 ################################################################################
 install_packages() {
     log progress "Checking and installing required packages"
-    install_dependency "wget" "wget"
-    install_dependency "jq" "jq"
-    # Ensure extraction tools
-    if command_exists apt-get; then
-        install_dependency "tar" "tar"
-        install_dependency "xz" "xz-utils"
-    elif command_exists yum; then
-        install_dependency "tar" "tar"
-        install_dependency "xz" "xz"
-    else
-        log warn "Unknown package manager, please ensure tar and xz are installed"
+    local packages=(wget jq tar xz-utils systemd-timesyncd)
+    local package
+
+    if ! command_exists apt-get; then
+        log error "Only Debian/Ubuntu apt environment is supported"
+        exit 1
     fi
-    
+
+    if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1; then
+        log error "Package index update failed"
+        exit 1
+    fi
+
+    for package in "${packages[@]}"; do
+        if package_installed "$package"; then
+            log info "Dependency $package already exists"
+            continue
+        fi
+
+        log info "Installing dependency: $package"
+        if ! DEBIAN_FRONTEND=noninteractive apt-get install -y "$package" -qq >/dev/null 2>&1; then
+            log error "Failed to install dependency: $package"
+            exit 1
+        fi
+    done
+
     # Check mktemp availability
     if ! command_exists mktemp; then
         log warn "mktemp command is not available, this may affect temporary directory creation"
@@ -161,39 +156,40 @@ install_packages() {
 }
 
 ################################################################################
-# Ensure chrony time synchronization service is running
+# Ensure systemd-timesyncd time synchronization service is running
 ################################################################################
 ensure_time_sync() {
-    log progress "Checking chrony service"
-    local old_services=(systemd-timesyncd.service ntp.service ntpsec.service openntpd.service)
+    log progress "Checking systemd-timesyncd service"
+    local synced="" i
 
-    if systemctl is-active --quiet chrony 2>/dev/null; then
-        log info "Chrony service is already running, skipping installation"
-    else
-        log info "Installing chrony"
-        if ! apt-get install -y chrony -qq >/dev/null 2>&1; then
-            log error "Chrony installation failed"
-            exit 1
-        fi
+    log info "Starting systemd-timesyncd service"
+    if ! systemctl enable --now systemd-timesyncd >/dev/null 2>&1; then
+        log error "systemd-timesyncd service failed to start"
+        exit 1
     fi
 
-    log info "Disabling other time synchronization services"
-    for service in "${old_services[@]}"; do
-        systemctl disable --now "$service" >/dev/null 2>&1 || true
+    if ! systemctl is-enabled --quiet systemd-timesyncd 2>/dev/null; then
+        log error "systemd-timesyncd service is not enabled"
+        exit 1
+    fi
+
+    if ! systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
+        log error "systemd-timesyncd service is not running"
+        exit 1
+    fi
+
+    for i in $(seq 1 30); do
+        synced="$(timedatectl show --property=NTPSynchronized --value 2>/dev/null || true)"
+        [ "$synced" = "yes" ] && break
+        sleep 2
     done
 
-    log info "Starting chrony service"
-    if ! systemctl enable --now chrony >/dev/null 2>&1; then
-        log error "Chrony service failed to start"
+    if [ "$synced" != "yes" ]; then
+        log error "systemd-timesyncd is running but time is not synchronized"
         exit 1
     fi
 
-    if ! systemctl is-active --quiet chrony 2>/dev/null; then
-        log error "Chrony service is not running"
-        exit 1
-    fi
-
-    log progress_end "Chrony service is running"
+    log progress_end "systemd-timesyncd is running and synchronized"
 }
 
 ################################################################################

@@ -38,7 +38,7 @@ sshd_cmd() {
 
 has_pkg() {
   case "$1" in
-    chrony) command -v chronyc >/dev/null 2>&1 ;;
+    systemd-timesyncd) dpkg -s systemd-timesyncd >/dev/null 2>&1 ;;
     iproute2) command -v ss >/dev/null 2>&1 ;;
     nftables) command -v nft >/dev/null 2>&1 ;;
     openssh-server) sshd_cmd >/dev/null 2>&1 ;;
@@ -182,27 +182,28 @@ current_timezone() {
 }
 
 step_time_sync() {
-  local timezone="${1:-}" service="${2:-}" old_service
-  local old_services=(systemd-timesyncd.service ntp.service ntpsec.service openntpd.service)
+  local timezone="${1:-}" service="${2:-}" synced="" i
   [ "$#" -eq 2 ] || fail "step_time_sync requires timezone and service"
-  [ "$service" = "chrony" ] || fail "unsupported time sync service | service=${service}"
+  [ "$service" = "systemd-timesyncd" ] || fail "unsupported time sync service | service=${service}"
 
-  ensure_packages chrony
+  ensure_packages systemd-timesyncd
   if [ "$(current_timezone)" != "$timezone" ]; then
     run_quiet timedatectl set-timezone "$timezone" || fail "timezone configuration failed | timezone=${timezone}"
   fi
 
-  for old_service in "${old_services[@]}"; do
-    systemctl disable --now "$old_service" >/dev/null 2>&1 || true
-  done
-
-  run_quiet systemctl enable --now chrony || fail "time sync start failed | service=chrony"
+  run_quiet systemctl enable --now systemd-timesyncd || fail "time sync start failed | service=systemd-timesyncd"
   [ "$(current_timezone)" = "$timezone" ] || fail "timezone verification failed | timezone=${timezone}"
-  service_active chrony || fail "time sync inactive | service=chrony"
-  for old_service in "${old_services[@]}"; do
-    service_active "$old_service" && fail "old time sync still active | service=${old_service}"
+  systemctl is-enabled --quiet systemd-timesyncd 2>/dev/null || fail "time sync not enabled | service=systemd-timesyncd"
+  service_active systemd-timesyncd || fail "time sync inactive | service=systemd-timesyncd"
+
+  for i in $(seq 1 30); do
+    synced="$(timedatectl show --property=NTPSynchronized --value 2>/dev/null || true)"
+    [ "$synced" = "yes" ] && break
+    sleep 2
   done
-  log "time sync active | timezone=${timezone} | service=chrony"
+  [ "$synced" = "yes" ] || fail "time sync not synchronized | service=systemd-timesyncd"
+
+  log "time sync active | timezone=${timezone} | service=systemd-timesyncd | synchronized=yes"
 }
 
 proxy_meta() {
