@@ -89,24 +89,31 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 
 ### 参数说明
 ```text
--h, --help              显示帮助
---install               安装
---update                更新
---uninstall             卸载
---install-type TYPE     reality_only 或 reality_ss
---domain DOMAIN         域名
---reality-port PORT     Reality 端口
---uuid UUID             VLESS UUID
---private-key KEY       Reality 私钥
---public-key KEY        Reality 公钥
---short-id ID           Reality short id
---ss-port PORT          Shadowsocks 端口
---ss-password PASS      Shadowsocks 密码
+--protocol LIST                 reality、shadowsocks 或 reality,shadowsocks
+--reality-port PORT             Reality 端口
+--reality-domain DOMAIN         Reality 域名
+--reality-uuid UUID             VLESS UUID
+--reality-private-key KEY       Reality 私钥
+--reality-public-key KEY        Reality 公钥
+--reality-short-id ID           Reality short id
+--ss-port PORT                  Shadowsocks 端口
+--ss-password PASSWORD          Shadowsocks 密码
+--warp-key KEY                  WARP PrivateKey
+--warp-address IPV6_CIDR        WARP IPv6 Address
+--update                        更新 Xray
+--uninstall                     卸载 Xray
+-h, --help                      显示帮助
 ```
 
 ### 示例命令
 ```bash
-bash reality.sh --domain www.google.com --reality-port 55555
+bash reality.sh \
+  --protocol reality,shadowsocks \
+  --reality-domain game.granbluefantasy.jp \
+  --reality-port 52080 \
+  --ss-port 51080 \
+  --warp-key WARP_KEY \
+  --warp-address 2606:4700:110:8c96:8f5b:a595:f5fe:4451/128
 ```
 
 ## **smartdns.sh**
