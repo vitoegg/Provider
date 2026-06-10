@@ -249,10 +249,10 @@ download_shadowsocks_package() {
     local version="$1"
     local archive_name="shadowsocks-${version}.${ss_arch}-unknown-linux-gnu.tar.xz"
     local download_url="https://github.com/shadowsocks/shadowsocks-rust/releases/download/${version}/${archive_name}"
-    
+
     log progress "Downloading Shadowsocks package ${archive_name}"
     log info "Download URL: ${download_url}"
-    
+
     # Use temporary file to record download errors
     if wget -q --no-check-certificate -N "${download_url}" 2>/tmp/wget_error.log; then
         if [[ -f "${archive_name}" ]]; then
@@ -287,7 +287,7 @@ get_ipv4_address() {
 ################################################################################
 # Install Shadowsocks-rust
 #
-# Retrieves the latest version using get_latest_version, downloads the package via 
+# Retrieves the latest version using get_latest_version, downloads the package via
 # download_shadowsocks_package, and extracts the binary.
 ################################################################################
 install_shadowsocks() {
@@ -317,17 +317,17 @@ install_shadowsocks() {
     log progress "Extracting package"
     local archive_name="shadowsocks-${latest_ver}.${ss_arch}-unknown-linux-gnu.tar.xz"
     local current_dir="$(pwd)"
-    
+
     # Check if the downloaded file exists
     if [[ ! -f "$current_dir/$archive_name" ]]; then
         log error "Downloaded file $archive_name not found in $current_dir!"
         exit 1
     fi
-    
+
     # Create temporary directory for extraction
     local temp_dir=$(mktemp -d)
     log info "Created temporary directory for extraction: $temp_dir"
-    
+
     # Use detailed error checking for extraction
     if ! tar -xf "$current_dir/$archive_name" -C "$temp_dir" 2>/tmp/tar_error.log; then
         log error "Failed to extract Shadowsocks package! Error code: $?"
@@ -336,7 +336,7 @@ install_shadowsocks() {
         rm -rf "$temp_dir" /tmp/tar_error.log
         exit 1
     fi
-    
+
     # Check if the extracted file exists
     if [[ ! -f "$temp_dir/ssserver" ]]; then
         log error "Extraction completed but ssserver binary not found in extracted files!"
@@ -344,11 +344,11 @@ install_shadowsocks() {
         rm -rf "$temp_dir"
         exit 1
     fi
-    
+
     # Set permissions and move file
     chmod +x "$temp_dir/ssserver"
     mv -f "$temp_dir/ssserver" /usr/local/bin/
-    
+
     # Clean up other files
     rm -f "$temp_dir/sslocal" "$temp_dir/ssmanager" "$temp_dir/ssservice" "$temp_dir/ssurl" 2>/dev/null
     rm -rf "$temp_dir"
@@ -390,6 +390,9 @@ configure_shadowsocks() {
 
     cat > /etc/shadowsocks/config.json << EOF
 {
+    "log": {
+        "writers": []
+    },
     "server": "0.0.0.0",
     "server_port": $ssport,
     "password": "$sspasswd",
@@ -519,7 +522,7 @@ uninstall_service() {
     if ! check_service_exists; then
         log warn "Shadowsocks service is not installed, continuing cleanup"
     fi
-    
+
     log progress "Stopping and disabling Shadowsocks service"
     systemctl stop shadowsocks.service 2>/dev/null
     systemctl disable shadowsocks.service 2>/dev/null
@@ -604,7 +607,7 @@ main() {
         log error "This script must be run as root! Please use sudo."
         exit 1
     fi
-    
+
     # Display script version and execution environment information
     log info "Shadowsocks installation script v1.2"
     log info "Operating System: $(uname -s) $(uname -r)"
@@ -614,7 +617,7 @@ main() {
         uninstall_service
         exit 0
     fi
-    
+
     # If parameters are provided (beyond script name) then execute non-interactive mode.
     if [ "$#" -gt 0 ]; then
         run_installation
