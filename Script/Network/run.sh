@@ -208,8 +208,9 @@ step_time_sync() {
 
 proxy_meta() {
   case "$1" in
-    shadss) printf 'shadowsocks.service|/etc/shadowsocks/config.json|-u|-p' ;;
-    singbox) printf 'sing-box.service|/etc/sing-box/config.json|--uninstall|' ;;
+    ssrust) printf 'shadowsocks.service|/etc/shadowsocks/config.json|-u|-p' ;;
+    ssgo) printf 'sing-box.service|/etc/sing-box/config.json|--uninstall|' ;;
+    anytls) printf 'sing-box.service|/etc/sing-box/config.json|--uninstall|' ;;
     reality) printf 'xray.service|/usr/local/etc/xray/config.json|--uninstall|--reality-port' ;;
     snell) printf 'snell.service|/etc/snell/snell.conf|-u|-p' ;;
     *) return 1 ;;
@@ -232,7 +233,7 @@ step_proxy() {
   shift 2
   IFS='|' read -r service config uninstall port_key <<< "$(proxy_meta "$type")" || fail "unknown proxy type | type=${type}"
 
-  if [ "$type" = "singbox" ]; then
+  if [ "$type" = "anytls" ] || [ "$type" = "ssgo" ]; then
     protocol="$(arg_value --protocol "$@" || true)"
     anytls_port="$(arg_value --anytls-port "$@" || true)"
     ss_port="$(arg_value --ss-port "$@" || true)"
@@ -251,7 +252,7 @@ step_proxy() {
     [ -z "$ss_port" ] || service_usable "$service" "$config" "$ss_port" || fail "proxy inactive | service=sing-box | protocol=shadowsocks"
     log "proxy active | service=${service%.service} | ${detail}"
     return 0
-  elif [ "$type" = "shadss" ]; then
+  elif [ "$type" = "ssrust" ]; then
     port="$(arg_value "$port_key" "$@")" || fail "proxy port missing | service=${service%.service}"
     provider_run "$script" "$@" || fail "proxy configuration failed | service=${service%.service}"
     service_usable "$service" "$config" "$port" || fail "proxy inactive | service=${service%.service}"
