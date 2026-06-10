@@ -1,4 +1,4 @@
-name: Check ImmortalWrt Kernel
+name: Check Upstream Version
 
 on:
   schedule:
@@ -11,7 +11,7 @@ permissions:
   actions: write
 
 jobs:
-  check-kernel-version:
+  check-upstream-version:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -29,31 +29,34 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Restore Kernel State
+      - name: Restore Upstream Version State
         uses: actions/cache/restore@v5
         with:
           path: ${{ runner.temp }}/immortalwrt-kernel-state
-          key: immortalwrt-kernel-state-${{ github.run_id }}
+          key: upstream-version-state-${{ github.run_id }}
           restore-keys: |
+            upstream-version-state-
+            upstream-core-state-
             immortalwrt-kernel-state-
 
-      - name: Check ImmortalWrt Kernel
-        id: check_kernel
+      - name: Check Upstream Version
+        id: check_version
         env:
           GITHUB_TOKEN: ${{ github.token }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          UPSTREAM_BRANCH: openwrt-25.12
+          KERNEL_UPSTREAM_BRANCH: openwrt-25.12
           KERNEL_PATCHVER: '6.12'
-          KERNEL_STATE_FILE: ${{ runner.temp }}/immortalwrt-kernel-state/state.json
-        run: python ${GITHUB_WORKSPACE}/Script/Workflow/kernel_monitor.py
+          MIHOMO_REPO: MetaCubeX/mihomo
+          MONITOR_STATE_FILE: ${{ runner.temp }}/immortalwrt-kernel-state/state.json
+        run: python ${GITHUB_WORKSPACE}/Script/Workflow/version_monitor.py
 
-      - name: Save Kernel State
-        if: steps.check_kernel.outputs.cache_save == 'true'
+      - name: Save Upstream Version State
+        if: steps.check_version.outputs.cache_save == 'true'
         uses: actions/cache/save@v5
         with:
           path: ${{ runner.temp }}/immortalwrt-kernel-state
-          key: immortalwrt-kernel-state-${{ steps.check_kernel.outputs.state_version }}-${{ steps.check_kernel.outputs.state_commit }}-${{ github.run_id }}
+          key: upstream-version-state-${{ steps.check_version.outputs.state_key }}-${{ github.run_id }}
 
       - name: Delete old Workflows
         uses: ophub/delete-releases-workflows@main
