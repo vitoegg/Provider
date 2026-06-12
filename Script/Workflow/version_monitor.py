@@ -20,10 +20,12 @@ USER_AGENT = "ProviderUpstreamMonitor/1.0"
 
 KERNEL_SOURCE = "immortalwrt_kernel"
 MIHOMO_SOURCE = "mihomo_core"
-SOURCE_ORDER = (KERNEL_SOURCE, MIHOMO_SOURCE)
+OPENWRT_RELEASE_SOURCE = "openwrt_release"
+SOURCE_ORDER = (KERNEL_SOURCE, MIHOMO_SOURCE, OPENWRT_RELEASE_SOURCE)
 SOURCE_NAMES = {
     KERNEL_SOURCE: "ImmortalWrt Kernel",
     MIHOMO_SOURCE: "Mihomo Core",
+    OPENWRT_RELEASE_SOURCE: "OpenWrt Release",
 }
 
 
@@ -171,6 +173,13 @@ def read_state():
             "updated_at": os.environ.get("PREVIOUS_MIHOMO_CORE_UPDATED_AT", ""),
             "url": os.environ.get("PREVIOUS_MIHOMO_CORE_URL", ""),
         }
+    openwrt_release_version = os.environ.get("PREVIOUS_OPENWRT_RELEASE_VERSION", "")
+    if openwrt_release_version:
+        state[OPENWRT_RELEASE_SOURCE] = {
+            "version": openwrt_release_version,
+            "updated_at": os.environ.get("PREVIOUS_OPENWRT_RELEASE_UPDATED_AT", ""),
+            "url": os.environ.get("PREVIOUS_OPENWRT_RELEASE_URL", ""),
+        }
     return state
 
 
@@ -190,6 +199,10 @@ def set_state_outputs(snapshots):
     set_output("state_key", state_key(snapshots))
     set_output("kernel_version", snapshots.get(KERNEL_SOURCE, {}).get("version", ""))
     set_output("mihomo_version", snapshots.get(MIHOMO_SOURCE, {}).get("version", ""))
+    set_output(
+        "openwrt_release_version",
+        snapshots.get(OPENWRT_RELEASE_SOURCE, {}).get("version", ""),
+    )
 
 
 def write_state(snapshots):
@@ -296,11 +309,11 @@ def detect_kernel(token):
     }
 
 
-def detect_mihomo(token):
+def detect_github_latest_release(token, source_id, repo_env, default_owner, default_repo):
     owner, repo = repo_parts(
-        os.environ.get("MIHOMO_REPO", "MetaCubeX/mihomo"),
-        "MetaCubeX",
-        "mihomo",
+        os.environ.get(repo_env, f"{default_owner}/{default_repo}"),
+        default_owner,
+        default_repo,
     )
     _, release = request(
         "GET",
@@ -321,7 +334,7 @@ def detect_mihomo(token):
 
     log(
         "source_detected",
-        source=MIHOMO_SOURCE,
+        source=source_id,
         repo=f"{owner}/{repo}",
         version=version,
         published_at=published_at,
@@ -331,6 +344,26 @@ def detect_mihomo(token):
         "updated_at": format_time(published_at),
         "url": url,
     }
+
+
+def detect_mihomo(token):
+    return detect_github_latest_release(
+        token,
+        MIHOMO_SOURCE,
+        "MIHOMO_REPO",
+        "MetaCubeX",
+        "mihomo",
+    )
+
+
+def detect_openwrt_release(token):
+    return detect_github_latest_release(
+        token,
+        OPENWRT_RELEASE_SOURCE,
+        "OPENWRT_RELEASE_REPO",
+        "openwrt",
+        "openwrt",
+    )
 
 
 def dry_run_current_state():
@@ -354,6 +387,7 @@ def detect_snapshots(token):
     return {
         KERNEL_SOURCE: detect_kernel(token),
         MIHOMO_SOURCE: detect_mihomo(token),
+        OPENWRT_RELEASE_SOURCE: detect_openwrt_release(token),
     }
 
 
@@ -377,7 +411,7 @@ def changed_sources(previous, current):
 
 
 def build_message(changes):
-    lines = ["🚀 <b>上游内核更新</b>", ""]
+    lines = ["🚀 <b>上游版本更新</b>", ""]
     for change in changes:
         current = change["current"]
         url = html.escape(current["url"], quote=True)

@@ -48,6 +48,7 @@ jobs:
           KERNEL_UPSTREAM_BRANCH: openwrt-25.12
           KERNEL_PATCHVER: '6.12'
           MIHOMO_REPO: MetaCubeX/mihomo
+          OPENWRT_RELEASE_REPO: openwrt/openwrt
           MONITOR_STATE_FILE: ${{ runner.temp }}/immortalwrt-kernel-state/state.json
         run: python ${GITHUB_WORKSPACE}/Script/Workflow/version_monitor.py
 
