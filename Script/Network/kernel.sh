@@ -47,6 +47,7 @@ write_config() {
 # Managed by Provider kernel.sh
 
 # TCP Adjustment
+net.ipv4.tcp_slow_start_after_idle = 1
 net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_fastopen = 0
 net.ipv4.tcp_ecn = 0
