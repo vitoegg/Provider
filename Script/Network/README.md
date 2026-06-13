@@ -186,9 +186,9 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 ```text
 --help, -h              显示帮助
 --list, -l              查看规则
---add, -a RULE [...]    添加规则
+--add, -a [noping] RULE [...]    添加规则，可选禁止 ping
 --delete, -d RULE [...] 删除规则
---replace, -r RULE [...] 替换全部规则
+--replace, -r [noping] RULE [...] 替换全部规则，可选禁止 ping
 --ddns sync             同步域名订阅
 --ddns apply            应用 DNS cache
 --ddns list             查看域名规则

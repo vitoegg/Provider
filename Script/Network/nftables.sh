@@ -953,8 +953,8 @@ remove_rule_from_state() {
 }
 
 rule_batch() {
-     local action="$1" candidate now success=0 skipped=0 failed=0 rule rc protect_flag desc success_msg empty_msg show_status=0 prepared_domains=0 applied_success=0
-     shift
+     local action="$1" protect_noping="$2" candidate now success=0 skipped=0 failed=0 rule rc protect_flag desc success_msg empty_msg show_status=0 prepared_domains=0 applied_success=0
+     shift 2
      [ $# -gt 0 ] || { log_error "未提供任何规则"; return 1; }
      candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 1
      case "$action" in
@@ -1025,7 +1025,7 @@ rule_batch() {
              rm -f "$candidate"
              return 0
          fi
-         apply_candidate_state "$candidate" "$protect_flag" "$desc" || {
+         apply_candidate_state "$candidate" "$protect_flag" "$desc" "" "$protect_noping" || {
              [ "$prepared_domains" -eq 0 ] || reconcile_forwardaws_dns || log_warn "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
              rm -f "$candidate"
              return 1
@@ -1034,16 +1034,17 @@ rule_batch() {
          reconcile_timers || { rm -f "$candidate"; return 1; }
          
          [ "$show_status" = "1" ] && show_protection_status
+     elif [ "$failed" -eq 0 ] && [ "$protect_noping" = "1" ] && [ "$(get_protect_noping_flag)" != "1" ]; then
+         apply_candidate_state "$candidate" "$protect_flag" "$desc" "" "$protect_noping" || { rm -f "$candidate"; return 1; }
+         log_warn "没有${empty_msg}: 跳过 ${skipped} 条，失败 ${failed} 条"
+         reconcile_timers || { rm -f "$candidate"; return 1; }
+         [ "$show_status" = "1" ] && show_protection_status
      else
          log_warn "没有${empty_msg}: 跳过 ${skipped} 条，失败 ${failed} 条"
      fi
      rm -f "$candidate"
      [ "$failed" -eq 0 ]
  }
-
-add_rule_batch() { rule_batch add "$@"; }
-delete_rule_batch() { rule_batch delete "$@"; }
-replace_rules_batch() { rule_batch replace "$@"; }
 
 apply_ddns_cache() {
     local candidate candidate_changed=0 changed=0 unchanged=0 pending=0 failed=0 now
@@ -1256,9 +1257,9 @@ show_help() {
 用法:
   $0 --help
   $0 --list
-  $0 --add <规则1> [规则2 ...]
+  $0 --add [noping] <规则1> [规则2 ...]
   $0 --delete <规则1> [规则2 ...]
-  $0 --replace <规则1> [规则2 ...]
+  $0 --replace [noping] <规则1> [规则2 ...]
   $0 --ddns sync
   $0 --ddns apply
   $0 --ddns list
@@ -1279,6 +1280,19 @@ run_mutation() {
     acquire_global_lock || return 1
     log_info_noisy "$desc"
     "$@"
+}
+
+run_rule_batch_command() {
+    local action="$1" desc_prefix="$2" desc_suffix="$3" allow_noping="$4" protect_noping=""
+    shift 4
+    if [ "${1:-}" = "noping" ]; then
+        [ "$allow_noping" = "1" ] || { log_error "当前命令不支持 noping 参数"; return 1; }
+        protect_noping=1
+        shift
+    fi
+    [ $# -gt 0 ] || { log_error "未提供任何规则"; show_help; return 1; }
+    ensure_for_write || return 1
+    run_mutation "${desc_prefix} $# ${desc_suffix}" rule_batch "$action" "$protect_noping" "$@"
 }
 
 ensure_for_read() {
@@ -1305,9 +1319,9 @@ main() {
     case "$1" in
         --help|-h) show_help ;;
         --list|-l) ensure_for_read && display_rules || exit 1 ;;
-        --add|-a) shift; [ $# -gt 0 ] || { log_error "未提供任何规则"; show_help; exit 1; }; ensure_for_write && run_mutation "准备批量添加 $# 条转发规则..." add_rule_batch "$@" || exit 1 ;;
-        --delete|-d) shift; [ $# -gt 0 ] || { log_error "未提供任何规则"; show_help; exit 1; }; ensure_for_write && run_mutation "准备批量删除 $# 条转发规则..." delete_rule_batch "$@" || exit 1 ;;
-        --replace|-r) shift; [ $# -gt 0 ] || { log_error "未提供任何规则"; show_help; exit 1; }; ensure_for_write && run_mutation "准备原子替换为 $# 条新规则..." replace_rules_batch "$@" || exit 1 ;;
+        --add|-a) shift; run_rule_batch_command add "准备批量添加" "条转发规则..." 1 "$@" || exit 1 ;;
+        --delete|-d) shift; run_rule_batch_command delete "准备批量删除" "条转发规则..." 0 "$@" || exit 1 ;;
+        --replace|-r) shift; run_rule_batch_command replace "准备原子替换为" "条新规则..." 1 "$@" || exit 1 ;;
         --ddns)
             shift
             [ $# -gt 0 ] || { log_error "未提供 DDNS 模式参数"; show_help; exit 1; }
