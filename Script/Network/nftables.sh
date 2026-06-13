@@ -290,7 +290,12 @@ get_config_value() {
 }
 
 get_protection_flag() { get_config_value "PROTECTION_ENABLED" "0"; }
-write_config_file() { echo "PROTECTION_ENABLED=$2" > "$1"; }
+get_protect_noping_flag() { [ "$(get_config_value "PROTECT_NOPING" "0")" = "1" ] && echo "1" || echo "0"; }
+write_config_file() {
+    local output_file="$1" protect_flag="$2" protect_noping="${3:-0}"
+    [ "$protect_flag" = "1" ] || protect_noping=0
+    printf 'PROTECTION_ENABLED=%s\nPROTECT_NOPING=%s\n' "$protect_flag" "$protect_noping" > "$output_file"
+}
 
 normalize_ports() {
     echo "$1" | tr -d ' ' | tr ',' '\n' | awk 'NF>0' | sort -un | tr '\n' ',' | sed 's/,$//'
@@ -542,13 +547,13 @@ copy_current_state_to() {
 }
 
 render_ruleset() {
-    local state_file="$1" protect_flag="$2" output_file="$3" allow_ports="${4:-}"
+    local state_file="$1" protect_flag="$2" output_file="$3" allow_ports="${4:-}" protect_noping="${5:-0}"
     if [ "$protect_flag" = "1" ] && [ -z "$allow_ports" ]; then
         allow_ports=$(get_auto_allow_ports "$state_file") || return 1
         [ -n "$allow_ports" ] || { log_error "保护端口列表为空，拒绝渲染保护链"; return 1; }
     fi
     awk -F'|' -v nat="$NAT_TABLE_NAME" -v filter="$FILTER_TABLE_NAME" \
-        -v protect="$protect_flag" -v allow="$allow_ports" '
+        -v protect="$protect_flag" -v allow="$allow_ports" -v noping="$protect_noping" '
         function rule(s) { return "        " s "\n" }
         NF>=8 && $6 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {
             if ($2=="remote") {
@@ -590,6 +595,10 @@ render_ruleset() {
             if (protect=="1") {
                 print "    chain input {\n        type filter hook input priority 0; policy drop;"
                 print "        iifname \"lo\" accept\n        ct state established,related accept"
+                if (noping=="1") {
+                    print "        ip protocol icmp icmp type echo-request drop"
+                    print "        ip6 nexthdr icmpv6 icmpv6 type echo-request drop"
+                }
                 print "        ip protocol icmp accept\n        ip6 nexthdr icmpv6 accept"
                 print "        tcp dport { " allow " } accept\n        udp dport { " allow " } accept\n    }"
             }
@@ -617,10 +626,12 @@ run_nft_file() {
 }
 
 apply_candidate_state() {
-    local candidate_state="$1" protect_flag="$2" desc="$3" protect_ports="${4:-}"
+    local candidate_state="$1" protect_flag="$2" desc="$3" protect_ports="${4:-}" protect_noping="${5:-}"
     local nft_tmp state_tmp config_tmp rules_changed=0 include_missing=0 forwarding_needs_update=0 state_changed=0 config_changed=0
     APPLY_CANDIDATE_CHANGED=0
     ensure_state_dir || return 1
+    [ -n "$protect_noping" ] || protect_noping=$(get_protect_noping_flag)
+    [ "$protect_flag" = "1" ] || protect_noping=0
     if [ "$protect_flag" = "1" ] && [ -z "$protect_ports" ]; then
         protect_ports=$(get_auto_allow_ports "$candidate_state") || return 1
     fi
@@ -628,10 +639,10 @@ apply_candidate_state() {
     nft_tmp="${FORWARDAWS_RULES_FILE}.tmp.$$"
     state_tmp="${RULES_STATE_FILE}.tmp.$$"
     config_tmp="${CONFIG_FILE}.tmp.$$"
-    render_ruleset "$candidate_state" "$protect_flag" "$nft_tmp" "$protect_ports" || { rm -f "$nft_tmp"; return 1; }
+    render_ruleset "$candidate_state" "$protect_flag" "$nft_tmp" "$protect_ports" "$protect_noping" || { rm -f "$nft_tmp"; return 1; }
     state_has_remote_rules "$candidate_state" && ipv4_forwarding_needs_update && forwarding_needs_update=1
     cp "$candidate_state" "$state_tmp" || { rm -f "$nft_tmp" "$state_tmp"; log_error "写入状态临时文件失败"; return 1; }
-    write_config_file "$config_tmp" "$protect_flag" || { rm -f "$nft_tmp" "$state_tmp" "$config_tmp"; log_error "写入配置临时文件失败"; return 1; }
+    write_config_file "$config_tmp" "$protect_flag" "$protect_noping" || { rm -f "$nft_tmp" "$state_tmp" "$config_tmp"; log_error "写入配置临时文件失败"; return 1; }
     cmp -s "$nft_tmp" "$FORWARDAWS_RULES_FILE" || rules_changed=1
     nft_main_config_has_forwardaws_include || include_missing=1
     cmp -s "$state_tmp" "$RULES_STATE_FILE" || state_changed=1
@@ -1127,13 +1138,15 @@ sync_ddns_rules() {
 }
 
 apply_protection_state() {
-    local protect_flag="$1" desc="$2" success_msg="$3" candidate current_ports=""
+    local protect_flag="$1" desc="$2" success_msg="$3" protect_noping="${4:-}" candidate current_ports=""
     candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 1
     copy_current_state_to "$candidate" || { rm -f "$candidate"; return 1; }
+    [ -n "$protect_noping" ] || protect_noping=$(get_protect_noping_flag)
+    [ "$protect_flag" = "1" ] || protect_noping=0
     if [ "$protect_flag" = "1" ]; then
         current_ports=$(get_auto_allow_ports "$candidate") || { rm -f "$candidate"; return 1; }
     fi
-    apply_candidate_state "$candidate" "$protect_flag" "$desc" "$current_ports" || { rm -f "$candidate"; return 1; }
+    apply_candidate_state "$candidate" "$protect_flag" "$desc" "$current_ports" "$protect_noping" || { rm -f "$candidate"; return 1; }
     rm -f "$candidate"
     reconcile_timers
     if [ "${APPLY_CANDIDATE_CHANGED:-0}" = "1" ]; then
@@ -1148,13 +1161,14 @@ sync_protection_ports() {
     apply_protection_state 1 "同步端口保护" "保护端口同步完成"
 }
 
-enable_protection() { apply_protection_state 1 "开启端口保护" "端口保护已开启，开放端口"; }
+enable_protection() { apply_protection_state 1 "开启端口保护" "端口保护已开启，开放端口" "${1:-0}"; }
 disable_protection() { apply_protection_state 0 "关闭端口保护" "端口保护已关闭"; }
 
 show_protection_status() {
-    local protect_flag timer_status auto_ports
+    local protect_flag protect_noping timer_status auto_ports
     prepare_state_file_for_read
     protect_flag=$(get_protection_flag)
+    protect_noping=$(get_protect_noping_flag)
     timer_status=$(get_protect_timer_status)
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}           端口保护状态${NC}"
@@ -1163,6 +1177,7 @@ show_protection_status() {
         auto_ports=$(get_auto_allow_ports "$RULES_STATE_FILE") || return 1
         echo -e "保护状态: ${GREEN}已开启${NC}"
         echo -e "当前放行端口: ${YELLOW}${auto_ports}${NC}"
+        [ "$protect_noping" = "1" ] && echo -e "Ping: ${RED}已禁止${NC}" || echo -e "Ping: ${GREEN}允许${NC}"
     else
         echo -e "保护状态: ${RED}未开启${NC}"
     fi
@@ -1247,7 +1262,7 @@ show_help() {
   $0 --ddns sync
   $0 --ddns apply
   $0 --ddns list
-  $0 --protect on
+  $0 --protect on [noping]
   $0 --protect off
   $0 --protect status
   $0 --protect sync
@@ -1284,6 +1299,7 @@ ensure_for_uninstall() {
 }
 
 main() {
+    local protect_noping
     ensure_supported_bash || exit 1
     [ $# -eq 0 ] && { log_error "请使用参数模式执行，例如: $0 --help"; show_help; exit 1; }
     case "$1" in
@@ -1308,10 +1324,28 @@ main() {
             shift
             [ $# -gt 0 ] || { log_error "未提供保护模式参数"; show_help; exit 1; }
             case "$1" in
-                on) ensure_for_write && run_mutation "正在开启端口保护模式..." enable_protection && show_protection_status || exit 1 ;;
-                off) ensure_for_write && run_mutation "正在关闭端口保护模式..." disable_protection && show_protection_status || exit 1 ;;
-                status) ensure_for_read && show_protection_status || exit 1 ;;
-                sync) ensure_for_write && run_mutation "正在同步端口保护..." sync_protection_ports || exit 1 ;;
+                on)
+                    shift
+                    case "${1:-}" in
+                        "") protect_noping=0 ;;
+                        noping) protect_noping=1; shift ;;
+                        *) log_error "未知的保护模式参数: $1"; exit 1 ;;
+                    esac
+                    [ $# -eq 0 ] || { log_error "保护模式 on 不支持额外参数: $*"; exit 1; }
+                    ensure_for_write && run_mutation "正在开启端口保护模式..." enable_protection "$protect_noping" && show_protection_status || exit 1
+                    ;;
+                off)
+                    [ $# -eq 1 ] || { log_error "保护模式 off 不支持额外参数: ${*:2}"; exit 1; }
+                    ensure_for_write && run_mutation "正在关闭端口保护模式..." disable_protection && show_protection_status || exit 1
+                    ;;
+                status)
+                    [ $# -eq 1 ] || { log_error "保护模式 status 不支持额外参数: ${*:2}"; exit 1; }
+                    ensure_for_read && show_protection_status || exit 1
+                    ;;
+                sync)
+                    [ $# -eq 1 ] || { log_error "保护模式 sync 不支持额外参数: ${*:2}"; exit 1; }
+                    ensure_for_write && run_mutation "正在同步端口保护..." sync_protection_ports || exit 1
+                    ;;
                 *) log_error "未知的保护模式参数: $1"; exit 1 ;;
             esac
             ;;

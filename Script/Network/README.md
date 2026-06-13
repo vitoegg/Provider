@@ -192,7 +192,7 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 --ddns sync             同步域名订阅
 --ddns apply            应用 DNS cache
 --ddns list             查看域名规则
---protect on            开启端口保护
+--protect on [noping]   开启端口保护，可选禁止 ping
 --protect off           关闭端口保护
 --protect status        查看保护状态
 --protect sync          同步保护端口
