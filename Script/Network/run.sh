@@ -394,7 +394,7 @@ step_traffic() {
       log "traffic rules loaded | mode=forward"
       ;;
     protect)
-      provider_run "$script" --protect on || fail "traffic rules load failed | mode=protect"
+      provider_run "$script" --protect on "$@" || fail "traffic rules load failed | mode=protect"
       log "traffic rules loaded | mode=protect"
       ;;
     *)
