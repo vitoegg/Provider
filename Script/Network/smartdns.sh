@@ -1,253 +1,191 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-# Define color codes for different log categories
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+API_URL="https://api.github.com/repos/pymumu/smartdns/releases/latest"
+CONFIG_DIR="/etc/smartdns"
+CONFIG_FILE="${CONFIG_DIR}/smartdns.conf"
+INSTALLER_CACHE="${CONFIG_DIR}/install"
+RESOLV_CONF="/etc/resolv.conf"
 
-# Global variables for versions
-RELEASE_NUMBER=""
-PACKAGE_VERSION=""
 ARCH_TYPE=""
-
-# ECS region variable
+DOWNLOAD_URL=""
 ECS_REGION=""
 IPV6_MODE=""
+UNINSTALL=0
 
-# ECS region to IP mapping
-declare -A ECS_IPS=(
-    ["HK"]="42.2.2.2"
-    ["TYO"]="106.152.210.210"
-    ["LA"]="107.119.53.53"
-    ["OR"]="12.75.216.200"
-    ["SEA"]="68.86.93.93"
-)
+log() { printf '[INFO] %s\n' "$*"; }
+warn() { printf '[WARN] %s\n' "$*" >&2; }
+fail() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 
-# Logging functions
-log_info() {
-    echo -e "${GREEN}[$(date '+%Y-%m-%d %H:%M:%S')][INFO] $1${NC}"
+usage() {
+  cat <<EOF
+Usage:
+  bash smartdns.sh [--ecs REGION] [--ipv6 disable|dualstack]
+  bash smartdns.sh -u|--uninstall
+
+Options:
+  -e, --ecs REGION        ECS region: HK, TYO, LA, OR, SEA
+  -6, --ipv6 MODE         IPv6 mode: disable, dualstack
+  -u, --uninstall         Uninstall SmartDNS and restore public DNS
+  -h, --help              Show help
+EOF
 }
 
-log_warn() {
-    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')][WARN] $1${NC}"
+ecs_ip() {
+  case "$1" in
+    HK) printf '42.2.2.2' ;;
+    TYO) printf '106.152.210.210' ;;
+    LA) printf '107.119.53.53' ;;
+    OR) printf '12.75.216.200' ;;
+    SEA) printf '68.86.93.93' ;;
+    *) return 1 ;;
+  esac
 }
 
-log_error() {
-    echo -e "${RED}[$(date '+%Y-%m-%d %H:%M:%S')][ERROR] $1${NC}"
-}
-
-# Check if running as root
-check_root() {
-    if [ "$(id -u)" != "0" ]; then
-        log_error "This script must be run as root"
-        exit 1
-    fi
-}
-
-# Check if SmartDNS is already installed
-check_installed() {
-    if systemctl is-active smartdns &>/dev/null; then
-        log_error "SmartDNS is already installed and running"
-        exit 1
-    fi
-}
-
-# Check system architecture
-check_arch() {
-    ARCH=$(uname -m)
-    case $ARCH in
-        x86_64)
-            ARCH_TYPE="x86_64"
-            ;;
-        aarch64)
-            ARCH_TYPE="aarch64"
-            ;;
-        *)
-            log_error "Unsupported architecture: $ARCH"
-            log_error "This script only supports x86_64 and aarch64 architectures"
-            exit 1
-            ;;
-    esac
-    log_info "Detected architecture: $ARCH_TYPE"
-}
-
-# Install jq if not present
-install_jq() {
-    if command -v jq &>/dev/null; then
-        log_info "jq is already installed"
-        return 0
-    fi
-
-    log_info "Installing jq..."
-    if [ -f /etc/debian_version ]; then
-        apt-get update -qq && apt-get install -y jq >/dev/null 2>&1
-    elif [ -f /etc/redhat-release ]; then
-        yum install -y jq >/dev/null 2>&1
-    else
-        log_error "Unsupported distribution for automatic jq installation"
-        exit 1
-    fi
-
-    if command -v jq &>/dev/null; then
-        log_info "jq installed successfully"
-    else
-        log_error "Failed to install jq"
-        exit 1
-    fi
-}
-
-# Get the latest SmartDNS versions from GitHub
-get_latest_version() {
-    install_jq
-
-    # Get the latest release page content
-    local release_page
-    release_page=$(wget -qO- https://api.github.com/repos/pymumu/smartdns/releases/latest)
-
-    if [ -z "$release_page" ]; then
-        log_error "Failed to fetch release information"
-        exit 1
-    fi
-
-    # Extract Release number
-    RELEASE_NUMBER=$(echo "$release_page" | jq -r '.tag_name' | sed 's/Release//')
-    if [ -z "$RELEASE_NUMBER" ]; then
-        log_error "Failed to extract Release number"
-        exit 1
-    fi
-
-    # Extract package version from assets
-    PACKAGE_VERSION=$(echo "$release_page" | jq -r '.assets[0].name' | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+-[0-9]\+')
-    if [ -z "$PACKAGE_VERSION" ]; then
-        log_error "Failed to extract package version"
-        exit 1
-    fi
-
-    log_info "Latest versions - Release: ${RELEASE_NUMBER}, Package: ${PACKAGE_VERSION}"
-    return 0
-}
-
-# Parse command line arguments
 parse_args() {
-    UNINSTALL=0
-
-    # If no arguments provided, use default installation
-    if [ $# -eq 0 ]; then
-        log_info "No parameters specified, proceeding with default installation"
-        return 0
-    fi
-
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            -u|--uninstall)
-                UNINSTALL=1
-                shift
-                ;;
-            -e|--ecs)
-                if [ -z "$2" ] || [[ "$2" == -* ]]; then
-                    log_error "ECS region not specified"
-                    echo "Available regions: HK, TYO, LA, SEA"
-                    exit 1
-                fi
-                ECS_REGION=$(echo "$2" | tr '[:lower:]' '[:upper:]')
-                if [ -z "${ECS_IPS[$ECS_REGION]}" ]; then
-                    log_error "Invalid ECS region: $2"
-                    echo "Available regions: HK, TYO, LA, SEA"
-                    exit 1
-                fi
-                log_info "ECS region set to: $ECS_REGION (IP: ${ECS_IPS[$ECS_REGION]})"
-                shift 2
-                ;;
-            -6|--ipv6)
-                case "${2:-}" in
-                    disable|dualstack)
-                        IPV6_MODE="$2"
-                        log_info "IPv6 mode set to: $IPV6_MODE"
-                        ;;
-                    ""|-*)
-                        log_error "IPv6 mode not specified"
-                        echo "Available IPv6 modes: disable, dualstack"
-                        exit 1
-                        ;;
-                    *)
-                        log_error "Invalid IPv6 mode: $2"
-                        echo "Available IPv6 modes: disable, dualstack"
-                        exit 1
-                        ;;
-                esac
-                shift 2
-                ;;
-            *)
-                log_error "Unknown parameter: $1"
-                echo "Usage: $0 [-u|--uninstall] [-e|--ecs REGION] [-6|--ipv6 disable|dualstack]"
-                echo "       $0 (no parameters for default installation)"
-                echo "Available ECS regions: HK, TYO, LA, SEA"
-                echo "Available IPv6 modes: disable, dualstack"
-                exit 1
-                ;;
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -u|--uninstall) UNINSTALL=1; shift ;;
+      -e|--ecs)
+        [ -n "${2:-}" ] && [[ "${2:-}" != -* ]] || fail "ECS region required"
+        ECS_REGION="$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]')"
+        ecs_ip "$ECS_REGION" >/dev/null || fail "invalid ECS region: $2"
+        shift 2
+        ;;
+      -6|--ipv6)
+        case "${2:-}" in
+          disable|dualstack) IPV6_MODE="$2" ;;
+          *) fail "invalid IPv6 mode: ${2:-}" ;;
         esac
-    done
-
-    if [ $UNINSTALL -eq 1 ]; then
-        log_info "Preparing to uninstall SmartDNS..."
-    else
-        log_info "Proceeding with default installation"
-    fi
+        shift 2
+        ;;
+      *) usage >&2; fail "unknown argument: $1" ;;
+    esac
+  done
 }
 
-# Download and install SmartDNS
-install_smartdns() {
-    local tmp_dir
-    tmp_dir=$(mktemp -d)
-    cd "$tmp_dir" || exit 1
-
-    log_info "Downloading SmartDNS..."
-    local download_url="https://github.com/pymumu/smartdns/releases/download/Release${RELEASE_NUMBER}/smartdns.${PACKAGE_VERSION}.${ARCH_TYPE}-linux-all.tar.gz"
-
-    wget --no-check-certificate -q "$download_url" -O smartdns.tar.gz || {
-        log_error "Download failed"
-        cd / && rm -rf "$tmp_dir"
-        exit 1
-    }
-
-    log_info "Installing SmartDNS..."
-    tar zxf smartdns.tar.gz >/dev/null 2>&1 || {
-        log_error "Failed to extract archive"
-        cd / && rm -rf "$tmp_dir"
-        exit 1
-    }
-
-    cd smartdns && chmod +x ./install
-    ./install -i >/dev/null 2>&1 || {
-        log_error "SmartDNS installation failed"
-        cd / && rm -rf "$tmp_dir"
-        exit 1
-    }
-
-    log_info "SmartDNS installed successfully"
-    cd / && rm -rf "$tmp_dir"
+require_root_systemd() {
+  [ "${EUID:-$(id -u)}" -eq 0 ] || fail "root required"
+  command -v systemctl >/dev/null 2>&1 || fail "systemd required"
 }
 
-# Configure SmartDNS
-configure_smartdns() {
-    mkdir -p /etc/smartdns
+ensure_dependencies() {
+  command -v apt-get >/dev/null 2>&1 || fail "Debian/Ubuntu apt required"
+  local missing=()
+  command -v jq >/dev/null 2>&1 || missing+=(jq)
+  command -v tar >/dev/null 2>&1 || missing+=(tar)
+  command -v ss >/dev/null 2>&1 || missing+=(iproute2)
+  command -v wget >/dev/null 2>&1 || missing+=(wget)
+  [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
 
-    # Generate ECS suffix for DNS servers (except 1.1.1.1)
-    local ecs_suffix=""
-    if [ -n "$ECS_REGION" ]; then
-        ecs_suffix=" -subnet ${ECS_IPS[$ECS_REGION]}/24"
-        log_info "Applying ECS configuration with IP: ${ECS_IPS[$ECS_REGION]}"
+  if [ "${#missing[@]}" -gt 0 ]; then
+    log "Installing dependencies: ${missing[*]}"
+    env DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null ||
+      fail "dependency metadata update failed"
+    env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null ||
+      fail "dependency install failed"
+  fi
+}
+
+fetch() {
+  wget -qO- "$1"
+}
+
+download() {
+  wget -q -O "$2" "$1"
+}
+
+detect_arch() {
+  case "$(uname -m)" in
+    x86_64) ARCH_TYPE="x86_64" ;;
+    aarch64) ARCH_TYPE="aarch64" ;;
+    *) fail "unsupported architecture: $(uname -m)" ;;
+  esac
+}
+
+select_release_asset() {
+  local json tag
+  json="$(fetch "$API_URL")" || fail "failed to fetch SmartDNS release"
+  tag="$(printf '%s' "$json" | jq -r '.tag_name // empty')"
+  [ -n "$tag" ] || fail "failed to parse SmartDNS release tag"
+
+  DOWNLOAD_URL="$(
+    printf '%s' "$json" |
+      jq -r --arg arch "$ARCH_TYPE" '
+        .assets[]
+        | select(.name | test("^smartdns\\..*\\." + $arch + "-linux-all\\.tar\\.gz$"))
+        | .browser_download_url
+      ' | head -n 1
+  )"
+  [ -n "$DOWNLOAD_URL" ] || fail "failed to find SmartDNS linux tar asset"
+  log "SmartDNS release: ${tag}"
+}
+
+service_exists() {
+  systemctl cat smartdns.service >/dev/null 2>&1 && return 0
+  systemctl list-unit-files smartdns.service 2>/dev/null |
+    awk '$1=="smartdns.service" { found=1 } END { exit !found }'
+}
+
+smartdns_present() {
+  service_exists || [ -x /usr/sbin/smartdns ] || [ -e "$CONFIG_FILE" ]
+}
+
+port_53_conflict() {
+  ss -H -lunp 2>/dev/null | awk '
+    /smartdns/ { next }
+    $5 ~ /(^|\[::\]|0\.0\.0\.0|127\.0\.0\.1|\*):53$/ { found=1 }
+    END { exit !found }
+  '
+}
+
+smartdns_listening() {
+  ss -H -lunp 2>/dev/null | awk '
+    /smartdns/ && $5 ~ /(^|\[::\]|0\.0\.0\.0|127\.0\.0\.1|\*):53$/ { found=1 }
+    END { exit !found }
+  '
+}
+
+run_installer() {
+  local action="$1" tmp_dir
+  tmp_dir="$(mktemp -d)"
+  if ! (
+    cd "$tmp_dir"
+    download "$DOWNLOAD_URL" smartdns.tar.gz
+    tar zxf smartdns.tar.gz
+    cd smartdns
+    chmod +x ./install
+    ./install "$action" >/dev/null 2>&1
+    if [ "$action" = "-i" ]; then
+      mkdir -p "$CONFIG_DIR"
+      cp ./install "$INSTALLER_CACHE"
+      chmod 755 "$INSTALLER_CACHE"
     fi
+  ); then
+    rm -rf "$tmp_dir"
+    fail "SmartDNS installer failed: ${action}"
+  fi
+  rm -rf "$tmp_dir"
+}
 
-    cat > /etc/smartdns/smartdns.conf << EOF
+write_config() {
+  local suffix="" ip
+  mkdir -p "$CONFIG_DIR"
+  if [ -n "$ECS_REGION" ]; then
+    ip="$(ecs_ip "$ECS_REGION")"
+    suffix=" -subnet ${ip}/24"
+    log "ECS: ${ECS_REGION} (${ip})"
+  fi
+
+  cat > "$CONFIG_FILE" <<EOF
 server-name smartdns
 log-level off
 bind 127.0.0.1:53
 server 1.1.1.1
 server 45.11.45.11
-server 8.8.8.8${ecs_suffix}
-server 94.140.14.140${ecs_suffix}
+server 8.8.8.8${suffix}
+server 94.140.14.140${suffix}
 speed-check-mode ping,tcp:80,tcp:443
 serve-expired yes
 serve-expired-ttl 129600
@@ -260,83 +198,78 @@ cache-file /etc/smartdns/smartdns.cache
 force-qtype-SOA 65
 EOF
 
-    case "$IPV6_MODE" in
-        disable)
-            printf 'dualstack-ip-selection no\nforce-AAAA-SOA yes\n' >> /etc/smartdns/smartdns.conf
-            ;;
-        dualstack)
-            printf 'dualstack-ip-selection yes\n' >> /etc/smartdns/smartdns.conf
-            ;;
-    esac
-
-    systemctl enable smartdns >/dev/null 2>&1
-    log_info "Starting SmartDNS service..."
-    systemctl start smartdns
-
-    if systemctl is-active smartdns &>/dev/null; then
-        log_info "SmartDNS installed and started successfully!"
-
-        log_info "Configuring system DNS..."
-        chattr -i /etc/resolv.conf 2>/dev/null
-        rm -f /etc/resolv.conf
-        echo "nameserver 127.0.0.1" > /etc/resolv.conf
-        chattr +i /etc/resolv.conf
-
-        log_info "System DNS configuration completed!"
-
-        echo "----------------------------------------"
-        systemctl status smartdns
-        echo "----------------------------------------"
-    else
-        log_error "SmartDNS failed to start. Please check logs"
-        exit 1
-    fi
+  case "$IPV6_MODE" in
+    disable) printf 'dualstack-ip-selection no\nforce-AAAA-SOA yes\n' >> "$CONFIG_FILE" ;;
+    dualstack) printf 'dualstack-ip-selection yes\n' >> "$CONFIG_FILE" ;;
+  esac
 }
 
-# Uninstall SmartDNS
+set_dns() {
+  chattr -i "$RESOLV_CONF" 2>/dev/null || true
+  rm -f "$RESOLV_CONF"
+  if [ "$1" = "local" ]; then
+    printf 'nameserver 127.0.0.1\n' > "$RESOLV_CONF"
+    chattr +i "$RESOLV_CONF" 2>/dev/null || true
+  else
+    printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > "$RESOLV_CONF"
+  fi
+}
+
+install_smartdns() {
+  smartdns_present && fail "SmartDNS already exists; run uninstall first"
+  port_53_conflict && fail "port 53 is already used by another service"
+
+  detect_arch
+  select_release_asset
+  log "Installing SmartDNS..."
+  run_installer -i
+  write_config
+  systemctl enable smartdns.service >/dev/null || fail "failed to enable SmartDNS"
+  systemctl restart smartdns.service || fail "failed to restart SmartDNS"
+  set_dns local
+
+  systemctl is-active --quiet smartdns.service || fail "SmartDNS service inactive"
+  systemctl is-enabled --quiet smartdns.service || fail "SmartDNS service not enabled"
+  smartdns_listening || fail "SmartDNS is not listening on port 53"
+  grep -qx 'nameserver 127.0.0.1' "$RESOLV_CONF" || fail "system DNS not pointed to SmartDNS"
+  log "SmartDNS installed"
+}
+
 uninstall_smartdns() {
-    log_info "Starting SmartDNS uninstallation..."
+  log "Restoring public DNS..."
+  set_dns public
 
-    if systemctl is-active smartdns &>/dev/null; then
-        log_info "Stopping SmartDNS service..."
-        systemctl stop smartdns
-    fi
-
-    if systemctl is-enabled smartdns &>/dev/null; then
-        log_info "Disabling SmartDNS service..."
-        systemctl disable smartdns >/dev/null 2>&1
-    fi
-
-    log_info "Restoring system DNS configuration..."
-    chattr -i /etc/resolv.conf 2>/dev/null
-    echo "nameserver 1.1.1.1" > /etc/resolv.conf
-    echo "nameserver 8.8.8.8" >> /etc/resolv.conf
-
-    log_info "Removing SmartDNS files..."
-    rm -rf /etc/smartdns
-    rm -f /usr/sbin/smartdns
-    rm -f /usr/lib/systemd/system/smartdns.service
-
-    systemctl daemon-reload >/dev/null 2>&1
-
-    log_info "SmartDNS uninstallation completed!"
-}
-
-# Main function
-main() {
-    check_root
-    parse_args "$@"
-
-    if [ $UNINSTALL -eq 1 ]; then
-        uninstall_smartdns
+  if smartdns_present; then
+    log "Uninstalling SmartDNS..."
+    if [ -x "$INSTALLER_CACHE" ]; then
+      "$INSTALLER_CACHE" -u >/dev/null 2>&1 || fail "SmartDNS uninstall failed"
     else
-        check_installed
-        check_arch
-        get_latest_version
-        install_smartdns
-        configure_smartdns
+      ensure_dependencies
+      detect_arch
+      select_release_asset
+      run_installer -u
     fi
+    rm -rf "$CONFIG_DIR"
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl is-active --quiet smartdns.service 2>/dev/null && fail "SmartDNS service still active"
+  else
+    warn "SmartDNS not installed"
+  fi
+
+  grep -qx 'nameserver 1.1.1.1' "$RESOLV_CONF" || fail "public DNS restore failed"
+  grep -qx 'nameserver 8.8.8.8' "$RESOLV_CONF" || fail "public DNS restore failed"
+  log "SmartDNS uninstalled"
 }
 
-# Execute main function with all command line arguments
+main() {
+  parse_args "$@"
+  require_root_systemd
+  if [ "$UNINSTALL" -eq 1 ]; then
+    uninstall_smartdns
+  else
+    ensure_dependencies
+    install_smartdns
+  fi
+}
+
 main "$@"
