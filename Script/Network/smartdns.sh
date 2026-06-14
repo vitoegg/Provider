@@ -13,6 +13,7 @@ ARCH_TYPE=""
 
 # ECS region variable
 ECS_REGION=""
+IPV6_MODE=""
 
 # ECS region to IP mapping
 declare -A ECS_IPS=(
@@ -158,11 +159,31 @@ parse_args() {
                 log_info "ECS region set to: $ECS_REGION (IP: ${ECS_IPS[$ECS_REGION]})"
                 shift 2
                 ;;
+            -6|--ipv6)
+                case "${2:-}" in
+                    disable|dualstack)
+                        IPV6_MODE="$2"
+                        log_info "IPv6 mode set to: $IPV6_MODE"
+                        ;;
+                    ""|-*)
+                        log_error "IPv6 mode not specified"
+                        echo "Available IPv6 modes: disable, dualstack"
+                        exit 1
+                        ;;
+                    *)
+                        log_error "Invalid IPv6 mode: $2"
+                        echo "Available IPv6 modes: disable, dualstack"
+                        exit 1
+                        ;;
+                esac
+                shift 2
+                ;;
             *)
                 log_error "Unknown parameter: $1"
-                echo "Usage: $0 [-u|--uninstall] [-e|--ecs REGION]"
+                echo "Usage: $0 [-u|--uninstall] [-e|--ecs REGION] [-6|--ipv6 disable|dualstack]"
                 echo "       $0 (no parameters for default installation)"
                 echo "Available ECS regions: HK, TYO, LA, SEA"
+                echo "Available IPv6 modes: disable, dualstack"
                 exit 1
                 ;;
         esac
@@ -236,9 +257,17 @@ serve-expired-prefetch-time 21600
 cache-size 4096
 cache-persist yes
 cache-file /etc/smartdns/smartdns.cache
-dualstack-ip-selection yes
 force-qtype-SOA 65
 EOF
+
+    case "$IPV6_MODE" in
+        disable)
+            printf 'dualstack-ip-selection no\nforce-AAAA-SOA yes\n' >> /etc/smartdns/smartdns.conf
+            ;;
+        dualstack)
+            printf 'dualstack-ip-selection yes\n' >> /etc/smartdns/smartdns.conf
+            ;;
+    esac
 
     systemctl enable smartdns >/dev/null 2>&1
     log_info "Starting SmartDNS service..."
