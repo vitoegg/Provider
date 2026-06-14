@@ -20,12 +20,12 @@ fail() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 usage() {
   cat <<EOF
 Usage:
-  bash smartdns.sh [--ecs REGION] [--ipv6 disable|dualstack]
+  bash smartdns.sh [--ecs REGION] [-6|--ipv6 yes|no]
   bash smartdns.sh -u|--uninstall
 
 Options:
   -e, --ecs REGION        ECS region: HK, TYO, LA, OR, SEA
-  -6, --ipv6 MODE         IPv6 mode: disable, dualstack
+  -6, --ipv6 MODE         IPv6 mode: yes, no
   -u, --uninstall         Uninstall SmartDNS and restore public DNS
   -h, --help              Show help
 EOF
@@ -55,7 +55,7 @@ parse_args() {
         ;;
       -6|--ipv6)
         case "${2:-}" in
-          disable|dualstack) IPV6_MODE="$2" ;;
+          yes|no) IPV6_MODE="$2" ;;
           *) fail "invalid IPv6 mode: ${2:-}" ;;
         esac
         shift 2
@@ -134,15 +134,20 @@ smartdns_present() {
 
 port_53_conflict() {
   ss -H -lunp 2>/dev/null | awk '
-    /smartdns/ { next }
-    $5 ~ /(^|\[::\]|0\.0\.0\.0|127\.0\.0\.1|\*):53$/ { found=1 }
+    function port_matches(addr) {
+      return addr ~ /(^|\[::\]|0\.0\.0\.0|127\.0\.0\.1|\*):53$/
+    }
+    port_matches($4) || port_matches($5) { found=1 }
     END { exit !found }
   '
 }
 
 smartdns_listening() {
   ss -H -lunp 2>/dev/null | awk '
-    /smartdns/ && $5 ~ /(^|\[::\]|0\.0\.0\.0|127\.0\.0\.1|\*):53$/ { found=1 }
+    function port_matches(addr) {
+      return addr ~ /(^|\[::\]|0\.0\.0\.0|127\.0\.0\.1|\*):53$/
+    }
+    port_matches($4) || port_matches($5) { found=1 }
     END { exit !found }
   '
 }
@@ -199,8 +204,8 @@ force-qtype-SOA 65
 EOF
 
   case "$IPV6_MODE" in
-    disable) printf 'dualstack-ip-selection no\nforce-AAAA-SOA yes\n' >> "$CONFIG_FILE" ;;
-    dualstack) printf 'dualstack-ip-selection yes\n' >> "$CONFIG_FILE" ;;
+    no) printf 'dualstack-ip-selection no\nforce-AAAA-SOA yes\n' >> "$CONFIG_FILE" ;;
+    yes) printf 'dualstack-ip-selection yes\n' >> "$CONFIG_FILE" ;;
   esac
 }
 

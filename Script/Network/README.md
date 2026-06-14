@@ -126,7 +126,7 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 ### 参数说明
 ```text
 -e, --ecs REGION        ECS 区域: HK, TYO, LA, OR, SEA
--6, --ipv6 MODE         IPv6 模式: disable, dualstack
+-6, --ipv6 MODE         IPv6 模式: yes, no
 -u, --uninstall         卸载并恢复 DNS 为 1.1.1.1 / 8.8.8.8
 ```
 
