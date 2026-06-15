@@ -14,19 +14,9 @@ USE_CUSTOM_DNS=0
 CUSTOM_DNS_SERVER=""
 DOMAIN_SELECTION=""
 UNINSTALL=0
-INTERACTIVE_MODE=0
 ECS_LOCATION="TYO"
 ECS_IP=""
 IP_PRIORITY="prefer_ipv4"
-
-# ECS location to IP mapping
-declare -A ECS_MAP=(
-    ["HK"]="42.2.2.2"
-    ["TYO"]="106.152.210.210"
-    ["LA"]="107.119.53.53"
-    ["OR"]="12.75.216.200"
-    ["SEA"]="68.86.93.93"
-)
 
 # Domain list configuration
 DOMAIN_LISTS=(
@@ -49,6 +39,23 @@ log_error() {
 
 log_debug() {
     echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')][DEBUG] $1${NC}"
+}
+
+usage() {
+    cat <<EOF
+用法:
+  $0 --install [--dns DNS服务器地址] [--ecs HK|TYO|LA|OR|SEA] [--ipv4|--ipv6]
+  $0 --uninstall
+
+参数:
+  -i, --install           安装 mosdns
+  -d, --dns DNS           自定义 DNS 服务器
+  -e, --ecs REGION        ECS 区域: HK, TYO, LA, OR, SEA
+  -4, --ipv4              IPv4 优先
+  -6, --ipv6              IPv6 优先
+  -u, --uninstall         卸载 mosdns
+  -h, --help              显示帮助
+EOF
 }
 
 # Check if running as root
@@ -171,9 +178,20 @@ get_latest_version() {
     log_info "最新版本: $MOSDNS_VERSION"
 }
 
+ecs_ip_for_location() {
+    case "$1" in
+        HK) printf '42.2.2.2' ;;
+        TYO) printf '106.152.210.210' ;;
+        LA) printf '107.119.53.53' ;;
+        OR) printf '12.75.216.200' ;;
+        SEA) printf '68.86.93.93' ;;
+        *) return 1 ;;
+    esac
+}
+
 # Set ECS IP based on location
 set_ecs_ip() {
-    local location=$1
+    local location=$1 ip
 
     if [ -z "$location" ]; then
         location="TYO"
@@ -181,14 +199,14 @@ set_ecs_ip() {
 
     location=$(echo "$location" | tr '[:lower:]' '[:upper:]')
 
-    if [ -n "${ECS_MAP[$location]}" ]; then
+    if ip="$(ecs_ip_for_location "$location")"; then
         ECS_LOCATION="$location"
-        ECS_IP="${ECS_MAP[$location]}"
+        ECS_IP="$ip"
         log_info "ECS位置: $ECS_LOCATION ($ECS_IP)"
     else
         log_warn "无效的ECS位置: $location，使用默认位置 TYO"
         ECS_LOCATION="TYO"
-        ECS_IP="${ECS_MAP[TYO]}"
+        ECS_IP="$(ecs_ip_for_location TYO)"
         log_info "ECS位置: $ECS_LOCATION ($ECS_IP)"
     fi
 }
@@ -489,17 +507,23 @@ EOF
 # Parse command line arguments
 parse_args() {
     if [ $# -eq 0 ]; then
-        INTERACTIVE_MODE=1
-        return 0
+        usage >&2
+        exit 1
     fi
 
     # First pass: check for uninstall flag
     for arg in "$@"; do
-        if [ "$arg" = "-u" ] || [ "$arg" = "--uninstall" ]; then
-            UNINSTALL=1
-            log_info "检测到卸载参数，进入卸载流程"
-            return 0
-        fi
+        case "$arg" in
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            -u|--uninstall)
+                UNINSTALL=1
+                log_info "检测到卸载参数，进入卸载流程"
+                return 0
+                ;;
+        esac
     done
 
     # Second pass: parse installation parameters
@@ -512,7 +536,7 @@ parse_args() {
             -d|--dns)
                 if [ -z "$2" ]; then
                     log_error "使用 -d 选项需要提供DNS服务器地址"
-                    echo "用法: $0 [-i] [-d <DNS服务器地址>] [-e <ECS位置>] [-4|-6] [-u]"
+                    usage >&2
                     exit 1
                 fi
                 USE_CUSTOM_DNS=1
@@ -521,8 +545,8 @@ parse_args() {
                 ;;
             -e|--ecs)
                 if [ -z "$2" ]; then
-                    log_error "使用 -e 选项需要提供ECS位置 (HK/TYO/LA/SEA)"
-                    echo "用法: $0 [-i] [-d <DNS服务器地址>] [-e <ECS位置>] [-4|-6] [-u]"
+                    log_error "使用 -e 选项需要提供ECS位置 (HK/TYO/LA/OR/SEA)"
+                    usage >&2
                     exit 1
                 fi
                 ECS_LOCATION="$2"
@@ -538,7 +562,7 @@ parse_args() {
                 ;;
             *)
                 log_error "未知参数: $1"
-                echo "用法: $0 [-i] [-d <DNS服务器地址>] [-e <ECS位置>] [-4|-6] [-u]"
+                usage >&2
                 exit 1
                 ;;
         esac
@@ -565,115 +589,16 @@ parse_args() {
         log_info "ECS位置: $ECS_LOCATION ($ECS_IP)"
         log_info "DNS解析优先级: ${IP_PRIORITY#prefer_}"
     else
-        log_info "使用默认配置安装 (ECS位置: $ECS_LOCATION，DNS解析优先级: ${IP_PRIORITY#prefer_})"
+        log_info "使用默认配置安装 (ECS位置: $ECS_LOCATION, DNS解析优先级: ${IP_PRIORITY#prefer_})"
     fi
-}
-
-# Interactive menu
-show_menu() {
-    echo ""
-    echo "========================================="
-    echo "        MosDNS 服务管理脚本"
-    echo "========================================="
-    echo "1) 安装 mosdns 服务"
-    echo "2) 卸载 mosdns 服务"
-    echo "3) 退出"
-    echo "========================================="
-    read -p "请选择操作 [1-3]: " choice
-
-    case $choice in
-        1)
-            log_info "选择：安装 mosdns 服务"
-            echo ""
-
-            # ECS location selection
-            echo "请选择ECS位置："
-            echo "  1) HK  - 香港 (42.2.2.2)"
-            echo "  2) TYO - 东京 (106.152.210.210) [默认]"
-            echo "  3) LA  - 洛杉矶 (107.119.53.53)"
-            echo "  4) SEA - 西雅图 (68.86.93.93)"
-            echo ""
-            read -p "请选择 [1-4] (默认: 2): " ecs_choice
-
-            case $ecs_choice in
-                1)
-                    ECS_LOCATION="HK"
-                    ;;
-                3)
-                    ECS_LOCATION="LA"
-                    ;;
-                4)
-                    ECS_LOCATION="SEA"
-                    ;;
-                *)
-                    ECS_LOCATION="TYO"
-                    ;;
-            esac
-
-            set_ecs_ip "$ECS_LOCATION"
-            echo ""
-
-            read -p "是否启用 IPv6 优先？(y/n) [n]: " use_ipv6
-            if [[ "$use_ipv6" == "y" || "$use_ipv6" == "Y" ]]; then
-                IP_PRIORITY="prefer_ipv6"
-            fi
-            echo ""
-
-            read -p "是否配置额外的DNS解析？(y/n) [n]: " use_custom
-            if [[ "$use_custom" == "y" || "$use_custom" == "Y" ]]; then
-                USE_CUSTOM_DNS=1
-                read -p "请输入自定义DNS服务器地址: " CUSTOM_DNS_SERVER
-                if [ -z "$CUSTOM_DNS_SERVER" ]; then
-                    log_error "DNS服务器地址不能为空"
-                    exit 1
-                fi
-
-                echo ""
-                echo "可用的域名列表："
-                for i in "${!DOMAIN_LISTS[@]}"; do
-                    local list_info="${DOMAIN_LISTS[$i]}"
-                    local name="${list_info##*|}"
-                    echo "  $(($i+1)). $name"
-                done
-                echo ""
-                read -p "请输入要使用的列表编号（多个用空格分隔，如: 1 2）: " DOMAIN_SELECTION
-                if [ -z "$DOMAIN_SELECTION" ]; then
-                    log_error "必须选择至少一个域名列表"
-                    exit 1
-                fi
-            fi
-
-            check_installed
-            check_arch
-            install_dependencies
-            get_latest_version
-            install_mosdns
-            configure_mosdns
-            ;;
-        2)
-            log_info "选择：卸载 mosdns 服务"
-            UNINSTALL=1
-            uninstall_mosdns
-            ;;
-        3)
-            log_info "退出脚本"
-            exit 0
-            ;;
-        *)
-            log_error "无效的选择"
-            exit 1
-            ;;
-    esac
 }
 
 # Main function
 main() {
-    check_root
     parse_args "$@"
+    check_root
 
-    if [ $INTERACTIVE_MODE -eq 1 ]; then
-        show_menu
-    elif [ $UNINSTALL -eq 1 ]; then
+    if [ $UNINSTALL -eq 1 ]; then
         uninstall_mosdns
     else
         check_installed
