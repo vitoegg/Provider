@@ -1,48 +1,29 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
-# Define color codes for different log categories
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+SERVICE="mosdns.service"
+BIN="/usr/local/bin/mosdns"
+CONFIG_DIR="/etc/mosdns"
+CONFIG_FILE="${CONFIG_DIR}/config.yaml"
+RULE_DIR="${CONFIG_DIR}/rule"
+RESOLV_CONF="/etc/resolv.conf"
+PUBLIC_DNS=$'nameserver 8.8.8.8\nnameserver 1.1.1.1\n'
 
-# Global variables
-MOSDNS_VERSION=""
-ARCH_TYPE=""
-USE_CUSTOM_DNS=0
-CUSTOM_DNS_SERVER=""
-DOMAIN_SELECTION=""
-UNINSTALL=0
-ECS_LOCATION="TYO"
+ARCH=""
+CUSTOM_DNS=""
+ECS_REGION="TYO"
 ECS_IP=""
 IP_PRIORITY="prefer_ipv4"
+UNINSTALL=0
+INSTALL_ARGS=0
+RULE_FILES=()
 
-# Domain list configuration
-DOMAIN_LISTS=(
-    "https://mirror.1991991.xyz/RuleSet/Extra/MosDNS/google.txt|Google"
-    "https://mirror.1991991.xyz/RuleSet/Extra/MosDNS/reddit.txt|Reddit"
-)
-
-# Logging functions
-log_info() {
-    echo -e "${GREEN}[$(date '+%Y-%m-%d %H:%M:%S')][INFO] $1${NC}"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')][WARN] $1${NC}"
-}
-
-log_error() {
-    echo -e "${RED}[$(date '+%Y-%m-%d %H:%M:%S')][ERROR] $1${NC}"
-}
-
-log_debug() {
-    echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')][DEBUG] $1${NC}"
-}
+log() { printf '[INFO] %s\n' "$*"; }
+warn() { printf '[WARN] %s\n' "$*" >&2; }
+fail() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 
 usage() {
-    cat <<EOF
+  cat <<EOF
 用法:
   $0 --install [--dns DNS服务器地址] [--ecs HK|TYO|LA|OR|SEA] [--ipv4|--ipv6]
   $0 --uninstall
@@ -58,215 +39,197 @@ usage() {
 EOF
 }
 
-# Check if running as root
-check_root() {
-    if [ "$(id -u)" != "0" ]; then
-        log_error "此脚本必须以root用户运行"
-        exit 1
-    fi
+DOMAIN_RULES=(
+  "https://mirror.1991991.xyz/RuleSet/Extra/MosDNS/google.txt|google.txt"
+  "https://mirror.1991991.xyz/RuleSet/Extra/MosDNS/reddit.txt|reddit.txt"
+)
+
+ecs_ip() {
+  case "$1" in
+    HK) printf '42.2.2.2' ;;
+    TYO) printf '106.152.210.210' ;;
+    LA) printf '107.119.53.53' ;;
+    OR) printf '12.75.216.200' ;;
+    SEA) printf '68.86.93.93' ;;
+    *) return 1 ;;
+  esac
 }
 
-# Check system architecture
-check_arch() {
-    ARCH=$(uname -m)
-    case $ARCH in
-        x86_64)
-            ARCH_TYPE="amd64"
-            ;;
-        aarch64)
-            ARCH_TYPE="arm64"
-            ;;
-        *)
-            log_error "不支持的系统架构: $ARCH"
-            log_error "此脚本仅支持 amd64 和 arm64 架构"
-            exit 1
-            ;;
-    esac
-    log_info "检测到系统架构: $ARCH_TYPE"
-}
+parse_args() {
+  [ "$#" -gt 0 ] || { usage >&2; exit 1; }
 
-# Check if mosdns service already exists
-check_installed() {
-    if systemctl is-active mosdns &>/dev/null || systemctl status mosdns &>/dev/null 2>&1; then
-        log_error "mosdns服务已存在，请先卸载后再安装"
-        exit 1
-    fi
-
-    if [ -f "/usr/local/bin/mosdns" ]; then
-        log_warn "检测到mosdns执行文件已存在于/usr/local/bin/mosdns"
-        log_error "请先执行卸载操作"
-        exit 1
-    fi
-}
-
-# Install dependencies
-install_dependencies() {
-    local deps_to_install=()
-
-    # Check wget or curl
-    if ! command -v wget &>/dev/null && ! command -v curl &>/dev/null; then
-        deps_to_install+=("wget")
-    fi
-
-    # Check unzip
-    if ! command -v unzip &>/dev/null; then
-        deps_to_install+=("unzip")
-    fi
-
-    # Check jq
-    if ! command -v jq &>/dev/null; then
-        deps_to_install+=("jq")
-    fi
-
-    if [ ${#deps_to_install[@]} -eq 0 ]; then
-        log_info "所有必要依赖已安装"
-        return 0
-    fi
-
-    log_info "检测到缺失的依赖包: ${deps_to_install[*]}"
-    log_info "开始安装依赖包..."
-
-    if [ -f /etc/debian_version ]; then
-        apt-get update -qq >/dev/null 2>&1
-        for dep in "${deps_to_install[@]}"; do
-            log_info "正在安装 $dep..."
-            if apt-get install -y "$dep" >/dev/null 2>&1; then
-                log_info "✓ $dep 安装成功"
-            else
-                log_error "✗ $dep 安装失败"
-                exit 1
-            fi
-        done
-    elif [ -f /etc/redhat-release ]; then
-        for dep in "${deps_to_install[@]}"; do
-            log_info "正在安装 $dep..."
-            if yum install -y "$dep" >/dev/null 2>&1; then
-                log_info "✓ $dep 安装成功"
-            else
-                log_error "✗ $dep 安装失败"
-                exit 1
-            fi
-        done
-    else
-        log_error "不支持的Linux发行版，无法自动安装依赖"
-        exit 1
-    fi
-}
-
-# Get the latest mosdns version from GitHub
-get_latest_version() {
-    log_info "正在获取最新版本信息..."
-
-    local release_page
-    if command -v wget &>/dev/null; then
-        release_page=$(wget -qO- https://api.github.com/repos/IrineSistiana/mosdns/releases/latest)
-    else
-        release_page=$(curl -s https://api.github.com/repos/IrineSistiana/mosdns/releases/latest)
-    fi
-
-    if [ -z "$release_page" ]; then
-        log_error "无法获取版本信息"
-        exit 1
-    fi
-
-    MOSDNS_VERSION=$(echo "$release_page" | jq -r '.tag_name')
-    if [ -z "$MOSDNS_VERSION" ] || [ "$MOSDNS_VERSION" = "null" ]; then
-        log_error "解析版本号失败"
-        exit 1
-    fi
-
-    log_info "最新版本: $MOSDNS_VERSION"
-}
-
-ecs_ip_for_location() {
+  while [ "$#" -gt 0 ]; do
     case "$1" in
-        HK) printf '42.2.2.2' ;;
-        TYO) printf '106.152.210.210' ;;
-        LA) printf '107.119.53.53' ;;
-        OR) printf '12.75.216.200' ;;
-        SEA) printf '68.86.93.93' ;;
-        *) return 1 ;;
+      -h|--help) usage; exit 0 ;;
+      -u|--uninstall) UNINSTALL=1; shift ;;
+      -i|--install) INSTALL_ARGS=1; shift ;;
+      -d|--dns)
+        [ -n "${2:-}" ] && [[ "${2:-}" != -* ]] || fail "使用 -d 选项需要提供DNS服务器地址"
+        INSTALL_ARGS=1
+        CUSTOM_DNS="$2"
+        shift 2
+        ;;
+      -e|--ecs)
+        [ -n "${2:-}" ] && [[ "${2:-}" != -* ]] || fail "使用 -e 选项需要提供ECS位置 (HK/TYO/LA/OR/SEA)"
+        INSTALL_ARGS=1
+        ECS_REGION="$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]')"
+        shift 2
+        ;;
+      -4|--ipv4) INSTALL_ARGS=1; IP_PRIORITY="prefer_ipv4"; shift ;;
+      -6|--ipv6) INSTALL_ARGS=1; IP_PRIORITY="prefer_ipv6"; shift ;;
+      *) usage >&2; fail "未知参数: $1" ;;
     esac
-}
+  done
 
-# Set ECS IP based on location
-set_ecs_ip() {
-    local location=$1 ip
-
-    if [ -z "$location" ]; then
-        location="TYO"
-    fi
-
-    location=$(echo "$location" | tr '[:lower:]' '[:upper:]')
-
-    if ip="$(ecs_ip_for_location "$location")"; then
-        ECS_LOCATION="$location"
-        ECS_IP="$ip"
-        log_info "ECS位置: $ECS_LOCATION ($ECS_IP)"
-    else
-        log_warn "无效的ECS位置: $location，使用默认位置 TYO"
-        ECS_LOCATION="TYO"
-        ECS_IP="$(ecs_ip_for_location TYO)"
-        log_info "ECS位置: $ECS_LOCATION ($ECS_IP)"
-    fi
-}
-
-# Download selected domain lists
-download_domain_lists() {
-    local selection=$1
-    local rule_dir="/etc/mosdns/rule"
-
-    mkdir -p "$rule_dir"
-    log_info "正在下载域名列表..."
-
-    local downloaded_files=()
-    for num in $selection; do
-        if [ "$num" -ge 1 ] && [ "$num" -le "${#DOMAIN_LISTS[@]}" ]; then
-            local index=$((num-1))
-            local list_info="${DOMAIN_LISTS[$index]}"
-            local url="${list_info%%|*}"
-            local name="${list_info##*|}"
-            local filename="${name,,}.txt"
-
-            log_info "正在下载 $name 域名列表..."
-            if command -v wget &>/dev/null; then
-                wget -q "$url" -O "$rule_dir/$filename" || {
-                    log_error "下载 $name 列表失败"
-                    return 1
-                }
-            else
-                curl -s "$url" -o "$rule_dir/$filename" || {
-                    log_error "下载 $name 列表失败"
-                    return 1
-                }
-            fi
-            log_info "✓ $name 列表下载成功"
-            downloaded_files+=("$rule_dir/$filename")
-        else
-            log_error "无效的选择编号: $num"
-            return 1
-        fi
-    done
-
-    # Store downloaded files for config generation
-    DOWNLOADED_RULE_FILES=("${downloaded_files[@]}")
+  if [ "$UNINSTALL" -eq 1 ]; then
+    [ "$INSTALL_ARGS" -eq 0 ] || fail "不能混用安装参数和卸载参数"
     return 0
+  fi
+
+  ECS_IP="$(ecs_ip "$ECS_REGION")" || fail "无效的ECS位置: $ECS_REGION"
 }
 
-# Generate mosdns configuration
-generate_config() {
-    local config_file="/etc/mosdns/config.yaml"
+require_root_systemd() {
+  [ "${EUID:-$(id -u)}" -eq 0 ] || fail "此脚本必须以root用户运行"
+  command -v systemctl >/dev/null 2>&1 || fail "此脚本需要 systemd/systemctl"
+}
 
-    log_info "正在生成配置文件..."
+require_apt() {
+  command -v apt-get >/dev/null 2>&1 || fail "此脚本仅支持 Debian/Ubuntu apt 环境"
+}
 
-    cat > "$config_file" << 'EOF'
+ensure_dependencies() {
+  local missing=()
+  command -v wget >/dev/null 2>&1 || missing+=(wget)
+  command -v unzip >/dev/null 2>&1 || missing+=(unzip)
+  command -v ss >/dev/null 2>&1 || missing+=(iproute2)
+  [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
+
+  [ "${#missing[@]}" -eq 0 ] && return 0
+  log "安装依赖: ${missing[*]}"
+  env DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null || fail "依赖包索引更新失败"
+  env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null || fail "依赖安装失败"
+}
+
+detect_arch() {
+  case "$(uname -m)" in
+    x86_64) ARCH="amd64" ;;
+    aarch64) ARCH="arm64" ;;
+    *) fail "不支持的系统架构: $(uname -m)" ;;
+  esac
+}
+
+download_url() {
+  printf 'https://github.com/IrineSistiana/mosdns/releases/latest/download/mosdns-linux-%s.zip' "$ARCH"
+}
+
+download() {
+  wget -q -O "$2" "$1"
+}
+
+service_exists() {
+  systemctl cat "$SERVICE" >/dev/null 2>&1 && return 0
+  systemctl list-unit-files "$SERVICE" 2>/dev/null |
+    awk -v unit="$SERVICE" '$1==unit { found=1 } END { exit !found }'
+}
+
+mosdns_exists() {
+  service_exists || [ -x "$BIN" ] || [ -e "$CONFIG_DIR" ]
+}
+
+udp53_listeners() {
+  ss -H -lunp 2>/dev/null | awk '
+    function is_local_dns(addr) {
+      return addr == "*:53" ||
+             addr == "0.0.0.0:53" ||
+             addr == "127.0.0.1:53" ||
+             addr == "[::]:53" ||
+             addr == "[::1]:53"
+    }
+    {
+      for (i = 1; i <= NF; i++) {
+        if (is_local_dns($i)) {
+          print
+          next
+        }
+      }
+    }
+  ' || true
+}
+
+port_53_free() {
+  [ -z "$(udp53_listeners)" ]
+}
+
+service_owns_udp53() {
+  local cgroup line pid
+  cgroup="$(systemctl show "$SERVICE" --property=ControlGroup --value 2>/dev/null || true)"
+  [ -n "$cgroup" ] || return 1
+
+  while IFS= read -r line; do
+    while IFS= read -r pid; do
+      [ -r "/proc/${pid}/cgroup" ] || continue
+      grep -Fq "$cgroup" "/proc/${pid}/cgroup" && return 0
+    done < <(printf '%s\n' "$line" | grep -oE 'pid=[0-9]+' | cut -d= -f2 || true)
+  done < <(udp53_listeners)
+  return 1
+}
+
+set_dns() {
+  chattr -i "$RESOLV_CONF" 2>/dev/null || true
+  rm -f "$RESOLV_CONF"
+
+  if [ "$1" = "local" ]; then
+    printf 'nameserver 127.0.0.1\n' > "$RESOLV_CONF"
+    chattr +i "$RESOLV_CONF" 2>/dev/null || true
+  else
+    printf '%s' "$PUBLIC_DNS" > "$RESOLV_CONF"
+  fi
+}
+
+install_binary() {
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+
+  if ! (
+    cd "$tmp_dir"
+    download "$(download_url)" mosdns.zip
+    unzip -q mosdns.zip
+    chmod 755 mosdns
+    mv mosdns "$BIN"
+  ); then
+    rm -rf "$tmp_dir"
+    fail "mosdns 下载或安装失败"
+  fi
+
+  rm -rf "$tmp_dir"
+}
+
+download_domain_rules() {
+  local item url file
+  [ -n "$CUSTOM_DNS" ] || return 0
+
+  mkdir -p "$RULE_DIR"
+  RULE_FILES=()
+  for item in "${DOMAIN_RULES[@]}"; do
+    url="${item%%|*}"
+    file="${RULE_DIR}/${item##*|}"
+    download "$url" "$file" || fail "域名列表下载失败: ${file##*/}"
+    RULE_FILES+=("$file")
+  done
+}
+
+write_config() {
+  mkdir -p "$CONFIG_DIR"
+  {
+    cat <<'EOF'
 log:
   level: error
   file: "/etc/mosdns/mosdns.log"
 
 plugins:
-  - tag: lazy_cache
-    type: "cache"
+  - tag: cache
+    type: cache
     args:
       size: 8192
       lazy_cache_ttl: 86400
@@ -275,33 +238,28 @@ plugins:
 
 EOF
 
-    # Add custom DNS plugins if configured and domain files downloaded successfully
-    if [ $USE_CUSTOM_DNS -eq 1 ] && [ ${#DOWNLOADED_RULE_FILES[@]} -gt 0 ]; then
-        cat >> "$config_file" << EOF
-  - tag: dns_domain
-    type: "domain_set"
+    if [ -n "$CUSTOM_DNS" ]; then
+      cat <<'EOF'
+  - tag: custom_domains
+    type: domain_set
     args:
       files:
 EOF
-        for file in "${DOWNLOADED_RULE_FILES[@]}"; do
-            echo "        - \"$file\"" >> "$config_file"
-        done
+      printf '        - "%s"\n' "${RULE_FILES[@]}"
+      cat <<EOF
 
-        cat >> "$config_file" << EOF
-
-  - tag: dns_reslove
-    type: "forward"
+  - tag: custom_dns
+    type: forward
     args:
       upstreams:
-        - addr: "udp://${CUSTOM_DNS_SERVER}"
+        - addr: "udp://${CUSTOM_DNS}"
 
 EOF
     fi
 
-    # Add standard DNS plugins
-    cat >> "$config_file" << 'EOF'
+    cat <<'EOF'
   - tag: main_dns
-    type: "forward"
+    type: forward
     args:
       concurrent: 2
       upstreams:
@@ -309,15 +267,15 @@ EOF
         - addr: "udp://94.140.14.140"
 
   - tag: fallback_dns
-    type: "forward"
+    type: forward
     args:
       concurrent: 2
       upstreams:
         - addr: "udp://1.1.1.1"
         - addr: "udp://45.11.45.11"
 
-  - tag: core_reslove
-    type: "fallback"
+  - tag: core_resolve
+    type: fallback
     args:
       primary: main_dns
       secondary: fallback_dns
@@ -325,290 +283,107 @@ EOF
       always_standby: true
 
   - tag: main_sequence
-    type: "sequence"
+    type: sequence
     args:
       - matches:
         - qtype 65
         exec: reject 3
 
-      - exec: $lazy_cache
+      - exec: $cache
       - matches: has_resp
         exec: accept
 
 EOF
 
-    echo "      - exec: ${IP_PRIORITY}" >> "$config_file"
+    printf '      - exec: %s\n' "$IP_PRIORITY"
+    printf '      - exec: ecs %s\n' "$ECS_IP"
 
-    # Add ECS configuration with variable substitution
-    echo "      - exec: ecs ${ECS_IP}" >> "$config_file"
-
-    # Add custom DNS matching if configured and domain files downloaded successfully
-    if [ $USE_CUSTOM_DNS -eq 1 ] && [ ${#DOWNLOADED_RULE_FILES[@]} -gt 0 ]; then
-        cat >> "$config_file" << 'EOF'
+    if [ -n "$CUSTOM_DNS" ]; then
+      cat <<'EOF'
 
       - matches:
-        - qname $dns_domain
-        exec: $dns_reslove
+        - qname $custom_domains
+        exec: $custom_dns
       - matches: has_resp
         exec: accept
 
 EOF
     fi
 
-    # Complete main_sequence
-    cat >> "$config_file" << 'EOF'
-      - exec: $core_reslove
+    cat <<'EOF'
+      - exec: $core_resolve
 
   - tag: udp_server
-    type: "udp_server"
+    type: udp_server
     args:
       entry: main_sequence
       listen: "127.0.0.1:53"
 EOF
-
-    log_info "配置文件生成完成: $config_file"
+  } > "$CONFIG_FILE"
 }
 
-# Download and install mosdns
+start_and_verify() {
+  "$BIN" service install -d "$CONFIG_DIR" -c "$CONFIG_FILE" >/dev/null 2>&1 || fail "服务安装失败"
+  "$BIN" service start >/dev/null || fail "服务启动失败"
+  sleep 2
+
+  systemctl is-active --quiet "$SERVICE" || fail "mosdns 服务未处于 active 状态"
+  service_owns_udp53 || fail "mosdns 服务未监听 53 端口"
+}
+
 install_mosdns() {
-    local tmp_dir
-    tmp_dir=$(mktemp -d)
-    cd "$tmp_dir" || exit 1
+  mosdns_exists && fail "mosdns 已存在或有残留，请先执行卸载操作"
 
-    log_info "正在下载 mosdns ${MOSDNS_VERSION}..."
-    local download_url="https://github.com/IrineSistiana/mosdns/releases/download/${MOSDNS_VERSION}/mosdns-linux-${ARCH_TYPE}.zip"
+  detect_arch
+  require_apt
+  ensure_dependencies
+  port_53_free || fail "53 端口已被占用，请先停止其它 DNS 服务"
 
-    if command -v wget &>/dev/null; then
-        wget --no-check-certificate -q "$download_url" -O mosdns.zip || {
-            log_error "下载失败"
-            cd / && rm -rf "$tmp_dir"
-            exit 1
-        }
-    else
-        curl -L -s "$download_url" -o mosdns.zip || {
-            log_error "下载失败"
-            cd / && rm -rf "$tmp_dir"
-            exit 1
-        }
-    fi
+  install_binary
+  download_domain_rules
+  write_config
+  start_and_verify
 
-    log_info "正在解压文件..."
-    unzip -q mosdns.zip || {
-        log_error "解压失败"
-        cd / && rm -rf "$tmp_dir"
-        exit 1
-    }
-
-    log_info "正在安装 mosdns 执行文件..."
-    chmod +x mosdns
-    mv mosdns /usr/local/bin/ || {
-        log_error "移动执行文件失败"
-        cd / && rm -rf "$tmp_dir"
-        exit 1
-    }
-
-    log_info "✓ mosdns 执行文件安装成功"
-    cd / && rm -rf "$tmp_dir"
+  set_dns local
+  grep -qx 'nameserver 127.0.0.1' "$RESOLV_CONF" || fail "系统DNS配置失败"
+  log "mosdns 安装完成"
 }
 
-# Configure and start mosdns service
-configure_mosdns() {
-    mkdir -p /etc/mosdns
-
-    # Download domain lists if custom DNS is configured
-    if [ $USE_CUSTOM_DNS -eq 1 ]; then
-        if ! download_domain_lists "$DOMAIN_SELECTION"; then
-            log_error "域名列表下载失败"
-            exit 1
-        fi
-    fi
-
-    # Generate configuration file
-    generate_config
-
-    # Install systemd service
-    log_info "正在安装 mosdns 服务..."
-    /usr/local/bin/mosdns service install -d /etc/mosdns -c /etc/mosdns/config.yaml >/dev/null 2>&1 || {
-        log_error "服务安装失败"
-        exit 1
-    }
-    log_info "✓ mosdns 服务安装成功"
-
-    # Modify DNS resolution
-    log_info "正在配置系统DNS..."
-    chattr -i /etc/resolv.conf 2>/dev/null
-    rm -f /etc/resolv.conf
-    echo "nameserver 127.0.0.1" > /etc/resolv.conf
-    chattr +i /etc/resolv.conf
-    log_info "✓ 系统DNS配置完成"
-
-    # Start service
-    log_info "正在启动 mosdns 服务..."
-    /usr/local/bin/mosdns service start || {
-        log_error "服务启动失败"
-        exit 1
-    }
-
-    sleep 2
-
-    if systemctl is-active mosdns &>/dev/null; then
-        log_info "✓ mosdns 服务启动成功！"
-        echo "========================================="
-        systemctl status mosdns --no-pager | head -n 10
-        echo "========================================="
-    else
-        log_error "mosdns 服务启动失败，请检查日志"
-        exit 1
-    fi
-}
-
-# Uninstall mosdns
 uninstall_mosdns() {
-    log_info "开始卸载 mosdns..."
+  set_dns public
+  grep -qx 'nameserver 8.8.8.8' "$RESOLV_CONF" || fail "DNS配置还原失败"
+  grep -qx 'nameserver 1.1.1.1' "$RESOLV_CONF" || fail "DNS配置还原失败"
 
-    # Check if mosdns binary exists
-    if [ ! -f "/usr/local/bin/mosdns" ]; then
-        log_warn "mosdns 未安装"
-        return 0
-    fi
+  if ! mosdns_exists; then
+    warn "mosdns 未安装"
+    return 0
+  fi
 
-    # Stop service
-    if systemctl is-active mosdns &>/dev/null; then
-        log_info "正在停止 mosdns 服务..."
-        /usr/local/bin/mosdns service stop 2>/dev/null
-        log_info "✓ 服务已停止"
-    fi
+  if [ -x "$BIN" ]; then
+    "$BIN" service stop >/dev/null 2>&1 || true
+    "$BIN" service uninstall >/dev/null 2>&1 || true
+  else
+    systemctl stop "$SERVICE" >/dev/null 2>&1 || true
+  fi
 
-    # Uninstall service
-    log_info "正在卸载 mosdns 服务..."
-    /usr/local/bin/mosdns service uninstall 2>/dev/null
-    log_info "✓ 服务已卸载"
-
-    # Restore DNS configuration
-    log_info "正在还原系统DNS配置..."
-    chattr -i /etc/resolv.conf 2>/dev/null
-    cat > /etc/resolv.conf << EOF
-nameserver 8.8.8.8
-nameserver 1.1.1.1
-EOF
-    log_info "✓ DNS配置已还原"
-
-    # Remove files
-    log_info "正在删除 mosdns 文件..."
-    rm -f /usr/local/bin/mosdns
-    rm -rf /etc/mosdns
-    log_info "✓ 文件已删除"
-
-    systemctl daemon-reload >/dev/null 2>&1
-
-    log_info "✓ mosdns 卸载完成！"
+  systemctl disable "$SERVICE" >/dev/null 2>&1 || true
+  rm -f "/etc/systemd/system/$SERVICE" "/lib/systemd/system/$SERVICE" "/usr/lib/systemd/system/$SERVICE"
+  rm -f "$BIN"
+  rm -rf "$CONFIG_DIR"
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  systemctl is-active --quiet "$SERVICE" 2>/dev/null && fail "mosdns 服务仍处于 active 状态"
+  log "mosdns 卸载完成"
 }
 
-# Parse command line arguments
-parse_args() {
-    if [ $# -eq 0 ]; then
-        usage >&2
-        exit 1
-    fi
-
-    # First pass: check for uninstall flag
-    for arg in "$@"; do
-        case "$arg" in
-            -h|--help)
-                usage
-                exit 0
-                ;;
-            -u|--uninstall)
-                UNINSTALL=1
-                log_info "检测到卸载参数，进入卸载流程"
-                return 0
-                ;;
-        esac
-    done
-
-    # Second pass: parse installation parameters
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            -i|--install)
-                log_info "快速安装模式：使用默认配置"
-                shift
-                ;;
-            -d|--dns)
-                if [ -z "$2" ]; then
-                    log_error "使用 -d 选项需要提供DNS服务器地址"
-                    usage >&2
-                    exit 1
-                fi
-                USE_CUSTOM_DNS=1
-                CUSTOM_DNS_SERVER="$2"
-                shift 2
-                ;;
-            -e|--ecs)
-                if [ -z "$2" ]; then
-                    log_error "使用 -e 选项需要提供ECS位置 (HK/TYO/LA/OR/SEA)"
-                    usage >&2
-                    exit 1
-                fi
-                ECS_LOCATION="$2"
-                shift 2
-                ;;
-            -4|--ipv4)
-                IP_PRIORITY="prefer_ipv4"
-                shift
-                ;;
-            -6|--ipv6)
-                IP_PRIORITY="prefer_ipv6"
-                shift
-                ;;
-            *)
-                log_error "未知参数: $1"
-                usage >&2
-                exit 1
-                ;;
-        esac
-    done
-
-    # Set ECS IP based on location (default: TYO)
-    set_ecs_ip "$ECS_LOCATION"
-
-    # If custom DNS is enabled but no domain list selected, use all available lists
-    if [ $USE_CUSTOM_DNS -eq 1 ] && [ -z "$DOMAIN_SELECTION" ]; then
-        # Generate default selection: all available lists
-        local default_selection=""
-        for i in "${!DOMAIN_LISTS[@]}"; do
-            default_selection="$default_selection $(($i+1))"
-        done
-        DOMAIN_SELECTION="${default_selection# }"
-        log_info "未指定域名列表，使用所有可用列表: $DOMAIN_SELECTION"
-    fi
-
-    # Display operation summary
-    if [ $USE_CUSTOM_DNS -eq 1 ]; then
-        log_info "自定义DNS服务器: $CUSTOM_DNS_SERVER"
-        log_info "选择的域名列表: $DOMAIN_SELECTION"
-        log_info "ECS位置: $ECS_LOCATION ($ECS_IP)"
-        log_info "DNS解析优先级: ${IP_PRIORITY#prefer_}"
-    else
-        log_info "使用默认配置安装 (ECS位置: $ECS_LOCATION, DNS解析优先级: ${IP_PRIORITY#prefer_})"
-    fi
-}
-
-# Main function
 main() {
-    parse_args "$@"
-    check_root
+  parse_args "$@"
+  require_root_systemd
 
-    if [ $UNINSTALL -eq 1 ]; then
-        uninstall_mosdns
-    else
-        check_installed
-        check_arch
-        install_dependencies
-        get_latest_version
-        install_mosdns
-        configure_mosdns
-    fi
+  if [ "$UNINSTALL" -eq 1 ]; then
+    uninstall_mosdns
+  else
+    install_mosdns
+  fi
 }
 
-# Execute main function with all command line arguments
 main "$@"
