@@ -19,17 +19,9 @@ table ip telegramip {
         }
     }
 
-    map good_ipv4 {
-        type integer : ipv4_addr
-        elements = {
-            0 : 91.108.56.147,
-            1 : 91.108.56.201
-        }
-    }
-
     chain output {
         type nat hook output priority -100; policy accept;
         ip daddr @bad_ipv4 counter \
-            dnat to numgen random mod 2 map @good_ipv4
+            dnat to numgen random mod 2 map { 0 : 91.108.56.147, 1 : 91.108.56.201 }
     }
 }
