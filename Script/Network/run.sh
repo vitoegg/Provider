@@ -403,6 +403,13 @@ step_traffic() {
   esac
 }
 
+step_telegram() {
+  [ "$#" -eq 1 ] || fail "step_telegram requires script"
+  local script="$1"
+  provider_run "$script" --apply || fail "telegram optimization failed"
+  log "telegram optimization active"
+}
+
 run_plan() {
   [ -r "$PLAN_FILE" ] || fail "plan unreadable | file=${PLAN_FILE}"
   # shellcheck disable=SC1090
