@@ -207,6 +207,25 @@ RULE: <源端口>:<目标(IPv4/域名/local)>:<目标端口>[:SNAT_IP[:MSS]]
 bash nftables.sh --add 10086:82.40.1.2:33333:10.100.1.2:auto
 ```
 
+## **telegramip.sh**
+
+### 下载
+```bash
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/telegramip.sh
+```
+
+### 参数说明
+```text
+--apply                 下载远程 NFT，创建或替换 Telegram IP 映射
+--remove                删除 Telegram IP 映射和持久规则文件
+--help, -h              显示帮助
+```
+
+### 示例命令
+```bash
+bash telegramip.sh --apply
+```
+
 ## **sshg.sh**
 
 ### 下载
