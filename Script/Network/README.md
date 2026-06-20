@@ -58,6 +58,26 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 bash shadowsocks.sh -s password -p 25252
 ```
 
+## **socks.sh**
+
+### 下载
+```bash
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/socks.sh
+```
+
+### 参数说明
+```text
+--port PORT                 监听端口，未提供时自动生成
+--allow-ip IP[,IP...]       允许访问的 IPv4，必填且可重复使用
+-u, --uninstall             卸载 Dante
+-h, --help                  显示帮助
+```
+
+### 示例命令
+```bash
+bash socks.sh --port 28080 --allow-ip 1.2.3.4,5.6.7.8
+```
+
 ## **snell.sh**
 
 ### 下载
