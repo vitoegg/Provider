@@ -32,71 +32,9 @@ script_path() {
     printf '%s\n' "$resolved"
 }
 
-path_in_git_worktree() {
-    command -v git >/dev/null 2>&1 || return 1
-    git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1
-}
-
-remove_self_after_install() {
-    local current_path="$1" current_dir
-    [ -f "$current_path" ] || return 0
-    current_dir="$(cd "$(dirname "$current_path")" 2>/dev/null && pwd)" || return 0
-    path_in_git_worktree "$current_dir" && return 0
-    rm -f "$current_path" 2>/dev/null || true
-}
-
 require_root() {
     [ "$ROOT" != "/" ] && return 0
     [ "$(id -u)" = "0" ] || fail "need root"
-}
-
-ensure_self_at_fixed_location() {
-    local current_path target_path tmp_path
-    
-    # 禁用 ROOT 环境下的自我安置（容器/chroot 场景）
-    [ "$ROOT" != "/" ] && return 0
-    
-    current_path="$(script_path)"
-    target_path="/usr/local/sbin/providerdns.sh"
-    
-    # 已在正确位置，无需处理
-    if [ "$current_path" = "$target_path" ]; then
-        return 0
-    fi
-    
-    # 验证当前脚本合法性
-    if ! bash -n "$current_path" 2>/dev/null; then
-        log "self-placement: syntax check failed"
-        return 1
-    fi
-    
-    # 目标已是最新时，只清理启动源文件
-    if [ -f "$target_path" ] && cmp -s "$current_path" "$target_path" 2>/dev/null; then
-        log "self-placement: target already current"
-        remove_self_after_install "$current_path"
-        return 0
-    fi
-    
-    # 原子写入：使用临时文件 + 重命名
-    tmp_path="${target_path}.tmp.$$"
-    if ! cp "$current_path" "$tmp_path" 2>/dev/null; then
-        log "self-placement: copy to temp failed"
-        return 1
-    fi
-    
-    if ! mv "$tmp_path" "$target_path" 2>/dev/null; then
-        rm -f "$tmp_path" 2>/dev/null || true
-        log "self-placement: move to target failed"
-        return 1
-    fi
-    
-    chmod 755 "$target_path" 2>/dev/null || true
-    log "self-placement: installed at $target_path"
-    
-    # 删除原文件（已安全复制）
-    remove_self_after_install "$current_path"
-    
-    return 0
 }
 
 subscription_dir() { path "/etc/provider/dns/subscriptions"; }
@@ -309,10 +247,9 @@ write_if_changed() {
 install_units() {
     local service timer script tmp changed=0 systemctl
     require_root
-    ensure_self_at_fixed_location
     service="$(service_file)"
     timer="$(timer_file)"
-    script="/usr/local/sbin/providerdns.sh"
+    script="$(script_path)"
     mkdir -p "$(systemd_dir)" || fail "systemd dir"
 
     tmp="${service}.tmp.$$"

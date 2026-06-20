@@ -4,7 +4,7 @@ set -o pipefail
 
 ROOT="${SSHG_ROOT:-/}"
 NFT_TABLE="sshg"
-PROVIDERDNS_BIN="${PROVIDERDNS_BIN:-/usr/local/sbin/providerdns.sh}"
+PROVIDERDNS_BIN="${PROVIDERDNS_BIN:-}"
 PROVIDERDNS_LOCAL_NAME="providerdns.sh"
 PROVIDERDNS_CONSUMER="sshg"
 SSHG_LOCK_HELD=0
@@ -372,13 +372,12 @@ providerdns_local_source() {
 }
 
 providerdns_bin() {
-    local bin="${PROVIDERDNS_BIN:-/usr/local/sbin/providerdns.sh}" local_source
-    [ -f "$bin" ] && { printf '%s\n' "$bin"; return 0; }
-    if local_source="$(providerdns_local_source)"; then
-        printf '%s\n' "$local_source"
+    if [ -n "$PROVIDERDNS_BIN" ]; then
+        [ -f "$PROVIDERDNS_BIN" ] || return 1
+        printf '%s\n' "$PROVIDERDNS_BIN"
         return 0
     fi
-    return 1
+    providerdns_local_source
 }
 
 find_providerdns() {

@@ -22,7 +22,7 @@ readonly SYSTEMD_SYSTEM_DIR="/etc/systemd/system"
 readonly PROTECT_SERVICE_NAME="forwardaws-protect.service"
 readonly PROTECT_TIMER_NAME="forwardaws-protect.timer"
 readonly PROVIDERDNS_CONSUMER="forwardaws"
-PROVIDERDNS_BIN="${PROVIDERDNS_BIN:-/usr/local/sbin/providerdns.sh}"
+PROVIDERDNS_BIN="${PROVIDERDNS_BIN:-}"
 readonly PROVIDERDNS_LOCAL_NAME="providerdns.sh"
 readonly DEFAULT_EXCLUDE_PORTS="53"
 readonly FORWARDAWS_TIMEZONE="Asia/Shanghai"
@@ -122,13 +122,12 @@ providerdns_local_source() {
 }
 
 providerdns_bin() {
-    local bin="${PROVIDERDNS_BIN:-/usr/local/sbin/providerdns.sh}" local_source
-    [ -f "$bin" ] && { printf '%s\n' "$bin"; return 0; }
-    if local_source=$(providerdns_local_source); then
-        printf '%s\n' "$local_source"
+    if [ -n "$PROVIDERDNS_BIN" ]; then
+        [ -f "$PROVIDERDNS_BIN" ] || return 1
+        printf '%s\n' "$PROVIDERDNS_BIN"
         return 0
     fi
-    return 1
+    providerdns_local_source
 }
 
 find_providerdns() {
@@ -137,7 +136,7 @@ find_providerdns() {
 
 require_providerdns() {
     find_providerdns && return 0
-    log_error "需要 providerdns.sh：请设置 PROVIDERDNS_BIN，或将 providerdns.sh 放到 /usr/local/sbin/providerdns.sh，或放在当前脚本同目录"
+    log_error "需要 providerdns.sh：请设置 PROVIDERDNS_BIN，或将 providerdns.sh 放在当前脚本同目录"
     return 1
 }
 
