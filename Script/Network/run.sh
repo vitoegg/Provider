@@ -208,6 +208,7 @@ step_time_sync() {
 
 proxy_meta() {
   case "$1" in
+    socks) printf 'danted.service|/etc/danted.conf|--uninstall|--port' ;;
     ssrust) printf 'shadowsocks.service|/etc/shadowsocks/config.json|-u|-p' ;;
     ssgo) printf 'sing-box.service|/etc/sing-box/config.json|--uninstall|' ;;
     anytls) printf 'sing-box.service|/etc/sing-box/config.json|--uninstall|' ;;
