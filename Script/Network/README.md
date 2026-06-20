@@ -68,7 +68,7 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 ### 参数说明
 ```text
 --port PORT                 监听端口，未提供时自动生成
---allow-ip IP[,IP...]       允许访问的 IPv4，必填且可重复使用
+--allow-ip IP[,IP...]       Dante 与 NFT 白名单 IPv4，必填且可重复使用
 -u, --uninstall             卸载 Dante
 -h, --help                  显示帮助
 ```

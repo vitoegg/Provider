@@ -6,6 +6,9 @@ export PATH
 
 readonly CONFIG_FILE="/etc/danted.conf"
 readonly SERVICE_NAME="danted.service"
+readonly NFT_CONFIG_FILE="/etc/nftables.conf"
+readonly NFT_RULES_FILE="/etc/nftables.d/socks.nft"
+readonly NFT_TABLE="socks_guard"
 readonly DEFAULT_PORT_START=20000
 readonly DEFAULT_PORT_END=30000
 
@@ -51,13 +54,16 @@ validate_ipv4() {
 }
 
 add_allow_list() {
-    local value="$1" ip
+    local value="$1" ip existing
     local -a ips
     [ -n "$value" ] || fail "--allow-ip 不能为空"
     case "$value" in ,*|*,|*,,*) fail "--allow-ip 包含空值" ;; esac
     IFS=',' read -ra ips <<< "$value"
     for ip in "${ips[@]}"; do
         validate_ipv4 "$ip" || fail "无效的白名单 IPv4: $ip"
+        for existing in "${ALLOW_IPS[@]}"; do
+            [ "$existing" = "$ip" ] && continue 2
+        done
         ALLOW_IPS+=("$ip")
     done
 }
@@ -96,23 +102,46 @@ require_environment() {
 
 ensure_environment() {
     require_environment
-    if [ ! -x /usr/sbin/danted ] || ! command -v ip >/dev/null 2>&1 || ! command -v ss >/dev/null 2>&1; then
+    if [ ! -x /usr/sbin/danted ] || [ ! -x /usr/sbin/nft ] ||
+        ! command -v ip >/dev/null 2>&1 || ! command -v ss >/dev/null 2>&1; then
         DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || fail "apt-get update 失败"
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq dante-server iproute2 >/dev/null 2>&1 ||
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq dante-server iproute2 nftables >/dev/null 2>&1 ||
             fail "安装 Dante 依赖失败"
         log_info "已安装 Dante 依赖"
     fi
     [ -x /usr/sbin/danted ] || fail "未检测到 danted"
+    [ -x /usr/sbin/nft ] || fail "未检测到 nft"
     command -v shuf >/dev/null 2>&1 || fail "未检测到 shuf"
 }
 
+ensure_nft_include() {
+    mkdir -p "$(dirname "$NFT_RULES_FILE")" || fail "无法创建 NFT 规则目录"
+    touch "$NFT_CONFIG_FILE" || fail "无法访问 nftables 主配置"
+    grep -Eq '^[[:space:]]*include[[:space:]]+"?/etc/nftables\.d/(\*|socks)\.nft"?[[:space:]]*$' "$NFT_CONFIG_FILE" && return 0
+    printf '\ninclude "/etc/nftables.d/socks.nft"\n' >> "$NFT_CONFIG_FILE" || fail "无法写入 nftables include"
+}
+
 uninstall_dante() {
+    local nft_config_tmp="${NFT_CONFIG_FILE}.socks.tmp"
     require_environment
     systemctl disable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
     DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq dante-server >/dev/null 2>&1 || fail "卸载 Dante 失败"
     rm -f "$CONFIG_FILE" "${CONFIG_FILE}.tmp" || fail "删除 Dante 配置失败"
+    if [ -x /usr/sbin/nft ]; then
+        if /usr/sbin/nft list table inet "$NFT_TABLE" >/dev/null 2>&1; then
+            /usr/sbin/nft delete table inet "$NFT_TABLE" >/dev/null 2>&1 || fail "删除 SOCKS NFT 表失败"
+        fi
+    fi
+    rm -f "$NFT_RULES_FILE" "${NFT_RULES_FILE}.tmp" || fail "删除 SOCKS NFT 规则失败"
+    if [ -f "$NFT_CONFIG_FILE" ]; then
+        awk '$0 !~ /^[[:space:]]*include[[:space:]]*"\/etc\/nftables[.]d\/socks[.]nft"[[:space:]]*$/' \
+            "$NFT_CONFIG_FILE" > "$nft_config_tmp" && mv -f "$nft_config_tmp" "$NFT_CONFIG_FILE" || {
+                rm -f "$nft_config_tmp"
+                fail "清理 socks.nft include 失败"
+            }
+    fi
     systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null && fail "Dante 服务仍在运行"
-    [ ! -x /usr/sbin/danted ] && [ ! -e "$CONFIG_FILE" ] || fail "Dante 卸载不完整"
+    [ ! -x /usr/sbin/danted ] && [ ! -e "$CONFIG_FILE" ] && [ ! -e "$NFT_RULES_FILE" ] || fail "Dante 卸载不完整"
     log_info "Dante 已卸载"
 }
 
@@ -134,11 +163,14 @@ prepare_port() {
 }
 
 apply_config() {
-    local interface ip temp_file="${CONFIG_FILE}.tmp"
-    interface="$(ip -4 route show default | awk '$1 == "default" { print $5; exit }')"
+    local interface ip allowed_ips
+    local config_tmp="${CONFIG_FILE}.tmp" nft_tmp="${NFT_RULES_FILE}.tmp"
+    interface="$(ip -4 route show default | awk '$1 == "default" { for (i=1; i<NF; i++) if ($i == "dev") { print $(i+1); exit } }')"
     [ -n "$interface" ] || fail "无法确定默认 IPv4 出口网卡"
+    allowed_ips="${ALLOW_IPS[*]}"
+    allowed_ips="${allowed_ips// /, }"
 
-    cat > "$temp_file" <<EOF
+    cat > "$config_tmp" <<EOF
 logoutput: /dev/null
 
 internal: 0.0.0.0 port = ${PORT}
@@ -152,7 +184,7 @@ socksmethod: none
 EOF
 
     for ip in "${ALLOW_IPS[@]}"; do
-        cat >> "$temp_file" <<EOF
+        cat >> "$config_tmp" <<EOF
 
 client pass {
     from: ${ip}/32 to: 0.0.0.0/0
@@ -167,8 +199,38 @@ socks pass {
 EOF
     done
 
-    /usr/sbin/danted -V -f "$temp_file" || { rm -f "$temp_file"; fail "Dante 配置校验失败"; }
-    mv -f "$temp_file" "$CONFIG_FILE" || fail "无法覆盖 Dante 配置"
+    ensure_nft_include
+
+    cat > "$nft_tmp" <<EOF
+#!/usr/sbin/nft -f
+
+table inet ${NFT_TABLE}
+delete table inet ${NFT_TABLE}
+
+table inet ${NFT_TABLE} {
+    set allowed_ipv4 {
+        type ipv4_addr
+        elements = { ${allowed_ips} }
+    }
+
+    chain input {
+        type filter hook input priority -20; policy accept;
+        meta nfproto ipv4 tcp dport ${PORT} ip saddr @allowed_ipv4 accept
+        tcp dport ${PORT} drop
+        udp dport ${PORT} drop
+    }
+}
+EOF
+
+    /usr/sbin/danted -V -f "$config_tmp" || { rm -f "$config_tmp" "$nft_tmp"; fail "Dante 配置校验失败"; }
+    /usr/sbin/nft -c -f "$nft_tmp" >/dev/null 2>&1 || { rm -f "$config_tmp" "$nft_tmp"; fail "SOCKS NFT 规则校验失败"; }
+    systemctl enable nftables.service >/dev/null 2>&1 || fail "无法启用 nftables 服务"
+    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        systemctl stop "$SERVICE_NAME" >/dev/null 2>&1 || fail "无法停止旧 Dante 服务"
+    fi
+    /usr/sbin/nft -f "$nft_tmp" >/dev/null 2>&1 || fail "无法应用 SOCKS NFT 规则"
+    mv -f "$nft_tmp" "$NFT_RULES_FILE" || fail "无法持久化 SOCKS NFT 规则"
+    mv -f "$config_tmp" "$CONFIG_FILE" || fail "无法覆盖 Dante 配置"
     systemctl enable "$SERVICE_NAME" >/dev/null 2>&1 || fail "无法启用 Dante 服务"
     systemctl restart "$SERVICE_NAME" >/dev/null 2>&1 || fail "无法启动 Dante 服务"
     systemctl is-active --quiet "$SERVICE_NAME" || fail "Dante 服务未运行"
