@@ -10,25 +10,17 @@ DEFAULT_PORT_START=50000
 DEFAULT_PORT_END=60000
 DEFAULT_PADDING_SCHEME="stop=3|0=30-30|1=140-320|2=420-780,c,780-1400"
 SS_METHOD="2022-blake3-aes-128-gcm"
-WARP_TAG="warp"
+SOCKS_TAG="proxy"
 DIRECT_TAG="direct"
-WARP_ENDPOINT_HOST="engage.cloudflareclient.com"
-WARP_ENDPOINT_PORT=2408
-WARP_MTU=1280
-WARP_ADDRESS_IPV4="172.16.0.2/32"
-WARP_ALLOWED_IP_IPV4="0.0.0.0/0"
-WARP_ALLOWED_IP_IPV6="::/0"
-WARP_PUBLIC_KEY="bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
-WARP_KEEPALIVE=30
-WARP_RULESET_TAG="pureSite"
-WARP_RULESET_FORMAT="source"
-WARP_RULESET_URL="https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Singbox/pureSite.json"
+SOCKS_RULESET_TAG="pureSite"
+SOCKS_RULESET_FORMAT="source"
+SOCKS_RULESET_URL="https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Singbox/pureSite.json"
 
 ARCH=""
 PROTOCOLS=""
 ANYTLS_ENABLED=0
 SS_ENABLED=0
-WARP_ENABLED=0
+SOCKS_ENABLED=0
 
 SINGBOX_VERSION=""
 UPDATE_REQUESTED=0
@@ -48,8 +40,8 @@ SS_PORT=""
 SS_PORT_SET=0
 SS_PASSWORD=""
 
-WARP_KEY=""
-WARP_ADDRESS=""
+SOCKS_HOST=""
+SOCKS_PORT=""
 
 USED_PORTS=()
 
@@ -97,9 +89,9 @@ Shadowsocks:
   --ss-port PORT
   --ss-password PASSWORD
 
-WARP:
-  --warp-key KEY
-  --warp-address IPV6_CIDR  可选，提供后启用 IPv6 WARP address
+Socks:
+  --socks-host HOST
+  --socks-port PORT
 
 全局:
   --version VERSION
@@ -284,24 +276,24 @@ parse_args() {
                 SS_PASSWORD="${1#*=}"
                 shift
                 ;;
-            --warp-key)
-                WARP_KEY="$(need_value "$1" "${2:-}")"
-                WARP_ENABLED=1
+            --socks-host)
+                SOCKS_HOST="$(need_value "$1" "${2:-}")"
+                SOCKS_ENABLED=1
                 shift 2
                 ;;
-            --warp-key=*)
-                WARP_KEY="${1#*=}"
-                WARP_ENABLED=1
+            --socks-host=*)
+                SOCKS_HOST="${1#*=}"
+                SOCKS_ENABLED=1
                 shift
                 ;;
-            --warp-address)
-                WARP_ADDRESS="$(need_value "$1" "${2:-}")"
-                WARP_ENABLED=1
+            --socks-port)
+                SOCKS_PORT="$(need_value "$1" "${2:-}")"
+                SOCKS_ENABLED=1
                 shift 2
                 ;;
-            --warp-address=*)
-                WARP_ADDRESS="${1#*=}"
-                WARP_ENABLED=1
+            --socks-port=*)
+                SOCKS_PORT="${1#*=}"
+                SOCKS_ENABLED=1
                 shift
                 ;;
             --version)
@@ -833,16 +825,27 @@ prepare_shadowsocks_params() {
     fi
 }
 
-prepare_warp_params() {
-    if [[ "$WARP_ENABLED" -ne 1 ]]; then
+prepare_socks_params() {
+    if [[ "$SOCKS_ENABLED" -ne 1 ]]; then
         return 0
     fi
 
-    if [[ -z "$WARP_KEY" ]]; then
-        log_error "启用 WARP 时必须提供 --warp-key。"
+    if [[ -z "$SOCKS_HOST" ]]; then
+        log_error "启用 Socks 时必须提供 --socks-host。"
         exit 1
     fi
-    log_info "启用 WARP 分流"
+
+    if [[ -z "$SOCKS_PORT" ]]; then
+        log_error "启用 Socks 时必须提供 --socks-port。"
+        exit 1
+    fi
+
+    if ! [[ "$SOCKS_PORT" =~ ^[0-9]+$ ]] || (( SOCKS_PORT < 1 || SOCKS_PORT > 65535 )); then
+        log_error "Socks 端口无效: $SOCKS_PORT"
+        exit 1
+    fi
+
+    log_info "启用 Socks 分流"
 }
 
 prepare_config_params() {
@@ -850,7 +853,7 @@ prepare_config_params() {
     prepare_ports
     prepare_anytls_params
     prepare_shadowsocks_params
-    prepare_warp_params
+    prepare_socks_params
     log_success "配置参数已就绪"
 }
 
@@ -934,44 +937,23 @@ build_shadowsocks_inbound() {
         }'
 }
 
-build_warp_config() {
+build_socks_config() {
     jq -n \
-        --arg warp_tag "$WARP_TAG" \
+        --arg socks_tag "$SOCKS_TAG" \
         --arg direct_tag "$DIRECT_TAG" \
-        --argjson mtu "$WARP_MTU" \
-        --arg address_ipv4 "$WARP_ADDRESS_IPV4" \
-        --arg address_ipv6 "$WARP_ADDRESS" \
-        --arg private_key "$WARP_KEY" \
-        --arg peer_address "$WARP_ENDPOINT_HOST" \
-        --argjson peer_port "$WARP_ENDPOINT_PORT" \
-        --arg peer_public_key "$WARP_PUBLIC_KEY" \
-        --arg allowed_ip_ipv4 "$WARP_ALLOWED_IP_IPV4" \
-        --arg allowed_ip_ipv6 "$WARP_ALLOWED_IP_IPV6" \
-        --argjson keepalive "$WARP_KEEPALIVE" \
-        --arg rule_set "$WARP_RULESET_TAG" \
-        --arg rule_format "$WARP_RULESET_FORMAT" \
-        --arg rule_url "$WARP_RULESET_URL" \
+        --arg socks_host "$SOCKS_HOST" \
+        --argjson socks_port "$SOCKS_PORT" \
+        --arg rule_set "$SOCKS_RULESET_TAG" \
+        --arg rule_format "$SOCKS_RULESET_FORMAT" \
+        --arg rule_url "$SOCKS_RULESET_URL" \
         '{
-          endpoints: [
-            {
-              type: "wireguard",
-              tag: $warp_tag,
-              system: false,
-              mtu: $mtu,
-              address: ([$address_ipv4] + if $address_ipv6 == "" then [] else [$address_ipv6] end),
-              private_key: $private_key,
-              peers: [
-                {
-                  address: $peer_address,
-                  port: $peer_port,
-                  public_key: $peer_public_key,
-                  allowed_ips: ([$allowed_ip_ipv4] + if $address_ipv6 == "" then [] else [$allowed_ip_ipv6] end),
-                  persistent_keepalive_interval: $keepalive
-                }
-              ]
-            }
-          ],
           outbounds: [
+            {
+              type: "socks",
+              tag: $socks_tag,
+              server: $socks_host,
+              server_port: $socks_port
+            },
             {
               type: "direct",
               tag: $direct_tag
@@ -982,7 +964,7 @@ build_warp_config() {
               {
                 rule_set: $rule_set,
                 action: "route",
-                outbound: $warp_tag
+                outbound: $socks_tag
               }
             ],
             rule_set: [
@@ -1004,7 +986,7 @@ create_singbox_config() {
     local config_file="${config_dir}/config.json"
     local temp_file="${config_file}.tmp"
     local inbounds_json="["
-    local warp_json
+    local socks_json
     local first=1
     local inbound
 
@@ -1025,12 +1007,12 @@ create_singbox_config() {
 
     inbounds_json+="]"
 
-    if [[ "$WARP_ENABLED" -eq 1 ]]; then
-        warp_json="$(build_warp_config)"
+    if [[ "$SOCKS_ENABLED" -eq 1 ]]; then
+        socks_json="$(build_socks_config)"
         if ! jq -n \
             --argjson inbounds "$inbounds_json" \
-            --argjson warp "$warp_json" \
-            '{ log: { disabled: true }, inbounds: $inbounds } + $warp' > "$temp_file"; then
+            --argjson socks "$socks_json" \
+            '{ log: { disabled: true }, inbounds: $inbounds } + $socks' > "$temp_file"; then
             log_error "sing-box 配置生成失败。"
             rm -f "$temp_file"
             exit 1
@@ -1095,7 +1077,6 @@ show_configuration() {
     local server_ip
     local status
     local display_scheme
-    local warp_address_display
 
     print_header "配置详情"
     server_ip="$(get_ipv4_address)"
@@ -1127,16 +1108,12 @@ show_configuration() {
         printf "%-22s %s\n" "加密:" "$SS_METHOD"
     fi
 
-    if [[ "$WARP_ENABLED" -eq 1 ]]; then
-        warp_address_display="$WARP_ADDRESS_IPV4"
-        if [[ -n "$WARP_ADDRESS" ]]; then
-            warp_address_display+=", $WARP_ADDRESS"
-        fi
+    if [[ "$SOCKS_ENABLED" -eq 1 ]]; then
         echo ""
-        echo "WARP:"
+        echo "Socks:"
         printf "%-22s %s\n" "状态:" "enabled"
-        printf "%-22s %s\n" "Address:" "$warp_address_display"
-        printf "%-22s %s\n" "Ruleset:" "$WARP_RULESET_URL"
+        printf "%-22s %s\n" "Server:" "$SOCKS_HOST:$SOCKS_PORT"
+        printf "%-22s %s\n" "Ruleset:" "$SOCKS_RULESET_URL"
         printf "%-22s %s\n" "Final:" "$DIRECT_TAG"
     fi
 
