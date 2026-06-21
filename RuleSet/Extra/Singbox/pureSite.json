@@ -3,7 +3,7 @@
   "rules": [
     {
       "domain": ["challenges.cloudflare.com", "stun.cloudflare.com"],
-      "domain_suffix": ["reddit.com"]
+      "domain_suffix": ["reddit.com", "cloudflare.com"]
     }
   ]
 }
