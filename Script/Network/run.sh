@@ -4,6 +4,7 @@ set -Eeuo pipefail
 PROVIDER_SCRIPT_DIR="/root"
 PLAN_FILE=""
 LOG_FILE=""
+CLEARED_SERVICES=""
 
 log() { printf '[RUN] %s\n' "$*" >&2; }
 fail() {
@@ -12,14 +13,23 @@ fail() {
 }
 
 cleanup_runtime() {
+  local status=$?
+  if [ "$status" -ne 0 ] && [ -n "$LOG_FILE" ] && [ -s "$LOG_FILE" ]; then
+    log "error output | first_lines=20"
+    head -n 20 "$LOG_FILE" >&2 || true
+  fi
   [ -z "$LOG_FILE" ] || rm -f "$LOG_FILE" || true
+  return "$status"
 }
 trap cleanup_runtime EXIT
 
 run_quiet() {
   [ -n "$LOG_FILE" ] || LOG_FILE="$(mktemp /tmp/cloud-run.XXXXXX)"
-  "$@" >>"$LOG_FILE" 2>&1
+  "$@" >"$LOG_FILE" 2>&1 || return
+  : >"$LOG_FILE"
 }
+
+mark_cleared() { CLEARED_SERVICES="${CLEARED_SERVICES}${CLEARED_SERVICES:+,}${1}"; }
 
 require_root() {
   [ "${EUID:-$(id -u)}" -eq 0 ] || fail "root required"
@@ -198,7 +208,7 @@ step_time_sync() {
   done
   [ "$synced" = "yes" ] || fail "time sync not synchronized | service=systemd-timesyncd"
 
-  log "time sync active | timezone=${timezone} | service=systemd-timesyncd | synchronized=yes"
+  log "time sync active | timezone=${timezone} | synchronized=yes"
 }
 
 proxy_meta() {
@@ -264,7 +274,7 @@ step_proxy_remove() {
   local type="$1" script="$2"
   shift 2
   provider_run "$script" "$@" || fail "proxy removal failed | type=${type}"
-  log "proxy cleared | type=${type}"
+  mark_cleared "$type"
 }
 
 step_kernel() {
@@ -272,7 +282,7 @@ step_kernel() {
   local script="$1"
   shift
   provider_run "$script" "$@" || fail "kernel tuning configuration failed"
-  log "kernel tuning configured"
+  if [ "${1:-}" = "-u" ]; then mark_cleared kernel; else log "kernel tuning configured"; fi
 }
 
 dns_meta() {
@@ -288,7 +298,7 @@ step_dns_remove() {
   local type="$1" script="$2"
   shift 2
   provider_run "$script" "$@" || fail "dns resolver removal failed | service=${type}"
-  log "dns resolver cleared | service=${type}"
+  mark_cleared "$type"
 }
 
 step_dns() {
@@ -317,7 +327,7 @@ step_traffic() {
     off)
       [ "$#" -eq 0 ] || fail "traffic off does not accept arguments"
       provider_run "$script" -u || fail "traffic rules removal failed"
-      log "traffic rules cleared"
+      mark_cleared traffic
       ;;
     *)
       fail "unknown traffic mode | mode=${mode}"
@@ -329,27 +339,26 @@ step_telegram() {
   [ "$#" -eq 2 ] || fail "step_telegram requires script and action"
   local script="$1" action="$2"
   provider_run "$script" "$action" || fail "telegram optimization failed | action=${action}"
-  log "telegram optimization configured | action=${action}"
+  if [ "$action" = "--remove" ]; then mark_cleared telegram; else log "telegram optimization active"; fi
 }
 
 step_cleanup_scripts() {
-  local script removed=0
+  local script
   for script in "$@"; do
     case "$script" in
       ""|*/*) fail "invalid cleanup script | name=${script}" ;;
     esac
     if [ -e "${PROVIDER_SCRIPT_DIR}/${script}" ]; then
       rm -f "${PROVIDER_SCRIPT_DIR}/${script}" || fail "provider script cleanup failed | script=${script}"
-      removed=$((removed + 1))
     fi
   done
-  log "provider scripts cleaned | count=${removed}"
 }
 
 run_plan() {
   [ -r "$PLAN_FILE" ] || fail "plan unreadable | file=${PLAN_FILE}"
   # shellcheck disable=SC1090
   source "$PLAN_FILE"
+  [ -z "$CLEARED_SERVICES" ] || log "services cleared | names=${CLEARED_SERVICES}"
 }
 
 main() {
