@@ -435,12 +435,19 @@ do_update() {
 
 do_uninstall() {
     print_message "info" "Starting uninstallation process..."
+
+    if [[ ! -e "$SYSTEMD" && ! -e "$CONF" && ! -e "$SERVER_BIN" ]] &&
+       ! systemctl is-active --quiet snell 2>/dev/null &&
+       ! systemctl cat snell.service >/dev/null 2>&1; then
+        print_message "success" "Snell server is already absent"
+        return 0
+    fi
     
     print_message "info" "Stopping Snell service..."
-    systemctl stop snell
+    systemctl stop snell >/dev/null 2>&1 || true
     
     print_message "info" "Disabling Snell service..."
-    systemctl disable snell
+    systemctl disable snell >/dev/null 2>&1 || true
     
     print_message "info" "Removing files..."
     rm -f "${SYSTEMD}"

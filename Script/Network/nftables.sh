@@ -1138,9 +1138,13 @@ sync_ddns_rules() {
 }
 
 apply_protection_state() {
-    local protect_flag="$1" desc="$2" success_msg="$3" protect_noping="${4:-}" candidate current_ports=""
+    local protect_flag="$1" desc="$2" success_msg="$3" protect_noping="${4:-}" reset_rules="${5:-0}" candidate current_ports=""
     candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 1
-    copy_current_state_to "$candidate" || { rm -f "$candidate"; return 1; }
+    if [ "$reset_rules" = "1" ]; then
+        : > "$candidate"
+    else
+        copy_current_state_to "$candidate" || { rm -f "$candidate"; return 1; }
+    fi
     [ -n "$protect_noping" ] || protect_noping=$(get_protect_noping_flag)
     [ "$protect_flag" = "1" ] || protect_noping=0
     if [ "$protect_flag" = "1" ]; then
@@ -1161,7 +1165,7 @@ sync_protection_ports() {
     apply_protection_state 1 "同步端口保护" "保护端口同步完成"
 }
 
-enable_protection() { apply_protection_state 1 "开启端口保护" "端口保护已开启，开放端口" "${1:-0}"; }
+enable_protection() { apply_protection_state 1 "开启端口保护" "端口保护已开启，开放端口" "${1:-0}" 1; }
 disable_protection() { apply_protection_state 0 "关闭端口保护" "端口保护已关闭"; }
 
 show_protection_status() {

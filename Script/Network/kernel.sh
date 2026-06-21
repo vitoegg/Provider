@@ -145,12 +145,13 @@ remove_profile() {
     require_root
     log "INFO" "mode=remove file=$SYSCTL_FILE"
 
-    if [[ -f "$SYSCTL_FILE" ]]; then
-        rm -f "$SYSCTL_FILE" || die "Failed to delete $SYSCTL_FILE"
-        log "OK" "remove: file deleted"
-    else
+    if [[ ! -f "$SYSCTL_FILE" ]]; then
         log "OK" "remove: file already absent"
+        return 0
     fi
+
+    rm -f "$SYSCTL_FILE" || die "Failed to delete $SYSCTL_FILE"
+    log "OK" "remove: file deleted"
 
     reload_sysctl
     [[ ! -f "$SYSCTL_FILE" ]] || die "remove failed: config file still exists"

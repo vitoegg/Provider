@@ -121,9 +121,22 @@ ensure_nft_include() {
     printf '\ninclude "/etc/nftables.d/socks.nft"\n' >> "$NFT_CONFIG_FILE" || fail "无法写入 nftables include"
 }
 
+dante_present() {
+    dpkg-query -W -f='${db:Status-Abbrev}' dante-server 2>/dev/null | grep -q '^ii ' && return 0
+    systemctl cat "$SERVICE_NAME" >/dev/null 2>&1 && return 0
+    if [ -e "$CONFIG_FILE" ] || [ -e "$NFT_RULES_FILE" ] || [ -x /usr/sbin/danted ]; then
+        return 0
+    fi
+    [ -x /usr/sbin/nft ] && /usr/sbin/nft list table inet "$NFT_TABLE" >/dev/null 2>&1
+}
+
 uninstall_dante() {
     local nft_config_tmp="${NFT_CONFIG_FILE}.socks.tmp"
     require_environment
+    if ! dante_present; then
+        log_info "Dante 已不存在"
+        return 0
+    fi
     systemctl disable --now "$SERVICE_NAME" >/dev/null 2>&1 || true
     DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq dante-server >/dev/null 2>&1 || fail "卸载 Dante 失败"
     rm -f "$CONFIG_FILE" "${CONFIG_FILE}.tmp" || fail "删除 Dante 配置失败"

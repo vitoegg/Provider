@@ -7,13 +7,14 @@ LOG_FILE=""
 
 log() { printf '[RUN] %s\n' "$*" >&2; }
 fail() {
-  if [ -n "$LOG_FILE" ] && [ -s "$LOG_FILE" ]; then
-    printf '[RUN] FAIL %s | log=%s\n' "$*" "$LOG_FILE" >&2
-  else
-    printf '[RUN] FAIL %s\n' "$*" >&2
-  fi
+  printf '[RUN] FAIL %s\n' "$*" >&2
   exit 1
 }
+
+cleanup_runtime() {
+  [ -z "$LOG_FILE" ] || rm -f "$LOG_FILE" || true
+}
+trap cleanup_runtime EXIT
 
 run_quiet() {
   [ -n "$LOG_FILE" ] || LOG_FILE="$(mktemp /tmp/cloud-run.XXXXXX)"
@@ -63,7 +64,6 @@ ensure_packages() {
 script_path() {
   local path="${PROVIDER_SCRIPT_DIR}/${1}"
   [ -s "$path" ] || fail "provider script missing | path=${path}"
-  chmod +x "$path"
   printf '%s' "$path"
 }
 
@@ -90,11 +90,6 @@ arg_value() {
 
 service_active() {
   systemctl is-active --quiet "$1" >/dev/null 2>&1
-}
-
-service_exists() {
-  systemctl cat "$1" >/dev/null 2>&1 && return 0
-  systemctl list-unit-files "$1" 2>/dev/null | awk -v unit="$1" '$1==unit { found=1 } END { exit !found }'
 }
 
 service_port_ready() {
@@ -140,9 +135,9 @@ allowlist_count() {
 }
 
 step_ssh_guard() {
-  local script="$1" allowlist="${2:-}" public_key="${3:-}" allow_count key_detail=""
-  local -a args
   [ "$#" -ge 2 ] && [ "$#" -le 3 ] || fail "step_ssh_guard requires script, allowlist, and optional public key"
+  local script="$1" allowlist="$2" public_key="${3:-}" allow_count key_detail=""
+  local -a args
   [ -n "$allowlist" ] || fail "ssh allowlist empty"
 
   ensure_packages openssh-server nftables
@@ -166,6 +161,7 @@ update_hosts() {
 }
 
 step_hostname() {
+  [ "$#" -eq 1 ] || fail "step_hostname requires hostname"
   local target="$1" current
   current="$(hostname 2>/dev/null || true)"
   if [ "$current" = "$target" ] && grep -Eq "^127\\.0\\.1\\.1[[:space:]]+${target}$" /etc/hosts 2>/dev/null; then
@@ -208,12 +204,12 @@ step_time_sync() {
 
 proxy_meta() {
   case "$1" in
-    socks) printf 'danted.service|/etc/danted.conf|--uninstall|--port' ;;
-    ssrust) printf 'shadowsocks.service|/etc/shadowsocks/config.json|-u|-p' ;;
-    ssgo) printf 'sing-box.service|/etc/sing-box/config.json|--uninstall|' ;;
-    anytls) printf 'sing-box.service|/etc/sing-box/config.json|--uninstall|' ;;
-    reality) printf 'xray.service|/usr/local/etc/xray/config.json|--uninstall|--reality-port' ;;
-    snell) printf 'snell.service|/etc/snell/snell.conf|-u|-p' ;;
+    socks) printf 'danted.service|/etc/danted.conf|--port' ;;
+    ssrust) printf 'shadowsocks.service|/etc/shadowsocks/config.json|-p' ;;
+    ssgo) printf 'sing-box.service|/etc/sing-box/config.json|' ;;
+    anytls) printf 'sing-box.service|/etc/sing-box/config.json|' ;;
+    reality) printf 'xray.service|/usr/local/etc/xray/config.json|--reality-port' ;;
+    snell) printf 'snell.service|/etc/snell/snell.conf|-p' ;;
     *) return 1 ;;
   esac
 }
@@ -223,16 +219,12 @@ service_usable() {
   service_active "$service" && [ -e "$config" ] && service_port_ready "$service" "$port"
 }
 
-service_port_mismatch() {
-  local service="$1" config="$2" port="$3"
-  service_active "$service" && [ -e "$config" ] && ! service_port_ready "$service" "$port"
-}
-
 step_proxy() {
-  local type="$1" script="$2" service config uninstall port_key port detail
+  [ "$#" -ge 3 ] || fail "step_proxy requires type, script, and configuration arguments"
+  local type="$1" script="$2" service config port_key port detail
   local protocol anytls_port ss_port
   shift 2
-  IFS='|' read -r service config uninstall port_key <<< "$(proxy_meta "$type")" || fail "unknown proxy type | type=${type}"
+  IFS='|' read -r service config port_key <<< "$(proxy_meta "$type")" || fail "unknown proxy type | type=${type}"
 
   if [ "$type" = "anytls" ] || [ "$type" = "ssgo" ]; then
     protocol="$(arg_value --protocol "$@" || true)"
@@ -269,123 +261,49 @@ step_proxy() {
 }
 
 step_proxy_remove() {
-  local type="$1" script="$2" service config uninstall port_key
+  [ "$#" -ge 3 ] || fail "step_proxy_remove requires type, script, and removal arguments"
+  local type="$1" script="$2"
   shift 2
-  [ "$#" -gt 0 ] || fail "step_proxy_remove requires removal arguments | type=${type}"
-  IFS='|' read -r service config uninstall port_key <<< "$(proxy_meta "$type")" || fail "unknown proxy type | type=${type}"
-  provider_run "$script" "$@" || fail "proxy removal failed | service=${service%.service}"
-  if [ -e "${PROVIDER_SCRIPT_DIR}/${script}" ]; then
-    rm -f "${PROVIDER_SCRIPT_DIR}/${script}" || fail "proxy script cleanup failed | script=${script}"
-  fi
-  log "proxy cleared | service=${service%.service}"
-}
-
-kernel_needs_ipv6_disabled() {
-  while [ "$#" -gt 0 ]; do
-    if [ "$1" = "-6" ]; then
-      [ "${2:-}" = "no" ] && return 0
-      return 1
-    fi
-    shift
-  done
-  return 1
-}
-
-kernel_config_matches() {
-  local file="/etc/sysctl.d/99-network-kernel.conf"
-  [ -f "$file" ] || return 1
-  if kernel_needs_ipv6_disabled "$@"; then
-    grep -q '^net\.ipv6\.conf\.all\.disable_ipv6 = 1$' "$file"
-  else
-    ! grep -q '^net\.ipv6\.conf\.all\.disable_ipv6 = 1$' "$file"
-  fi
+  provider_run "$script" "$@" || fail "proxy removal failed | type=${type}"
+  log "proxy cleared | type=${type}"
 }
 
 step_kernel() {
-  local script="$1" file="/etc/sysctl.d/99-network-kernel.conf"
+  [ "$#" -ge 1 ] || fail "step_kernel requires script"
+  local script="$1"
   shift
-  if kernel_config_matches "$@"; then
-    log "kernel tuning configured"
-    return 0
-  fi
-  if [ -f "$file" ]; then
-    provider_run "$script" -u || fail "kernel tuning cleanup failed"
-  fi
   provider_run "$script" "$@" || fail "kernel tuning configuration failed"
-  kernel_config_matches "$@" || fail "kernel tuning verification failed"
   log "kernel tuning configured"
 }
 
 dns_meta() {
   case "$1" in
-    mosdns) printf 'mosdns.service|/etc/mosdns|-u|53|/usr/local/bin/mosdns' ;;
-    smartdns) printf 'smartdns.service|/etc/smartdns/smartdns.conf|-u|53|/usr/sbin/smartdns' ;;
+    mosdns) printf 'mosdns.service|/etc/mosdns|53' ;;
+    smartdns) printf 'smartdns.service|/etc/smartdns/smartdns.conf|53' ;;
     *) return 1 ;;
   esac
 }
 
-other_dns_script() {
-  case "$1" in
-    mosdns) printf 'smartdns.sh' ;;
-    smartdns) printf 'mosdns.sh' ;;
-    *) return 1 ;;
-  esac
-}
-
-cleanup_other_dns_script() {
-  local script
-  script="$(other_dns_script "$1")" || return 0
-  if [ -e "${PROVIDER_SCRIPT_DIR}/${script}" ]; then
-    rm -f "${PROVIDER_SCRIPT_DIR}/${script}" || fail "dns script cleanup failed | script=${script}"
-  fi
-}
-
-remove_other_dns() {
-  local target="$1" other other_script other_service other_config other_uninstall other_port other_binary
-  case "$target" in
-    mosdns)
-      other="smartdns"
-      ;;
-    smartdns)
-      other="mosdns"
-      ;;
-    *)
-      return 0
-      ;;
-  esac
-  other_script="$(other_dns_script "$target")" || return 0
-
-  IFS='|' read -r other_service other_config other_uninstall other_port other_binary <<< "$(dns_meta "$other")" || return 0
-  if service_exists "$other_service" || [ -e "$other_config" ] || [ -e "$other_binary" ]; then
-    provider_run "$other_script" "$other_uninstall" || fail "dns resolver removal failed | service=${other_service%.service}"
-  fi
+step_dns_remove() {
+  [ "$#" -ge 3 ] || fail "step_dns_remove requires type, script, and removal arguments"
+  local type="$1" script="$2"
+  shift 2
+  provider_run "$script" "$@" || fail "dns resolver removal failed | service=${type}"
+  log "dns resolver cleared | service=${type}"
 }
 
 step_dns() {
-  local type="$1" script="$2" service config uninstall port binary
+  [ "$#" -ge 2 ] || fail "step_dns requires type and script"
+  local type="$1" script="$2" service config port
   shift 2
-  IFS='|' read -r service config uninstall port binary <<< "$(dns_meta "$type")" || fail "unknown dns resolver | service=${type}"
-
-  if service_usable "$service" "$config" "$port"; then
-    cleanup_other_dns_script "$type"
-    log "dns resolver active | service=${service%.service}"
-    return 0
-  fi
-
-  if service_port_mismatch "$service" "$config" "$port"; then
-    provider_run "$script" "$uninstall" || fail "dns resolver removal failed | service=${service%.service}"
-  elif service_exists "$service" || [ -e "$config" ] || [ -e "$binary" ]; then
-    provider_run "$script" "$uninstall" || fail "dns resolver removal failed | service=${service%.service}"
-  fi
-
-  remove_other_dns "$type"
+  IFS='|' read -r service config port <<< "$(dns_meta "$type")" || fail "unknown dns resolver | service=${type}"
   provider_run "$script" "$@" || fail "dns resolver installation failed | service=${service%.service}"
   service_usable "$service" "$config" "$port" || fail "dns resolver inactive | service=${service%.service}"
-  cleanup_other_dns_script "$type"
   log "dns resolver active | service=${service%.service}"
 }
 
 step_traffic() {
+  [ "$#" -ge 2 ] || fail "step_traffic requires mode and script"
   local mode="$1" script="$2"
   shift 2
   ensure_packages nftables
@@ -398,6 +316,11 @@ step_traffic() {
       provider_run "$script" --protect on "$@" || fail "traffic rules load failed | mode=protect"
       log "traffic rules loaded | mode=protect"
       ;;
+    off)
+      [ "$#" -eq 0 ] || fail "traffic off does not accept arguments"
+      provider_run "$script" -u || fail "traffic rules removal failed"
+      log "traffic rules cleared"
+      ;;
     *)
       fail "unknown traffic mode | mode=${mode}"
       ;;
@@ -405,10 +328,24 @@ step_traffic() {
 }
 
 step_telegram() {
-  [ "$#" -eq 1 ] || fail "step_telegram requires script"
-  local script="$1"
-  provider_run "$script" --apply || fail "telegram optimization failed"
-  log "telegram optimization active"
+  [ "$#" -eq 2 ] || fail "step_telegram requires script and action"
+  local script="$1" action="$2"
+  provider_run "$script" "$action" || fail "telegram optimization failed | action=${action}"
+  log "telegram optimization configured | action=${action}"
+}
+
+step_cleanup_scripts() {
+  local script removed=0
+  for script in "$@"; do
+    case "$script" in
+      ""|*/*) fail "invalid cleanup script | name=${script}" ;;
+    esac
+    if [ -e "${PROVIDER_SCRIPT_DIR}/${script}" ]; then
+      rm -f "${PROVIDER_SCRIPT_DIR}/${script}" || fail "provider script cleanup failed | script=${script}"
+      removed=$((removed + 1))
+    fi
+  done
+  log "provider scripts cleaned | count=${removed}"
 }
 
 run_plan() {
@@ -430,7 +367,6 @@ main() {
   require_apt
   ensure_packages iproute2
   run_plan
-  [ -z "$LOG_FILE" ] || rm -f "$LOG_FILE"
 }
 
 main "$@"

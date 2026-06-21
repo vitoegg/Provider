@@ -895,6 +895,13 @@ update_xray() {
 uninstall_xray() {
     print_header "卸载 Xray"
 
+    if ! systemctl is-active --quiet "$XRAY_SERVICE" 2>/dev/null &&
+       ! systemctl cat "$XRAY_SERVICE" >/dev/null 2>&1 &&
+       ! xray_command >/dev/null 2>&1 && [[ ! -e "$CONFIG_FILE" ]]; then
+        log_success "Xray 已不存在"
+        return 0
+    fi
+
     log_info "停止服务: $XRAY_SERVICE"
     systemctl stop "$XRAY_SERVICE" >/dev/null 2>&1 || true
 

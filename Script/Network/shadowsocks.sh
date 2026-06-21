@@ -520,7 +520,8 @@ uninstall_service() {
     echo -e "\n=== Uninstalling Shadowsocks ===\n"
 
     if ! check_service_exists; then
-        log warn "Shadowsocks service is not installed, continuing cleanup"
+        log info "Shadowsocks is already absent"
+        return 0
     fi
 
     log progress "Stopping and disabling Shadowsocks service"
@@ -565,6 +566,10 @@ uninstall_service() {
 # Check if Shadowsocks service exists
 ################################################################################
 check_service_exists() {
+    if [[ -e /etc/shadowsocks ]] || command_exists ssserver; then
+        return 0
+    fi
+
     if [[ -f "/lib/systemd/system/shadowsocks.service" ]] ||
        [[ -f "/etc/systemd/system/shadowsocks.service" ]]; then
         return 0

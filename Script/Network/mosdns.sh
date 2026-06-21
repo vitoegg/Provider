@@ -323,23 +323,36 @@ EOF
 }
 
 start_and_verify() {
-  "$BIN" service install -d "$CONFIG_DIR" -c "$CONFIG_FILE" >/dev/null 2>&1 || fail "服务安装失败"
-  "$BIN" service start >/dev/null || fail "服务启动失败"
+  if service_exists; then
+    systemctl restart "$SERVICE" >/dev/null || fail "服务重启失败"
+  else
+    "$BIN" service install -d "$CONFIG_DIR" -c "$CONFIG_FILE" >/dev/null 2>&1 || fail "服务安装失败"
+    "$BIN" service start >/dev/null || fail "服务启动失败"
+  fi
   sleep 2
 
   systemctl is-active --quiet "$SERVICE" || fail "mosdns 服务未处于 active 状态"
   service_owns_udp53 || fail "mosdns 服务未监听 53 端口"
 }
 
-install_mosdns() {
-  mosdns_exists && fail "mosdns 已存在或有残留，请先执行卸载操作"
-
+apply_mosdns() {
   detect_arch
   require_apt
   ensure_dependencies
-  port_53_free || fail "53 端口已被占用，请先停止其它 DNS 服务"
 
-  install_binary
+  if mosdns_exists && { [ ! -x "$BIN" ] || ! service_exists; }; then
+    warn "mosdns 安装不完整，重新安装"
+    uninstall_mosdns
+  fi
+
+  if ! mosdns_exists; then
+    port_53_free || fail "53 端口已被占用，请先停止其它 DNS 服务"
+    install_binary
+  else
+    log "更新 mosdns 配置"
+  fi
+
+  rm -rf "$RULE_DIR"
   download_domain_rules
   write_config
   start_and_verify
@@ -350,14 +363,14 @@ install_mosdns() {
 }
 
 uninstall_mosdns() {
+  if ! mosdns_exists; then
+    log "mosdns 已不存在"
+    return 0
+  fi
+
   set_dns public
   grep -qx 'nameserver 8.8.8.8' "$RESOLV_CONF" || fail "DNS配置还原失败"
   grep -qx 'nameserver 1.1.1.1' "$RESOLV_CONF" || fail "DNS配置还原失败"
-
-  if ! mosdns_exists; then
-    warn "mosdns 未安装"
-    return 0
-  fi
 
   if [ -x "$BIN" ]; then
     "$BIN" service stop >/dev/null 2>&1 || true
@@ -382,7 +395,7 @@ main() {
   if [ "$UNINSTALL" -eq 1 ]; then
     uninstall_mosdns
   else
-    install_mosdns
+    apply_mosdns
   fi
 }
 

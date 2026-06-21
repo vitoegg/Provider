@@ -115,6 +115,11 @@ service_known() {
     systemctl list-unit-files --no-legend sing-box.service 2>/dev/null | grep -q '^sing-box\.service[[:space:]]'
 }
 
+managed_state_exists() {
+    package_known || service_known || systemctl is-active --quiet sing-box 2>/dev/null ||
+        [[ -e /etc/sing-box || -e /var/lib/sing-box ]]
+}
+
 remove_path() {
     local path="$1"
 
@@ -1122,6 +1127,11 @@ show_configuration() {
 
 uninstall_service() {
     print_header "卸载 sing-box"
+
+    if ! managed_state_exists; then
+        log_success "sing-box 已不存在"
+        return 0
+    fi
 
     log_info "停止服务: sing-box"
     systemctl stop sing-box >/dev/null 2>&1 || true

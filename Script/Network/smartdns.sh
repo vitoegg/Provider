@@ -220,14 +220,22 @@ set_dns() {
   fi
 }
 
-install_smartdns() {
-  smartdns_present && fail "SmartDNS already exists; run uninstall first"
-  port_53_conflict && fail "port 53 is already used by another service"
+apply_smartdns() {
+  if smartdns_present && { ! service_exists || [ ! -x /usr/sbin/smartdns ]; }; then
+    warn "SmartDNS installation is incomplete; reinstalling"
+    uninstall_smartdns
+  fi
 
-  detect_arch
-  select_release_asset
-  log "Installing SmartDNS..."
-  run_installer -i
+  if ! smartdns_present; then
+    port_53_conflict && fail "port 53 is already used by another service"
+    detect_arch
+    select_release_asset
+    log "Installing SmartDNS..."
+    run_installer -i
+  else
+    log "Updating SmartDNS configuration..."
+  fi
+
   write_config
   systemctl enable smartdns.service >/dev/null || fail "failed to enable SmartDNS"
   systemctl restart smartdns.service || fail "failed to restart SmartDNS"
@@ -237,29 +245,30 @@ install_smartdns() {
   systemctl is-enabled --quiet smartdns.service || fail "SmartDNS service not enabled"
   smartdns_listening || fail "SmartDNS is not listening on port 53"
   grep -qx 'nameserver 127.0.0.1' "$RESOLV_CONF" || fail "system DNS not pointed to SmartDNS"
-  log "SmartDNS installed"
+  log "SmartDNS configured"
 }
 
 uninstall_smartdns() {
+  if ! smartdns_present; then
+    log "SmartDNS already absent"
+    return 0
+  fi
+
   log "Restoring public DNS..."
   set_dns public
 
-  if smartdns_present; then
-    log "Uninstalling SmartDNS..."
-    if [ -x "$INSTALLER_CACHE" ]; then
-      "$INSTALLER_CACHE" -u >/dev/null 2>&1 || fail "SmartDNS uninstall failed"
-    else
-      ensure_dependencies
-      detect_arch
-      select_release_asset
-      run_installer -u
-    fi
-    rm -rf "$CONFIG_DIR"
-    systemctl daemon-reload >/dev/null 2>&1 || true
-    systemctl is-active --quiet smartdns.service 2>/dev/null && fail "SmartDNS service still active"
+  log "Uninstalling SmartDNS..."
+  if [ -x "$INSTALLER_CACHE" ]; then
+    "$INSTALLER_CACHE" -u >/dev/null 2>&1 || fail "SmartDNS uninstall failed"
   else
-    warn "SmartDNS not installed"
+    ensure_dependencies
+    detect_arch
+    select_release_asset
+    run_installer -u
   fi
+  rm -rf "$CONFIG_DIR"
+  systemctl daemon-reload >/dev/null 2>&1 || true
+  systemctl is-active --quiet smartdns.service 2>/dev/null && fail "SmartDNS service still active"
 
   grep -qx 'nameserver 1.1.1.1' "$RESOLV_CONF" || fail "public DNS restore failed"
   grep -qx 'nameserver 8.8.8.8' "$RESOLV_CONF" || fail "public DNS restore failed"
@@ -273,7 +282,7 @@ main() {
     uninstall_smartdns
   else
     ensure_dependencies
-    install_smartdns
+    apply_smartdns
   fi
 }
 
