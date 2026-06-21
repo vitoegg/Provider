@@ -31,6 +31,17 @@ require_root() {
     [ "$(id -u)" = "0" ] || fail "此操作必须以 root 权限运行"
 }
 
+ensure_sshg_dependencies() {
+    local missing=()
+    command -v apt-get >/dev/null 2>&1 || fail "Debian/Ubuntu apt required"
+    nft_cmd >/dev/null 2>&1 || missing+=(nftables)
+    sshd_cmd >/dev/null 2>&1 || missing+=(openssh-server)
+    [ "${#missing[@]}" -eq 0 ] && return 0
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || fail "apt-get update 失败"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 || fail "依赖安装失败: ${missing[*]}"
+    log_info "已安装依赖: ${missing[*]}"
+}
+
 acquire_lock() {
     local lock
     [ "$SSHG_LOCK_HELD" = "1" ] && return 0
@@ -810,6 +821,9 @@ main() {
     done
 
     require_root
+    case "$action" in
+        --apply|apply|--reset|reset|--sync|sync) ensure_sshg_dependencies ;;
+    esac
     case "$action" in
         --apply|apply|--reset|reset|--sync|sync|--remove|remove|hook) acquire_lock ;;
     esac

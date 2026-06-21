@@ -140,7 +140,6 @@ step_ssh_guard() {
   local -a args
   [ -n "$allowlist" ] || fail "ssh allowlist empty"
 
-  ensure_packages openssh-server nftables
   args=(--reset config=ssh "allow=${allowlist}")
   if [ -n "$public_key" ]; then
     args+=("key=${public_key}")
@@ -306,7 +305,6 @@ step_traffic() {
   [ "$#" -ge 2 ] || fail "step_traffic requires mode and script"
   local mode="$1" script="$2"
   shift 2
-  ensure_packages nftables
   case "$mode" in
     forward)
       provider_run "$script" -r "$@" || fail "traffic rules load failed | mode=forward"
