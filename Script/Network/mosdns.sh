@@ -25,11 +25,11 @@ fail() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 usage() {
   cat <<EOF
 用法:
-  $0 --install [--dns DNS服务器地址] [--ecs HK|TYO|LA|OR|SEA] [--ipv4|--ipv6]
+  $0 [--install] [--dns DNS服务器地址] [--ecs HK|TYO|LA|OR|SEA] [--ipv4|--ipv6]
   $0 --uninstall
 
 参数:
-  -i, --install           安装 mosdns
+  -i, --install           显式安装 mosdns，可省略
   -d, --dns DNS           自定义 DNS 服务器
   -e, --ecs REGION        ECS 区域: HK, TYO, LA, OR, SEA
   -4, --ipv4              IPv4 优先
@@ -56,8 +56,6 @@ ecs_ip() {
 }
 
 parse_args() {
-  [ "$#" -gt 0 ] || { usage >&2; exit 1; }
-
   while [ "$#" -gt 0 ]; do
     case "$1" in
       -h|--help) usage; exit 0 ;;

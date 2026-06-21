@@ -164,7 +164,7 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 
 ### 参数说明
 ```text
--i, --install           安装
+-i, --install           显式安装，可省略
 -d, --dns DNS           自定义 DNS 服务器
 -e, --ecs REGION        ECS 区域: HK, TYO, LA, SEA
 -4, --ipv4              IPv4 优先
