@@ -77,27 +77,6 @@ script_path() {
   printf '%s' "$path"
 }
 
-arg_value() {
-  local key="$1" arg
-  shift
-  while [ "$#" -gt 0 ]; do
-    arg="$1"
-    case "$arg" in
-      "$key")
-        [ -n "${2:-}" ] || return 1
-        printf '%s' "$2"
-        return 0
-        ;;
-      "$key="*)
-        printf '%s' "${arg#*=}"
-        return 0
-        ;;
-    esac
-    shift
-  done
-  return 1
-}
-
 service_active() {
   systemctl is-active --quiet "$1" >/dev/null 2>&1
 }
@@ -211,70 +190,25 @@ step_time_sync() {
   log "time sync active | timezone=${timezone} | synchronized=yes"
 }
 
-proxy_meta() {
-  case "$1" in
-    socks) printf 'danted.service|/etc/danted.conf|--port' ;;
-    ssrust) printf 'shadowsocks.service|/etc/shadowsocks/config.json|-p' ;;
-    ssgo) printf 'sing-box.service|/etc/sing-box/config.json|' ;;
-    anytls) printf 'sing-box.service|/etc/sing-box/config.json|' ;;
-    reality) printf 'xray.service|/usr/local/etc/xray/config.json|--reality-port' ;;
-    snell) printf 'snell.service|/etc/snell/snell.conf|-p' ;;
-    *) return 1 ;;
-  esac
-}
-
 service_usable() {
   local service="$1" config="$2" port="$3"
   service_active "$service" && [ -e "$config" ] && service_port_ready "$service" "$port"
 }
 
 step_proxy() {
-  [ "$#" -ge 3 ] || fail "step_proxy requires type, script, and configuration arguments"
-  local type="$1" script="$2" service config port_key port detail
-  local protocol anytls_port ss_port
+  [ "$#" -ge 3 ] || fail "step_proxy requires owner, script, and configuration arguments"
+  local owner="$1" script="$2"
   shift 2
-  IFS='|' read -r service config port_key <<< "$(proxy_meta "$type")" || fail "unknown proxy type | type=${type}"
-
-  if [ "$type" = "anytls" ] || [ "$type" = "ssgo" ]; then
-    protocol="$(arg_value --protocol "$@" || true)"
-    anytls_port="$(arg_value --anytls-port "$@" || true)"
-    ss_port="$(arg_value --ss-port "$@" || true)"
-    port="${anytls_port:-$ss_port}"
-    [ -n "$port" ] || fail "proxy port missing | service=sing-box"
-    detail="protocols=${protocol:-unknown}"
-    if [ -n "$anytls_port" ] && [ -n "$ss_port" ]; then
-      detail="${detail} | ports=anytls:${anytls_port},shadowsocks:${ss_port}"
-    elif [ -n "$anytls_port" ]; then
-      detail="${detail} | ports=anytls:${anytls_port}"
-    else
-      detail="${detail} | ports=shadowsocks:${ss_port}"
-    fi
-    provider_run "$script" "$@" || fail "proxy configuration failed | service=sing-box"
-    [ -z "$anytls_port" ] || service_usable "$service" "$config" "$anytls_port" || fail "proxy inactive | service=sing-box | protocol=anytls"
-    [ -z "$ss_port" ] || service_usable "$service" "$config" "$ss_port" || fail "proxy inactive | service=sing-box | protocol=shadowsocks"
-    log "proxy active | service=${service%.service} | ${detail}"
-    return 0
-  elif [ "$type" = "ssrust" ]; then
-    port="$(arg_value "$port_key" "$@")" || fail "proxy port missing | service=${service%.service}"
-    provider_run "$script" "$@" || fail "proxy configuration failed | service=${service%.service}"
-    service_usable "$service" "$config" "$port" || fail "proxy inactive | service=${service%.service}"
-    log "proxy active | service=${service%.service} | port=${port}"
-    return 0
-  else
-    port="$(arg_value "$port_key" "$@")" || fail "proxy port missing | service=${service%.service}"
-  fi
-
-  provider_run "$script" "$@" || fail "proxy configuration failed | service=${service%.service}"
-  service_usable "$service" "$config" "$port" || fail "proxy inactive | service=${service%.service}"
-  log "proxy active | service=${service%.service} | port=${port}"
+  provider_run "$script" "$@" || fail "proxy configuration failed | owner=${owner}"
+  log "proxy configured | owner=${owner}"
 }
 
 step_proxy_remove() {
-  [ "$#" -ge 3 ] || fail "step_proxy_remove requires type, script, and removal arguments"
-  local type="$1" script="$2"
+  [ "$#" -ge 3 ] || fail "step_proxy_remove requires owner, script, and removal arguments"
+  local owner="$1" script="$2"
   shift 2
-  provider_run "$script" "$@" || fail "proxy removal failed | type=${type}"
-  mark_cleared "$type"
+  provider_run "$script" "$@" || fail "proxy removal failed | owner=${owner}"
+  mark_cleared "$owner"
 }
 
 step_kernel() {
