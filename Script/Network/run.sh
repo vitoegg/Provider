@@ -39,20 +39,9 @@ require_apt() {
   command -v apt-get >/dev/null 2>&1 || fail "Debian/Ubuntu apt required"
 }
 
-sshd_cmd() {
-  local path
-  path="$(command -v sshd 2>/dev/null || true)"
-  [ -n "$path" ] || path="/usr/sbin/sshd"
-  [ -x "$path" ] || return 1
-  printf '%s' "$path"
-}
-
 has_pkg() {
   case "$1" in
     systemd-timesyncd) dpkg-query -W -f='${db:Status-Abbrev}' systemd-timesyncd 2>/dev/null | grep -q '^ii ' ;;
-    iproute2) command -v ss >/dev/null 2>&1 ;;
-    nftables) command -v nft >/dev/null 2>&1 ;;
-    openssh-server) sshd_cmd >/dev/null 2>&1 ;;
     *) command -v "$1" >/dev/null 2>&1 ;;
   esac
 }
@@ -79,28 +68,6 @@ script_path() {
 
 service_active() {
   systemctl is-active --quiet "$1" >/dev/null 2>&1
-}
-
-service_port_ready() {
-  local service="$1" port="$2" cgroup line pid
-  case "$port" in
-    ''|*[!0-9]*) return 1 ;;
-  esac
-  cgroup="$(systemctl show "$service" --property=ControlGroup --value 2>/dev/null || true)"
-  [ -n "$cgroup" ] || return 1
-
-  while IFS= read -r line; do
-    while IFS= read -r pid; do
-      [ -r "/proc/${pid}/cgroup" ] || continue
-      grep -Fq "$cgroup" "/proc/${pid}/cgroup" && return 0
-    done < <(printf '%s\n' "$line" | grep -oE 'pid=[0-9]+' | cut -d= -f2)
-  done < <(ss -H -tulpen 2>/dev/null | awk -v port="$port" '
-    function port_matches(addr) {
-      return addr ~ (":" port "$") || addr ~ ("\\." port "$")
-    }
-    port_matches($5)
-  ')
-  return 1
 }
 
 provider_run() {
@@ -190,11 +157,6 @@ step_time_sync() {
   log "time sync active | timezone=${timezone} | synchronized=yes"
 }
 
-service_usable() {
-  local service="$1" config="$2" port="$3"
-  service_active "$service" && [ -e "$config" ] && service_port_ready "$service" "$port"
-}
-
 step_proxy() {
   [ "$#" -ge 3 ] || fail "step_proxy requires owner, script, and configuration arguments"
   local owner="$1" script="$2"
@@ -219,30 +181,20 @@ step_kernel() {
   if [ "${1:-}" = "-u" ]; then mark_cleared kernel; else log "kernel tuning configured"; fi
 }
 
-dns_meta() {
-  case "$1" in
-    mosdns) printf 'mosdns.service|/etc/mosdns|53' ;;
-    smartdns) printf 'smartdns.service|/etc/smartdns/smartdns.conf|53' ;;
-    *) return 1 ;;
-  esac
-}
-
 step_dns_remove() {
-  [ "$#" -ge 3 ] || fail "step_dns_remove requires type, script, and removal arguments"
-  local type="$1" script="$2"
+  [ "$#" -ge 3 ] || fail "step_dns_remove requires owner, script, and removal arguments"
+  local owner="$1" script="$2"
   shift 2
-  provider_run "$script" "$@" || fail "dns resolver removal failed | service=${type}"
-  mark_cleared "$type"
+  provider_run "$script" "$@" || fail "dns resolver removal failed | owner=${owner}"
+  mark_cleared "$owner"
 }
 
 step_dns() {
-  [ "$#" -ge 2 ] || fail "step_dns requires type and script"
-  local type="$1" script="$2" service config port
+  [ "$#" -ge 2 ] || fail "step_dns requires owner and script"
+  local owner="$1" script="$2"
   shift 2
-  IFS='|' read -r service config port <<< "$(dns_meta "$type")" || fail "unknown dns resolver | service=${type}"
-  provider_run "$script" "$@" || fail "dns resolver installation failed | service=${service%.service}"
-  service_usable "$service" "$config" "$port" || fail "dns resolver inactive | service=${service%.service}"
-  log "dns resolver active | service=${service%.service}"
+  provider_run "$script" "$@" || fail "dns resolver configuration failed | owner=${owner}"
+  log "dns resolver configured | owner=${owner}"
 }
 
 step_traffic() {
@@ -306,7 +258,6 @@ main() {
   PLAN_FILE="$1"
   require_root
   require_apt
-  ensure_packages iproute2
   run_plan
 }
 
