@@ -267,7 +267,7 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 --sync                  解析域名并刷新 nft
 --remove                移除 sshg 文件和 nft table
 config=ssh              写入 SSH hardening 配置
-key=...                 写入 root authorized_keys3
+key=...                 确保 root 可使用该 ssh-ed25519 公钥，必要时写入 authorized_keys3
 allow=...               IPv4、IPv4 CIDR 或域名，逗号分隔
 ```
 

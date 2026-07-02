@@ -125,20 +125,30 @@ validate_domain() {
         [[ "$domain" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?([.][A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]]
 }
 
-public_key_valid() {
-    local key="$1" type body
+public_key_id() {
+    local key="$1"
     case "$key" in
         *'
 '*) return 1 ;;
     esac
     set -- $key
-    type="${1:-}"
-    body="${2:-}"
-    case "$type" in
-        ssh-ed25519|ssh-rsa|ecdsa-sha2-*|sk-ssh-ed25519@openssh.com|sk-ecdsa-sha2-nistp256@openssh.com) ;;
-        *) return 1 ;;
-    esac
-    [ -n "$body" ] && [[ "$body" =~ ^[A-Za-z0-9+/=]+$ ]]
+    [ "${1:-}" = "ssh-ed25519" ] || return 1
+    [ -n "${2:-}" ] && [[ "$2" =~ ^[A-Za-z0-9+/=]+$ ]] || return 1
+    printf '%s %s\n' "$1" "$2"
+}
+
+public_key_valid() { public_key_id "$1" >/dev/null; }
+
+key_file_has_key() {
+    local file="$1" target="${2:-}" line value
+    [ -s "$file" ] || return 1
+    [ -z "$target" ] || target="$(public_key_id "$target")" || return 1
+    while IFS= read -r line || [ -n "$line" ]; do
+        value="$(public_key_id "$(trim "${line%%#*}")" 2>/dev/null || true)"
+        [ -n "$value" ] || continue
+        { [ -z "$target" ] || [ "$value" = "$target" ]; } && return 0
+    done < "$file"
+    return 1
 }
 
 write_key() {
@@ -147,9 +157,10 @@ write_key() {
     key="$(trim "$key")"
     public_key_valid "$key" || fail "SSH 公钥格式无效"
     file="$(key_file)"
+    key_file_has_key "$file" "$key" && return 0
+    root_key_exists_without_managed "$key" && return 0
     if [ -e "$file" ] || [ -L "$file" ]; then
         existed=1
-        [ "$(cat "$file" 2>/dev/null)" = "$key" ] && return 0
     fi
     tmp="${file}.tmp.$$"
     mkdir -p "$(dirname "$file")" || fail "无法创建密钥目录"
@@ -173,27 +184,17 @@ remove_key() {
 }
 
 root_key_exists() {
-    local file line value
+    local key="${1:-}" file
     for file in "$(path "/root/.ssh/authorized_keys")" "$(path "/root/.ssh/authorized_keys2")" "$(key_file)"; do
-        [ -s "$file" ] || continue
-        while IFS= read -r line || [ -n "$line" ]; do
-            value="$(trim "${line%%#*}")"
-            [ -n "$value" ] || continue
-            public_key_valid "$value" && return 0
-        done < "$file"
+        key_file_has_key "$file" "$key" && return 0
     done
     return 1
 }
 
 root_key_exists_without_managed() {
-    local file line value
+    local key="${1:-}" file
     for file in "$(path "/root/.ssh/authorized_keys")" "$(path "/root/.ssh/authorized_keys2")"; do
-        [ -s "$file" ] || continue
-        while IFS= read -r line || [ -n "$line" ]; do
-            value="$(trim "${line%%#*}")"
-            [ -n "$value" ] || continue
-            public_key_valid "$value" && return 0
-        done < "$file"
+        key_file_has_key "$file" "$key" && return 0
     done
     return 1
 }
@@ -777,7 +778,7 @@ Actions:
 
 Parameters:
   config=ssh     write ssh hardening config
-  key=...        write root authorized_keys3
+  key=...        ensure root can use this ssh-ed25519 public key
   allow=...      comma-separated IPv4, IPv4 CIDR, or domain entries
 EOF
 }

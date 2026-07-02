@@ -99,7 +99,7 @@ step_ssh_guard() {
   args=(--reset config=ssh "allow=${allowlist}")
   if [ -n "$public_key" ]; then
     args+=("key=${public_key}")
-    key_detail=" | root_key=installed"
+    key_detail=" | root_key=ready"
   fi
 
   allow_count="$(allowlist_count "$allowlist")"
