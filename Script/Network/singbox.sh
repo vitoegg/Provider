@@ -18,6 +18,7 @@ SOCKS_RULESET_URL="https://raw.githubusercontent.com/vitoegg/Provider/master/Rul
 
 ARCH=""
 PROTOCOLS=""
+SHADOWTLS_ENABLED=0
 ANYTLS_ENABLED=0
 SS_ENABLED=0
 SOCKS_ENABLED=0
@@ -25,6 +26,11 @@ SOCKS_ENABLED=0
 SINGBOX_VERSION=""
 UPDATE_REQUESTED=0
 UNINSTALL_REQUESTED=0
+
+SHADOWTLS_PORT=""
+SHADOWTLS_PORT_SET=0
+SHADOWTLS_PASSWORD=""
+SHADOWTLS_DOMAIN=""
 
 ANYTLS_PORT=""
 ANYTLS_PORT_SET=0
@@ -70,10 +76,15 @@ show_usage() {
     name="$(basename "$0")"
     cat << EOF
 用法:
-  bash ${name} --protocol anytls|shadowsocks|anytls,shadowsocks [OPTIONS]
+  bash ${name} --protocol LIST [OPTIONS]
 
 协议:
-  --protocol LIST
+  --protocol LIST  anytls、shadowsocks、shadowtls，支持逗号组合
+
+ShadowTLS:
+  --shadowtls-port PORT
+  --shadowtls-password PASSWORD
+  --shadowtls-domain DOMAIN
 
 AnyTLS:
   --anytls-port PORT
@@ -195,6 +206,32 @@ parse_args() {
                 ;;
             --protocol=*)
                 PROTOCOLS="${1#*=}"
+                shift
+                ;;
+            --shadowtls-port)
+                SHADOWTLS_PORT="$(need_value "$1" "${2:-}")"
+                SHADOWTLS_PORT_SET=1
+                shift 2
+                ;;
+            --shadowtls-port=*)
+                SHADOWTLS_PORT="${1#*=}"
+                SHADOWTLS_PORT_SET=1
+                shift
+                ;;
+            --shadowtls-password)
+                SHADOWTLS_PASSWORD="$(need_value "$1" "${2:-}")"
+                shift 2
+                ;;
+            --shadowtls-password=*)
+                SHADOWTLS_PASSWORD="${1#*=}"
+                shift
+                ;;
+            --shadowtls-domain)
+                SHADOWTLS_DOMAIN="$(need_value "$1" "${2:-}")"
+                shift 2
+                ;;
+            --shadowtls-domain=*)
+                SHADOWTLS_DOMAIN="${1#*=}"
                 shift
                 ;;
             --anytls-port)
@@ -343,6 +380,10 @@ parse_protocols() {
     for protocol in "${protocol_items[@]}"; do
         protocol="${protocol//[[:space:]]/}"
         case "$protocol" in
+            shadowtls)
+                SHADOWTLS_ENABLED=1
+                SS_ENABLED=1
+                ;;
             anytls)
                 ANYTLS_ENABLED=1
                 ;;
@@ -362,6 +403,13 @@ parse_protocols() {
 }
 
 validate_protocol_scope() {
+    if [[ "$SHADOWTLS_ENABLED" -eq 0 ]]; then
+        if [[ -n "$SHADOWTLS_PORT$SHADOWTLS_PASSWORD$SHADOWTLS_DOMAIN" ]]; then
+            log_error "ShadowTLS 参数需要 --protocol shadowtls。"
+            exit 1
+        fi
+    fi
+
     if [[ "$ANYTLS_ENABLED" -eq 0 ]]; then
         if [[ -n "$ANYTLS_PORT$ANYTLS_PASSWORD$ANYTLS_DOMAIN$ANYTLS_SCHEME$ANYTLS_CERT_MODE$ANYTLS_TOKEN$ANYTLS_CERT_PATH$ANYTLS_KEY_PATH" ]]; then
             log_error "AnyTLS 参数需要 --protocol anytls。"
@@ -532,12 +580,24 @@ generate_unique_port() {
 prepare_ports() {
     USED_PORTS=()
 
+    if [[ "$SHADOWTLS_ENABLED" -eq 1 && -n "$SHADOWTLS_PORT" ]]; then
+        add_used_port "$SHADOWTLS_PORT" "ShadowTLS"
+    fi
+
     if [[ "$ANYTLS_ENABLED" -eq 1 && -n "$ANYTLS_PORT" ]]; then
         add_used_port "$ANYTLS_PORT" "AnyTLS"
     fi
 
     if [[ "$SS_ENABLED" -eq 1 && -n "$SS_PORT" ]]; then
         add_used_port "$SS_PORT" "Shadowsocks"
+    fi
+
+    if [[ "$SHADOWTLS_ENABLED" -eq 1 && -z "$SHADOWTLS_PORT" ]]; then
+        SHADOWTLS_PORT="$(generate_unique_port)"
+        add_used_port "$SHADOWTLS_PORT" "ShadowTLS"
+        log_info "生成 ShadowTLS 端口: $SHADOWTLS_PORT"
+    elif [[ "$SHADOWTLS_ENABLED" -eq 1 && "$SHADOWTLS_PORT_SET" -eq 1 ]]; then
+        log_info "使用指定 ShadowTLS 端口: $SHADOWTLS_PORT"
     fi
 
     if [[ "$ANYTLS_ENABLED" -eq 1 && -z "$ANYTLS_PORT" ]]; then
@@ -753,6 +813,29 @@ generate_password() {
     printf '%s\n' "$password"
 }
 
+prepare_shadowtls_params() {
+    if [[ "$SHADOWTLS_ENABLED" -ne 1 ]]; then
+        return 0
+    fi
+
+    if [[ -z "$SHADOWTLS_DOMAIN" ]]; then
+        log_error "启用 ShadowTLS 时必须提供 --shadowtls-domain。"
+        exit 1
+    fi
+
+    if [[ "$SHADOWTLS_DOMAIN" == *,* || "$SHADOWTLS_DOMAIN" =~ [[:space:]] ]]; then
+        log_error "ShadowTLS 只支持单个域名: $SHADOWTLS_DOMAIN"
+        exit 1
+    fi
+
+    if [[ -z "$SHADOWTLS_PASSWORD" ]]; then
+        SHADOWTLS_PASSWORD="$(generate_password)"
+        log_info "生成 ShadowTLS 密码"
+    else
+        log_info "使用指定 ShadowTLS 密码"
+    fi
+}
+
 prepare_anytls_params() {
     if [[ "$ANYTLS_ENABLED" -ne 1 ]]; then
         return 0
@@ -856,6 +939,7 @@ prepare_socks_params() {
 prepare_config_params() {
     print_header "准备配置"
     prepare_ports
+    prepare_shadowtls_params
     prepare_anytls_params
     prepare_shadowsocks_params
     prepare_socks_params
@@ -866,6 +950,28 @@ generate_padding_scheme_json() {
     local scheme_str="${1:-$DEFAULT_PADDING_SCHEME}"
 
     jq -n --arg scheme "$scheme_str" '$scheme | split("|") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))'
+}
+
+build_shadowtls_inbound() {
+    jq -n \
+        --argjson port "$SHADOWTLS_PORT" \
+        --arg password "$SHADOWTLS_PASSWORD" \
+        --arg domain "$SHADOWTLS_DOMAIN" \
+        '{
+          type: "shadowtls",
+          tag: "shadowtls-in",
+          listen: "::",
+          listen_port: $port,
+          detour: "shadowsocks-in",
+          version: 3,
+          users: [{ name: "ShadowTLS", password: $password }],
+          handshake: {
+            server: $domain,
+            server_port: 443
+          },
+          strict_mode: true,
+          wildcard_sni: "off"
+        }'
 }
 
 build_anytls_inbound() {
@@ -998,8 +1104,15 @@ create_singbox_config() {
     mkdir -p "$config_dir"
     chmod 755 "$config_dir"
 
+    if [[ "$SHADOWTLS_ENABLED" -eq 1 ]]; then
+        inbound="$(build_shadowtls_inbound)"
+        inbounds_json+="$inbound"
+        first=0
+    fi
+
     if [[ "$ANYTLS_ENABLED" -eq 1 ]]; then
         inbound="$(build_anytls_inbound)"
+        [[ "$first" -eq 0 ]] && inbounds_json+=","
         inbounds_json+="$inbound"
         first=0
     fi
@@ -1089,6 +1202,16 @@ show_configuration() {
 
     printf "%-22s %s\n" "服务:" "sing-box (${status})"
     printf "%-22s %s\n" "服务器 IP:" "$server_ip"
+
+    if [[ "$SHADOWTLS_ENABLED" -eq 1 ]]; then
+        echo ""
+        echo "ShadowTLS:"
+        printf "%-22s %s\n" "端口:" "$SHADOWTLS_PORT"
+        printf "%-22s %s\n" "密码:" "$SHADOWTLS_PASSWORD"
+        printf "%-22s %s\n" "域名:" "$SHADOWTLS_DOMAIN"
+        printf "%-22s %s\n" "版本:" "3"
+        printf "%-22s %s\n" "后端:" "shadowsocks-in"
+    fi
 
     if [[ "$ANYTLS_ENABLED" -eq 1 ]]; then
         display_scheme="${ANYTLS_SCHEME:-$DEFAULT_PADDING_SCHEME}"

@@ -9,7 +9,10 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 
 ### 参数说明
 ```text
---protocol LIST                 anytls、shadowsocks 或 anytls,shadowsocks
+--protocol LIST                 anytls、shadowsocks、shadowtls，支持逗号组合
+--shadowtls-port PORT           ShadowTLS 端口
+--shadowtls-password PASSWORD   ShadowTLS 密码
+--shadowtls-domain DOMAIN       ShadowTLS 单域名，启用时自动配置 Shadowsocks
 --anytls-port PORT              AnyTLS 端口
 --anytls-password PASS          AnyTLS 密码
 --anytls-domain DOMAIN          AnyTLS 域名
@@ -30,6 +33,10 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 
 ### 示例命令
 ```bash
+bash singbox.sh \
+  --protocol shadowtls \
+  --shadowtls-domain www.example.com
+
 bash singbox.sh \
   --protocol anytls,shadowsocks \
   --anytls-domain api.example.com \
