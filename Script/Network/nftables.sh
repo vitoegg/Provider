@@ -599,7 +599,7 @@ render_ruleset() {
                     print "        ip6 nexthdr icmpv6 icmpv6 type echo-request drop"
                 }
                 print "        ip protocol icmp accept\n        ip6 nexthdr icmpv6 accept"
-                print "        ip6 saddr fe80::/10 udp sport 547 dport 546 limit rate 20/second accept"
+                print "        ip6 saddr fe80::/10 udp sport 547 udp dport 546 limit rate 20/second accept"
                 print "        tcp dport { " allow " } accept\n        udp dport { " allow " } accept\n    }"
             }
             if (has_remote) {
