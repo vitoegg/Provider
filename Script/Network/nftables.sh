@@ -599,6 +599,7 @@ render_ruleset() {
                     print "        ip6 nexthdr icmpv6 icmpv6 type echo-request drop"
                 }
                 print "        ip protocol icmp accept\n        ip6 nexthdr icmpv6 accept"
+                print "        ip6 saddr fe80::/10 udp sport 547 dport 546 limit rate 20/second accept"
                 print "        tcp dport { " allow " } accept\n        udp dport { " allow " } accept\n    }"
             }
             if (has_remote) {
@@ -865,7 +866,7 @@ remove_active_nft_tables() {
 remove_systemd_units() {
     local service_removed=0 timer_removed=0 dns_removed=0
     SYSTEMD_UNITS_CHANGED=0
-    
+
     log_info_noisy "  清理 systemd 服务和定时器:"
     if has_systemctl; then
         systemctl disable --now --no-reload "$PROTECT_TIMER_NAME" >/dev/null 2>&1 && { service_removed=1; log_info_noisy "    - 已停用定时器: ${PROTECT_TIMER_NAME}"; } || true
@@ -877,7 +878,7 @@ remove_systemd_units() {
     remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/${PROTECT_SERVICE_NAME}" || return 1
     remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/${PROTECT_TIMER_NAME}" || return 1
     remove_systemd_unit_path "${SYSTEMD_SYSTEM_DIR}/timers.target.wants/${PROTECT_TIMER_NAME}" || return 1
-    
+
     log_info_noisy "  清理 DNS 订阅:"
     providerdns_unset_forwardaws || return 1
 
@@ -886,33 +887,33 @@ remove_systemd_units() {
 
 uninstall_forwardaws() {
     local nft_removed=0 config_removed=0 sysctl_removed=0
-    
+
     log_info "开始清理 nftables.sh 产物..."
     echo -e "${BLUE}─────────────────────────────────────${NC}"
-    
+
     # 步骤 1: 清理 systemd 服务和定时器
     log_info_noisy "步骤 1/5: 清理 systemd 服务和定时器"
     remove_systemd_units || return 1
-    
+
     # 步骤 2: 清理运行时 nftables 规则
     log_info_noisy "步骤 2/5: 清理运行时 nftables 规则"
     remove_active_nft_tables || return 1
-    
+
     # 步骤 3: 删除规则配置文件
     log_info_noisy "步骤 3/5: 删除规则配置文件"
     [ -f "$FORWARDAWS_RULES_FILE" ] && { remove_path "$FORWARDAWS_RULES_FILE" "NFT 规则文件" || return 1; nft_removed=1; } || true
-    
+
     # 步骤 4: 清理 nftables 主配置包含行
     log_info_noisy "步骤 4/5: 清理 nftables 主配置"
     remove_nft_main_config_include_if_unused || return 1
     rmdir "$NFT_INCLUDE_DIR" 2>/dev/null || true
-    
+
     # 步骤 5: 删除状态文件和系统配置
     log_info_noisy "步骤 5/5: 删除状态目录和系统配置"
     [ -d "$STATE_DIR" ] && { remove_path "$STATE_DIR" "状态目录" || return 1; } || true
     [ -f "$IPV4_FORWARD_SYSCTL_FILE" ] && { remove_path "$IPV4_FORWARD_SYSCTL_FILE" "sysctl 配置文件" || return 1; sysctl_removed=1; } || true
     [ -f "$GLOBAL_LOCK_FILE" ] && { remove_path "$GLOBAL_LOCK_FILE" "全局锁文件" || return 1; } || true
-    
+
     # 输出清理摘要
     echo -e "${BLUE}─────────────────────────────────────${NC}"
     log_info "清理完成，已移除:"
@@ -1031,7 +1032,7 @@ rule_batch() {
          }
          [ "$action" = "replace" ] && log_info "原子替换完成，共应用 ${applied_success} 条规则" || log_info "${success_msg}完成: 成功 ${applied_success} 条，跳过 ${skipped} 条，失败 ${failed} 条"
          reconcile_timers || { rm -f "$candidate"; return 1; }
-         
+
          [ "$show_status" = "1" ] && show_protection_status
      elif [ "$failed" -eq 0 ] && [ "$protect_noping" = "1" ] && [ "$(get_protect_noping_flag)" != "1" ]; then
          apply_candidate_state "$candidate" "$protect_flag" "$desc" "" "$protect_noping" || { rm -f "$candidate"; return 1; }
@@ -1060,11 +1061,11 @@ apply_ddns_cache() {
     candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 1
     : > "$candidate"
     now=$(date +%s)
-    
+
     # 打印 DDNS 同步开始信息
     log_info "DDNS 缓存同步开始 (共 ${total_domains} 条域名规则)"
     echo -e "${BLUE}─────────────────────────────────────${NC}"
-    
+
     while IFS='|' read -r src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss; do
         [ -n "$src_port$mode$target$dest_port" ] || continue
         if [ "$target_type" != "domain" ]; then
@@ -1116,12 +1117,12 @@ apply_ddns_cache() {
         fi
     done < "$RULES_STATE_FILE"
     cmp -s "$candidate" "$RULES_STATE_FILE" || candidate_changed=1
-    
+
     # 应用候选状态
     apply_candidate_state "$candidate" "$(get_protection_flag)" "DDNS 同步" || { rm -f "$candidate"; return 1; }
     rm -f "$candidate"
     reconcile_timers || return 1
-    
+
     # 输出 DDNS 同步结果汇总
     echo -e "${BLUE}─────────────────────────────────────${NC}"
     if [ "$candidate_changed" -eq 1 ]; then
