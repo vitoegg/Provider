@@ -3,13 +3,6 @@ payload:
   - '+.oyunfor.com'
   # Zimuku
   - '+.zimuku.org'
-  # Lily Emby CF
-  - '+.lilyemby.com'
-  # Lily Emby Streaming
-  - '+.lilyemby.cc'
-  - '+.lilyya.top'
-  # Lily Emby Proxy
-  - '+.nginxlily.cyou'
   # Cloud Service
   - '+.greencloudvps.com'
   - '+.green.cloud'
