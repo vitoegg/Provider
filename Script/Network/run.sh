@@ -221,13 +221,6 @@ step_traffic() {
   esac
 }
 
-step_telegram() {
-  [ "$#" -eq 2 ] || fail "step_telegram requires script and action"
-  local script="$1" action="$2"
-  provider_run "$script" "$action" || fail "telegram optimization failed | action=${action}"
-  if [ "$action" = "--remove" ]; then mark_cleared telegram; else log "telegram optimization active"; fi
-}
-
 step_cleanup_scripts() {
   local script
   for script in "$@"; do
