@@ -1063,7 +1063,8 @@ build_socks_config() {
               type: "socks",
               tag: $socks_tag,
               server: $socks_host,
-              server_port: $socks_port
+              server_port: $socks_port,
+              network: "tcp"
             },
             {
               type: "direct",
