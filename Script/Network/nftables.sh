@@ -69,6 +69,17 @@ validate_ip_address() {
     done
 }
 
+validate_noping_spec() {
+    local spec="$1" ip
+    local -a ips
+    [ "$spec" = "1" ] && return 0
+    case "$spec" in ""|,*|*,|*,,*) return 1 ;; esac
+    IFS=',' read -ra ips <<< "$spec"
+    for ip in "${ips[@]}"; do
+        validate_ip_address "$ip" || return 1
+    done
+}
+
 validate_domain_name() {
     local domain="$1"
     [ -n "$domain" ] && [ "${#domain}" -le 253 ] && \
@@ -289,7 +300,7 @@ get_config_value() {
 }
 
 get_protection_flag() { get_config_value "PROTECTION_ENABLED" "0"; }
-get_protect_noping_flag() { [ "$(get_config_value "PROTECT_NOPING" "0")" = "1" ] && echo "1" || echo "0"; }
+get_protect_noping() { get_config_value "PROTECT_NOPING" "0"; }
 write_config_file() {
     local output_file="$1" protect_flag="$2" protect_noping="${3:-0}"
     [ "$protect_flag" = "1" ] || protect_noping=0
@@ -594,7 +605,8 @@ render_ruleset() {
             if (protect=="1") {
                 print "    chain input {\n        type filter hook input priority 0; policy drop;"
                 print "        iifname \"lo\" accept\n        ct state established,related accept"
-                if (noping=="1") {
+                if (noping!="0") {
+                    if (noping!="1") print "        ip saddr { " noping " } ip protocol icmp icmp type echo-request accept"
                     print "        ip protocol icmp icmp type echo-request drop"
                     print "        ip6 nexthdr icmpv6 icmpv6 type echo-request drop"
                 }
@@ -630,8 +642,9 @@ apply_candidate_state() {
     local nft_tmp state_tmp config_tmp rules_changed=0 include_missing=0 forwarding_needs_update=0 state_changed=0 config_changed=0
     APPLY_CANDIDATE_CHANGED=0
     ensure_state_dir || return 1
-    [ -n "$protect_noping" ] || protect_noping=$(get_protect_noping_flag)
+    [ -n "$protect_noping" ] || protect_noping=$(get_protect_noping)
     [ "$protect_flag" = "1" ] || protect_noping=0
+    [ "$protect_noping" = "0" ] || validate_noping_spec "$protect_noping" || { log_error "noping 状态无效: $protect_noping"; return 1; }
     if [ "$protect_flag" = "1" ] && [ -z "$protect_ports" ]; then
         protect_ports=$(get_auto_allow_ports "$candidate_state") || return 1
     fi
@@ -1034,7 +1047,7 @@ rule_batch() {
          reconcile_timers || { rm -f "$candidate"; return 1; }
 
          [ "$show_status" = "1" ] && show_protection_status
-     elif [ "$failed" -eq 0 ] && [ "$protect_noping" = "1" ] && [ "$(get_protect_noping_flag)" != "1" ]; then
+     elif [ "$failed" -eq 0 ] && [ -n "$protect_noping" ] && [ "$(get_protect_noping)" != "$protect_noping" ]; then
          apply_candidate_state "$candidate" "$protect_flag" "$desc" "" "$protect_noping" || { rm -f "$candidate"; return 1; }
          log_warn "没有${empty_msg}: 跳过 ${skipped} 条，失败 ${failed} 条"
          reconcile_timers || { rm -f "$candidate"; return 1; }
@@ -1146,7 +1159,7 @@ apply_protection_state() {
     else
         copy_current_state_to "$candidate" || { rm -f "$candidate"; return 1; }
     fi
-    [ -n "$protect_noping" ] || protect_noping=$(get_protect_noping_flag)
+    [ -n "$protect_noping" ] || protect_noping=$(get_protect_noping)
     [ "$protect_flag" = "1" ] || protect_noping=0
     if [ "$protect_flag" = "1" ]; then
         current_ports=$(get_auto_allow_ports "$candidate") || { rm -f "$candidate"; return 1; }
@@ -1173,7 +1186,7 @@ show_protection_status() {
     local protect_flag protect_noping timer_status auto_ports
     prepare_state_file_for_read
     protect_flag=$(get_protection_flag)
-    protect_noping=$(get_protect_noping_flag)
+    protect_noping=$(get_protect_noping)
     timer_status=$(get_protect_timer_status)
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}           端口保护状态${NC}"
@@ -1182,7 +1195,11 @@ show_protection_status() {
         auto_ports=$(get_auto_allow_ports "$RULES_STATE_FILE") || return 1
         echo -e "保护状态: ${GREEN}已开启${NC}"
         echo -e "当前放行端口: ${YELLOW}${auto_ports}${NC}"
-        [ "$protect_noping" = "1" ] && echo -e "Ping: ${RED}已禁止${NC}" || echo -e "Ping: ${GREEN}允许${NC}"
+        case "$protect_noping" in
+            0) echo -e "Ping: ${GREEN}允许${NC}" ;;
+            1) echo -e "Ping: ${RED}已禁止${NC}" ;;
+            *) echo -e "Ping: ${YELLOW}仅允许 $protect_noping${NC}" ;;
+        esac
     else
         echo -e "保护状态: ${RED}未开启${NC}"
     fi
@@ -1261,13 +1278,13 @@ show_help() {
 用法:
   $0 --help
   $0 --list
-  $0 --add [noping] <规则1> [规则2 ...]
+  $0 --add [noping[=IPv4,...]] <规则1> [规则2 ...]
   $0 --delete <规则1> [规则2 ...]
-  $0 --replace [noping] <规则1> [规则2 ...]
+  $0 --replace [noping[=IPv4,...]] <规则1> [规则2 ...]
   $0 --ddns sync
   $0 --ddns apply
   $0 --ddns list
-  $0 --protect on [noping]
+  $0 --protect on [noping[=IPv4,...]]
   $0 --protect off
   $0 --protect status
   $0 --protect sync
@@ -1289,9 +1306,16 @@ run_mutation() {
 run_rule_batch_command() {
     local action="$1" desc_prefix="$2" desc_suffix="$3" allow_noping="$4" protect_noping=""
     shift 4
-    if [ "${1:-}" = "noping" ]; then
+    case "${1:-}" in
+        noping) protect_noping=1 ;;
+        noping=*)
+            protect_noping="${1#noping=}"
+            validate_noping_spec "$protect_noping" || { log_error "noping 白名单格式无效: $protect_noping"; return 1; }
+            ;;
+        *) protect_noping="" ;;
+    esac
+    if [ -n "$protect_noping" ]; then
         [ "$allow_noping" = "1" ] || { log_error "当前命令不支持 noping 参数"; return 1; }
-        protect_noping=1
         shift
     fi
     [ $# -gt 0 ] || { log_error "未提供任何规则"; show_help; return 1; }
@@ -1347,6 +1371,11 @@ main() {
                     case "${1:-}" in
                         "") protect_noping=0 ;;
                         noping) protect_noping=1; shift ;;
+                        noping=*)
+                            protect_noping="${1#noping=}"
+                            validate_noping_spec "$protect_noping" || { log_error "noping 白名单格式无效: $protect_noping"; exit 1; }
+                            shift
+                            ;;
                         *) log_error "未知的保护模式参数: $1"; exit 1 ;;
                     esac
                     [ $# -eq 0 ] || { log_error "保护模式 on 不支持额外参数: $*"; exit 1; }
