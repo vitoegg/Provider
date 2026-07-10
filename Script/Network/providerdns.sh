@@ -6,9 +6,25 @@ set -o pipefail
 
 ROOT="${PROVIDERDNS_ROOT:-/}"
 DEFAULT_TIMEOUT="5"
+TEMP_FILES=()
 
 log() { printf '[providerdns] %s\n' "$*"; }
 fail() { printf '[providerdns] FAIL %s\n' "$*" >&2; exit 1; }
+
+cleanup_temps() {
+    local file
+    for file in "${TEMP_FILES[@]}"; do
+        rm -f "$file"
+    done
+}
+
+track_temp() {
+    TEMP_FILES+=("$1")
+}
+
+trap cleanup_temps EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 path() {
     if [ "$ROOT" = "/" ]; then
@@ -97,16 +113,18 @@ resolve_ipv4() {
     if [ -n "${PROVIDERDNS_HOSTS_FILE:-}" ]; then
         ip="$(awk -v d="$domain" '$1==d { print $2; exit }' "$PROVIDERDNS_HOSTS_FILE")"
     else
-        command -v getent >/dev/null 2>&1 || return 1
         timeout_value="${PROVIDERDNS_TIMEOUT:-$DEFAULT_TIMEOUT}"
-        if command -v timeout >/dev/null 2>&1; then
-            ip="$(timeout "${timeout_value}s" getent ahostsv4 "$domain" 2>/dev/null | awk '/STREAM/ { print $1; exit }')"
-        else
-            ip="$(getent ahostsv4 "$domain" 2>/dev/null | awk '/STREAM/ { print $1; exit }')"
-        fi
+        ip="$(timeout "${timeout_value}s" getent ahostsv4 "$domain" 2>/dev/null | awk '/STREAM/ { print $1; exit }')"
     fi
     validate_ipv4 "$ip" || return 1
     printf '%s\n' "$ip"
+}
+
+require_resolver() {
+    [ -n "${PROVIDERDNS_HOSTS_FILE:-}" ] && return 0
+    command -v getent >/dev/null 2>&1 || fail "missing getent"
+    command -v timeout >/dev/null 2>&1 || fail "missing timeout"
+    [[ "${PROVIDERDNS_TIMEOUT:-$DEFAULT_TIMEOUT}" =~ ^[0-9]+([.][0-9]+)?$ ]] || fail "timeout"
 }
 
 collect_domains() {
@@ -159,30 +177,46 @@ run_hooks() {
     [ "$failed" -eq 0 ] || { log "hookfail=${failed}"; return 1; }
 }
 
-refresh_cache() {
-    local run_hooks="${1:-0}" lock_wait="${PROVIDERDNS_LOCK_WAIT:-0}" domains tmp oldcache changed_domains cache domain old_domain now ip old_ip old_status old_time changed=0 new_ip new_status hook_rc=0
-    mkdir -p "$(subscription_dir)" "$(hook_dir)" "$(state_dir)" || fail "dir"
-    if command -v flock >/dev/null 2>&1; then
-        exec 8>"$(lock_file)" || fail "lock"
-        if [[ "$lock_wait" =~ ^[0-9]+$ ]] && [ "$lock_wait" -gt 0 ]; then
-            flock -w "$lock_wait" 8 || { log "locked"; return 75; }
-        else
-            flock -n 8 || { log "locked"; return 0; }
-        fi
+acquire_lock() {
+    local wait="${1:-0}"
+    command -v flock >/dev/null 2>&1 || fail "missing flock"
+    mkdir -p "$(dirname "$(lock_file)")" || fail "lock dir"
+    exec 8>"$(lock_file)" || fail "lock"
+    if [[ "$wait" =~ ^[0-9]+$ ]] && [ "$wait" -gt 0 ]; then
+        flock -w "$wait" 8
+    else
+        flock -n 8
     fi
+}
+
+release_lock() {
+    flock -u 8 2>/dev/null || true
+    exec 8>&-
+}
+
+refresh_cache() {
+    local run_hooks="${1:-0}" lock_wait="${PROVIDERDNS_LOCK_WAIT:-0}" domains tmp oldcache changed_domains cache domain old_domain now ip old_ip old_status old_time new_ip new_status hook_rc=0
+    require_resolver
+    mkdir -p "$(subscription_dir)" "$(hook_dir)" "$(state_dir)" || fail "dir"
+    acquire_lock "$lock_wait" || {
+        log "locked"
+        [[ "$lock_wait" =~ ^[0-9]+$ ]] && [ "$lock_wait" -gt 0 ] && return 75
+        return 0
+    }
 
     domains="$(mktemp /tmp/providerdns-domains.XXXXXX)" || fail "temp"
-    tmp="$(mktemp /tmp/providerdns-cache.XXXXXX)" || { rm -f "$domains"; fail "temp"; }
-    oldcache="$(mktemp /tmp/providerdns-old.XXXXXX)" || { rm -f "$domains" "$tmp"; fail "temp"; }
-    changed_domains="$(mktemp /tmp/providerdns-changed.XXXXXX)" || { rm -f "$domains" "$tmp" "$oldcache"; fail "temp"; }
+    track_temp "$domains"
+    tmp="$(mktemp /tmp/providerdns-cache.XXXXXX)" || fail "temp"
+    track_temp "$tmp"
+    oldcache="$(mktemp /tmp/providerdns-old.XXXXXX)" || fail "temp"
+    track_temp "$oldcache"
+    changed_domains="$(mktemp /tmp/providerdns-changed.XXXXXX)" || fail "temp"
+    track_temp "$changed_domains"
     cache="$(cache_file)"
 
-    collect_domains "$domains" || { rm -f "$domains" "$tmp" "$oldcache" "$changed_domains"; fail "collect"; }
+    collect_domains "$domains" || fail "collect"
     if [ -s "$cache" ]; then
-        awk 'NF>=4 { print $1 "\t" $2 "\t" $3 "\t" $4 }' "$cache" | sort -u > "$oldcache" || {
-            rm -f "$domains" "$tmp" "$oldcache" "$changed_domains"
-            fail "old"
-        }
+        awk 'NF>=4 { print $1 "\t" $2 "\t" $3 "\t" $4 }' "$cache" | sort -u > "$oldcache" || fail "old"
     else
         : > "$oldcache"
     fi
@@ -211,21 +245,17 @@ refresh_cache() {
     sort -u "$changed_domains" -o "$changed_domains"
 
     if cmp -s "$tmp" "$cache" 2>/dev/null; then
-        rm -f "$domains" "$tmp" "$oldcache" "$changed_domains"
-        command -v flock >/dev/null 2>&1 && { flock -u 8 2>/dev/null || true; exec 8>&-; }
+        release_lock
         log "unchanged"
         return 0
     fi
 
-    mv "$tmp" "$cache" || { rm -f "$domains" "$tmp" "$oldcache" "$changed_domains"; fail "install"; }
-    rm -f "$domains" "$oldcache"
-    changed=1
-    command -v flock >/dev/null 2>&1 && { flock -u 8 2>/dev/null || true; exec 8>&-; }
+    mv "$tmp" "$cache" || fail "install"
+    release_lock
     log "updated"
-    if [ "$run_hooks" = "1" ] && [ "$changed" -eq 1 ]; then
+    if [ "$run_hooks" = "1" ]; then
         run_hooks "$changed_domains" || hook_rc=1
     fi
-    rm -f "$changed_domains"
     return "$hook_rc"
 }
 
@@ -253,6 +283,7 @@ install_units() {
     mkdir -p "$(systemd_dir)" || fail "systemd dir"
 
     tmp="${service}.tmp.$$"
+    track_temp "$tmp"
     cat > "$tmp" << EOF || fail "service"
 [Unit]
 Description=Provider DNS refresh service
@@ -266,6 +297,7 @@ EOF
     write_if_changed "$tmp" "$service" && changed=1
 
     tmp="${timer}.tmp.$$"
+    track_temp "$tmp"
     cat > "$tmp" << 'EOF' || fail "timer"
 [Unit]
 Description=Provider DNS refresh timer
@@ -299,9 +331,8 @@ has_subscriptions() {
     return 1
 }
 
-cleanup_unused() {
+cleanup_unused_locked() {
     local systemctl
-    require_root
     has_subscriptions && { log "cleanup: subscriptions exist"; return 0; }
     if [ "$ROOT" = "/" ]; then
         systemctl="$(systemctl_cmd || true)"
@@ -314,37 +345,51 @@ cleanup_unused() {
     log "cleanup: done"
 }
 
+cleanup_unused() {
+    require_root
+    acquire_lock "${PROVIDERDNS_LOCK_WAIT:-10}" || fail "locked"
+    cleanup_unused_locked
+    release_lock
+}
+
 set_consumer() {
-    local consumer="$1" domains_file="$2" hook_command="$3" subscription hook tmp
+    local consumer="$1" domains_file="$2" hook_command="$3" subscription hook subscription_tmp hook_tmp
     require_root
     validate_consumer "$consumer" || fail "consumer"
     [ -f "$domains_file" ] || fail "domains"
     [ -n "$hook_command" ] || fail "hook"
     mkdir -p "$(subscription_dir)" "$(hook_dir)" || fail "dir"
+    acquire_lock "${PROVIDERDNS_LOCK_WAIT:-10}" || fail "locked"
     subscription="$(consumer_subscription_file "$consumer")"
     hook="$(consumer_hook_file "$consumer")"
-    tmp="${subscription}.tmp.$$"
-    : > "$tmp" || fail "subscription"
+    subscription_tmp="${subscription}.tmp.$$"
+    hook_tmp="${hook}.tmp.$$"
+    track_temp "$subscription_tmp"
+    track_temp "$hook_tmp"
+    : > "$subscription_tmp" || fail "subscription"
     while IFS= read -r domain || [ -n "$domain" ]; do
         domain="$(trim "${domain%%#*}")"
         [ -n "$domain" ] || continue
         validate_domain "$domain" || fail "domain $domain"
-        printf '%s\n' "$domain" >> "$tmp"
+        printf '%s\n' "$domain" >> "$subscription_tmp"
     done < "$domains_file"
-    sort -u "$tmp" -o "$tmp"
-    if [ -s "$tmp" ]; then
-        mv "$tmp" "$subscription" || { rm -f "$tmp"; fail "subscription"; }
-        chmod 644 "$subscription" 2>/dev/null || true
+    sort -u "$subscription_tmp" -o "$subscription_tmp"
+    if [ -s "$subscription_tmp" ]; then
         {
             printf '%s\n' '#!/bin/bash'
             printf '%s\n' "$hook_command"
-        } > "$hook" || fail "hook"
-        chmod 755 "$hook" || fail "hook mode"
+        } > "$hook_tmp" || fail "hook"
+        chmod 755 "$hook_tmp" || fail "hook mode"
+        mv "$hook_tmp" "$hook" || fail "hook"
+        mv "$subscription_tmp" "$subscription" || fail "subscription"
+        chmod 644 "$subscription" 2>/dev/null || true
         install_units
+        release_lock
         log "set: $consumer"
     else
-        rm -f "$tmp" "$subscription" "$hook"
-        cleanup_unused
+        rm -f "$subscription_tmp" "$subscription" "$hook"
+        cleanup_unused_locked
+        release_lock
         log "unset: $consumer"
     fi
 }
@@ -353,8 +398,10 @@ unset_consumer() {
     local consumer="$1"
     require_root
     validate_consumer "$consumer" || fail "consumer"
+    acquire_lock "${PROVIDERDNS_LOCK_WAIT:-10}" || fail "locked"
     rm -f "$(consumer_subscription_file "$consumer")" "$(consumer_hook_file "$consumer")"
-    cleanup_unused
+    cleanup_unused_locked
+    release_lock
     log "unset: $consumer"
 }
 
@@ -365,6 +412,7 @@ lookup_domain() {
         printf '%s\n' "$ip"
         return 0
     fi
+    require_resolver
     resolve_ipv4 "$domain"
 }
 
