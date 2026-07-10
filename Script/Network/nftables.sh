@@ -102,23 +102,6 @@ get_script_absolute_path() {
     echo "$resolved"
 }
 
-providerdns_cache_field() {
-    local domain="$1" field="$2" record
-    record=$(providerdns_cache_record "$domain") || return 1
-    awk -v f="$field" '{ print $f }' <<< "$record"
-}
-
-providerdns_cache_ip() {
-    local ip
-    ip=$(providerdns_cache_field "$1" 2 2>/dev/null || true)
-    validate_ip_address "$ip" || return 1
-    printf '%s\n' "$ip"
-}
-
-providerdns_cache_status() {
-    providerdns_cache_field "$1" 3 2>/dev/null || printf 'missing\n'
-}
-
 providerdns_cache_record() {
     local domain="$1"
     run_providerdns --cache "$domain" 2>/dev/null
@@ -402,7 +385,7 @@ get_auto_allow_ports() {
 }
 
 parse_rule() {
-    local rule_string="$1" resolve_domain="${2:-1}" src_port target dest_port snat_ip mss
+    local rule_string="$1" src_port target dest_port snat_ip mss
     PARSED_SRC_PORT=""; PARSED_MODE=""; PARSED_TARGET=""; PARSED_DEST_PORT=""
     PARSED_TYPE=""; PARSED_IP=""; PARSED_STATUS="ok"; PARSED_SNAT_IP=""; PARSED_MSS=""
 
@@ -430,16 +413,7 @@ parse_rule() {
                 PARSED_TYPE="ipv4"; PARSED_IP="$target"
             elif validate_domain_name "$target"; then
                 PARSED_TYPE="domain"
-                if [ "$resolve_domain" = "1" ]; then
-                    if PARSED_IP=$(providerdns_cache_ip "$target"); then
-                        PARSED_STATUS=$(providerdns_cache_status "$target")
-                    else
-                        PARSED_IP=""; PARSED_STATUS="pending"
-                        log_info_noisy "域名尚未解析，规则将先保存并等待 Provider DNS 生效: $target"
-                    fi
-                else
-                    PARSED_IP=""; PARSED_STATUS="pending"
-                fi
+                PARSED_IP=""; PARSED_STATUS="pending"
             else
                 log_error "无效的目标地址: $target"
                 return 1
@@ -489,17 +463,27 @@ write_state_domains() {
     awk -F'|' 'NF>=8 && $5=="domain" { print $3 }' "$state_file" | sort -u > "$output_file"
 }
 
-apply_providerdns_for_state() {
+state_domain_sets_equal() {
+    cmp -s \
+        <(awk -F'|' 'NF>=8 && $5=="domain" { print $3 }' "$1" | sort -u) \
+        <(awk -F'|' 'NF>=8 && $5=="domain" { print $3 }' "$2" | sort -u)
+}
+
+sync_providerdns_subscription() {
     local state_file="$1" domains_file
     if state_has_domain "$state_file"; then
         domains_file=$(mktemp /tmp/forwardaws-domains.XXXXXX) || return 1
         write_state_domains "$state_file" "$domains_file" || { rm -f "$domains_file"; return 1; }
         providerdns_set_forwardaws "$domains_file" || { rm -f "$domains_file"; return 1; }
         rm -f "$domains_file"
-        providerdns_refresh
     else
         providerdns_unset_forwardaws
     fi
+}
+
+restore_providerdns_subscription() {
+    state_domain_sets_equal "$1" "$RULES_STATE_FILE" && return 0
+    sync_providerdns_subscription "$RULES_STATE_FILE"
 }
 
 filter_candidate_domain_cache() {
@@ -535,20 +519,19 @@ filter_candidate_domain_cache() {
     mv "$next" "$candidate" || { rm -f "$next"; return 1; }
 }
 
-resolve_candidate_domains() {
-    state_has_domain "$1" || return 0
-    apply_providerdns_for_state "$1" || return 1
-    filter_candidate_domain_cache "$1"
+prepare_candidate_domains() {
+    local candidate="$1"
+    DOMAIN_RULES_DROPPED=0
+    sync_providerdns_subscription "$candidate" || return 1
+    state_has_domain "$candidate" || return 0
+    providerdns_refresh || return 1
+    filter_candidate_domain_cache "$candidate" || return 1
+    [ "$DOMAIN_RULES_DROPPED" -eq 0 ] || sync_providerdns_subscription "$candidate"
 }
 
 prepare_state_file() {
     ensure_state_dir || return 1
     [ -f "$RULES_STATE_FILE" ] || : > "$RULES_STATE_FILE"
-}
-
-prepare_state_file_for_read() {
-    [ -f "$RULES_STATE_FILE" ] && return 0
-    return 0
 }
 
 copy_current_state_to() {
@@ -758,19 +741,6 @@ disable_timer_if_available() {
     systemctl disable --now --no-reload "$1" >/dev/null 2>&1 && log_info_noisy "$2"
 }
 
-reconcile_forwardaws_dns() {
-    local domain_count
-    domain_count=$(state_domain_count "$RULES_STATE_FILE")
-    if [ "$domain_count" -gt 0 ]; then
-        apply_providerdns_for_state "$RULES_STATE_FILE" || {
-            log_warn "注册 Provider DNS 订阅失败，请手动检查 systemd 状态"
-            return 1
-        }
-    else
-        providerdns_unset_forwardaws || return 1
-    fi
-}
-
 reconcile_protection_timer() {
     local protect_flag enable_protect=0 failed=0
     protect_flag=$(get_protection_flag)
@@ -786,11 +756,6 @@ reconcile_protection_timer() {
     fi
     [ "$enable_protect" -eq 0 ] || enable_timer_if_available "$PROTECT_TIMER_NAME" "保护端口自动同步已启用" "启用保护同步定时器失败，请手动检查 systemd 状态" || failed=1
     [ "$failed" -eq 0 ]
-}
-
-reconcile_timers() {
-    reconcile_forwardaws_dns || return 1
-    reconcile_protection_timer
 }
 
 get_protect_timer_status() {
@@ -877,13 +842,12 @@ remove_active_nft_tables() {
 }
 
 remove_systemd_units() {
-    local service_removed=0 timer_removed=0 dns_removed=0
     SYSTEMD_UNITS_CHANGED=0
 
     log_info_noisy "  清理 systemd 服务和定时器:"
     if has_systemctl; then
-        systemctl disable --now --no-reload "$PROTECT_TIMER_NAME" >/dev/null 2>&1 && { service_removed=1; log_info_noisy "    - 已停用定时器: ${PROTECT_TIMER_NAME}"; } || true
-        systemctl stop "$PROTECT_SERVICE_NAME" >/dev/null 2>&1 && { service_removed=1; } || true
+        systemctl disable --now --no-reload "$PROTECT_TIMER_NAME" >/dev/null 2>&1 && log_info_noisy "    - 已停用定时器: ${PROTECT_TIMER_NAME}" || true
+        systemctl stop "$PROTECT_SERVICE_NAME" >/dev/null 2>&1 || true
         systemctl reset-failed "$PROTECT_TIMER_NAME" "$PROTECT_SERVICE_NAME" >/dev/null 2>&1 || true
     fi
 
@@ -899,7 +863,7 @@ remove_systemd_units() {
 }
 
 uninstall_forwardaws() {
-    local nft_removed=0 config_removed=0 sysctl_removed=0
+    local nft_removed=0 sysctl_removed=0
 
     log_info "开始清理 nftables.sh 产物..."
     echo -e "${BLUE}─────────────────────────────────────${NC}"
@@ -931,7 +895,6 @@ uninstall_forwardaws() {
     echo -e "${BLUE}─────────────────────────────────────${NC}"
     log_info "清理完成，已移除:"
     [ "$nft_removed" = "1" ] && log_info_noisy "  • NFT 规则文件"
-    [ "$config_removed" = "1" ] && log_info_noisy "  • nftables 配置包含"
     [ "$sysctl_removed" = "1" ] && log_info_noisy "  • IP 转发 sysctl 配置"
     log_info_noisy "  • systemd 服务和定时器"
     log_info_noisy "  • 状态数据库和配置"
@@ -940,7 +903,7 @@ uninstall_forwardaws() {
 
 append_rule_to_state() {
     local candidate="$1" rule="$2" now="$3" duplicate_mode="$4" status suffix=""
-    parse_rule "$rule" 0 || return 1
+    parse_rule "$rule" || return 1
     status=$(state_rule_status "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_SNAT_IP" "$PARSED_MSS")
     [ "$duplicate_mode" = "skip" ] && suffix="，跳过"
     case "$status" in
@@ -953,7 +916,7 @@ append_rule_to_state() {
 
 remove_rule_from_state() {
     local candidate="$1" rule="$2" next_candidate status
-    parse_rule "$rule" 0 || return 1
+    parse_rule "$rule" || return 1
     status=$(state_rule_status "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_SNAT_IP" "$PARSED_MSS")
     case "$status" in
         exact|base) ;;
@@ -966,7 +929,7 @@ remove_rule_from_state() {
 }
 
 rule_batch() {
-     local action="$1" protect_noping="$2" candidate now success=0 skipped=0 failed=0 rule rc protect_flag desc success_msg empty_msg show_status=0 prepared_domains=0 applied_success=0
+     local action="$1" protect_noping="$2" candidate now success=0 skipped=0 failed=0 rule rc protect_flag desc success_msg empty_msg show_status=0 applied_success=0
      shift 2
      [ $# -gt 0 ] || { log_error "未提供任何规则"; return 1; }
      candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 1
@@ -1017,40 +980,37 @@ rule_batch() {
          return 1
      fi
      if [ "$success" -gt 0 ]; then
-         if state_has_domain "$candidate"; then
-             log_info "检测到域名规则，触发 Provider DNS 解析..."
-             prepared_domains=1
-             resolve_candidate_domains "$candidate" || {
-                 reconcile_forwardaws_dns || log_warn "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
-                 rm -f "$candidate"
-                 return 1
-             }
-             if [ "$DOMAIN_RULES_DROPPED" -gt 0 ]; then
-                 skipped=$((skipped + DOMAIN_RULES_DROPPED))
-                 success=$((success - DOMAIN_RULES_DROPPED))
-                 [ "$success" -lt 0 ] && success=0
-             fi
+         state_has_domain "$candidate" && log_info "检测到域名规则，触发 Provider DNS 解析..."
+         prepare_candidate_domains "$candidate" || {
+             sync_providerdns_subscription "$RULES_STATE_FILE" || log_warn "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
+             rm -f "$candidate"
+             return 1
+         }
+         if [ "$DOMAIN_RULES_DROPPED" -gt 0 ]; then
+             skipped=$((skipped + DOMAIN_RULES_DROPPED))
+             success=$((success - DOMAIN_RULES_DROPPED))
+             [ "$success" -lt 0 ] && success=0
          fi
          applied_success=$success
          if [ "$action" != "delete" ] && [ "$applied_success" -eq 0 ]; then
              log_warn "没有${empty_msg}: 跳过 ${skipped} 条，失败 ${failed} 条"
-             [ "$prepared_domains" -eq 0 ] || reconcile_forwardaws_dns || log_warn "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
+             restore_providerdns_subscription "$candidate" || log_warn "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
              rm -f "$candidate"
              return 0
          fi
          apply_candidate_state "$candidate" "$protect_flag" "$desc" "" "$protect_noping" || {
-             [ "$prepared_domains" -eq 0 ] || reconcile_forwardaws_dns || log_warn "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
+             restore_providerdns_subscription "$candidate" || log_warn "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
              rm -f "$candidate"
              return 1
          }
          [ "$action" = "replace" ] && log_info "原子替换完成，共应用 ${applied_success} 条规则" || log_info "${success_msg}完成: 成功 ${applied_success} 条，跳过 ${skipped} 条，失败 ${failed} 条"
-         reconcile_timers || { rm -f "$candidate"; return 1; }
+         reconcile_protection_timer || { rm -f "$candidate"; return 1; }
 
          [ "$show_status" = "1" ] && show_protection_status
      elif [ "$failed" -eq 0 ] && [ -n "$protect_noping" ] && [ "$(get_protect_noping)" != "$protect_noping" ]; then
          apply_candidate_state "$candidate" "$protect_flag" "$desc" "" "$protect_noping" || { rm -f "$candidate"; return 1; }
          log_warn "没有${empty_msg}: 跳过 ${skipped} 条，失败 ${failed} 条"
-         reconcile_timers || { rm -f "$candidate"; return 1; }
+         reconcile_protection_timer || { rm -f "$candidate"; return 1; }
          [ "$show_status" = "1" ] && show_protection_status
      else
          log_warn "没有${empty_msg}: 跳过 ${skipped} 条，失败 ${failed} 条"
@@ -1060,15 +1020,16 @@ rule_batch() {
  }
 
 apply_ddns_cache() {
-    local candidate candidate_changed=0 changed=0 unchanged=0 pending=0 failed=0 now
+    local candidate candidate_changed=0 changed=0 unchanged=0 pending=0 failed=0 now subscription_changed=0
     local src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss record record_domain new_ip new_status cache_updated_at
     local total_domains
     prepare_state_file || return 1
     total_domains=$(state_domain_count "$RULES_STATE_FILE")
     if [ "$total_domains" -eq 0 ]; then
         log_info_noisy "未配置 DDNS 域名规则，无需同步"
-        reconcile_timers
-        return 0
+        sync_providerdns_subscription "$RULES_STATE_FILE" || return 1
+        reconcile_protection_timer
+        return $?
     fi
     require_providerdns || return 1
     candidate=$(mktemp /tmp/forwardaws-state.XXXXXX) || return 1
@@ -1131,10 +1092,21 @@ apply_ddns_cache() {
     done < "$RULES_STATE_FILE"
     cmp -s "$candidate" "$RULES_STATE_FILE" || candidate_changed=1
 
-    # 应用候选状态
-    apply_candidate_state "$candidate" "$(get_protection_flag)" "DDNS 同步" || { rm -f "$candidate"; return 1; }
+    if [ "$pending" -gt 0 ]; then
+        sync_providerdns_subscription "$candidate" || {
+            sync_providerdns_subscription "$RULES_STATE_FILE" || log_warn "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
+            rm -f "$candidate"
+            return 1
+        }
+        subscription_changed=1
+    fi
+    apply_candidate_state "$candidate" "$(get_protection_flag)" "DDNS 同步" || {
+        [ "$subscription_changed" -eq 0 ] || restore_providerdns_subscription "$candidate" || log_warn "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
+        rm -f "$candidate"
+        return 1
+    }
     rm -f "$candidate"
-    reconcile_timers || return 1
+    reconcile_protection_timer || return 1
 
     # 输出 DDNS 同步结果汇总
     echo -e "${BLUE}─────────────────────────────────────${NC}"
@@ -1147,7 +1119,10 @@ apply_ddns_cache() {
 }
 
 sync_ddns_rules() {
-    reconcile_forwardaws_dns || return 1
+    sync_providerdns_subscription "$RULES_STATE_FILE" || return 1
+    if state_has_domain "$RULES_STATE_FILE"; then
+        providerdns_refresh || return 1
+    fi
     apply_ddns_cache
 }
 
@@ -1166,7 +1141,8 @@ apply_protection_state() {
     fi
     apply_candidate_state "$candidate" "$protect_flag" "$desc" "$current_ports" "$protect_noping" || { rm -f "$candidate"; return 1; }
     rm -f "$candidate"
-    reconcile_timers
+    [ "$reset_rules" != "1" ] || sync_providerdns_subscription "$RULES_STATE_FILE" || return 1
+    reconcile_protection_timer || return 1
     if [ "${APPLY_CANDIDATE_CHANGED:-0}" = "1" ]; then
         [ "$protect_flag" = "1" ] && log_info "${success_msg}: $current_ports" || log_info "$success_msg"
     else
@@ -1179,12 +1155,12 @@ sync_protection_ports() {
     apply_protection_state 1 "同步端口保护" "保护端口同步完成"
 }
 
-enable_protection() { apply_protection_state 1 "开启端口保护" "端口保护已开启，开放端口" "${1:-0}" 1; }
+enable_protection() { apply_protection_state 1 "开启端口保护" "端口保护已开启，开放端口" "${1:-0}"; }
+enable_protection_only() { apply_protection_state 1 "切换纯保护模式" "纯保护模式已开启，开放端口" "${1:-0}" 1; }
 disable_protection() { apply_protection_state 0 "关闭端口保护" "端口保护已关闭"; }
 
 show_protection_status() {
     local protect_flag protect_noping timer_status auto_ports
-    prepare_state_file_for_read
     protect_flag=$(get_protection_flag)
     protect_noping=$(get_protect_noping)
     timer_status=$(get_protect_timer_status)
@@ -1220,7 +1196,6 @@ rule_extra_text() {
 
 show_ddns_rules() {
     local count=1 domain resolved_ip status updated_at refs
-    prepare_state_file_for_read
     [ "$(state_domain_count "$RULES_STATE_FILE")" -gt 0 ] || { log_warn "未找到 DDNS 域名规则"; return 0; }
     echo -e "${YELLOW}=== DDNS 域名规则状态 ===${NC}"
     while IFS='|' read -r domain resolved_ip status updated_at refs; do
@@ -1254,7 +1229,6 @@ show_ddns_rules() {
 
 display_rules() {
     local count=1 src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss extra
-    prepare_state_file_for_read
     [ -s "$RULES_STATE_FILE" ] || { log_warn "未找到转发规则"; return 0; }
     echo -e "${YELLOW}=== 端口转发规则 ===${NC}"
     while IFS='|' read -r src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss; do
@@ -1285,6 +1259,7 @@ show_help() {
   $0 --ddns apply
   $0 --ddns list
   $0 --protect on [noping[=IPv4,...]]
+  $0 --protect only [noping[=IPv4,...]]
   $0 --protect off
   $0 --protect status
   $0 --protect sync
@@ -1323,9 +1298,30 @@ run_rule_batch_command() {
     run_mutation "${desc_prefix} $# ${desc_suffix}" rule_batch "$action" "$protect_noping" "$@"
 }
 
+run_protection_enable_command() {
+    local mode="$1" protect_noping=0 action desc
+    shift
+    case "${1:-}" in
+        "") ;;
+        noping) protect_noping=1; shift ;;
+        noping=*)
+            protect_noping="${1#noping=}"
+            validate_noping_spec "$protect_noping" || { log_error "noping 白名单格式无效: $protect_noping"; return 1; }
+            shift
+            ;;
+        *) log_error "未知的保护模式参数: $1"; return 1 ;;
+    esac
+    [ $# -eq 0 ] || { log_error "保护模式 ${mode} 不支持额外参数: $*"; return 1; }
+    case "$mode" in
+        on) action=enable_protection; desc="正在开启端口保护模式..." ;;
+        only) action=enable_protection_only; desc="正在切换纯保护模式..." ;;
+    esac
+    ensure_for_write || return 1
+    run_mutation "$desc" "$action" "$protect_noping" && show_protection_status
+}
+
 ensure_for_read() {
     ensure_supported_bash || return 1
-    prepare_state_file_for_read
 }
 
 ensure_for_write() {
@@ -1341,7 +1337,7 @@ ensure_for_uninstall() {
 }
 
 main() {
-    local protect_noping
+    local protect_mode
     ensure_supported_bash || exit 1
     [ $# -eq 0 ] && { log_error "请使用参数模式执行，例如: $0 --help"; show_help; exit 1; }
     case "$1" in
@@ -1366,20 +1362,10 @@ main() {
             shift
             [ $# -gt 0 ] || { log_error "未提供保护模式参数"; show_help; exit 1; }
             case "$1" in
-                on)
+                on|only)
+                    protect_mode="$1"
                     shift
-                    case "${1:-}" in
-                        "") protect_noping=0 ;;
-                        noping) protect_noping=1; shift ;;
-                        noping=*)
-                            protect_noping="${1#noping=}"
-                            validate_noping_spec "$protect_noping" || { log_error "noping 白名单格式无效: $protect_noping"; exit 1; }
-                            shift
-                            ;;
-                        *) log_error "未知的保护模式参数: $1"; exit 1 ;;
-                    esac
-                    [ $# -eq 0 ] || { log_error "保护模式 on 不支持额外参数: $*"; exit 1; }
-                    ensure_for_write && run_mutation "正在开启端口保护模式..." enable_protection "$protect_noping" && show_protection_status || exit 1
+                    run_protection_enable_command "$protect_mode" "$@" || exit 1
                     ;;
                 off)
                     [ $# -eq 1 ] || { log_error "保护模式 off 不支持额外参数: ${*:2}"; exit 1; }
