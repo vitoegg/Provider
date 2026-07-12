@@ -107,6 +107,12 @@ step_ssh_guard() {
   log "ssh guard enabled | trusted_sources=${allow_count}${key_detail}"
 }
 
+step_ssh_guard_remove() {
+  [ "$#" -eq 1 ] || fail "step_ssh_guard_remove requires script"
+  provider_run "$1" --remove || fail "ssh guard removal failed"
+  mark_cleared sshg
+}
+
 update_hosts() {
   if grep -q '^127\.0\.1\.1[[:space:]]' /etc/hosts 2>/dev/null; then
     sed -i "s/^127\.0\.1\.1.*/127.0.1.1 ${1}/" /etc/hosts
