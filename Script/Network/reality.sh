@@ -141,33 +141,6 @@ install_arguments_present() {
         [ -n "$SS_PORT$SS_PASSWORD$SOCKS_HOST$SOCKS_PORT" ]
 }
 
-require_environment() {
-    [ "${EUID:-$(id -u)}" -eq 0 ] || fail "请使用 root 权限执行。"
-    command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt 环境。"
-    command -v systemctl >/dev/null 2>&1 || fail "当前系统未提供 systemd。"
-}
-
-ensure_dependencies() {
-    local missing=()
-
-    command -v curl >/dev/null 2>&1 || missing+=(curl)
-    [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
-    if [ "$UNINSTALL_REQUESTED" -eq 0 ]; then
-        command -v jq >/dev/null 2>&1 || missing+=(jq)
-        command -v ss >/dev/null 2>&1 || missing+=(iproute2)
-    fi
-    if [ "$UPDATE_REQUESTED" -eq 0 ] && [ "$UNINSTALL_REQUESTED" -eq 0 ]; then
-        command -v openssl >/dev/null 2>&1 || missing+=(openssl)
-        command -v shuf >/dev/null 2>&1 || missing+=(coreutils)
-    fi
-    [ "${#missing[@]}" -eq 0 ] && return 0
-    log_info "正在安装缺失依赖：${missing[*]}"
-    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || fail "软件包索引更新失败。"
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
-        fail "依赖安装失败：${missing[*]}"
-    log_info "已安装依赖：${missing[*]}"
-}
-
 parse_protocols() {
     local protocol protocol_items=()
 
@@ -197,14 +170,51 @@ validate_protocol_scope() {
     fi
 }
 
-xray_command() {
-    if command -v xray >/dev/null 2>&1; then
-        command -v xray
-    elif [ -x "$XRAY_BINARY" ]; then
-        printf '%s\n' "$XRAY_BINARY"
-    else
+validate_port() {
+    if ! [[ "$1" =~ ^[0-9]+$ ]] || (( 10#$1 < 1 || 10#$1 > 65535 )); then
+        log_error "$2 端口无效：$1"
         return 1
     fi
+}
+
+validate_domain() {
+    local domain="$1" label pattern
+
+    label='[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?'
+    pattern="^${label}([.]${label})*$"
+    [ -n "$domain" ] && [ "${#domain}" -le 253 ] && [[ "$domain" =~ $pattern ]]
+}
+
+require_environment() {
+    [ "${EUID:-$(id -u)}" -eq 0 ] || fail "请使用 root 权限执行。"
+    command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt 环境。"
+    command -v systemctl >/dev/null 2>&1 || fail "当前系统未提供 systemd。"
+}
+
+ensure_dependencies() {
+    local missing=()
+
+    command -v curl >/dev/null 2>&1 || missing+=(curl)
+    [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
+    if [ "$UNINSTALL_REQUESTED" -eq 0 ]; then
+        command -v jq >/dev/null 2>&1 || missing+=(jq)
+        command -v ss >/dev/null 2>&1 || missing+=(iproute2)
+    fi
+    if [ "$UPDATE_REQUESTED" -eq 0 ] && [ "$UNINSTALL_REQUESTED" -eq 0 ]; then
+        command -v openssl >/dev/null 2>&1 || missing+=(openssl)
+        command -v shuf >/dev/null 2>&1 || missing+=(coreutils)
+    fi
+    [ "${#missing[@]}" -eq 0 ] && return 0
+    log_info "正在安装缺失依赖：${missing[*]}"
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || fail "软件包索引更新失败。"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
+        fail "依赖安装失败：${missing[*]}"
+    log_info "已安装依赖：${missing[*]}"
+}
+
+xray_command() {
+    [ -x "$XRAY_BINARY" ] || return 1
+    printf '%s\n' "$XRAY_BINARY"
 }
 
 run_xray_installer() {
@@ -233,13 +243,6 @@ run_xray_installer() {
 
 port_in_use() {
     ss -H -lntu 2>/dev/null | grep -Eq ":${1}[[:space:]]"
-}
-
-validate_port() {
-    if ! [[ "$1" =~ ^[0-9]+$ ]] || (( 10#$1 < 1 || 10#$1 > 65535 )); then
-        log_error "$2 端口无效：$1"
-        return 1
-    fi
 }
 
 port_is_reserved() {
@@ -279,14 +282,6 @@ prepare_ports() {
         SS_PORT="$(generate_unique_port)"
         reserve_port "$SS_PORT" Shadowsocks
     fi
-}
-
-validate_domain() {
-    local domain="$1" label pattern
-
-    label='[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?'
-    pattern="^${label}([.]${label})*$"
-    [ -n "$domain" ] && [ "${#domain}" -le 253 ] && [[ "$domain" =~ $pattern ]]
 }
 
 generate_uuid() {
@@ -457,10 +452,6 @@ apply_config() {
         rm -f "$candidate"
         fail "Xray 配置生成失败。"
     }
-    jq -e . "$candidate" >/dev/null 2>&1 || {
-        rm -f "$candidate"
-        fail "Xray JSON 预检失败。"
-    }
     binary="$(xray_command)" || {
         rm -f "$candidate"
         fail "未找到 Xray。"
@@ -499,7 +490,6 @@ begin_transaction() {
             rm -rf "$TRANSACTION_DIR"
             fail "无法备份 Xray 配置。"
         }
-        : > "${TRANSACTION_DIR}/config.exists"
     fi
     CONFIG_CHANGED=0
     TRANSACTION_ACTIVE=1
@@ -510,7 +500,7 @@ rollback_transaction() {
     local restore_failed=0 restore_candidate=""
 
     [ "$TRANSACTION_ACTIVE" -eq 1 ] || return 0
-    if [ -e "${TRANSACTION_DIR}/config.exists" ]; then
+    if [ -e "${TRANSACTION_DIR}/config" ]; then
         mkdir -p "$(dirname "$XRAY_CONFIG_FILE")" || restore_failed=1
         restore_candidate="$(mktemp "$(dirname "$XRAY_CONFIG_FILE")/.config.restore.XXXXXX")" ||
             restore_failed=1
@@ -530,7 +520,10 @@ rollback_transaction() {
         systemctl disable xray >/dev/null 2>&1 || restore_failed=1
     fi
     if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
-        systemctl restart xray >/dev/null 2>&1 || restore_failed=1
+        if ! systemctl restart xray >/dev/null 2>&1 ||
+           ! systemctl is-active --quiet xray 2>/dev/null; then
+            restore_failed=1
+        fi
     elif systemctl is-active --quiet xray 2>/dev/null; then
         systemctl stop xray >/dev/null 2>&1 || restore_failed=1
     fi
@@ -574,61 +567,11 @@ converge_service() {
                 log_error "Xray 重启失败。"
                 return 1
             fi
-            log_info "已重启系统服务：xray.service"
         fi
     elif ! systemctl start xray >/dev/null 2>&1; then
         log_error "Xray 启动失败。"
         return 1
-    else
-        log_info "已启动系统服务：xray.service"
     fi
-}
-
-port_listening() {
-    ss -H -lntu 2>/dev/null | grep -Eq ":${1}[[:space:]]"
-}
-
-verify_service() {
-    if ! systemctl is-active --quiet xray 2>/dev/null; then
-        log_error "Xray 服务未运行。"
-        return 1
-    fi
-    if [ "$REALITY_ENABLED" -eq 1 ] && ! port_listening "$REALITY_PORT"; then
-        log_error "Reality 未监听端口：$REALITY_PORT"
-        return 1
-    fi
-    if [ "$SS_ENABLED" -eq 1 ] && ! port_listening "$SS_PORT"; then
-        log_error "Shadowsocks 未监听端口：$SS_PORT"
-        return 1
-    fi
-}
-
-verify_existing_listeners() {
-    local port
-    systemctl is-active --quiet xray 2>/dev/null || return 1
-    while IFS= read -r port; do
-        port_listening "$port" || return 1
-    done < <(jq -r '.inbounds[].port' "$XRAY_CONFIG_FILE")
-}
-
-show_configuration() {
-    local ip
-
-    ip="$(curl --fail --silent --show-error --max-time 5 https://api.ipify.org 2>/dev/null)" || true
-    printf '\n=== Xray 客户端配置 ===\n服务器：%s\n' "${ip:-无法获取 IP}"
-    if [ "$REALITY_ENABLED" -eq 1 ]; then
-        printf 'Reality 端口：%s\nUUID：%s\n域名：%s\nPrivateKey：%s\nPublicKey：%s\nShort ID：%s\n' \
-            "$REALITY_PORT" "$REALITY_UUID" "$REALITY_DOMAIN" \
-            "$REALITY_PRIVATE_KEY" "$REALITY_PUBLIC_KEY" "$REALITY_SHORT_ID"
-    fi
-    if [ "$SS_ENABLED" -eq 1 ]; then
-        printf 'Shadowsocks 端口：%s\nShadowsocks 密码：%s\n加密：%s\n' \
-            "$SS_PORT" "$SS_PASSWORD" "$SS_METHOD"
-    fi
-    if [ "$SOCKS_ENABLED" -eq 1 ]; then
-        printf 'Socks：%s:%s\n分流域名：reddit.com, cloudflare.com\n' "$SOCKS_HOST" "$SOCKS_PORT"
-    fi
-    printf '========================\n'
 }
 
 install_reality() {
@@ -656,7 +599,7 @@ update_xray() {
     binary="$(xray_command)" || fail "Xray 更新后命令不存在。"
     "$binary" run -test -config "$XRAY_CONFIG_FILE" >/dev/null 2>&1 ||
         fail "新 Xray 无法加载现有配置；官方安装器变更已保留。"
-    if ! converge_service || ! verify_existing_listeners; then
+    if ! converge_service || ! verify_service; then
         if rollback_transaction; then
             fail "Xray 更新后服务验证失败，服务状态已恢复；新版本保留。"
         fi
@@ -664,14 +607,6 @@ update_xray() {
     fi
     commit_transaction
     log_info "Xray 已更新并验证运行状态。"
-}
-
-verify_uninstalled() {
-    if systemctl is-active --quiet xray 2>/dev/null ||
-       systemctl cat xray.service >/dev/null 2>&1 ||
-       [ -e "$XRAY_BINARY" ] || [ -e "$XRAY_CONFIG_FILE" ]; then
-        fail "Xray 卸载验证失败。"
-    fi
 }
 
 uninstall_xray() {
@@ -687,6 +622,41 @@ uninstall_xray() {
     systemctl reset-failed xray >/dev/null 2>&1 || true
     verify_uninstalled
     log_info "Xray 已卸载。"
+}
+
+verify_service() {
+    if ! systemctl is-active --quiet xray 2>/dev/null; then
+        log_error "Xray 服务未运行。"
+        return 1
+    fi
+}
+
+verify_uninstalled() {
+    if systemctl is-active --quiet xray 2>/dev/null ||
+       systemctl cat xray.service >/dev/null 2>&1 ||
+       [ -e "$XRAY_BINARY" ] || [ -e "$XRAY_CONFIG_FILE" ]; then
+        fail "Xray 卸载验证失败。"
+    fi
+}
+
+show_configuration() {
+    local ip
+
+    ip="$(curl --fail --silent --show-error --max-time 5 https://api.ipify.org 2>/dev/null)" || true
+    printf '\n=== Xray 客户端配置 ===\n服务器：%s\n' "${ip:-无法获取 IP}"
+    if [ "$REALITY_ENABLED" -eq 1 ]; then
+        printf 'Reality 端口：%s\nUUID：%s\n域名：%s\nPrivateKey：%s\nPublicKey：%s\nShort ID：%s\n' \
+            "$REALITY_PORT" "$REALITY_UUID" "$REALITY_DOMAIN" \
+            "$REALITY_PRIVATE_KEY" "$REALITY_PUBLIC_KEY" "$REALITY_SHORT_ID"
+    fi
+    if [ "$SS_ENABLED" -eq 1 ]; then
+        printf 'Shadowsocks 端口：%s\nShadowsocks 密码：%s\n加密：%s\n' \
+            "$SS_PORT" "$SS_PASSWORD" "$SS_METHOD"
+    fi
+    if [ "$SOCKS_ENABLED" -eq 1 ]; then
+        printf 'Socks：%s:%s\n分流域名：reddit.com, cloudflare.com\n' "$SOCKS_HOST" "$SOCKS_PORT"
+    fi
+    printf '========================\n'
 }
 
 main() {

@@ -50,25 +50,6 @@ show_help() {
 EOF
 }
 
-ensure_dependencies() {
-    local missing=()
-    if [ "$ROOT" != "/" ]; then
-        return 0
-    fi
-    command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt-get 环境"
-    command -v curl >/dev/null 2>&1 || missing+=(curl)
-    command -v sha256sum >/dev/null 2>&1 || missing+=(coreutils)
-    dpkg-query -W -f='${db:Status-Abbrev}' ca-certificates 2>/dev/null | grep -q '^ii ' ||
-        missing+=(ca-certificates)
-    [ "${#missing[@]}" -gt 0 ] || return 0
-
-    log_info "正在安装缺失依赖：${missing[*]}"
-    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || fail "软件包索引更新失败"
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
-        fail "依赖安装失败：${missing[*]}"
-    log_info "已安装依赖：${missing[*]}"
-}
-
 append_account_pair() {
     local account="$1" name="$2" existing
     [[ "$account" =~ ^[A-Za-z0-9._-]+$ ]] || fail "--account 只能使用字母、数字、点、下划线或横线"
@@ -148,6 +129,25 @@ parse_args() {
     elif [ "${#ACCOUNTS[@]}" -eq 0 ]; then
         fail "必须提供 --account ID --name NAME"
     fi
+}
+
+ensure_dependencies() {
+    local missing=()
+    if [ "$ROOT" != "/" ]; then
+        return 0
+    fi
+    command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt-get 环境"
+    command -v curl >/dev/null 2>&1 || missing+=(curl)
+    command -v sha256sum >/dev/null 2>&1 || missing+=(coreutils)
+    dpkg-query -W -f='${db:Status-Abbrev}' ca-certificates 2>/dev/null | grep -q '^ii ' ||
+        missing+=(ca-certificates)
+    [ "${#missing[@]}" -gt 0 ] || return 0
+
+    log_info "正在安装缺失依赖：${missing[*]}"
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || fail "软件包索引更新失败"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
+        fail "依赖安装失败：${missing[*]}"
+    log_info "已安装依赖：${missing[*]}"
 }
 
 detect_arch() {
@@ -266,15 +266,6 @@ generate_profile() {
     fail "WARP 配置生成失败，请检查：$WGCF_LOG"
 }
 
-remove_all() {
-    if [ ! -d "$WARP_DIR" ]; then
-        log_info "WARP 产物已不存在，无需清理"
-        return 0
-    fi
-    rm -rf "$WARP_DIR" || fail "无法删除 WARP 产物目录"
-    log_info "已删除 WARP 产物目录"
-}
-
 generate_all() {
     local i account_dir
 
@@ -299,6 +290,15 @@ generate_all() {
         cat "$WGCF_PROFILE" || fail "无法读取 WARP 配置"
         printf '%s\n' '----- WARP CONFIG END -----'
     done
+}
+
+remove_all() {
+    if [ ! -d "$WARP_DIR" ]; then
+        log_info "WARP 产物已不存在，无需清理"
+        return 0
+    fi
+    rm -rf "$WARP_DIR" || fail "无法删除 WARP 产物目录"
+    log_info "已删除 WARP 产物目录"
 }
 
 main() {

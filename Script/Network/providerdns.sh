@@ -32,18 +32,23 @@ trap 'rm -f "${TEMP_FILES[@]}"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+show_help() {
+    cat << 'EOF'
+用法：
+  providerdns.sh --install
+  providerdns.sh --set <consumer> <域名文件> <hook 命令>
+  providerdns.sh --unset <consumer>
+  providerdns.sh --refresh
+  providerdns.sh --refresh hooks
+  providerdns.sh --cache <域名>
+  providerdns.sh --lookup <域名>
+  providerdns.sh --cleanup unused
+  providerdns.sh -h|--help
+EOF
+}
+
 trim() {
     printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
-}
-
-require_root() {
-    [ "$ROOT" != "/" ] && return 0
-    [ "$(id -u)" = "0" ] || fail "此操作必须以 root 权限运行"
-}
-
-ensure_private_dir() {
-    mkdir -p "$1" || return 1
-    chmod 700 "$1" || return 1
 }
 
 validate_ipv4() {
@@ -62,6 +67,23 @@ validate_domain() {
     [ -n "$domain" ] && [ "${#domain}" -le 253 ] &&
         [[ "$domain" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\
 ([.][A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]]
+}
+
+require_root() {
+    [ "$ROOT" != "/" ] && return 0
+    [ "$(id -u)" = "0" ] || fail "此操作必须以 root 权限运行"
+}
+
+ensure_private_dir() {
+    mkdir -p "$1" || return 1
+    chmod 700 "$1" || return 1
+}
+
+require_resolver() {
+    [ -n "${PROVIDERDNS_HOSTS_FILE:-}" ] && return 0
+    command -v getent >/dev/null 2>&1 || fail "缺少依赖命令：getent"
+    command -v timeout >/dev/null 2>&1 || fail "缺少依赖命令：timeout"
+    [[ "${PROVIDERDNS_TIMEOUT:-5}" =~ ^[0-9]+([.][0-9]+)?$ ]] || fail "DNS 超时参数无效"
 }
 
 cache_ip() {
@@ -97,13 +119,6 @@ resolve_ipv4() {
     printf '%s\n' "$ip"
 }
 
-require_resolver() {
-    [ -n "${PROVIDERDNS_HOSTS_FILE:-}" ] && return 0
-    command -v getent >/dev/null 2>&1 || fail "缺少依赖命令：getent"
-    command -v timeout >/dev/null 2>&1 || fail "缺少依赖命令：timeout"
-    [[ "${PROVIDERDNS_TIMEOUT:-5}" =~ ^[0-9]+([.][0-9]+)?$ ]] || fail "DNS 超时参数无效"
-}
-
 collect_domains() {
     local output="$1" file line domain
     ensure_private_dir "$SUBSCRIPTION_DIR" || return 1
@@ -129,10 +144,8 @@ run_hooks() {
             name="$(basename "$hook")"
             subscription="${SUBSCRIPTION_DIR}/${name}.list"
             [ -s "$changed" ] || continue
-            if [ -s "$subscription" ] &&
-                ! grep -Fqx -f "$changed" "$subscription"; then
-                continue
-            fi
+            [ -s "$subscription" ] || continue
+            grep -Fqx -f "$changed" "$subscription" || continue
         fi
         "$hook" || failed=$((failed + 1))
     done
@@ -235,6 +248,9 @@ write_if_changed() {
 install_units() {
     local script tmp changed=0
     require_root
+    if [ "$ROOT" = "/" ] && ! command -v systemctl >/dev/null 2>&1; then
+        fail "未检测到 systemctl，无法安装 Provider DNS timer"
+    fi
     script="$(realpath "$0")"
     mkdir -p "$(dirname "$SERVICE_FILE")" || fail "无法创建 systemd 配置目录"
 
@@ -273,57 +289,16 @@ EOF
     chmod 644 "$SERVICE_FILE" "$TIMER_FILE" || fail "无法设置 systemd unit 权限"
 
     [ "$ROOT" != "/" ] && return 0
-    command -v systemctl >/dev/null 2>&1 || fail "未检测到 systemctl，无法安装 Provider DNS timer"
     [ "$changed" = "0" ] || systemctl daemon-reload >/dev/null 2>&1 || fail "systemd daemon-reload 失败"
     if systemctl is-enabled --quiet providerdns.timer >/dev/null 2>&1 &&
         systemctl is-active --quiet providerdns.timer >/dev/null 2>&1; then
         return 0
     fi
-    systemctl enable --now --no-reload providerdns.timer >/dev/null 2>&1 || fail "Provider DNS timer 启用失败"
+    if ! systemctl enable --now --no-reload providerdns.timer >/dev/null 2>&1 ||
+       ! systemctl is-active --quiet providerdns.timer >/dev/null 2>&1; then
+        fail "Provider DNS timer 启用失败"
+    fi
     log_info "已启用系统服务：providerdns.timer"
-}
-
-cleanup_unused_locked() {
-    local systemctl file changed=0
-    if [ -d "$SUBSCRIPTION_DIR" ]; then
-        for file in "$SUBSCRIPTION_DIR"/*.list; do
-            [ -s "$file" ] && return 0
-        done
-    fi
-    if [ "$ROOT" = "/" ]; then
-        systemctl="$(command -v systemctl 2>/dev/null || true)"
-        if [ -n "$systemctl" ]; then
-            if "$systemctl" is-enabled --quiet providerdns.timer >/dev/null 2>&1 ||
-                "$systemctl" is-active --quiet providerdns.timer >/dev/null 2>&1; then
-                "$systemctl" disable --now --no-reload providerdns.timer >/dev/null 2>&1 ||
-                    fail "Provider DNS timer 停用失败"
-                log_info "已停止并禁用系统服务：providerdns.timer"
-                changed=1
-            fi
-            if "$systemctl" is-active --quiet providerdns.service >/dev/null 2>&1; then
-                "$systemctl" stop providerdns.service >/dev/null 2>&1 ||
-                    fail "Provider DNS service 停止失败"
-                log_info "已停止系统服务：providerdns.service"
-                changed=1
-            fi
-            if [ "$changed" = "1" ] || [[ -e "$TIMER_FILE" || -e "$SERVICE_FILE" ]]; then
-                "$systemctl" reset-failed providerdns.timer providerdns.service >/dev/null 2>&1 || true
-            fi
-        fi
-    fi
-    [ ! -e "$SERVICE_FILE" ] || changed=1
-    [ ! -e "$TIMER_FILE" ] || changed=1
-    [ ! -e "$CACHE_FILE" ] || changed=1
-    rm -f "$SERVICE_FILE" "$TIMER_FILE" "$CACHE_FILE" || fail "Provider DNS 运行时清理失败"
-    rmdir "$STATE_DIR" "$HOOK_DIR" "$SUBSCRIPTION_DIR" "${ROOT_PREFIX}/etc/provider/dns" 2>/dev/null || true
-    if [ "$ROOT" = "/" ] && [ "$changed" = "1" ] && [ -n "${systemctl:-}" ]; then
-        "$systemctl" daemon-reload >/dev/null 2>&1 || fail "systemd daemon-reload 失败"
-    fi
-    if [ "$changed" = "1" ]; then
-        log_info "Provider DNS 运行时已清理"
-    else
-        log_info "Provider DNS 运行时已不存在，无需清理"
-    fi
 }
 
 set_consumer() {
@@ -391,19 +366,46 @@ unset_consumer() {
     fi
 }
 
-show_help() {
-    cat << 'EOF'
-用法：
-  providerdns.sh --install
-  providerdns.sh --set <consumer> <域名文件> <hook 命令>
-  providerdns.sh --unset <consumer>
-  providerdns.sh --refresh
-  providerdns.sh --refresh hooks
-  providerdns.sh --cache <域名>
-  providerdns.sh --lookup <域名>
-  providerdns.sh --cleanup unused
-  providerdns.sh -h|--help
-EOF
+cleanup_unused_locked() {
+    local systemctl file changed=0
+    if [ -d "$SUBSCRIPTION_DIR" ]; then
+        for file in "$SUBSCRIPTION_DIR"/*.list; do
+            [ -s "$file" ] && return 0
+        done
+    fi
+    [[ -e "$SERVICE_FILE" || -e "$TIMER_FILE" || -d "$STATE_DIR" || -d "$HOOK_DIR" ||
+        -d "$SUBSCRIPTION_DIR" ]] && changed=1
+    if [ "$ROOT" = "/" ]; then
+        systemctl="$(command -v systemctl 2>/dev/null || true)"
+        [ -n "$systemctl" ] || fail "未检测到 systemctl，无法清理 Provider DNS runtime"
+        if "$systemctl" is-enabled --quiet providerdns.timer >/dev/null 2>&1 ||
+            "$systemctl" is-active --quiet providerdns.timer >/dev/null 2>&1; then
+            "$systemctl" disable --now --no-reload providerdns.timer >/dev/null 2>&1 ||
+                fail "Provider DNS timer 停用失败"
+            log_info "已停止并禁用系统服务：providerdns.timer"
+            changed=1
+        fi
+        if "$systemctl" is-active --quiet providerdns.service >/dev/null 2>&1; then
+            "$systemctl" stop providerdns.service >/dev/null 2>&1 ||
+                fail "Provider DNS service 停止失败"
+            log_info "已停止系统服务：providerdns.service"
+            changed=1
+        fi
+        if [ "$changed" = "1" ]; then
+            "$systemctl" reset-failed providerdns.timer providerdns.service >/dev/null 2>&1 || true
+        fi
+    fi
+    rm -f "$SERVICE_FILE" "$TIMER_FILE" || fail "Provider DNS 运行时清理失败"
+    rm -rf "$STATE_DIR" "$HOOK_DIR" "$SUBSCRIPTION_DIR" || fail "Provider DNS 运行时清理失败"
+    rmdir "${ROOT_PREFIX}/etc/provider/dns" 2>/dev/null || true
+    if [ "$ROOT" = "/" ] && [ "$changed" = "1" ] && [ -n "${systemctl:-}" ]; then
+        "$systemctl" daemon-reload >/dev/null 2>&1 || fail "systemd daemon-reload 失败"
+    fi
+    if [ "$changed" = "1" ]; then
+        log_info "Provider DNS 运行时已清理"
+    else
+        log_info "Provider DNS 运行时已不存在，无需清理"
+    fi
 }
 
 main() {

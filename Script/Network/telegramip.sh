@@ -29,8 +29,16 @@ fail() {
     exit 1
 }
 
-cleanup() {
-    rm -f "$DOWNLOAD_FILE" "$STAGE_FILE" 2>/dev/null || true
+show_help() {
+    cat <<'EOF'
+用法：
+  bash telegramip.sh --apply
+  bash telegramip.sh --remove
+参数：
+  --apply    下载并应用 Telegram IP 映射
+  --remove   删除 Telegram IP 实时和持久化规则
+  -h, --help 显示帮助
+EOF
 }
 
 require_root() {
@@ -125,6 +133,8 @@ apply_rules() {
     download_rules
     nft_output="$(nft -c -f "$DOWNLOAD_FILE" 2>&1)" ||
         fail "Telegram IP 规则预检失败${nft_output:+：$nft_output}"
+    grep -Eq '^[[:space:]]*table[[:space:]]+ip[[:space:]]+telegramip([[:space:]]*[{]|[[:space:]]*$)' \
+        "$DOWNLOAD_FILE" || fail "Telegram IP 规则未声明目标表：table ip telegramip"
 
     if cmp -s "$DOWNLOAD_FILE" "$NFT_FILE" 2>/dev/null; then
         nft_table_exists
@@ -184,16 +194,8 @@ remove_rules() {
     fi
 }
 
-show_help() {
-    cat <<'EOF'
-用法：
-  bash telegramip.sh --apply
-  bash telegramip.sh --remove
-参数：
-  --apply    下载并应用 Telegram IP 映射
-  --remove   删除 Telegram IP 实时和持久化规则
-  -h, --help 显示帮助
-EOF
+cleanup() {
+    rm -f "$DOWNLOAD_FILE" "$STAGE_FILE" 2>/dev/null || true
 }
 
 main() {

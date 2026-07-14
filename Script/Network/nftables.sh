@@ -41,6 +41,58 @@ log_error() {
     printf '[ERROR] %s\n' "$*" >&2
 }
 
+show_help() {
+    cat << EOF
+用法:
+  $0 --help
+  $0 --list
+  $0 --add [noping[=IPv4,...]] <规则1> [规则2 ...]
+  $0 --delete <规则1> [规则2 ...]
+  $0 --replace [noping[=IPv4,...]] <规则1> [规则2 ...]
+  $0 --ddns sync
+  $0 --ddns apply
+  $0 --ddns list
+  $0 --protect on [noping[=IPv4,...]]
+  $0 --protect only [noping[=IPv4,...]]
+  $0 --protect off
+  $0 --protect status
+  $0 --protect sync
+  $0 --uninstall|-u
+
+规则格式:
+  <源端口>:<目标(IPv4/域名/local)>:<目标端口>[:SNAT_IP[:MSS]]
+EOF
+}
+
+parse_noping_arg() {
+    local arg="$1" value
+    case "$arg" in
+        noping)
+            printf '1\n'
+            ;;
+        noping=*)
+            value="${arg#noping=}"
+            if ! validate_noping_spec "$value"; then
+                log_error "noping 白名单格式无效: $value"
+                return 1
+            fi
+            printf '%s\n' "$value"
+            ;;
+        *)
+            log_error "未知的 noping 参数: $arg"
+            return 1
+            ;;
+    esac
+}
+
+require_arg_count() {
+    local expected="$1" message="$2"
+    shift 2
+    [ "$#" -eq "$expected" ] && return 0
+    log_error "$message"
+    return 1
+}
+
 validate_port() {
     local port="$1"
     [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]
@@ -188,6 +240,13 @@ acquire_global_lock() {
     }
 }
 
+ensure_for_write() {
+    require_root || return 1
+    ensure_dependencies || return 1
+    mkdir -p "$STATE_DIR" "$NFT_INCLUDE_DIR" || return 1
+    [ -f "$RULES_STATE_FILE" ] || : > "$RULES_STATE_FILE"
+}
+
 nft_main_config_has_forwardaws_include() {
     [ -f "$NFT_MAIN_CONFIG_FILE" ] || return 1
     grep -Eq '^[[:space:]]*include[[:space:]]+"?/etc/nftables\.d/(\*|forwardaws)\.nft"?[[:space:]]*$' \
@@ -323,7 +382,7 @@ detect_runtime_public_ports() {
         log_error "缺少依赖命令：ss"
         return 1
     }
-    listeners="$(ss -H -ltn 2>/dev/null)" || {
+    listeners="$(ss -H -lntu 2>/dev/null)" || {
         log_error "无法检测监听端口，拒绝应用端口保护"
         return 1
     }
@@ -682,10 +741,7 @@ apply_candidate_state() (
     fi
     if [ "$rules_changed" -eq 1 ] || [ "$live_missing" -eq 1 ]; then
         if ! run_nft_file "-c" "预检" "$nft_tmp" "$desc" ||
-            ! run_nft_file "" "应用" "$nft_tmp" "$desc" ||
-            ! nft list table ip "$NAT_TABLE_NAME" >/dev/null 2>&1 ||
-            ! nft list table inet "$FILTER_TABLE_NAME" >/dev/null 2>&1; then
-            log_error "nftables 最终状态验证失败，请检查当前规则"
+            ! run_nft_file "" "应用" "$nft_tmp" "$desc"; then
             return 1
         fi
     fi
@@ -809,148 +865,12 @@ reconcile_protection_timer() {
         systemctl is-active --quiet "$PROTECT_TIMER_NAME" 2>/dev/null; then
         return 0
     fi
-    if ! systemctl enable --now --no-reload "$PROTECT_TIMER_NAME" >/dev/null 2>&1; then
+    if ! systemctl enable --now --no-reload "$PROTECT_TIMER_NAME" >/dev/null 2>&1 ||
+       ! systemctl is-active --quiet "$PROTECT_TIMER_NAME" 2>/dev/null; then
         log_error "启用保护端口自动同步失败，请检查 systemd 状态"
         return 1
     fi
     log_info "保护端口自动同步已启用"
-}
-
-remove_nft_main_config_include_if_unused() (
-    local tmp_file other_file keep_include=0
-    [ -f "$NFT_MAIN_CONFIG_FILE" ] || return 0
-    grep -Fqx "$NFT_INCLUDE_MARKER" "$NFT_MAIN_CONFIG_FILE" || return 0
-    other_file=$(find "$NFT_INCLUDE_DIR" -maxdepth 1 -name '*.nft' ! -name 'forwardaws.nft' -print -quit 2>/dev/null)
-    [ -z "$other_file" ] || keep_include=1
-
-    tmp_file=$(mktemp "${NFT_MAIN_CONFIG_FILE}.XXXXXX") || return 1
-    trap 'rm -f "$tmp_file"' EXIT
-    awk -v marker="$NFT_INCLUDE_MARKER" -v keep="$keep_include" '
-        $0 == marker {
-            owned = 1
-            next
-        }
-        owned && $0 ~ /^[[:space:]]*include[[:space:]]+"?\/etc\/nftables[.]d\/(forwardaws|[*])[.]nft"?[[:space:]]*$/ {
-            owned = 0
-            if (keep == 1) print
-            next
-        }
-        { owned = 0; print }
-    ' "$NFT_MAIN_CONFIG_FILE" > "$tmp_file" || {
-        log_error "清理 nftables 主配置 include 失败: $NFT_MAIN_CONFIG_FILE"
-        return 1
-    }
-    if ! mv "$tmp_file" "$NFT_MAIN_CONFIG_FILE"; then
-        log_error "写回 nftables 主配置失败: $NFT_MAIN_CONFIG_FILE"
-        return 1
-    fi
-)
-
-remove_active_nft_tables() (
-    local nft_tmp
-    command -v nft >/dev/null 2>&1 || {
-        log_warning "未检测到 nft，跳过运行时规则清理"
-        return 0
-    }
-    nft_tmp="$(mktemp /tmp/forwardaws-cleanup.XXXXXX)" || return 1
-    trap 'rm -f "$nft_tmp"' EXIT
-    cat > "$nft_tmp" << EOF
-table ip ${NAT_TABLE_NAME}
-delete table ip ${NAT_TABLE_NAME}
-table inet ${FILTER_TABLE_NAME}
-delete table inet ${FILTER_TABLE_NAME}
-table ip forwardaws
-delete table ip forwardaws
-table ip6 forwardaws
-delete table ip6 forwardaws
-EOF
-    run_nft_file "" "清理" "$nft_tmp" "卸载 forwardaws nftables 表" || return 1
-    log_info "已删除 ForwardAWS 运行规则"
-)
-
-forwardaws_resources_exist() {
-    if [ -e "$FORWARDAWS_RULES_FILE" ] || [ -d "$STATE_DIR" ] || [ -e "$IPV4_FORWARD_SYSCTL_FILE" ] ||
-        [ -e "${SYSTEMD_SYSTEM_DIR}/${PROTECT_SERVICE_NAME}" ] ||
-        [ -e "${SYSTEMD_SYSTEM_DIR}/${PROTECT_TIMER_NAME}" ]; then
-        return 0
-    fi
-    grep -Fqx "$NFT_INCLUDE_MARKER" "$NFT_MAIN_CONFIG_FILE" 2>/dev/null && return 0
-    if has_systemctl; then
-        if systemctl is-enabled --quiet "$PROTECT_TIMER_NAME" 2>/dev/null ||
-            systemctl is-active --quiet "$PROTECT_TIMER_NAME" 2>/dev/null ||
-            systemctl is-active --quiet "$PROTECT_SERVICE_NAME" 2>/dev/null; then
-            return 0
-        fi
-    fi
-    command -v nft >/dev/null 2>&1 || return 1
-    nft list table ip "$NAT_TABLE_NAME" >/dev/null 2>&1 ||
-        nft list table inet "$FILTER_TABLE_NAME" >/dev/null 2>&1 ||
-        nft list table ip forwardaws >/dev/null 2>&1 ||
-        nft list table ip6 forwardaws >/dev/null 2>&1
-}
-
-remove_systemd_units() {
-    local path units_removed=0
-
-    if has_systemctl; then
-        if systemctl is-enabled --quiet "$PROTECT_TIMER_NAME" 2>/dev/null ||
-            systemctl is-active --quiet "$PROTECT_TIMER_NAME" 2>/dev/null; then
-            if ! systemctl disable --now --no-reload "$PROTECT_TIMER_NAME" >/dev/null 2>&1; then
-                log_error "无法停用定时器：${PROTECT_TIMER_NAME}"
-                return 1
-            fi
-            log_info "已停用定时器：${PROTECT_TIMER_NAME}"
-        fi
-        if systemctl is-active --quiet "$PROTECT_SERVICE_NAME" 2>/dev/null; then
-            if ! systemctl stop "$PROTECT_SERVICE_NAME" >/dev/null 2>&1; then
-                log_error "无法停止系统服务：${PROTECT_SERVICE_NAME}"
-                return 1
-            fi
-            log_info "已停止系统服务：${PROTECT_SERVICE_NAME}"
-        fi
-        systemctl reset-failed "$PROTECT_TIMER_NAME" "$PROTECT_SERVICE_NAME" >/dev/null 2>&1 || true
-    fi
-
-    for path in \
-        "${SYSTEMD_SYSTEM_DIR}/${PROTECT_SERVICE_NAME}" \
-        "${SYSTEMD_SYSTEM_DIR}/${PROTECT_TIMER_NAME}" \
-        "${SYSTEMD_SYSTEM_DIR}/timers.target.wants/${PROTECT_TIMER_NAME}"; do
-        [ -e "$path" ] || [ -L "$path" ] || continue
-        if ! rm -f "$path"; then
-            log_error "删除 systemd 单元失败：$path"
-            return 1
-        fi
-        units_removed=1
-    done
-    [ "$units_removed" -eq 0 ] || log_info "已删除 ForwardAWS systemd 单元"
-
-    providerdns_unset_forwardaws || return 1
-
-    if [ "$units_removed" -eq 1 ] && has_systemctl; then
-        if ! systemctl daemon-reload >/dev/null 2>&1; then
-            log_error "systemd 配置刷新失败"
-            return 1
-        fi
-    fi
-}
-
-uninstall_forwardaws() {
-    if ! forwardaws_resources_exist; then
-        providerdns_unset_forwardaws || return 1
-        log_info "nftables.sh 产物已不存在，无需卸载"
-        return 0
-    fi
-
-    remove_systemd_units || return 1
-    remove_active_nft_tables || return 1
-    if ! rm -rf "$FORWARDAWS_RULES_FILE" "$STATE_DIR" "$IPV4_FORWARD_SYSCTL_FILE" "$GLOBAL_LOCK_FILE"; then
-        log_error "删除 ForwardAWS 持久文件失败"
-        return 1
-    fi
-    remove_nft_main_config_include_if_unused || return 1
-    rmdir "$NFT_INCLUDE_DIR" 2>/dev/null || true
-
-    log_info "ForwardAWS 防火墙配置已卸载"
 }
 
 append_rule_to_state() {
@@ -1169,6 +1089,203 @@ sync_protection_ports() {
     apply_protection_state 1 "同步端口保护" "保护端口同步完成"
 }
 
+run_mutation() {
+    local desc="$1"
+    shift
+    acquire_global_lock || return 1
+    log_info "$desc"
+    "$@"
+}
+
+run_rule_batch_command() {
+    local action="$1" protect_noping=""
+    shift
+    case "${1:-}" in
+        noping|noping=*)
+            if [ "$action" = "delete" ]; then
+                log_error "删除命令不支持 noping 参数"
+                return 1
+            fi
+            protect_noping="$(parse_noping_arg "$1")" || return 1
+            shift
+            ;;
+    esac
+    if [ $# -eq 0 ]; then
+        log_error "未提供任何规则"
+        show_help
+        return 1
+    fi
+    ensure_for_write || return 1
+    run_mutation "正在处理 $# 条转发规则" rule_batch "$action" "$protect_noping" "$@"
+}
+
+run_protection_enable_command() {
+    local mode="$1" protect_noping=0 desc success reset_rules=0
+    shift
+    if [ $# -gt 1 ]; then
+        log_error "保护模式 ${mode} 不支持额外参数: $*"
+        return 1
+    fi
+    if [ $# -eq 1 ]; then
+        protect_noping="$(parse_noping_arg "$1")" || return 1
+    fi
+    case "$mode" in
+        on)
+            desc="正在开启端口保护模式..."
+            success="端口保护已开启，开放端口"
+            ;;
+        only)
+            desc="正在切换纯保护模式..."
+            success="纯保护模式已开启，开放端口"
+            reset_rules=1
+            ;;
+    esac
+    ensure_for_write || return 1
+    run_mutation "$desc" apply_protection_state \
+        1 "$desc" "$success" "$protect_noping" "$reset_rules" || return 1
+    show_protection_status
+}
+
+remove_nft_main_config_include_if_unused() (
+    local tmp_file other_file keep_include=0
+    [ -f "$NFT_MAIN_CONFIG_FILE" ] || return 0
+    grep -Fqx "$NFT_INCLUDE_MARKER" "$NFT_MAIN_CONFIG_FILE" || return 0
+    other_file=$(find "$NFT_INCLUDE_DIR" -maxdepth 1 -name '*.nft' ! -name 'forwardaws.nft' -print -quit 2>/dev/null)
+    [ -z "$other_file" ] || keep_include=1
+
+    tmp_file=$(mktemp "${NFT_MAIN_CONFIG_FILE}.XXXXXX") || return 1
+    trap 'rm -f "$tmp_file"' EXIT
+    awk -v marker="$NFT_INCLUDE_MARKER" -v keep="$keep_include" '
+        $0 == marker {
+            owned = 1
+            next
+        }
+        owned && $0 ~ /^[[:space:]]*include[[:space:]]+"?\/etc\/nftables[.]d\/(forwardaws|[*])[.]nft"?[[:space:]]*$/ {
+            owned = 0
+            if (keep == 1) print
+            next
+        }
+        { owned = 0; print }
+    ' "$NFT_MAIN_CONFIG_FILE" > "$tmp_file" || {
+        log_error "清理 nftables 主配置 include 失败: $NFT_MAIN_CONFIG_FILE"
+        return 1
+    }
+    if ! mv "$tmp_file" "$NFT_MAIN_CONFIG_FILE"; then
+        log_error "写回 nftables 主配置失败: $NFT_MAIN_CONFIG_FILE"
+        return 1
+    fi
+)
+
+remove_active_nft_tables() (
+    local nft_tmp
+    nft_tmp="$(mktemp /tmp/forwardaws-cleanup.XXXXXX)" || return 1
+    trap 'rm -f "$nft_tmp"' EXIT
+    cat > "$nft_tmp" << EOF
+table ip ${NAT_TABLE_NAME}
+delete table ip ${NAT_TABLE_NAME}
+table inet ${FILTER_TABLE_NAME}
+delete table inet ${FILTER_TABLE_NAME}
+table ip forwardaws
+delete table ip forwardaws
+table ip6 forwardaws
+delete table ip6 forwardaws
+EOF
+    run_nft_file "" "清理" "$nft_tmp" "卸载 forwardaws nftables 表" || return 1
+    log_info "已删除 ForwardAWS 运行规则"
+)
+
+forwardaws_resources_exist() {
+    if [ -e "$FORWARDAWS_RULES_FILE" ] || [ -d "$STATE_DIR" ] || [ -e "$IPV4_FORWARD_SYSCTL_FILE" ] ||
+        [ -e "${SYSTEMD_SYSTEM_DIR}/${PROTECT_SERVICE_NAME}" ] ||
+        [ -e "${SYSTEMD_SYSTEM_DIR}/${PROTECT_TIMER_NAME}" ]; then
+        return 0
+    fi
+    grep -Fqx "$NFT_INCLUDE_MARKER" "$NFT_MAIN_CONFIG_FILE" 2>/dev/null && return 0
+    if has_systemctl; then
+        if systemctl is-enabled --quiet "$PROTECT_TIMER_NAME" 2>/dev/null ||
+            systemctl is-active --quiet "$PROTECT_TIMER_NAME" 2>/dev/null ||
+            systemctl is-active --quiet "$PROTECT_SERVICE_NAME" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    nft list table ip "$NAT_TABLE_NAME" >/dev/null 2>&1 ||
+        nft list table inet "$FILTER_TABLE_NAME" >/dev/null 2>&1 ||
+        nft list table ip forwardaws >/dev/null 2>&1 ||
+        nft list table ip6 forwardaws >/dev/null 2>&1
+}
+
+remove_systemd_units() {
+    local path units_removed=0
+
+    if has_systemctl; then
+        if systemctl is-enabled --quiet "$PROTECT_TIMER_NAME" 2>/dev/null ||
+            systemctl is-active --quiet "$PROTECT_TIMER_NAME" 2>/dev/null; then
+            if ! systemctl disable --now --no-reload "$PROTECT_TIMER_NAME" >/dev/null 2>&1; then
+                log_error "无法停用定时器：${PROTECT_TIMER_NAME}"
+                return 1
+            fi
+            log_info "已停用定时器：${PROTECT_TIMER_NAME}"
+        fi
+        if systemctl is-active --quiet "$PROTECT_SERVICE_NAME" 2>/dev/null; then
+            if ! systemctl stop "$PROTECT_SERVICE_NAME" >/dev/null 2>&1; then
+                log_error "无法停止系统服务：${PROTECT_SERVICE_NAME}"
+                return 1
+            fi
+            log_info "已停止系统服务：${PROTECT_SERVICE_NAME}"
+        fi
+        systemctl reset-failed "$PROTECT_TIMER_NAME" "$PROTECT_SERVICE_NAME" >/dev/null 2>&1 || true
+    fi
+
+    for path in \
+        "${SYSTEMD_SYSTEM_DIR}/${PROTECT_SERVICE_NAME}" \
+        "${SYSTEMD_SYSTEM_DIR}/${PROTECT_TIMER_NAME}" \
+        "${SYSTEMD_SYSTEM_DIR}/timers.target.wants/${PROTECT_TIMER_NAME}"; do
+        [ -e "$path" ] || [ -L "$path" ] || continue
+        if ! rm -f "$path"; then
+            log_error "删除 systemd 单元失败：$path"
+            return 1
+        fi
+        units_removed=1
+    done
+    [ "$units_removed" -eq 0 ] || log_info "已删除 ForwardAWS systemd 单元"
+
+    providerdns_unset_forwardaws || return 1
+
+    if [ "$units_removed" -eq 1 ] && has_systemctl; then
+        if ! systemctl daemon-reload >/dev/null 2>&1; then
+            log_error "systemd 配置刷新失败"
+            return 1
+        fi
+    fi
+}
+
+uninstall_forwardaws() {
+    local forwarding_persisted=0
+    if ! command -v nft >/dev/null 2>&1 || ! nft list tables >/dev/null 2>&1; then
+        log_error "无法读取 nftables 状态，卸载未完成"
+        return 1
+    fi
+    [ ! -e "$IPV4_FORWARD_SYSCTL_FILE" ] || forwarding_persisted=1
+    if ! forwardaws_resources_exist; then
+        providerdns_unset_forwardaws || return 1
+        log_info "nftables.sh 产物已不存在，无需卸载"
+        return 0
+    fi
+
+    remove_systemd_units || return 1
+    remove_active_nft_tables || return 1
+    if ! rm -rf "$FORWARDAWS_RULES_FILE" "$STATE_DIR" "$IPV4_FORWARD_SYSCTL_FILE" "$GLOBAL_LOCK_FILE"; then
+        log_error "删除 ForwardAWS 持久文件失败"
+        return 1
+    fi
+    [ "$forwarding_persisted" -eq 0 ] ||
+        log_warning "已删除 IPv4 转发持久配置，当前 net.ipv4.ip_forward live 值未复位"
+    remove_nft_main_config_include_if_unused || return 1
+    rmdir "$NFT_INCLUDE_DIR" 2>/dev/null || true
+
+    log_info "ForwardAWS 防火墙配置已卸载"
+}
+
 show_protection_status() {
     local protect_flag protect_noping auto_ports
     protect_flag=$(get_config_value "PROTECTION_ENABLED" "0")
@@ -1194,7 +1311,8 @@ show_protection_status() {
     fi
     if ! has_systemctl; then
         printf '自动同步：systemctl 不可用\n'
-    elif systemctl is-active --quiet "$PROTECT_TIMER_NAME"; then
+    elif systemctl is-enabled --quiet "$PROTECT_TIMER_NAME" &&
+        systemctl is-active --quiet "$PROTECT_TIMER_NAME"; then
         printf '自动同步：已启用\n'
     else
         printf '自动同步：未启用\n'
@@ -1268,122 +1386,6 @@ display_rules() {
     done < "$RULES_STATE_FILE"
     printf '\n'
     show_protection_status
-}
-
-show_help() {
-    cat << EOF
-用法:
-  $0 --help
-  $0 --list
-  $0 --add [noping[=IPv4,...]] <规则1> [规则2 ...]
-  $0 --delete <规则1> [规则2 ...]
-  $0 --replace [noping[=IPv4,...]] <规则1> [规则2 ...]
-  $0 --ddns sync
-  $0 --ddns apply
-  $0 --ddns list
-  $0 --protect on [noping[=IPv4,...]]
-  $0 --protect only [noping[=IPv4,...]]
-  $0 --protect off
-  $0 --protect status
-  $0 --protect sync
-  $0 --uninstall|-u
-
-规则格式:
-  <源端口>:<目标(IPv4/域名/local)>:<目标端口>[:SNAT_IP[:MSS]]
-EOF
-}
-
-run_mutation() {
-    local desc="$1"
-    shift
-    acquire_global_lock || return 1
-    log_info "$desc"
-    "$@"
-}
-
-parse_noping_arg() {
-    local arg="$1" value
-    case "$arg" in
-        noping)
-            printf '1\n'
-            ;;
-        noping=*)
-            value="${arg#noping=}"
-            if ! validate_noping_spec "$value"; then
-                log_error "noping 白名单格式无效: $value"
-                return 1
-            fi
-            printf '%s\n' "$value"
-            ;;
-        *)
-            log_error "未知的 noping 参数: $arg"
-            return 1
-            ;;
-    esac
-}
-
-run_rule_batch_command() {
-    local action="$1" protect_noping=""
-    shift
-    case "${1:-}" in
-        noping|noping=*)
-            if [ "$action" = "delete" ]; then
-                log_error "删除命令不支持 noping 参数"
-                return 1
-            fi
-            protect_noping="$(parse_noping_arg "$1")" || return 1
-            shift
-            ;;
-    esac
-    if [ $# -eq 0 ]; then
-        log_error "未提供任何规则"
-        show_help
-        return 1
-    fi
-    ensure_for_write || return 1
-    run_mutation "正在处理 $# 条转发规则" rule_batch "$action" "$protect_noping" "$@"
-}
-
-run_protection_enable_command() {
-    local mode="$1" protect_noping=0 desc success reset_rules=0
-    shift
-    if [ $# -gt 1 ]; then
-        log_error "保护模式 ${mode} 不支持额外参数: $*"
-        return 1
-    fi
-    if [ $# -eq 1 ]; then
-        protect_noping="$(parse_noping_arg "$1")" || return 1
-    fi
-    case "$mode" in
-        on)
-            desc="正在开启端口保护模式..."
-            success="端口保护已开启，开放端口"
-            ;;
-        only)
-            desc="正在切换纯保护模式..."
-            success="纯保护模式已开启，开放端口"
-            reset_rules=1
-            ;;
-    esac
-    ensure_for_write || return 1
-    run_mutation "$desc" apply_protection_state \
-        1 "$desc" "$success" "$protect_noping" "$reset_rules" || return 1
-    show_protection_status
-}
-
-ensure_for_write() {
-    require_root || return 1
-    ensure_dependencies || return 1
-    mkdir -p "$STATE_DIR" "$NFT_INCLUDE_DIR" || return 1
-    [ -f "$RULES_STATE_FILE" ] || : > "$RULES_STATE_FILE"
-}
-
-require_arg_count() {
-    local expected="$1" message="$2"
-    shift 2
-    [ "$#" -eq "$expected" ] && return 0
-    log_error "$message"
-    return 1
 }
 
 main() {

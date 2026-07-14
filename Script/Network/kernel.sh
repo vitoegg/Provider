@@ -100,26 +100,12 @@ EOF
     fi
 }
 
-runtime_matches_config() {
-    local file="$1" report="${2:-0}" key operator expected actual failed=0
-    while read -r key operator expected; do
-        if [[ "$key" == \#* ]]; then
-            continue
-        fi
-        actual="$(sysctl -n "$key" 2>/dev/null || true)"
-        if [ "$actual" != "$expected" ]; then
-            if [ "$report" = "1" ]; then
-                log_warning "内核参数未生效：$key，期望 $expected，实际 ${actual:-不可用}"
-            fi
-            failed=1
-        fi
-    done < "$file"
-    [ "$failed" = "0" ]
-}
-
 apply_profile() {
-    local bbr_status="不可用" ipv6_status
+    local bbr_status="不可用" ipv6_status="保留"
     install -d "$(dirname "$SYSCTL_FILE")" || fail '无法创建 sysctl 配置目录'
+    if [ "$IPV6" = "yes" ] && grep -q 'disable_ipv6 = 1' "$SYSCTL_FILE" 2>/dev/null; then
+        ipv6_status="重启后恢复"
+    fi
     CANDIDATE="$(mktemp "${SYSCTL_FILE}.XXXXXX")" || fail '无法创建 sysctl 临时文件'
     render_config "$CANDIDATE"
     chmod 644 "$CANDIDATE" || fail '无法设置 sysctl 配置权限'
@@ -138,15 +124,13 @@ apply_profile() {
         log_warning 'sysctl 运行值可能已部分改变，请检查当前值或重启系统'
         fail '内核参数应用或验证失败，请检查当前配置文件'
     fi
-    if [ "$IPV6" = "yes" ]; then
-        ipv6_status="保留"
-    else
-        ipv6_status="禁用"
-    fi
+    [ "$IPV6" = "yes" ] || ipv6_status="禁用"
     if grep -q 'tcp_congestion_control = bbr' "$SYSCTL_FILE"; then
         bbr_status="启用"
     fi
     log_info "内核网络优化已应用（BBR：$bbr_status，IPv6：$ipv6_status）"
+    [ "$ipv6_status" != "重启后恢复" ] ||
+        log_warning '已移除 IPv6 禁用配置，当前运行值未复位，请重启系统恢复 IPv6'
 }
 
 remove_profile() {
@@ -161,6 +145,23 @@ remove_profile() {
     fi
     log_info '已删除内核网络优化配置'
     log_warning '已写入的内核运行值不会自动恢复，建议重启系统恢复默认值'
+}
+
+runtime_matches_config() {
+    local file="$1" report="${2:-0}" key operator expected actual failed=0
+    while read -r key operator expected; do
+        if [[ "$key" == \#* ]]; then
+            continue
+        fi
+        actual="$(sysctl -n "$key" 2>/dev/null || true)"
+        if [ "$actual" != "$expected" ]; then
+            if [ "$report" = "1" ]; then
+                log_warning "内核参数未生效：$key，期望 $expected，实际 ${actual:-不可用}"
+            fi
+            failed=1
+        fi
+    done < "$file"
+    [ "$failed" = "0" ]
 }
 
 main() {

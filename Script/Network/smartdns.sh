@@ -40,18 +40,6 @@ show_help() {
 EOF
 }
 
-ecs_ip() {
-    local -A addresses=(
-        [HK]="42.2.2.2"
-        [TYO]="106.152.210.210"
-        [LA]="107.119.53.53"
-        [OR]="12.75.216.200"
-        [SEA]="68.86.93.93"
-    )
-    [ -n "${addresses[$1]:-}" ] || return 1
-    printf '%s' "${addresses[$1]}"
-}
-
 parse_args() {
     while [ "$#" -gt 0 ]; do
         case "$1" in
@@ -86,6 +74,18 @@ parse_args() {
     if [ "$UNINSTALL" -eq 1 ] && [ -n "$ECS_REGION$IPV6_MODE" ]; then
         fail "卸载参数不能与配置参数混用"
     fi
+}
+
+ecs_ip() {
+    local -A addresses=(
+        [HK]="42.2.2.2"
+        [TYO]="106.152.210.210"
+        [LA]="107.119.53.53"
+        [OR]="12.75.216.200"
+        [SEA]="68.86.93.93"
+    )
+    [ -n "${addresses[$1]:-}" ] || return 1
+    printf '%s' "${addresses[$1]}"
 }
 
 require_environment() {
@@ -132,7 +132,7 @@ select_release_asset() {
 }
 
 udp53_listeners() {
-    ss -H -lunp 2>/dev/null |
+    ss -H -lun 2>/dev/null |
         awk '$4 ~ /(^|\[::\]|0\.0\.0\.0|127\.0\.0\.1|\*):53$/ { print }'
 }
 
@@ -232,12 +232,16 @@ set_dns() {
 }
 
 apply_smartdns() {
-    local restart_needed=0
-    if ! systemctl cat "$SERVICE" >/dev/null 2>&1 || [ ! -x /usr/sbin/smartdns ]; then
+    local restart_needed=0 service_exists=0
+    systemctl cat "$SERVICE" >/dev/null 2>&1 && service_exists=1
+    if [ "$service_exists" -eq 0 ]; then
         [ -z "$(udp53_listeners)" ] || fail "53 端口已被其他服务占用"
+    fi
+    if [ "$service_exists" -eq 0 ] || [ ! -x /usr/sbin/smartdns ]; then
         select_release_asset
         log_info "正在安装 SmartDNS"
         run_installer -i || fail "SmartDNS 安装失败"
+        restart_needed=1
     fi
     write_config
     if [ "$CONFIG_CHANGED" -eq 1 ] || ! systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
@@ -252,10 +256,9 @@ apply_smartdns() {
             fail "SmartDNS 启动失败，请执行：journalctl -u ${SERVICE} --no-pager"
     fi
     systemctl is-active --quiet "$SERVICE" || fail "SmartDNS 服务未运行"
-    udp53_listeners | grep -q 'smartdns' || fail "SmartDNS 未监听 UDP 53"
     set_dns local
     if [ "$restart_needed" -eq 1 ]; then
-        log_info "SmartDNS 已启动，监听地址：127.0.0.1:53"
+        log_info "SmartDNS 已启动，服务地址：127.0.0.1:53"
     else
         log_info "SmartDNS 配置未变化，无需重新应用"
     fi

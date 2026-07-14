@@ -96,29 +96,6 @@ parse_args() {
     fi
 }
 
-require_environment() {
-    [ "${EUID:-$(id -u)}" -eq 0 ] || fail "请使用 root 权限执行。"
-    command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt 环境。"
-    command -v systemctl >/dev/null 2>&1 || fail "当前系统未提供 systemd。"
-}
-
-ensure_dependencies() {
-    local missing=()
-
-    command -v wget >/dev/null 2>&1 || missing+=(wget)
-    [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
-    command -v unzip >/dev/null 2>&1 || missing+=(unzip)
-    command -v ss >/dev/null 2>&1 || missing+=(iproute2)
-    [ "${#missing[@]}" -eq 0 ] && return 0
-
-    log_info "正在安装缺失依赖：${missing[*]}"
-    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 ||
-        fail "软件包索引更新失败。"
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
-        fail "依赖安装失败：${missing[*]}"
-    log_info "已安装依赖：${missing[*]}"
-}
-
 validate_value() {
     local type="$1" value="$2"
     if [ "$type" = version ] && ! [[ "$value" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -135,6 +112,28 @@ validate_value() {
         log_error "PSK 无效：必须是 16 位字母数字。"
         return 1
     fi
+}
+
+require_environment() {
+    [ "${EUID:-$(id -u)}" -eq 0 ] || fail "请使用 root 权限执行。"
+    command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt 环境。"
+    command -v systemctl >/dev/null 2>&1 || fail "当前系统未提供 systemd。"
+}
+
+ensure_dependencies() {
+    local missing=()
+
+    command -v wget >/dev/null 2>&1 || missing+=(wget)
+    [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
+    command -v unzip >/dev/null 2>&1 || missing+=(unzip)
+    [ "${#missing[@]}" -eq 0 ] && return 0
+
+    log_info "正在安装缺失依赖：${missing[*]}"
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 ||
+        fail "软件包索引更新失败。"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
+        fail "依赖安装失败：${missing[*]}"
+    log_info "已安装依赖：${missing[*]}"
 }
 
 detect_arch() {
@@ -221,10 +220,6 @@ begin_transaction() {
     targets=("$SNELL_BINARY" "$SNELL_CONFIG_FILE" "$SNELL_UNIT_FILE")
     names=(binary config unit)
     TRANSACTION_DIR="$(mktemp -d)" || fail "无法创建 Snell 事务目录。"
-    chmod 700 "$TRANSACTION_DIR" || {
-        rm -rf "$TRANSACTION_DIR"
-        fail "无法保护 Snell 事务目录。"
-    }
     if systemctl is-active --quiet snell 2>/dev/null; then
         SERVICE_WAS_ACTIVE=1
     else
@@ -242,7 +237,6 @@ begin_transaction() {
             rm -rf "$TRANSACTION_DIR"
             fail "无法备份 Snell 当前状态。"
         }
-        : > "${TRANSACTION_DIR}/${names[$index]}.exists"
     done
     TRANSACTION_ACTIVE=1
     trap rollback_transaction EXIT
@@ -255,7 +249,7 @@ rollback_transaction() {
     targets=("$SNELL_BINARY" "$SNELL_CONFIG_FILE" "$SNELL_UNIT_FILE")
     names=(binary config unit)
     for index in "${!targets[@]}"; do
-        if [ -e "${TRANSACTION_DIR}/${names[$index]}.exists" ]; then
+        if [ -e "${TRANSACTION_DIR}/${names[$index]}" ]; then
             if ! mkdir -p "$(dirname "${targets[$index]}")" ||
                ! cp -a "${TRANSACTION_DIR}/${names[$index]}" "${targets[$index]}"; then
                 restore_failed=1
@@ -272,7 +266,10 @@ rollback_transaction() {
         systemctl disable snell >/dev/null 2>&1 || restore_failed=1
     fi
     if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
-        systemctl restart snell >/dev/null 2>&1 || restore_failed=1
+        if ! systemctl restart snell >/dev/null 2>&1 ||
+           ! systemctl is-active --quiet snell 2>/dev/null; then
+            restore_failed=1
+        fi
     elif systemctl is-active --quiet snell 2>/dev/null; then
         systemctl stop snell >/dev/null 2>&1 || restore_failed=1
     fi
@@ -406,42 +403,13 @@ converge_service() {
                 log_error "Snell 重启失败，请执行：journalctl -u snell --no-pager"
                 return 1
             }
-            log_info "已重启系统服务：snell.service"
         fi
     else
         systemctl start snell >/dev/null 2>&1 || {
             log_error "Snell 启动失败，请执行：journalctl -u snell --no-pager"
             return 1
         }
-        log_info "已启动系统服务：snell.service"
     fi
-}
-
-verify_service() {
-    systemctl is-active --quiet snell 2>/dev/null || {
-        log_error "Snell 服务未运行，请执行：journalctl -u snell --no-pager"
-        return 1
-    }
-    ss -H -lntu 2>/dev/null | grep -Eq ":${PORT}[[:space:]]" || {
-        log_error "Snell 未监听端口：$PORT"
-        return 1
-    }
-}
-
-show_configuration() {
-    local current_version ip
-
-    current_version="$(get_current_version 2>/dev/null || printf '%s' "${VERSION:-未知}")"
-    ip="$(wget -qO- --timeout=5 --tries=2 https://api.ipify.org 2>/dev/null)" || true
-    cat <<EOF
-
-=== Snell 客户端配置 ===
-服务器：${ip:-无法获取 IP}
-端口：${PORT}
-PSK：${PSK}
-版本：${current_version}
-========================
-EOF
 }
 
 read_current_configuration() {
@@ -466,7 +434,7 @@ install_snell() {
     fi
     commit_transaction
     [ "$BINARY_CHANGED" -eq 0 ] || log_info "已安装 Snell 二进制。"
-    log_info "Snell 已启动，监听端口：$PORT"
+    log_info "Snell 已启动，服务端口：$PORT"
     show_configuration
 }
 
@@ -485,9 +453,9 @@ update_snell() {
         return 0
     fi
 
+    read_current_configuration
     begin_transaction
     download_server "$VERSION"
-    read_current_configuration
     if ! converge_service || ! verify_service; then
         if rollback_transaction; then
             fail "Snell 更新失败，已恢复旧状态。"
@@ -525,6 +493,29 @@ uninstall_snell() {
         fail "Snell 卸载验证失败。"
     fi
     log_info "Snell 已卸载。"
+}
+
+verify_service() {
+    systemctl is-active --quiet snell 2>/dev/null || {
+        log_error "Snell 服务未运行，请执行：journalctl -u snell --no-pager"
+        return 1
+    }
+}
+
+show_configuration() {
+    local current_version ip
+
+    current_version="$(get_current_version 2>/dev/null || printf '%s' "${VERSION:-未知}")"
+    ip="$(wget -qO- --timeout=5 --tries=2 https://api.ipify.org 2>/dev/null)" || true
+    cat <<EOF
+
+=== Snell 客户端配置 ===
+服务器：${ip:-无法获取 IP}
+端口：${PORT}
+PSK：${PSK}
+版本：${current_version}
+========================
+EOF
 }
 
 main() {

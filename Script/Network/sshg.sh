@@ -43,8 +43,84 @@ fail() {
     exit 1
 }
 
+show_help() {
+    cat << 'EOF'
+用法：
+  sshg.sh --apply config=ssh allow=1.2.3.4,1.2.3.0/24,example.com key='ssh-ed25519 AAAA...'
+  sshg.sh --reset config=ssh allow=1.2.3.4,example.com key='ssh-ed25519 AAAA...'
+  sshg.sh --sync
+  sshg.sh --remove
+
+动作：
+  --apply        合并指定的 SSH 配置、公钥和白名单
+  --reset        重置目标状态；未指定的配置、公钥或白名单会被移除
+  --sync         重新解析域名并刷新 nftables 规则
+  --remove       移除 sshg 托管文件和 nftables 表
+
+参数：
+  config=ssh     应用 SSH 加固配置
+  key=...        写入 root 使用的 ssh-ed25519 公钥
+  allow=...      逗号分隔的 IPv4、IPv4 CIDR 或域名
+
+兼容入口：apply、reset、sync、remove；hook 仅供 ProviderDNS 回调使用。
+EOF
+}
+
 trim() {
     printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+}
+
+validate_ipv4() {
+    local ip="$1" octet
+    local -a octets
+    [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+    IFS=. read -ra octets <<< "$ip"
+    [ "${#octets[@]}" -eq 4 ] || return 1
+    for octet in "${octets[@]}"; do
+        [ "$octet" -le 255 ] || return 1
+    done
+}
+
+ipv4_to_24_cidr() {
+    local ip="$1"
+    validate_ipv4 "$ip" || return 1
+    printf '%s.0/24\n' "${ip%.*}"
+}
+
+validate_cidr() {
+    local value="$1" ip prefix
+    case "$value" in
+        */*)
+            ip="${value%/*}"
+            prefix="${value#*/}"
+            validate_ipv4 "$ip" || return 1
+            [[ "$prefix" =~ ^[0-9]+$ ]] && [ "$prefix" -ge 0 ] && [ "$prefix" -le 32 ]
+            ;;
+        *)
+            validate_ipv4 "$value"
+            ;;
+    esac
+}
+
+validate_domain() {
+    local domain="$1"
+    [ -n "$domain" ] && [ "${#domain}" -le 253 ] &&
+        [[ "$domain" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\
+([.][A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]]
+}
+
+public_key_id() {
+    local key="$1" key_type key_body
+    case "$key" in
+        *'
+'*)
+            return 1
+            ;;
+    esac
+    read -r key_type key_body _ <<< "$key"
+    [ "$key_type" = "ssh-ed25519" ] || return 1
+    [[ "$key_body" =~ ^[A-Za-z0-9+/=]+$ ]] || return 1
+    printf '%s %s\n' "$key_type" "$key_body"
 }
 
 require_root() {
@@ -171,59 +247,6 @@ commit_transaction() {
     SSHG_TRANSACTION_DIR=""
 }
 
-validate_ipv4() {
-    local ip="$1" octet
-    local -a octets
-    [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
-    IFS=. read -ra octets <<< "$ip"
-    [ "${#octets[@]}" -eq 4 ] || return 1
-    for octet in "${octets[@]}"; do
-        [ "$octet" -le 255 ] || return 1
-    done
-}
-
-ipv4_to_24_cidr() {
-    local ip="$1"
-    validate_ipv4 "$ip" || return 1
-    printf '%s.0/24\n' "${ip%.*}"
-}
-
-validate_cidr() {
-    local value="$1" ip prefix
-    case "$value" in
-        */*)
-            ip="${value%/*}"
-            prefix="${value#*/}"
-            validate_ipv4 "$ip" || return 1
-            [[ "$prefix" =~ ^[0-9]+$ ]] && [ "$prefix" -ge 0 ] && [ "$prefix" -le 32 ]
-            ;;
-        *)
-            validate_ipv4 "$value"
-            ;;
-    esac
-}
-
-validate_domain() {
-    local domain="$1"
-    [ -n "$domain" ] && [ "${#domain}" -le 253 ] &&
-        [[ "$domain" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\
-([.][A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]]
-}
-
-public_key_id() {
-    local key="$1" key_type key_body
-    case "$key" in
-        *'
-'*)
-            return 1
-            ;;
-    esac
-    read -r key_type key_body _ <<< "$key"
-    [ "$key_type" = "ssh-ed25519" ] || return 1
-    [[ "$key_body" =~ ^[A-Za-z0-9+/=]+$ ]] || return 1
-    printf '%s %s\n' "$key_type" "$key_body"
-}
-
 key_file_has_key() {
     local file="$1" target="${2:-}" line value
     [ -s "$file" ] || return 1
@@ -289,7 +312,7 @@ sshd_has_dropin_include() {
 
 sshd_effective_config_ok() {
     local effective
-    effective="$("$1" -T 2>/dev/null)" || return 1
+    effective="$("$1" -T -C user=root,host=localhost,addr=127.0.0.1 2>/dev/null)" || return 1
     awk '
         {
             key = $1
@@ -336,7 +359,6 @@ EOF
         mv "$tmp" "$file" || fail "无法安装 SSH 配置"
         SSH_CONFIG_CHANGED=1
     fi
-    "$sshd" -t >/dev/null 2>&1 || fail "SSH 配置预检失败"
     sshd_effective_config_ok "$sshd" || fail "SSH 生效配置不符合预期"
     if [ "$SSH_CONFIG_CHANGED" = "1" ]; then
         log_info "SSH 配置已应用"
@@ -358,7 +380,10 @@ reload_ssh() {
     [ -n "$systemctl" ] || fail "未检测到 systemctl，无法重载 SSH"
     for unit in ssh.service sshd.service; do
         "$systemctl" is-active --quiet "$unit" >/dev/null 2>&1 || continue
-        "$systemctl" reload "$unit" >/dev/null 2>&1 || fail "SSH 重载失败：$unit"
+        if ! "$systemctl" reload "$unit" >/dev/null 2>&1 ||
+           ! "$systemctl" is-active --quiet "$unit" >/dev/null 2>&1; then
+            fail "SSH 重载失败：$unit"
+        fi
         log_info "SSH 已重载：$unit"
         return 0
     done
@@ -628,8 +653,7 @@ apply_nft_from_files() {
     fi
     chmod 600 "$NFT_FILE" 2>/dev/null || true
     SSHG_NFT_TOUCHED=1
-    if ! "$nft" -f "$NFT_FILE" >/dev/null 2>&1 ||
-        ! "$nft" list table inet "$NFT_TABLE" >/dev/null 2>&1; then
+    if ! "$nft" -f "$NFT_FILE" >/dev/null 2>&1; then
         rm -f "$sources"
         fail "NFT 规则应用失败"
     fi
@@ -700,7 +724,10 @@ remove_active_nft() {
     local nft tmp
     nft="$(nft_cmd 2>/dev/null || true)"
     [ -n "$nft" ] || fail "未检测到 nft，无法验证 live NFT table 已清理"
-    "$nft" list table inet "$NFT_TABLE" >/dev/null 2>&1 || return 0
+    if ! "$nft" list table inet "$NFT_TABLE" >/dev/null 2>&1; then
+        "$nft" list tables >/dev/null 2>&1 || fail "无法读取 nftables 状态"
+        return 0
+    fi
     tmp="$(mktemp /tmp/sshg-clean.XXXXXX)" || fail "无法创建 NFT 清理临时文件"
     cat > "$tmp" << EOF
 table inet ${NFT_TABLE}
@@ -712,7 +739,6 @@ EOF
         fail "live NFT table 清理失败"
     fi
     rm -f "$tmp"
-    "$nft" list table inet "$NFT_TABLE" >/dev/null 2>&1 && fail "live NFT table 清理后仍然存在"
     log_info "已删除 live NFT table：${NFT_TABLE}"
 }
 
@@ -724,24 +750,18 @@ remove_path_report() {
 }
 
 sshg_resources_exist() {
-    local nft
-    if [[ -e "$SSHD_DROPIN" || -L "$SSHD_DROPIN" || -e "$KEY_FILE" || -L "$KEY_FILE" ||
-        -e "$NFT_FILE" || -L "$NFT_FILE" || -d "$STATE_DIR" ]]; then
-        return 0
-    fi
-    nft="$(nft_cmd 2>/dev/null || true)"
-    [ -n "$nft" ] || return 1
-    "$nft" list table inet "$NFT_TABLE" >/dev/null 2>&1
+    [[ -e "$SSHD_DROPIN" || -L "$SSHD_DROPIN" || -e "$KEY_FILE" || -L "$KEY_FILE" ||
+        -e "$NFT_FILE" || -L "$NFT_FILE" || -d "$STATE_DIR" ]]
 }
 
 remove_all() {
     local rc ssh_changed=0
-    if ! sshg_resources_exist; then
+    remove_active_nft
+    if ! sshg_resources_exist && [ "$SSHG_NFT_TOUCHED" = "0" ]; then
         reconcile_sshg_dns || fail "无法取消 Provider DNS 注册"
         log_info "SSH 防护已不存在，无需移除"
         return 0
     fi
-    remove_active_nft
     if [ -e "$SSHD_DROPIN" ] || [ -L "$SSHD_DROPIN" ]; then
         ssh_changed=1
     fi
@@ -757,29 +777,6 @@ remove_all() {
     fi
     [ "$ssh_changed" = "0" ] || reload_ssh
     log_info "SSH 防护已移除"
-}
-
-show_help() {
-    cat << 'EOF'
-用法：
-  sshg.sh --apply config=ssh allow=1.2.3.4,1.2.3.0/24,example.com key='ssh-ed25519 AAAA...'
-  sshg.sh --reset config=ssh allow=1.2.3.4,example.com key='ssh-ed25519 AAAA...'
-  sshg.sh --sync
-  sshg.sh --remove
-
-动作：
-  --apply        合并指定的 SSH 配置、公钥和白名单
-  --reset        重置目标状态；未指定的配置、公钥或白名单会被移除
-  --sync         重新解析域名并刷新 nftables 规则
-  --remove       移除 sshg 托管文件和 nftables 表
-
-参数：
-  config=ssh     应用 SSH 加固配置
-  key=...        写入 root 使用的 ssh-ed25519 公钥
-  allow=...      逗号分隔的 IPv4、IPv4 CIDR 或域名
-
-兼容入口：apply、reset、sync、remove；hook 仅供 ProviderDNS 回调使用。
-EOF
 }
 
 main() {

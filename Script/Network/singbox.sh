@@ -163,69 +163,6 @@ install_arguments_present() {
         [ -n "$SS_PORT$SS_PASSWORD$SOCKS_HOST$SOCKS_PORT$SINGBOX_VERSION" ]
 }
 
-require_environment() {
-    [ "${EUID:-$(id -u)}" -eq 0 ] || fail "请使用 root 权限执行。"
-    command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt 环境。"
-    command -v systemctl >/dev/null 2>&1 || fail "当前系统未提供 systemd。"
-}
-
-ensure_dependencies() {
-    local missing=()
-    command -v wget >/dev/null 2>&1 || missing+=(wget)
-    [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
-    command -v jq >/dev/null 2>&1 || missing+=(jq)
-    command -v dpkg-deb >/dev/null 2>&1 || missing+=(dpkg)
-    command -v openssl >/dev/null 2>&1 || missing+=(openssl)
-    command -v shuf >/dev/null 2>&1 || missing+=(coreutils)
-    command -v ss >/dev/null 2>&1 || missing+=(iproute2)
-    dpkg-query -W -f='${db:Status-Abbrev}' systemd-timesyncd 2>/dev/null | grep -q '^ii ' ||
-        missing+=(systemd-timesyncd)
-    [ "${#missing[@]}" -eq 0 ] && return 0
-    log_info "正在安装缺失依赖：${missing[*]}"
-    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || fail "软件包索引更新失败。"
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
-        fail "依赖安装失败：${missing[*]}"
-    log_info "已安装依赖：${missing[*]}"
-}
-
-ensure_time_sync() {
-    local synced="" i
-    if ! systemctl is-enabled --quiet systemd-timesyncd 2>/dev/null ||
-       ! systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
-        systemctl enable --now systemd-timesyncd >/dev/null 2>&1 || fail "systemd-timesyncd 启动失败。"
-        log_info "已启用系统服务：systemd-timesyncd.service"
-    fi
-    for ((i=0; i<30; i++)); do
-        synced="$(timedatectl show --property=NTPSynchronized --value 2>/dev/null || true)"
-        [ "$synced" = yes ] && return 0
-        sleep 2
-    done
-    fail "systemd-timesyncd 已运行，但时间尚未同步。"
-}
-
-detect_arch() {
-    case "$(uname -m)" in
-        x86_64)
-            ARCH=amd64
-            ;;
-        x86|i386|i686)
-            ARCH=386
-            ;;
-        aarch64|arm64)
-            ARCH=arm64
-            ;;
-        armv7l)
-            ARCH=armv7
-            ;;
-        s390x)
-            ARCH=s390x
-            ;;
-        *)
-            fail "不支持的系统架构：$(uname -m)"
-            ;;
-    esac
-}
-
 parse_protocols() {
     local protocol protocol_items=()
     [ -n "$PROTOCOLS" ] || fail "缺少 --protocol。"
@@ -269,15 +206,83 @@ validate_protocol_scope() {
     fi
 }
 
-port_in_use() {
-    ss -H -lntu 2>/dev/null | grep -Eq ":${1}[[:space:]]"
-}
-
 validate_port() {
     if ! [[ "$1" =~ ^[0-9]+$ ]] || (( 10#$1 < 1 || 10#$1 > 65535 )); then
         log_error "$2 端口无效：$1"
         return 1
     fi
+}
+
+require_environment() {
+    [ "${EUID:-$(id -u)}" -eq 0 ] || fail "请使用 root 权限执行。"
+    command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt 环境。"
+    command -v systemctl >/dev/null 2>&1 || fail "当前系统未提供 systemd。"
+}
+
+ensure_dependencies() {
+    local missing=()
+    command -v wget >/dev/null 2>&1 || missing+=(wget)
+    [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
+    command -v jq >/dev/null 2>&1 || missing+=(jq)
+    command -v dpkg-deb >/dev/null 2>&1 || missing+=(dpkg)
+    command -v openssl >/dev/null 2>&1 || missing+=(openssl)
+    command -v shuf >/dev/null 2>&1 || missing+=(coreutils)
+    command -v ss >/dev/null 2>&1 || missing+=(iproute2)
+    dpkg-query -W -f='${db:Status-Abbrev}' systemd-timesyncd 2>/dev/null | grep -q '^ii ' ||
+        missing+=(systemd-timesyncd)
+    [ "${#missing[@]}" -eq 0 ] && return 0
+    log_info "正在安装缺失依赖：${missing[*]}"
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || fail "软件包索引更新失败。"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
+        fail "依赖安装失败：${missing[*]}"
+    log_info "已安装依赖：${missing[*]}"
+}
+
+ensure_time_sync() {
+    local synced="" i
+    synced="$(timedatectl show --property=NTPSynchronized --value 2>/dev/null || true)"
+    [ "$synced" != yes ] || return 0
+    if ! systemctl is-enabled --quiet systemd-timesyncd 2>/dev/null ||
+       ! systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
+        if ! systemctl enable --now systemd-timesyncd >/dev/null 2>&1 ||
+           ! systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
+            fail "systemd-timesyncd 启动失败。"
+        fi
+        log_info "已启用系统服务：systemd-timesyncd.service"
+    fi
+    for ((i=0; i<30; i++)); do
+        synced="$(timedatectl show --property=NTPSynchronized --value 2>/dev/null || true)"
+        [ "$synced" = yes ] && return 0
+        sleep 2
+    done
+    fail "systemd-timesyncd 已运行，但时间尚未同步。"
+}
+
+detect_arch() {
+    case "$(uname -m)" in
+        x86_64)
+            ARCH=amd64
+            ;;
+        x86|i386|i686)
+            ARCH=386
+            ;;
+        aarch64|arm64)
+            ARCH=arm64
+            ;;
+        armv7l)
+            ARCH=armv7
+            ;;
+        s390x)
+            ARCH=s390x
+            ;;
+        *)
+            fail "不支持的系统架构：$(uname -m)"
+            ;;
+    esac
+}
+
+port_in_use() {
+    ss -H -lntu 2>/dev/null | grep -Eq ":${1}[[:space:]]"
 }
 
 port_is_reserved() {
@@ -664,7 +669,6 @@ begin_transaction() {
             rm -rf "$TRANSACTION_DIR"
             fail "无法备份 sing-box 配置。"
         }
-        : > "${TRANSACTION_DIR}/config.exists"
     fi
     TRANSACTION_ACTIVE=1
     trap rollback_transaction EXIT
@@ -674,7 +678,7 @@ rollback_transaction() {
     local restore_failed=0 restore_candidate=""
 
     [ "$TRANSACTION_ACTIVE" -eq 1 ] || return 0
-    if [ -e "${TRANSACTION_DIR}/config.exists" ]; then
+    if [ -e "${TRANSACTION_DIR}/config" ]; then
         mkdir -p "$(dirname "$SINGBOX_CONFIG_FILE")" || restore_failed=1
         restore_candidate="$(mktemp "$(dirname "$SINGBOX_CONFIG_FILE")/.config.restore.XXXXXX")" ||
             restore_failed=1
@@ -694,7 +698,10 @@ rollback_transaction() {
         systemctl disable sing-box >/dev/null 2>&1 || restore_failed=1
     fi
     if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
-        systemctl restart sing-box >/dev/null 2>&1 || restore_failed=1
+        if ! systemctl restart sing-box >/dev/null 2>&1 ||
+           ! systemctl is-active --quiet sing-box 2>/dev/null; then
+            restore_failed=1
+        fi
     elif systemctl is-active --quiet sing-box 2>/dev/null; then
         systemctl stop sing-box >/dev/null 2>&1 || restore_failed=1
     fi
@@ -730,61 +737,13 @@ converge_service() {
                 log_error "sing-box 重启失败。"
                 return 1
             fi
-            log_info "已重启系统服务：sing-box.service"
         fi
     else
         if ! systemctl start sing-box >/dev/null 2>&1; then
             log_error "sing-box 启动失败。"
             return 1
         fi
-        log_info "已启动系统服务：sing-box.service"
     fi
-}
-
-port_listening() {
-    ss -H -lntu 2>/dev/null | grep -Eq ":${1}[[:space:]]"
-}
-
-verify_service() {
-    if ! systemctl is-active --quiet sing-box 2>/dev/null; then
-        log_error "sing-box 服务未运行。"
-        return 1
-    fi
-    if [ "$SHADOWTLS_ENABLED" -eq 1 ] && ! port_listening "$SHADOWTLS_PORT"; then
-        log_error "ShadowTLS 未监听端口：$SHADOWTLS_PORT"
-        return 1
-    fi
-    if [ "$ANYTLS_ENABLED" -eq 1 ] && ! port_listening "$ANYTLS_PORT"; then
-        log_error "AnyTLS 未监听端口：$ANYTLS_PORT"
-        return 1
-    fi
-    if [ "$SS_ENABLED" -eq 1 ] && ! port_listening "$SS_PORT"; then
-        log_error "Shadowsocks 未监听端口：$SS_PORT"
-        return 1
-    fi
-}
-
-show_configuration() {
-    local ip
-
-    ip="$(wget -qO- --timeout=5 --tries=2 https://api.ipify.org 2>/dev/null)" || true
-    printf '\n=== sing-box 客户端配置 ===\n服务器：%s\n' "${ip:-无法获取 IP}"
-    if [ "$SHADOWTLS_ENABLED" -eq 1 ]; then
-        printf 'ShadowTLS 端口：%s\nShadowTLS 密码：%s\nShadowTLS 域名：%s\n' \
-            "$SHADOWTLS_PORT" "$SHADOWTLS_PASSWORD" "$SHADOWTLS_DOMAIN"
-    fi
-    if [ "$ANYTLS_ENABLED" -eq 1 ]; then
-        printf 'AnyTLS 端口：%s\nAnyTLS 密码：%s\nAnyTLS 域名：%s\n证书模式：%s\n' \
-            "$ANYTLS_PORT" "$ANYTLS_PASSWORD" "$ANYTLS_DOMAIN" "$ANYTLS_CERT_MODE"
-    fi
-    if [ "$SS_ENABLED" -eq 1 ]; then
-        printf 'Shadowsocks 端口：%s\nShadowsocks 密码：%s\n加密：%s\n' \
-            "$SS_PORT" "$SS_PASSWORD" "$SS_METHOD"
-    fi
-    if [ "$SOCKS_ENABLED" -eq 1 ]; then
-        printf 'Socks：%s:%s\n规则集：%s\n' "$SOCKS_HOST" "$SOCKS_PORT" "$SOCKS_RULESET_URL"
-    fi
-    printf '===========================\n'
 }
 
 install_singbox() {
@@ -825,7 +784,7 @@ update_singbox() {
     fi
     begin_transaction
     install_package_version "$latest"
-    if ! converge_service || ! verify_existing_listeners; then
+    if ! converge_service || ! verify_service; then
         if rollback_transaction; then
             fail "sing-box 更新后服务验证失败，服务状态已恢复；新软件包保留。"
         fi
@@ -835,31 +794,8 @@ update_singbox() {
     log_info "sing-box 已更新：${current} -> ${latest#v}"
 }
 
-verify_existing_listeners() {
-    if ! systemctl is-active --quiet sing-box 2>/dev/null; then
-        log_error "sing-box 服务未运行。"
-        return 1
-    fi
-    local port
-    while IFS= read -r port; do
-        if ! port_listening "$port"; then
-            log_error "sing-box 未监听端口：$port"
-            return 1
-        fi
-    done < <(jq -r '.inbounds[].listen_port' "$SINGBOX_CONFIG_FILE")
-}
-
 package_known() {
     dpkg-query -W -f='${db:Status-Abbrev}' sing-box 2>/dev/null | grep -q '^ii '
-}
-
-verify_uninstalled() {
-    if systemctl is-active --quiet sing-box 2>/dev/null ||
-       systemctl cat sing-box.service >/dev/null 2>&1 ||
-       package_known || [ -e "$SINGBOX_CONFIG_FILE" ] ||
-       [ -e "$SINGBOX_STATE_DIR" ] || [ -e "$SINGBOX_BINARY" ]; then
-        fail "sing-box 卸载验证失败。"
-    fi
 }
 
 uninstall_singbox() {
@@ -890,6 +826,45 @@ uninstall_singbox() {
     systemctl reset-failed sing-box >/dev/null 2>&1 || true
     verify_uninstalled
     log_info "sing-box 已卸载。"
+}
+
+verify_service() {
+    if ! systemctl is-active --quiet sing-box 2>/dev/null; then
+        log_error "sing-box 服务未运行。"
+        return 1
+    fi
+}
+
+verify_uninstalled() {
+    if systemctl is-active --quiet sing-box 2>/dev/null ||
+       systemctl cat sing-box.service >/dev/null 2>&1 ||
+       package_known || [ -e "$SINGBOX_CONFIG_FILE" ] ||
+       [ -e "$SINGBOX_STATE_DIR" ] || [ -e "$SINGBOX_BINARY" ]; then
+        fail "sing-box 卸载验证失败。"
+    fi
+}
+
+show_configuration() {
+    local ip
+
+    ip="$(wget -qO- --timeout=5 --tries=2 https://api.ipify.org 2>/dev/null)" || true
+    printf '\n=== sing-box 客户端配置 ===\n服务器：%s\n' "${ip:-无法获取 IP}"
+    if [ "$SHADOWTLS_ENABLED" -eq 1 ]; then
+        printf 'ShadowTLS 端口：%s\nShadowTLS 密码：%s\nShadowTLS 域名：%s\n' \
+            "$SHADOWTLS_PORT" "$SHADOWTLS_PASSWORD" "$SHADOWTLS_DOMAIN"
+    fi
+    if [ "$ANYTLS_ENABLED" -eq 1 ]; then
+        printf 'AnyTLS 端口：%s\nAnyTLS 密码：%s\nAnyTLS 域名：%s\n证书模式：%s\n' \
+            "$ANYTLS_PORT" "$ANYTLS_PASSWORD" "$ANYTLS_DOMAIN" "$ANYTLS_CERT_MODE"
+    fi
+    if [ "$SS_ENABLED" -eq 1 ]; then
+        printf 'Shadowsocks 端口：%s\nShadowsocks 密码：%s\n加密：%s\n' \
+            "$SS_PORT" "$SS_PASSWORD" "$SS_METHOD"
+    fi
+    if [ "$SOCKS_ENABLED" -eq 1 ]; then
+        printf 'Socks：%s:%s\n规则集：%s\n' "$SOCKS_HOST" "$SOCKS_PORT" "$SOCKS_RULESET_URL"
+    fi
+    printf '===========================\n'
 }
 
 main() {

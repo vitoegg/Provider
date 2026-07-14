@@ -85,6 +85,13 @@ parse_args() {
     fi
 }
 
+validate_port() {
+    if ! [[ "$1" =~ ^[0-9]+$ ]] || (( 10#$1 < 1 || 10#$1 > 65535 )); then
+        log_error "Shadowsocks 端口无效：$1"
+        return 1
+    fi
+}
+
 require_environment() {
     [ "${EUID:-$(id -u)}" -eq 0 ] || fail "请使用 root 权限执行。"
     command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt 环境。"
@@ -115,9 +122,14 @@ ensure_dependencies() {
 
 ensure_time_sync() {
     local synced i
+    synced="$(timedatectl show --property=NTPSynchronized --value 2>/dev/null || true)"
+    [ "$synced" != yes ] || return 0
     if ! systemctl is-enabled --quiet systemd-timesyncd 2>/dev/null ||
        ! systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
-        systemctl enable --now systemd-timesyncd >/dev/null 2>&1 || fail "systemd-timesyncd 启动失败。"
+        if ! systemctl enable --now systemd-timesyncd >/dev/null 2>&1 ||
+           ! systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
+            fail "systemd-timesyncd 启动失败。"
+        fi
         log_info "已启用系统服务：systemd-timesyncd.service"
     fi
     for ((i=0; i<30; i++)); do
@@ -141,13 +153,6 @@ detect_arch() {
         printf 'x86_64\n'
     else
         fail "不支持的系统架构：$arch"
-    fi
-}
-
-validate_port() {
-    if ! [[ "$1" =~ ^[0-9]+$ ]] || (( 10#$1 < 1 || 10#$1 > 65535 )); then
-        log_error "Shadowsocks 端口无效：$1"
-        return 1
     fi
 }
 
@@ -269,7 +274,6 @@ begin_transaction() {
             rm -rf "$TRANSACTION_DIR"
             fail "无法备份 Shadowsocks 当前状态。"
         }
-        : > "${TRANSACTION_DIR}/${names[$index]}.exists"
     done
     TRANSACTION_ACTIVE=1
     trap rollback_transaction EXIT
@@ -281,7 +285,7 @@ rollback_transaction() {
     targets=("$SS_BINARY" "$SS_CONFIG_FILE" "$SS_UNIT_FILE")
     names=(binary config unit)
     for index in "${!targets[@]}"; do
-        if [ -e "${TRANSACTION_DIR}/${names[$index]}.exists" ]; then
+        if [ -e "${TRANSACTION_DIR}/${names[$index]}" ]; then
             if ! mkdir -p "$(dirname "${targets[$index]}")" ||
                ! cp -a "${TRANSACTION_DIR}/${names[$index]}" "${targets[$index]}"; then
                 restore_failed=1
@@ -297,7 +301,10 @@ rollback_transaction() {
         systemctl disable shadowsocks.service >/dev/null 2>&1 || restore_failed=1
     fi
     if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
-        systemctl restart shadowsocks.service >/dev/null 2>&1 || restore_failed=1
+        if ! systemctl restart shadowsocks.service >/dev/null 2>&1 ||
+           ! systemctl is-active --quiet shadowsocks.service 2>/dev/null; then
+            restore_failed=1
+        fi
     elif systemctl is-active --quiet shadowsocks.service 2>/dev/null; then
         systemctl stop shadowsocks.service >/dev/null 2>&1 || restore_failed=1
     fi
@@ -375,44 +382,13 @@ converge_service() {
                 log_error "Shadowsocks 重启失败。"
                 return 1
             }
-            log_info "已重启系统服务：shadowsocks.service"
         fi
     else
         systemctl start shadowsocks.service >/dev/null 2>&1 || {
             log_error "Shadowsocks 启动失败。"
             return 1
         }
-        log_info "已启动系统服务：shadowsocks.service"
     fi
-}
-
-verify_service() {
-    systemctl is-active --quiet shadowsocks.service 2>/dev/null || {
-        log_error "Shadowsocks 服务未运行。"
-        return 1
-    }
-    ss -H -lnt 2>/dev/null | grep -Eq ":${SS_PORT}[[:space:]]" || {
-        log_error "Shadowsocks 未监听 TCP 端口：$SS_PORT"
-        return 1
-    }
-    ss -H -lnu 2>/dev/null | grep -Eq ":${SS_PORT}[[:space:]]" || {
-        log_error "Shadowsocks 未监听 UDP 端口：$SS_PORT"
-        return 1
-    }
-}
-
-show_configuration() {
-    local ip
-    ip="$(wget -qO- --timeout=5 --tries=2 https://api.ipify.org 2>/dev/null)" || true
-    cat <<EOF
-
-=== Shadowsocks 客户端配置 ===
-服务器：${ip:-无法获取 IP}
-端口：${SS_PORT}
-密码：${SS_PASSWORD}
-加密：${SS_METHOD}
-==============================
-EOF
 }
 
 read_current_configuration() {
@@ -450,7 +426,7 @@ install_shadowsocks() {
     trap - EXIT
     rm -rf "$TRANSACTION_DIR" || log_warning "Shadowsocks 事务临时目录清理失败：$TRANSACTION_DIR"
     [ "$BINARY_CHANGED" -eq 0 ] || log_info "已安装 Shadowsocks 二进制。"
-    log_info "Shadowsocks 已启动，监听端口：$SS_PORT"
+    log_info "Shadowsocks 已启动，服务端口：$SS_PORT"
     show_configuration
 }
 
@@ -504,6 +480,27 @@ uninstall_shadowsocks() {
         fail "Shadowsocks 卸载验证失败。"
     fi
     log_info "Shadowsocks 已卸载。"
+}
+
+verify_service() {
+    systemctl is-active --quiet shadowsocks.service 2>/dev/null || {
+        log_error "Shadowsocks 服务未运行。"
+        return 1
+    }
+}
+
+show_configuration() {
+    local ip
+    ip="$(wget -qO- --timeout=5 --tries=2 https://api.ipify.org 2>/dev/null)" || true
+    cat <<EOF
+
+=== Shadowsocks 客户端配置 ===
+服务器：${ip:-无法获取 IP}
+端口：${SS_PORT}
+密码：${SS_PASSWORD}
+加密：${SS_METHOD}
+==============================
+EOF
 }
 
 main() {

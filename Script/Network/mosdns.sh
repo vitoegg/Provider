@@ -138,33 +138,8 @@ download() {
 }
 
 udp53_listeners() {
-    ss -H -lunp 2>/dev/null |
+    ss -H -lun 2>/dev/null |
         awk '$4 ~ /(^|\[::\]|0\.0\.0\.0|127\.0\.0\.1|\*):53$/ { print }'
-}
-
-set_dns() {
-    local mode="$1" candidate content message
-    candidate="$(mktemp "${RESOLV_CONF}.tmp.XXXXXX")" || fail "无法创建 DNS 候选配置"
-    if [ "$mode" = "local" ]; then
-        content=$'nameserver 127.0.0.1\n'
-        message="已将系统 DNS 设置为 127.0.0.1"
-    else
-        content="$PUBLIC_DNS"
-        message="已恢复公共 DNS：8.8.8.8、1.1.1.1"
-    fi
-    printf '%s' "$content" > "$candidate" || fail "无法生成 DNS 候选配置"
-    chattr -i "$RESOLV_CONF" 2>/dev/null || true
-    if cmp -s "$candidate" "$RESOLV_CONF" 2>/dev/null; then
-        rm -f "$candidate"
-        [ "$mode" != "local" ] || chattr +i "$RESOLV_CONF" 2>/dev/null || true
-        return 0
-    fi
-    if ! chmod 644 "$candidate" || ! mv -f "$candidate" "$RESOLV_CONF"; then
-        rm -f "$candidate"
-        fail "无法更新系统 DNS"
-    fi
-    [ "$mode" != "local" ] || chattr +i "$RESOLV_CONF" 2>/dev/null || true
-    log_info "$message"
 }
 
 install_binary() {
@@ -339,13 +314,42 @@ write_config() {
     CONFIG_CHANGED=1
 }
 
+set_dns() {
+    local mode="$1" candidate content message
+    candidate="$(mktemp "${RESOLV_CONF}.tmp.XXXXXX")" || fail "无法创建 DNS 候选配置"
+    if [ "$mode" = "local" ]; then
+        content=$'nameserver 127.0.0.1\n'
+        message="已将系统 DNS 设置为 127.0.0.1"
+    else
+        content="$PUBLIC_DNS"
+        message="已恢复公共 DNS：8.8.8.8、1.1.1.1"
+    fi
+    printf '%s' "$content" > "$candidate" || fail "无法生成 DNS 候选配置"
+    chattr -i "$RESOLV_CONF" 2>/dev/null || true
+    if cmp -s "$candidate" "$RESOLV_CONF" 2>/dev/null; then
+        rm -f "$candidate"
+        [ "$mode" != "local" ] || chattr +i "$RESOLV_CONF" 2>/dev/null || true
+        return 0
+    fi
+    if ! chmod 644 "$candidate" || ! mv -f "$candidate" "$RESOLV_CONF"; then
+        rm -f "$candidate"
+        fail "无法更新系统 DNS"
+    fi
+    [ "$mode" != "local" ] || chattr +i "$RESOLV_CONF" 2>/dev/null || true
+    log_info "$message"
+}
+
 apply_mosdns() {
-    local restart_needed=0
+    local restart_needed=0 service_exists=0
     ensure_dependencies
-    if ! systemctl cat "$SERVICE" >/dev/null 2>&1 || [ ! -x "$BIN" ]; then
+    systemctl cat "$SERVICE" >/dev/null 2>&1 && service_exists=1
+    if [ "$service_exists" -eq 0 ]; then
         [ -z "$(udp53_listeners)" ] || fail "53 端口已被其他 DNS 服务占用"
+    fi
+    if [ "$service_exists" -eq 0 ] || [ ! -x "$BIN" ]; then
         log_info "正在安装 MosDNS"
         install_binary
+        restart_needed=1
     fi
     download_domain_rules
     write_config
@@ -353,7 +357,7 @@ apply_mosdns() {
         ! systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
         restart_needed=1
     fi
-    if systemctl cat "$SERVICE" >/dev/null 2>&1; then
+    if [ "$service_exists" -eq 1 ]; then
         if [ "$restart_needed" -eq 1 ]; then
             systemctl restart "$SERVICE" >/dev/null 2>&1 ||
                 fail "MosDNS 启动失败，请执行：journalctl -u ${SERVICE} --no-pager"
@@ -366,12 +370,10 @@ apply_mosdns() {
         systemctl enable "$SERVICE" >/dev/null 2>&1 || fail "无法启用 MosDNS 服务"
         log_info "已启用系统服务：${SERVICE}"
     fi
-    sleep 2
     systemctl is-active --quiet "$SERVICE" || fail "MosDNS 服务未运行"
-    udp53_listeners | grep -q 'mosdns' || fail "MosDNS 未持有 UDP 53 端口"
     set_dns local
     if [ "$restart_needed" -eq 1 ]; then
-        log_info "MosDNS 已启动，监听地址：127.0.0.1:53"
+        log_info "MosDNS 已启动，服务地址：127.0.0.1:53"
     else
         log_info "MosDNS 配置未变化，无需重新应用"
     fi
