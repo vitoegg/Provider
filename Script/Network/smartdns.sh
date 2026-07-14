@@ -146,7 +146,6 @@ run_installer() {
         tar -xzf smartdns.tar.gz || exit 1
         cd smartdns || exit 1
         sh -n ./install >/dev/null 2>&1 || exit 1
-        ./usr/sbin/smartdns -v >/dev/null 2>&1 || exit 1
         chmod +x ./install || exit 1
         ./install "$action" >/dev/null 2>&1 || exit 1
         if [ "$action" = "-i" ]; then

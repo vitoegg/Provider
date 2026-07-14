@@ -217,6 +217,14 @@ xray_command() {
     printf '%s\n' "$XRAY_BINARY"
 }
 
+xray_service_group() {
+    local service_user
+
+    service_user="$(systemctl show xray --property=User --value 2>/dev/null)" || return 1
+    [ -n "$service_user" ] || service_user=root
+    id -gn "$service_user"
+}
+
 run_xray_installer() {
     local temp_dir installer status
 
@@ -442,11 +450,13 @@ build_xray_config() {
 }
 
 apply_config() {
-    local directory candidate binary
+    local directory candidate binary service_group
 
     directory="$(dirname "$XRAY_CONFIG_FILE")"
     mkdir -p "$directory" || fail "无法创建 Xray 配置目录。"
-    candidate="$(mktemp "${directory}/.config.json.XXXXXX")" || fail "无法创建 Xray 候选配置。"
+    candidate="$(mktemp "${directory}/.config.XXXXXX")" || fail "无法创建 Xray 候选配置。"
+    mv "$candidate" "${candidate}.json" || fail "无法创建 Xray 候选配置。"
+    candidate="${candidate}.json"
     umask 077
     build_xray_config > "$candidate" || {
         rm -f "$candidate"
@@ -460,12 +470,23 @@ apply_config() {
         rm -f "$candidate"
         fail "Xray 配置预检失败。"
     }
+    service_group="$(xray_service_group)" || {
+        rm -f "$candidate"
+        fail "无法确定 Xray 服务组。"
+    }
+    if ! chgrp "$service_group" "$candidate" || ! chmod 640 "$candidate"; then
+        rm -f "$candidate"
+        fail "Xray 配置权限设置失败。"
+    fi
     if [ -f "$XRAY_CONFIG_FILE" ] && cmp -s "$candidate" "$XRAY_CONFIG_FILE"; then
         rm -f "$candidate"
+        if ! chgrp "$service_group" "$XRAY_CONFIG_FILE" || ! chmod 640 "$XRAY_CONFIG_FILE"; then
+            fail "Xray 配置权限设置失败。"
+        fi
         CONFIG_CHANGED=0
         return 0
     fi
-    if ! chmod 600 "$candidate" || ! mv -f "$candidate" "$XRAY_CONFIG_FILE"; then
+    if ! mv -f "$candidate" "$XRAY_CONFIG_FILE"; then
         rm -f "$candidate"
         fail "Xray 配置应用失败。"
     fi
@@ -627,6 +648,11 @@ uninstall_xray() {
 verify_service() {
     if ! systemctl is-active --quiet xray 2>/dev/null; then
         log_error "Xray 服务未运行。"
+        return 1
+    fi
+    sleep 1
+    if ! systemctl is-active --quiet xray 2>/dev/null; then
+        log_error "Xray 服务启动后退出。"
         return 1
     fi
 }

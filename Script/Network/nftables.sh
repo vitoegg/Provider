@@ -1311,8 +1311,8 @@ show_protection_status() {
     fi
     if ! has_systemctl; then
         printf '自动同步：systemctl 不可用\n'
-    elif systemctl is-enabled --quiet "$PROTECT_TIMER_NAME" &&
-        systemctl is-active --quiet "$PROTECT_TIMER_NAME"; then
+    elif systemctl is-enabled --quiet "$PROTECT_TIMER_NAME" 2>/dev/null &&
+        systemctl is-active --quiet "$PROTECT_TIMER_NAME" 2>/dev/null; then
         printf '自动同步：已启用\n'
     else
         printf '自动同步：未启用\n'
