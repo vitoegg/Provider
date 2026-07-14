@@ -16,22 +16,14 @@ DEFAULT_PORT_END=60000
 SS_METHOD="2022-blake3-aes-128-gcm"
 
 DIRECT_TAG="direct"
-WARP_TAG="warp"
-WARP_ENDPOINT_HOST="engage.cloudflareclient.com"
-WARP_ENDPOINT_PORT=2408
-WARP_MTU=1280
-WARP_ADDRESS_IPV4="172.16.0.2/32"
-WARP_ALLOWED_IP_IPV4="0.0.0.0/0"
-WARP_ALLOWED_IP_IPV6="::/0"
-WARP_PUBLIC_KEY="bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo="
-WARP_KEEPALIVE=30
-ROUTE_DOMAINS=("full:challenges.cloudflare.com" "full:stun.cloudflare.com" "domain:reddit.com")
-ROUTE_DOMAIN_DISPLAY="challenges.cloudflare.com, stun.cloudflare.com, reddit.com"
+SOCKS_TAG="proxy"
+ROUTE_DOMAINS=("domain:reddit.com" "domain:cloudflare.com")
+ROUTE_DOMAIN_DISPLAY="reddit.com, cloudflare.com"
 
 PROTOCOLS=""
 REALITY_ENABLED=0
 SS_ENABLED=0
-WARP_ENABLED=0
+SOCKS_ENABLED=0
 
 UPDATE_REQUESTED=0
 UNINSTALL_REQUESTED=0
@@ -48,8 +40,8 @@ SS_PORT=""
 SS_PORT_SET=0
 SS_PASSWORD=""
 
-WARP_KEY=""
-WARP_ADDRESS=""
+SOCKS_HOST=""
+SOCKS_PORT=""
 
 USED_PORTS=()
 
@@ -95,9 +87,9 @@ Shadowsocks:
   --ss-port PORT
   --ss-password PASSWORD
 
-WARP:
-  --warp-key KEY
-  --warp-address IPV6_CIDR  可选，提供后启用 IPv6 WARP address
+Socks:
+  --socks-host HOST
+  --socks-port PORT
 
 全局:
   --update
@@ -197,24 +189,24 @@ parse_args() {
                 SS_PASSWORD="${1#*=}"
                 shift
                 ;;
-            --warp-key)
-                WARP_KEY="$(need_value "$1" "${2:-}")"
-                WARP_ENABLED=1
+            --socks-host)
+                SOCKS_HOST="$(need_value "$1" "${2:-}")"
+                SOCKS_ENABLED=1
                 shift 2
                 ;;
-            --warp-key=*)
-                WARP_KEY="${1#*=}"
-                WARP_ENABLED=1
+            --socks-host=*)
+                SOCKS_HOST="${1#*=}"
+                SOCKS_ENABLED=1
                 shift
                 ;;
-            --warp-address)
-                WARP_ADDRESS="$(need_value "$1" "${2:-}")"
-                WARP_ENABLED=1
+            --socks-port)
+                SOCKS_PORT="$(need_value "$1" "${2:-}")"
+                SOCKS_ENABLED=1
                 shift 2
                 ;;
-            --warp-address=*)
-                WARP_ADDRESS="${1#*=}"
-                WARP_ENABLED=1
+            --socks-port=*)
+                SOCKS_PORT="${1#*=}"
+                SOCKS_ENABLED=1
                 shift
                 ;;
             --update)
@@ -541,17 +533,23 @@ prepare_shadowsocks_params() {
     fi
 }
 
-prepare_warp_params() {
-    if [[ "$WARP_ENABLED" -ne 1 ]]; then
+prepare_socks_params() {
+    if [[ "$SOCKS_ENABLED" -ne 1 ]]; then
         return 0
     fi
 
-    if [[ -z "$WARP_KEY" ]]; then
-        log_error "启用 WARP 时必须提供 --warp-key。"
+    if [[ -z "$SOCKS_HOST" ]]; then
+        log_error "启用 Socks 时必须提供 --socks-host。"
         exit 1
     fi
 
-    log_info "启用 WARP 分流: $ROUTE_DOMAIN_DISPLAY"
+    if [[ -z "$SOCKS_PORT" ]]; then
+        log_error "启用 Socks 时必须提供 --socks-port。"
+        exit 1
+    fi
+
+    validate_port "$SOCKS_PORT" "Socks"
+    log_info "启用 Socks 分流: $ROUTE_DOMAIN_DISPLAY"
 }
 
 prepare_config_params() {
@@ -559,7 +557,7 @@ prepare_config_params() {
     prepare_ports
     prepare_reality_params
     prepare_shadowsocks_params
-    prepare_warp_params
+    prepare_socks_params
     log_success "配置参数已就绪"
 }
 
@@ -652,34 +650,14 @@ build_direct_outbound() {
 EOF
 }
 
-build_warp_outbound() {
-    local addresses=("$WARP_ADDRESS_IPV4")
-    local allowed_ips=("$WARP_ALLOWED_IP_IPV4")
-    local domain_strategy="ForceIPv4"
-
-    if [[ -n "$WARP_ADDRESS" ]]; then
-        addresses+=("$WARP_ADDRESS")
-        allowed_ips+=("$WARP_ALLOWED_IP_IPV6")
-        domain_strategy="ForceIPv4v6"
-    fi
-
+build_socks_outbound() {
     cat << EOF
     {
-      "protocol": "wireguard",
-      "tag": "$WARP_TAG",
+      "protocol": "socks",
+      "tag": "$SOCKS_TAG",
       "settings": {
-        "secretKey": $(json_string "$WARP_KEY"),
-        "address": $(json_array "${addresses[@]}"),
-        "peers": [
-          {
-            "endpoint": "$(json_escape "$WARP_ENDPOINT_HOST"):$WARP_ENDPOINT_PORT",
-            "publicKey": "$WARP_PUBLIC_KEY",
-            "keepAlive": $WARP_KEEPALIVE,
-            "allowedIPs": $(json_array "${allowed_ips[@]}")
-          }
-        ],
-        "mtu": $WARP_MTU,
-        "domainStrategy": "$domain_strategy"
+        "address": $(json_string "$SOCKS_HOST"),
+        "port": $SOCKS_PORT
       }
     }
 EOF
@@ -692,8 +670,9 @@ build_routing() {
     "rules": [
       {
         "type": "field",
+        "network": "tcp",
         "domain": $(json_array "${ROUTE_DOMAINS[@]}"),
-        "outboundTag": "$WARP_TAG"
+        "outboundTag": "$SOCKS_TAG"
       }
     ]
   }
@@ -723,12 +702,12 @@ build_xray_config() {
     printf '\n  ],\n'
     printf '  "outbounds": [\n'
     build_direct_outbound
-    if [[ "$WARP_ENABLED" -eq 1 ]]; then
+    if [[ "$SOCKS_ENABLED" -eq 1 ]]; then
         printf ',\n'
-        build_warp_outbound
+        build_socks_outbound
     fi
     printf '\n  ]'
-    if [[ "$WARP_ENABLED" -eq 1 ]]; then
+    if [[ "$SOCKS_ENABLED" -eq 1 ]]; then
         printf ',\n'
         build_routing
     fi
@@ -824,7 +803,6 @@ get_ipv4_address() {
 show_configuration() {
     local server_ip
     local status
-    local warp_address_display
 
     print_header "配置详情"
     server_ip="$(get_ipv4_address)"
@@ -853,15 +831,11 @@ show_configuration() {
         printf "%-22s %s\n" "加密:" "$SS_METHOD"
     fi
 
-    if [[ "$WARP_ENABLED" -eq 1 ]]; then
-        warp_address_display="$WARP_ADDRESS_IPV4"
-        if [[ -n "$WARP_ADDRESS" ]]; then
-            warp_address_display+=", $WARP_ADDRESS"
-        fi
+    if [[ "$SOCKS_ENABLED" -eq 1 ]]; then
         echo ""
-        echo "WARP:"
+        echo "Socks:"
         printf "%-22s %s\n" "状态:" "enabled"
-        printf "%-22s %s\n" "Address:" "$warp_address_display"
+        printf "%-22s %s\n" "Server:" "$SOCKS_HOST:$SOCKS_PORT"
         printf "%-22s %s\n" "Route domains:" "$ROUTE_DOMAIN_DISPLAY"
         printf "%-22s %s\n" "Final:" "$DIRECT_TAG"
     fi

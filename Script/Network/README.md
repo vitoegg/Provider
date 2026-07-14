@@ -125,8 +125,8 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 --reality-short-id ID           Reality short id
 --ss-port PORT                  Shadowsocks 端口
 --ss-password PASSWORD          Shadowsocks 密码
---warp-key KEY                  WARP PrivateKey
---warp-address IPV6_CIDR        WARP IPv6 Address
+--socks-host HOST               Socks 服务 IP
+--socks-port PORT               Socks 服务端口
 --update                        更新 Xray
 --uninstall                     卸载 Xray
 -h, --help                      显示帮助
@@ -139,8 +139,8 @@ bash reality.sh \
   --reality-domain game.granbluefantasy.jp \
   --reality-port 52080 \
   --ss-port 51080 \
-  --warp-key WARP_KEY \
-  --warp-address 2606:4700:110:8c96:8f5b:a595:f5fe:4451/128
+  --socks-host 1.2.3.4 \
+  --socks-port 1080
 ```
 
 ## **smartdns.sh**
