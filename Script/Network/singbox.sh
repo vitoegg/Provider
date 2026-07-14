@@ -1,19 +1,14 @@
 #!/bin/bash
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-BOLD='\033[1m'
+set -o pipefail
 
+SINGBOX_BINARY="${SINGBOX_BINARY:-/usr/bin/sing-box}"
+SINGBOX_CONFIG_FILE="${SINGBOX_CONFIG_FILE:-/etc/sing-box/config.json}"
+SINGBOX_STATE_DIR="${SINGBOX_STATE_DIR:-/var/lib/sing-box}"
 DEFAULT_PORT_START=50000
 DEFAULT_PORT_END=60000
 DEFAULT_PADDING_SCHEME="stop=3|0=30-30|1=140-320|2=420-780,c,780-1400"
 SS_METHOD="2022-blake3-aes-128-gcm"
-SOCKS_TAG="proxy"
-DIRECT_TAG="direct"
-SOCKS_RULESET_TAG="pureSite"
-SOCKS_RULESET_FORMAT="source"
 SOCKS_RULESET_URL="https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/Singbox/pureSite.json"
 
 ARCH=""
@@ -22,18 +17,13 @@ SHADOWTLS_ENABLED=0
 ANYTLS_ENABLED=0
 SS_ENABLED=0
 SOCKS_ENABLED=0
-
-SINGBOX_VERSION=""
 UPDATE_REQUESTED=0
 UNINSTALL_REQUESTED=0
-
+SINGBOX_VERSION=""
 SHADOWTLS_PORT=""
-SHADOWTLS_PORT_SET=0
 SHADOWTLS_PASSWORD=""
 SHADOWTLS_DOMAIN=""
-
 ANYTLS_PORT=""
-ANYTLS_PORT_SET=0
 ANYTLS_PASSWORD=""
 ANYTLS_DOMAIN=""
 ANYTLS_SCHEME=""
@@ -41,341 +31,204 @@ ANYTLS_CERT_MODE=""
 ANYTLS_TOKEN=""
 ANYTLS_CERT_PATH=""
 ANYTLS_KEY_PATH=""
-
 SS_PORT=""
-SS_PORT_SET=0
 SS_PASSWORD=""
-
 SOCKS_HOST=""
 SOCKS_PORT=""
-
 USED_PORTS=()
+PACKAGE_CHANGED=0
+CONFIG_CHANGED=0
+TRANSACTION_DIR=""
+TRANSACTION_ACTIVE=0
+SERVICE_WAS_ACTIVE=0
+SERVICE_WAS_ENABLED=0
 
 log_info() {
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') [INFO] $*"
-}
-
-log_success() {
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') [SUCCESS] ${GREEN}$*${NC}"
+    printf '[INFO] %s\n' "$*"
 }
 
 log_warning() {
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') [WARNING] ${YELLOW}$*${NC}"
+    printf '[WARNING] %s\n' "$*" >&2
 }
 
 log_error() {
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] ${RED}$*${NC}" >&2
+    printf '[ERROR] %s\n' "$*" >&2
 }
 
-print_header() {
-    echo -e "\n${BOLD}=== $1 ===${NC}"
+fail() {
+    log_error "$*"
+    exit 1
 }
 
 show_usage() {
-    local name
-    name="$(basename "$0")"
-    cat << EOF
-用法:
-  bash ${name} --protocol LIST [OPTIONS]
+    cat <<'EOF'
+用法：
+  bash singbox.sh --protocol LIST [OPTIONS]
+  bash singbox.sh --update
+  bash singbox.sh --uninstall
 
-协议:
-  --protocol LIST  anytls、shadowsocks、shadowtls，支持逗号组合
-
-ShadowTLS:
-  --shadowtls-port PORT
-  --shadowtls-password PASSWORD
-  --shadowtls-domain DOMAIN
-
-AnyTLS:
-  --anytls-port PORT
-  --anytls-password PASS
-  --anytls-domain DOMAIN
-  --anytls-scheme SCHEME
-  --anytls-cert-mode acme|manual
-  --anytls-token TOKEN
-  --anytls-cert-path PATH
-  --anytls-key-path PATH
-
-Shadowsocks:
-  --ss-port PORT
-  --ss-password PASSWORD
-
-Socks:
-  --socks-host HOST
-  --socks-port PORT
-
-全局:
-  --version VERSION
-  --update
-  --uninstall
-  -h, --help
+协议：
+  --protocol LIST                 anytls、shadowsocks、shadowtls，支持逗号组合
+  --shadowtls-port PORT           ShadowTLS 端口
+  --shadowtls-password PASSWORD   ShadowTLS 密码
+  --shadowtls-domain DOMAIN       ShadowTLS 单域名
+  --anytls-port PORT              AnyTLS 端口
+  --anytls-password PASSWORD      AnyTLS 密码
+  --anytls-domain DOMAIN          AnyTLS 域名
+  --anytls-scheme SCHEME          AnyTLS padding scheme
+  --anytls-cert-mode acme|manual  AnyTLS 证书模式
+  --anytls-token TOKEN            Cloudflare API Token
+  --anytls-cert-path PATH         证书路径
+  --anytls-key-path PATH          私钥路径
+  --ss-port PORT                  Shadowsocks 端口
+  --ss-password PASSWORD          Shadowsocks 密码
+  --socks-host HOST               Socks 服务地址
+  --socks-port PORT               Socks 服务端口
+  --version VERSION               sing-box 版本
+  --update                        更新 sing-box
+  -u, --uninstall                 卸载 sing-box
+  -h, --help                      显示帮助
 EOF
 }
 
-cleanup_temp_files() {
-    rm -f /tmp/sing-box.deb /tmp/sing-box-update.tar.gz /tmp/sing-box-binary-backup 2>/dev/null
-    rm -rf /tmp/sing-box-update 2>/dev/null
-}
-trap cleanup_temp_files EXIT
-
-package_known() {
-    dpkg-query -W -f='${db:Status-Abbrev}' sing-box >/dev/null 2>&1
-}
-
-service_known() {
-    systemctl list-unit-files --no-legend sing-box.service 2>/dev/null | grep -q '^sing-box\.service[[:space:]]'
-}
-
-managed_state_exists() {
-    package_known || service_known || systemctl is-active --quiet sing-box 2>/dev/null ||
-        [[ -e /etc/sing-box || -e /var/lib/sing-box ]]
-}
-
-remove_path() {
-    local path="$1"
-
-    if [[ ! -e "$path" ]]; then
-        log_info "未发现: $path"
-        return 0
-    fi
-
-    rm -rf "$path" || {
-        log_error "删除失败: $path"
-        return 1
-    }
-    log_info "已删除: $path"
-}
-
-verify_uninstalled() {
-    if systemctl is-active --quiet sing-box 2>/dev/null; then
-        log_error "验证失败: sing-box 服务仍在运行"
-        return 1
-    fi
-
-    if service_known; then
-        log_error "验证失败: sing-box 服务单元仍存在"
-        return 1
-    fi
-
-    if package_known; then
-        log_error "验证失败: sing-box 包仍存在"
-        return 1
-    fi
-
-    if [[ -e /etc/sing-box ]]; then
-        log_error "验证失败: /etc/sing-box 仍存在"
-        return 1
-    fi
-
-    if [[ -e /var/lib/sing-box ]]; then
-        log_error "验证失败: /var/lib/sing-box 仍存在"
-        return 1
-    fi
-
-    if command -v sing-box >/dev/null 2>&1; then
-        log_error "验证失败: sing-box 仍在 PATH 中"
-        return 1
-    fi
-
-    log_success "验证通过: 服务、包、配置、状态目录、命令均已清理"
-}
-
-require_root() {
-    if [[ $EUID -ne 0 ]]; then
-        log_error "请使用 root 权限执行。"
-        exit 1
-    fi
-}
-
-need_value() {
-    local option="$1"
-    local value="${2:-}"
-    if [[ -z "$value" ]]; then
-        log_error "$option 缺少参数值。"
-        exit 1
-    fi
-    printf '%s' "$value"
-}
-
 parse_args() {
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --protocol)
-                PROTOCOLS="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --protocol=*)
-                PROTOCOLS="${1#*=}"
+    local option value target_name
+    local -A targets=(
+        [--protocol]=PROTOCOLS
+        [--shadowtls-port]=SHADOWTLS_PORT
+        [--shadowtls-password]=SHADOWTLS_PASSWORD
+        [--shadowtls-domain]=SHADOWTLS_DOMAIN
+        [--anytls-port]=ANYTLS_PORT
+        [--anytls-password]=ANYTLS_PASSWORD
+        [--anytls-domain]=ANYTLS_DOMAIN
+        [--anytls-scheme]=ANYTLS_SCHEME
+        [--anytls-cert-mode]=ANYTLS_CERT_MODE
+        [--anytls-token]=ANYTLS_TOKEN
+        [--anytls-cert-path]=ANYTLS_CERT_PATH
+        [--anytls-key-path]=ANYTLS_KEY_PATH
+        [--ss-port]=SS_PORT
+        [--ss-password]=SS_PASSWORD
+        [--socks-host]=SOCKS_HOST
+        [--socks-port]=SOCKS_PORT
+        [--version]=SINGBOX_VERSION
+    )
+
+    while [ "$#" -gt 0 ]; do
+        option="${1%%=*}"
+        if [[ -v "targets[$option]" ]]; then
+            if [[ "$1" == *=* ]]; then
+                value="${1#*=}"
                 shift
-                ;;
-            --shadowtls-port)
-                SHADOWTLS_PORT="$(need_value "$1" "${2:-}")"
-                SHADOWTLS_PORT_SET=1
+            else
+                if [ "$#" -le 1 ] || [[ "$2" == -* ]]; then
+                    fail "$1 缺少参数值。"
+                fi
+                value="$2"
                 shift 2
-                ;;
-            --shadowtls-port=*)
-                SHADOWTLS_PORT="${1#*=}"
-                SHADOWTLS_PORT_SET=1
-                shift
-                ;;
-            --shadowtls-password)
-                SHADOWTLS_PASSWORD="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --shadowtls-password=*)
-                SHADOWTLS_PASSWORD="${1#*=}"
-                shift
-                ;;
-            --shadowtls-domain)
-                SHADOWTLS_DOMAIN="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --shadowtls-domain=*)
-                SHADOWTLS_DOMAIN="${1#*=}"
-                shift
-                ;;
-            --anytls-port)
-                ANYTLS_PORT="$(need_value "$1" "${2:-}")"
-                ANYTLS_PORT_SET=1
-                shift 2
-                ;;
-            --anytls-port=*)
-                ANYTLS_PORT="${1#*=}"
-                ANYTLS_PORT_SET=1
-                shift
-                ;;
-            --anytls-password)
-                ANYTLS_PASSWORD="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --anytls-password=*)
-                ANYTLS_PASSWORD="${1#*=}"
-                shift
-                ;;
-            --anytls-domain)
-                ANYTLS_DOMAIN="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --anytls-domain=*)
-                ANYTLS_DOMAIN="${1#*=}"
-                shift
-                ;;
-            --anytls-scheme)
-                ANYTLS_SCHEME="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --anytls-scheme=*)
-                ANYTLS_SCHEME="${1#*=}"
-                shift
-                ;;
-            --anytls-cert-mode)
-                ANYTLS_CERT_MODE="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --anytls-cert-mode=*)
-                ANYTLS_CERT_MODE="${1#*=}"
-                shift
-                ;;
-            --anytls-token)
-                ANYTLS_TOKEN="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --anytls-token=*)
-                ANYTLS_TOKEN="${1#*=}"
-                shift
-                ;;
-            --anytls-cert-path)
-                ANYTLS_CERT_PATH="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --anytls-cert-path=*)
-                ANYTLS_CERT_PATH="${1#*=}"
-                shift
-                ;;
-            --anytls-key-path)
-                ANYTLS_KEY_PATH="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --anytls-key-path=*)
-                ANYTLS_KEY_PATH="${1#*=}"
-                shift
-                ;;
-            --ss-port)
-                SS_PORT="$(need_value "$1" "${2:-}")"
-                SS_PORT_SET=1
-                shift 2
-                ;;
-            --ss-port=*)
-                SS_PORT="${1#*=}"
-                SS_PORT_SET=1
-                shift
-                ;;
-            --ss-password)
-                SS_PASSWORD="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --ss-password=*)
-                SS_PASSWORD="${1#*=}"
-                shift
-                ;;
-            --socks-host)
-                SOCKS_HOST="$(need_value "$1" "${2:-}")"
+            fi
+            [ -n "$value" ] || fail "$option 缺少参数值。"
+            target_name="${targets[$option]}"
+            printf -v "$target_name" '%s' "$value"
+            if [[ "$option" =~ ^--socks-(host|port)$ ]]; then
                 SOCKS_ENABLED=1
-                shift 2
-                ;;
-            --socks-host=*)
-                SOCKS_HOST="${1#*=}"
-                SOCKS_ENABLED=1
-                shift
-                ;;
-            --socks-port)
-                SOCKS_PORT="$(need_value "$1" "${2:-}")"
-                SOCKS_ENABLED=1
-                shift 2
-                ;;
-            --socks-port=*)
-                SOCKS_PORT="${1#*=}"
-                SOCKS_ENABLED=1
-                shift
-                ;;
-            --version)
-                SINGBOX_VERSION="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --version=*)
-                SINGBOX_VERSION="${1#*=}"
-                shift
-                ;;
-            --update)
-                UPDATE_REQUESTED=1
-                shift
-                ;;
-            -u|--uninstall)
-                UNINSTALL_REQUESTED=1
-                shift
-                ;;
-            -h|--help)
-                show_usage
-                exit 0
-                ;;
-            *)
-                log_error "未知参数: $1"
-                show_usage
-                exit 1
-                ;;
-        esac
+            fi
+        elif [ "$1" = --update ]; then
+            UPDATE_REQUESTED=1
+            shift
+        elif [ "$1" = -u ] || [ "$1" = --uninstall ]; then
+            UNINSTALL_REQUESTED=1
+            shift
+        elif [ "$1" = -h ] || [ "$1" = --help ]; then
+            show_usage
+            exit 0
+        else
+            fail "未知参数：$1"
+        fi
     done
+
+    if (( UPDATE_REQUESTED && UNINSTALL_REQUESTED )); then
+        fail "--update 和 --uninstall 不能同时使用。"
+    fi
+    if (( UPDATE_REQUESTED || UNINSTALL_REQUESTED )); then
+        if install_arguments_present; then
+            fail "更新或卸载不能同时使用协议、配置或版本参数。"
+        fi
+    fi
+}
+
+install_arguments_present() {
+    [ -n "$PROTOCOLS$SHADOWTLS_PORT$SHADOWTLS_PASSWORD$SHADOWTLS_DOMAIN" ] ||
+        [ -n "$ANYTLS_PORT$ANYTLS_PASSWORD$ANYTLS_DOMAIN$ANYTLS_SCHEME" ] ||
+        [ -n "$ANYTLS_CERT_MODE$ANYTLS_TOKEN$ANYTLS_CERT_PATH$ANYTLS_KEY_PATH" ] ||
+        [ -n "$SS_PORT$SS_PASSWORD$SOCKS_HOST$SOCKS_PORT$SINGBOX_VERSION" ]
+}
+
+require_environment() {
+    [ "${EUID:-$(id -u)}" -eq 0 ] || fail "请使用 root 权限执行。"
+    command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt 环境。"
+    command -v systemctl >/dev/null 2>&1 || fail "当前系统未提供 systemd。"
+}
+
+ensure_dependencies() {
+    local missing=()
+    command -v wget >/dev/null 2>&1 || missing+=(wget)
+    [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
+    command -v jq >/dev/null 2>&1 || missing+=(jq)
+    command -v dpkg-deb >/dev/null 2>&1 || missing+=(dpkg)
+    command -v openssl >/dev/null 2>&1 || missing+=(openssl)
+    command -v shuf >/dev/null 2>&1 || missing+=(coreutils)
+    command -v ss >/dev/null 2>&1 || missing+=(iproute2)
+    dpkg-query -W -f='${db:Status-Abbrev}' systemd-timesyncd 2>/dev/null | grep -q '^ii ' ||
+        missing+=(systemd-timesyncd)
+    [ "${#missing[@]}" -eq 0 ] && return 0
+    log_info "正在安装缺失依赖：${missing[*]}"
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || fail "软件包索引更新失败。"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
+        fail "依赖安装失败：${missing[*]}"
+    log_info "已安装依赖：${missing[*]}"
+}
+
+ensure_time_sync() {
+    local synced="" i
+    if ! systemctl is-enabled --quiet systemd-timesyncd 2>/dev/null ||
+       ! systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
+        systemctl enable --now systemd-timesyncd >/dev/null 2>&1 || fail "systemd-timesyncd 启动失败。"
+        log_info "已启用系统服务：systemd-timesyncd.service"
+    fi
+    for ((i=0; i<30; i++)); do
+        synced="$(timedatectl show --property=NTPSynchronized --value 2>/dev/null || true)"
+        [ "$synced" = yes ] && return 0
+        sleep 2
+    done
+    fail "systemd-timesyncd 已运行，但时间尚未同步。"
+}
+
+detect_arch() {
+    case "$(uname -m)" in
+        x86_64)
+            ARCH=amd64
+            ;;
+        x86|i386|i686)
+            ARCH=386
+            ;;
+        aarch64|arm64)
+            ARCH=arm64
+            ;;
+        armv7l)
+            ARCH=armv7
+            ;;
+        s390x)
+            ARCH=s390x
+            ;;
+        *)
+            fail "不支持的系统架构：$(uname -m)"
+            ;;
+    esac
 }
 
 parse_protocols() {
-    local protocol
-
-    if [[ -z "$PROTOCOLS" ]]; then
-        log_error "缺少 --protocol。"
-        show_usage
-        exit 1
-    fi
-
+    local protocol protocol_items=()
+    [ -n "$PROTOCOLS" ] || fail "缺少 --protocol。"
     IFS=',' read -ra protocol_items <<< "$PROTOCOLS"
     for protocol in "${protocol_items[@]}"; do
         protocol="${protocol//[[:space:]]/}"
@@ -390,187 +243,62 @@ parse_protocols() {
             shadowsocks)
                 SS_ENABLED=1
                 ;;
-            "")
-                log_error "--protocol 包含空协议。"
-                exit 1
+            '')
+                fail "--protocol 包含空协议。"
                 ;;
             *)
-                log_error "不支持的协议: $protocol"
-                exit 1
+                fail "不支持的协议：$protocol"
                 ;;
         esac
     done
 }
 
 validate_protocol_scope() {
-    if [[ "$SHADOWTLS_ENABLED" -eq 0 ]]; then
-        if [[ -n "$SHADOWTLS_PORT$SHADOWTLS_PASSWORD$SHADOWTLS_DOMAIN" ]]; then
-            log_error "ShadowTLS 参数需要 --protocol shadowtls。"
-            exit 1
-        fi
-    fi
+    local anytls_options
 
-    if [[ "$ANYTLS_ENABLED" -eq 0 ]]; then
-        if [[ -n "$ANYTLS_PORT$ANYTLS_PASSWORD$ANYTLS_DOMAIN$ANYTLS_SCHEME$ANYTLS_CERT_MODE$ANYTLS_TOKEN$ANYTLS_CERT_PATH$ANYTLS_KEY_PATH" ]]; then
-            log_error "AnyTLS 参数需要 --protocol anytls。"
-            exit 1
-        fi
+    anytls_options="$ANYTLS_PORT$ANYTLS_PASSWORD$ANYTLS_DOMAIN$ANYTLS_SCHEME"
+    anytls_options+="$ANYTLS_CERT_MODE$ANYTLS_TOKEN$ANYTLS_CERT_PATH$ANYTLS_KEY_PATH"
+    if [ "$SHADOWTLS_ENABLED" -eq 0 ] && [ -n "$SHADOWTLS_PORT$SHADOWTLS_PASSWORD$SHADOWTLS_DOMAIN" ]; then
+        fail "ShadowTLS 参数需要 --protocol shadowtls。"
     fi
-
-    if [[ "$SS_ENABLED" -eq 0 ]]; then
-        if [[ -n "$SS_PORT$SS_PASSWORD" ]]; then
-            log_error "Shadowsocks 参数需要 --protocol shadowsocks。"
-            exit 1
-        fi
+    if [ "$ANYTLS_ENABLED" -eq 0 ] && [ -n "$anytls_options" ]; then
+        fail "AnyTLS 参数需要 --protocol anytls。"
+    fi
+    if [ "$SS_ENABLED" -eq 0 ] && [ -n "$SS_PORT$SS_PASSWORD" ]; then
+        fail "Shadowsocks 参数需要 --protocol shadowsocks。"
     fi
 }
 
-detect_arch() {
-    print_header "检测系统架构"
-    case "$(uname -m)" in
-        x86_64)
-            ARCH="amd64"
-            ;;
-        x86|i686|i386)
-            ARCH="386"
-            ;;
-        aarch64|arm64)
-            ARCH="arm64"
-            ;;
-        armv7l)
-            ARCH="armv7"
-            ;;
-        s390x)
-            ARCH="s390x"
-            ;;
-        *)
-            log_error "不支持的系统架构: $(uname -m)"
-            exit 1
-            ;;
-    esac
-    log_success "系统架构: $ARCH"
-}
-
-install_packages() {
-    print_header "安装依赖"
-    local packages_needed=(wget dpkg jq tar systemd-timesyncd)
-    local pkg
-
-    if ! command -v apt-get >/dev/null 2>&1; then
-        log_error "仅支持 Debian/Ubuntu apt 环境。"
-        exit 1
-    fi
-
-    log_info "更新软件源..."
-    if ! DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1; then
-        log_error "软件源更新失败。"
-        exit 1
-    fi
-
-    for pkg in "${packages_needed[@]}"; do
-        if dpkg-query -W -f='${db:Status-Abbrev}' "$pkg" 2>/dev/null | grep -q '^ii '; then
-            log_info "依赖已存在: $pkg"
-            continue
-        fi
-
-        log_info "安装依赖: $pkg"
-        if ! DEBIAN_FRONTEND=noninteractive apt-get install -y "$pkg" -qq >/dev/null 2>&1; then
-            log_error "依赖安装失败: $pkg"
-            exit 1
-        fi
-    done
-
-    log_success "依赖已就绪"
-}
-
-ensure_time_sync() {
-    print_header "时间同步"
-    local synced="" i
-
-    log_info "启动 systemd-timesyncd..."
-    if ! systemctl enable --now systemd-timesyncd >/dev/null 2>&1; then
-        log_error "systemd-timesyncd 启动失败。"
-        exit 1
-    fi
-
-    if ! systemctl is-enabled --quiet systemd-timesyncd 2>/dev/null; then
-        log_error "systemd-timesyncd 未启用。"
-        exit 1
-    fi
-
-    if ! systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
-        log_error "systemd-timesyncd 未运行。"
-        exit 1
-    fi
-
-    for i in $(seq 1 30); do
-        synced="$(timedatectl show --property=NTPSynchronized --value 2>/dev/null || true)"
-        [[ "$synced" == "yes" ]] && break
-        sleep 2
-    done
-
-    if [[ "$synced" != "yes" ]]; then
-        log_error "systemd-timesyncd 已运行，但时间尚未同步。"
-        exit 1
-    fi
-
-    log_success "systemd-timesyncd 正在运行且已同步"
-}
-
-generate_port() {
-    local start="$1"
-    local end="$2"
-    local port
-
-    while true; do
-        port="$(shuf -i "${start}-${end}" -n 1)"
-        if [[ "$port" != *4* ]]; then
-            printf '%s\n' "$port"
-            return 0
-        fi
-    done
-}
-
-port_is_used() {
-    local candidate="$1"
-    local port
-
-    for port in "${USED_PORTS[@]}"; do
-        [[ "$port" == "$candidate" ]] && return 0
-    done
-
-    return 1
+port_in_use() {
+    ss -H -lntu 2>/dev/null | grep -Eq ":${1}[[:space:]]"
 }
 
 validate_port() {
-    local port="$1"
-    local name="$2"
-
-    if ! [[ "$port" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
-        log_error "$name 端口无效: $port"
-        exit 1
+    if ! [[ "$1" =~ ^[0-9]+$ ]] || (( 10#$1 < 1 || 10#$1 > 65535 )); then
+        log_error "$2 端口无效：$1"
+        return 1
     fi
 }
 
-add_used_port() {
-    local port="$1"
-    local name="$2"
+port_is_reserved() {
+    local item
+    for item in "${USED_PORTS[@]}"; do
+        [ "$item" = "$1" ] && return 0
+    done
+    return 1
+}
 
-    validate_port "$port" "$name"
-    if port_is_used "$port"; then
-        log_error "端口冲突: $port"
-        exit 1
-    fi
-
-    USED_PORTS+=("$port")
+reserve_port() {
+    validate_port "$1" "$2" || exit 1
+    ! port_is_reserved "$1" || fail "端口冲突：$1"
+    USED_PORTS+=("$1")
 }
 
 generate_unique_port() {
     local port
-
     while true; do
-        port="$(generate_port "$DEFAULT_PORT_START" "$DEFAULT_PORT_END")"
-        if ! port_is_used "$port"; then
+        port="$(shuf -i "${DEFAULT_PORT_START}-${DEFAULT_PORT_END}" -n 1)" || fail "端口生成失败。"
+        if [[ "$port" != *4* ]] && ! port_is_reserved "$port" && ! port_in_use "$port"; then
             printf '%s\n' "$port"
             return 0
         fi
@@ -579,750 +307,605 @@ generate_unique_port() {
 
 prepare_ports() {
     USED_PORTS=()
-
-    if [[ "$SHADOWTLS_ENABLED" -eq 1 && -n "$SHADOWTLS_PORT" ]]; then
-        add_used_port "$SHADOWTLS_PORT" "ShadowTLS"
-    fi
-
-    if [[ "$ANYTLS_ENABLED" -eq 1 && -n "$ANYTLS_PORT" ]]; then
-        add_used_port "$ANYTLS_PORT" "AnyTLS"
-    fi
-
-    if [[ "$SS_ENABLED" -eq 1 && -n "$SS_PORT" ]]; then
-        add_used_port "$SS_PORT" "Shadowsocks"
-    fi
-
-    if [[ "$SHADOWTLS_ENABLED" -eq 1 && -z "$SHADOWTLS_PORT" ]]; then
+    [ "$SHADOWTLS_ENABLED" -eq 0 ] || [ -z "$SHADOWTLS_PORT" ] || reserve_port "$SHADOWTLS_PORT" ShadowTLS
+    [ "$ANYTLS_ENABLED" -eq 0 ] || [ -z "$ANYTLS_PORT" ] || reserve_port "$ANYTLS_PORT" AnyTLS
+    [ "$SS_ENABLED" -eq 0 ] || [ -z "$SS_PORT" ] || reserve_port "$SS_PORT" Shadowsocks
+    if [ "$SHADOWTLS_ENABLED" -eq 1 ] && [ -z "$SHADOWTLS_PORT" ]; then
         SHADOWTLS_PORT="$(generate_unique_port)"
-        add_used_port "$SHADOWTLS_PORT" "ShadowTLS"
-        log_info "生成 ShadowTLS 端口: $SHADOWTLS_PORT"
-    elif [[ "$SHADOWTLS_ENABLED" -eq 1 && "$SHADOWTLS_PORT_SET" -eq 1 ]]; then
-        log_info "使用指定 ShadowTLS 端口: $SHADOWTLS_PORT"
+        reserve_port "$SHADOWTLS_PORT" ShadowTLS
     fi
-
-    if [[ "$ANYTLS_ENABLED" -eq 1 && -z "$ANYTLS_PORT" ]]; then
+    if [ "$ANYTLS_ENABLED" -eq 1 ] && [ -z "$ANYTLS_PORT" ]; then
         ANYTLS_PORT="$(generate_unique_port)"
-        add_used_port "$ANYTLS_PORT" "AnyTLS"
-        log_info "生成 AnyTLS 端口: $ANYTLS_PORT"
-    elif [[ "$ANYTLS_ENABLED" -eq 1 && "$ANYTLS_PORT_SET" -eq 1 ]]; then
-        log_info "使用指定 AnyTLS 端口: $ANYTLS_PORT"
+        reserve_port "$ANYTLS_PORT" AnyTLS
     fi
-
-    if [[ "$SS_ENABLED" -eq 1 && -z "$SS_PORT" ]]; then
+    if [ "$SS_ENABLED" -eq 1 ] && [ -z "$SS_PORT" ]; then
         SS_PORT="$(generate_unique_port)"
-        add_used_port "$SS_PORT" "Shadowsocks"
-        log_info "生成 Shadowsocks 端口: $SS_PORT"
-    elif [[ "$SS_ENABLED" -eq 1 && "$SS_PORT_SET" -eq 1 ]]; then
-        log_info "使用指定 Shadowsocks 端口: $SS_PORT"
+        reserve_port "$SS_PORT" Shadowsocks
     fi
-}
-
-get_ipv4_address() {
-    local ip
-    ip="$(wget -qO- --timeout=5 --tries=2 https://api.ipify.org 2>/dev/null)"
-    if [[ -z "$ip" ]]; then
-        printf '无法获取 IP\n'
-    else
-        printf '%s\n' "$ip"
-    fi
-}
-
-get_current_version() {
-    if command -v sing-box >/dev/null 2>&1; then
-        sing-box version 2>/dev/null | head -n1 | awk '{print $3}' | sed 's/^v//'
-    fi
-}
-
-compare_versions() {
-    local version1="${1#v}"
-    local version2="${2#v}"
-    local max_parts i part1 part2
-
-    [[ "$version1" == "$version2" ]] && return 0
-
-    IFS='.' read -ra ver1_parts <<< "$version1"
-    IFS='.' read -ra ver2_parts <<< "$version2"
-    max_parts=$((${#ver1_parts[@]} > ${#ver2_parts[@]} ? ${#ver1_parts[@]} : ${#ver2_parts[@]}))
-
-    for ((i=0; i<max_parts; i++)); do
-        part1="${ver1_parts[i]:-0}"
-        part2="${ver2_parts[i]:-0}"
-        part1="$(echo "$part1" | sed 's/[^0-9].*//')"
-        part2="$(echo "$part2" | sed 's/[^0-9].*//')"
-        part1="${part1:-0}"
-        part2="${part2:-0}"
-
-        if (( part1 > part2 )); then
-            return 1
-        elif (( part1 < part2 )); then
-            return 2
-        fi
-    done
-
-    return 0
-}
-
-install_singbox() {
-    print_header "安装 sing-box"
-    local target_version
-    local download_url
-    local temp_file="/tmp/sing-box.deb"
-
-    if command -v sing-box >/dev/null 2>&1 && [[ -z "$SINGBOX_VERSION" ]]; then
-        log_info "sing-box 已存在: $(command -v sing-box)"
-        return 0
-    fi
-
-    if [[ -n "$SINGBOX_VERSION" ]]; then
-        target_version="$SINGBOX_VERSION"
-        [[ "$target_version" == v* ]] || target_version="v$target_version"
-        log_info "使用指定版本: $target_version"
-    else
-        log_info "获取最新版本..."
-        target_version="$(wget -qO- --timeout=10 --tries=3 https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null | jq -r .tag_name)"
-        if [[ -z "$target_version" || "$target_version" == "null" ]]; then
-            log_error "无法获取 sing-box 发布版本。"
-            exit 1
-        fi
-    fi
-
-    download_url="https://github.com/SagerNet/sing-box/releases/download/${target_version}/sing-box_${target_version#v}_linux_${ARCH}.deb"
-    log_info "下载 sing-box: $download_url"
-    if ! wget --no-check-certificate -q -O "$temp_file" "$download_url"; then
-        log_error "sing-box 安装包下载失败。"
-        exit 1
-    fi
-
-    log_info "安装 sing-box 包..."
-    if ! DEBIAN_FRONTEND=noninteractive dpkg -i "$temp_file" >/dev/null 2>&1; then
-        log_error "sing-box 包安装失败。"
-        exit 1
-    fi
-
-    rm -f "$temp_file"
-    log_success "sing-box 安装完成"
-}
-
-update_singbox() {
-    print_header "更新 sing-box"
-    local current_version latest_version comparison_result
-    local service_was_running=0
-    local binary_backup="/tmp/sing-box-binary-backup"
-    local temp_archive="/tmp/sing-box-update.tar.gz"
-    local temp_dir="/tmp/sing-box-update"
-    local download_url binary_file new_version
-
-    if ! command -v sing-box >/dev/null 2>&1; then
-        log_error "sing-box 未安装。"
-        return 1
-    fi
-
-    detect_arch
-    install_packages
-
-    current_version="$(get_current_version)"
-    if [[ -z "$current_version" ]]; then
-        log_error "无法获取当前 sing-box 版本。"
-        return 1
-    fi
-    log_info "当前版本: $current_version"
-
-    latest_version="$(wget -qO- --timeout=10 --tries=3 https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null | jq -r .tag_name)"
-    if [[ -z "$latest_version" || "$latest_version" == "null" ]]; then
-        log_error "无法获取最新 sing-box 版本。"
-        return 1
-    fi
-    log_info "最新版本: $latest_version"
-
-    compare_versions "$latest_version" "$current_version"
-    comparison_result=$?
-    if [[ "$comparison_result" -eq 0 ]]; then
-        log_info "sing-box 已是最新版本。"
-        return 0
-    elif [[ "$comparison_result" -eq 2 ]]; then
-        log_warning "当前版本高于最新发布版本，跳过更新。"
-        return 0
-    fi
-
-    if systemctl is-active --quiet sing-box 2>/dev/null; then
-        service_was_running=1
-        log_info "停止 sing-box 服务..."
-        if ! systemctl stop sing-box >/dev/null 2>&1; then
-            log_error "sing-box 服务停止失败。"
-            return 1
-        fi
-    fi
-
-    if [[ -f "/usr/bin/sing-box" ]]; then
-        cp "/usr/bin/sing-box" "$binary_backup" || return 1
-    fi
-
-    download_url="https://github.com/SagerNet/sing-box/releases/download/${latest_version}/sing-box-${latest_version#v}-linux-${ARCH}.tar.gz"
-    log_info "下载 sing-box 二进制: $download_url"
-    if ! wget --no-check-certificate -q -O "$temp_archive" "$download_url"; then
-        log_error "sing-box 二进制下载失败。"
-        [[ "$service_was_running" -eq 1 ]] && systemctl start sing-box >/dev/null 2>&1
-        return 1
-    fi
-
-    mkdir -p "$temp_dir"
-    if ! tar -xzf "$temp_archive" -C "$temp_dir" >/dev/null 2>&1; then
-        log_error "sing-box 压缩包解压失败。"
-        [[ "$service_was_running" -eq 1 ]] && systemctl start sing-box >/dev/null 2>&1
-        return 1
-    fi
-
-    binary_file="$(find "$temp_dir" -name "sing-box" -type f | head -n1)"
-    if [[ -z "$binary_file" ]]; then
-        log_error "压缩包内未找到 sing-box 二进制。"
-        [[ "$service_was_running" -eq 1 ]] && systemctl start sing-box >/dev/null 2>&1
-        return 1
-    fi
-
-    if ! cp "$binary_file" "/usr/bin/sing-box"; then
-        log_error "sing-box 二进制替换失败。"
-        [[ -f "$binary_backup" ]] && cp "$binary_backup" "/usr/bin/sing-box"
-        [[ "$service_was_running" -eq 1 ]] && systemctl start sing-box >/dev/null 2>&1
-        return 1
-    fi
-
-    chmod +x "/usr/bin/sing-box" >/dev/null 2>&1
-    new_version="$(get_current_version)"
-    if [[ "$new_version" != "${latest_version#v}" ]]; then
-        log_error "版本校验失败，期望 ${latest_version#v}，实际 $new_version。"
-        return 1
-    fi
-
-    cleanup_temp_files
-    if [[ "$service_was_running" -eq 1 ]]; then
-        systemctl start sing-box >/dev/null 2>&1 || return 1
-    fi
-
-    log_success "sing-box 已更新: $current_version -> $new_version"
 }
 
 generate_password() {
-    local password
-
-    password="$(sing-box generate rand --base64 16 2>/dev/null)"
-    if [[ -z "$password" ]]; then
-        log_error "密码生成失败。"
-        exit 1
-    fi
-
-    printf '%s\n' "$password"
+    openssl rand -base64 16 || fail "密码生成失败。"
 }
 
 prepare_shadowtls_params() {
-    if [[ "$SHADOWTLS_ENABLED" -ne 1 ]]; then
-        return 0
-    fi
-
-    if [[ -z "$SHADOWTLS_DOMAIN" ]]; then
-        log_error "启用 ShadowTLS 时必须提供 --shadowtls-domain。"
-        exit 1
-    fi
-
+    [ "$SHADOWTLS_ENABLED" -eq 1 ] || return 0
+    [ -n "$SHADOWTLS_DOMAIN" ] || fail "启用 ShadowTLS 时必须提供 --shadowtls-domain。"
     if [[ "$SHADOWTLS_DOMAIN" == *,* || "$SHADOWTLS_DOMAIN" =~ [[:space:]] ]]; then
-        log_error "ShadowTLS 只支持单个域名: $SHADOWTLS_DOMAIN"
-        exit 1
+        fail "ShadowTLS 只支持单个域名。"
     fi
-
-    if [[ -z "$SHADOWTLS_PASSWORD" ]]; then
-        SHADOWTLS_PASSWORD="$(generate_password)"
-        log_info "生成 ShadowTLS 密码"
-    else
-        log_info "使用指定 ShadowTLS 密码"
-    fi
+    [ -n "$SHADOWTLS_PASSWORD" ] || SHADOWTLS_PASSWORD="$(generate_password)"
 }
 
 prepare_anytls_params() {
-    if [[ "$ANYTLS_ENABLED" -ne 1 ]]; then
-        return 0
-    fi
-
-    if [[ -z "$ANYTLS_PASSWORD" ]]; then
-        ANYTLS_PASSWORD="$(generate_password)"
-        log_info "生成 AnyTLS 密码"
-    else
-        log_info "使用指定 AnyTLS 密码"
-    fi
-
-    if [[ -z "$ANYTLS_DOMAIN" ]]; then
-        log_error "启用 AnyTLS 时必须提供 --anytls-domain。"
-        exit 1
-    fi
-
-    if [[ -z "$ANYTLS_CERT_MODE" ]]; then
-        if [[ -n "$ANYTLS_CERT_PATH$ANYTLS_KEY_PATH" ]]; then
-            ANYTLS_CERT_MODE="manual"
-        elif [[ -n "$ANYTLS_TOKEN" ]]; then
-            ANYTLS_CERT_MODE="acme"
+    [ "$ANYTLS_ENABLED" -eq 1 ] || return 0
+    [ -n "$ANYTLS_PASSWORD" ] || ANYTLS_PASSWORD="$(generate_password)"
+    [ -n "$ANYTLS_DOMAIN" ] || fail "启用 AnyTLS 时必须提供 --anytls-domain。"
+    if [ -z "$ANYTLS_CERT_MODE" ]; then
+        if [ -n "$ANYTLS_CERT_PATH$ANYTLS_KEY_PATH" ]; then
+            ANYTLS_CERT_MODE=manual
+        elif [ -n "$ANYTLS_TOKEN" ]; then
+            ANYTLS_CERT_MODE=acme
         else
-            log_error "AnyTLS 需要 --anytls-token 或手动证书路径。"
-            exit 1
+            fail "AnyTLS 需要 --anytls-token 或手动证书路径。"
         fi
     fi
-
     case "$ANYTLS_CERT_MODE" in
         acme)
-            if [[ -z "$ANYTLS_TOKEN" ]]; then
-                log_error "AnyTLS ACME 模式需要 --anytls-token。"
-                exit 1
-            fi
-            if [[ -n "$ANYTLS_CERT_PATH$ANYTLS_KEY_PATH" ]]; then
-                log_error "ACME 模式不能使用手动证书路径。"
-                exit 1
-            fi
+            [ -n "$ANYTLS_TOKEN" ] || fail "AnyTLS ACME 模式需要 --anytls-token。"
+            [ -z "$ANYTLS_CERT_PATH$ANYTLS_KEY_PATH" ] || fail "ACME 模式不能使用手动证书路径。"
             ;;
         manual)
-            if [[ -n "$ANYTLS_TOKEN" ]]; then
-                log_error "手动证书模式不能使用 --anytls-token。"
-                exit 1
-            fi
-            if [[ -z "$ANYTLS_CERT_PATH" || -z "$ANYTLS_KEY_PATH" ]]; then
-                log_error "手动证书模式需要 --anytls-cert-path 和 --anytls-key-path。"
-                exit 1
-            fi
-            if [[ ! -f "$ANYTLS_CERT_PATH" ]]; then
-                log_error "证书文件不存在: $ANYTLS_CERT_PATH"
-                exit 1
-            fi
-            if [[ ! -f "$ANYTLS_KEY_PATH" ]]; then
-                log_error "私钥文件不存在: $ANYTLS_KEY_PATH"
-                exit 1
+            [ -z "$ANYTLS_TOKEN" ] || fail "手动证书模式不能使用 --anytls-token。"
+            if [ ! -f "$ANYTLS_CERT_PATH" ] || [ ! -f "$ANYTLS_KEY_PATH" ]; then
+                fail "手动证书文件不存在。"
             fi
             ;;
         *)
-            log_error "AnyTLS 证书模式无效: $ANYTLS_CERT_MODE"
-            exit 1
+            fail "AnyTLS 证书模式无效：$ANYTLS_CERT_MODE"
             ;;
     esac
 }
 
 prepare_shadowsocks_params() {
-    if [[ "$SS_ENABLED" -ne 1 ]]; then
-        return 0
-    fi
-
-    if [[ -z "$SS_PASSWORD" ]]; then
-        SS_PASSWORD="$(generate_password)"
-        log_info "生成 Shadowsocks 密码"
-    else
-        log_info "使用指定 Shadowsocks 密码"
-    fi
+    [ "$SS_ENABLED" -eq 1 ] || return 0
+    [ -n "$SS_PASSWORD" ] || SS_PASSWORD="$(generate_password)"
 }
 
 prepare_socks_params() {
-    if [[ "$SOCKS_ENABLED" -ne 1 ]]; then
-        return 0
+    [ "$SOCKS_ENABLED" -eq 1 ] || return 0
+    if [ -z "$SOCKS_HOST" ] || [ -z "$SOCKS_PORT" ]; then
+        fail "启用 Socks 时必须同时提供 host 和 port。"
     fi
-
-    if [[ -z "$SOCKS_HOST" ]]; then
-        log_error "启用 Socks 时必须提供 --socks-host。"
-        exit 1
-    fi
-
-    if [[ -z "$SOCKS_PORT" ]]; then
-        log_error "启用 Socks 时必须提供 --socks-port。"
-        exit 1
-    fi
-
-    if ! [[ "$SOCKS_PORT" =~ ^[0-9]+$ ]] || (( SOCKS_PORT < 1 || SOCKS_PORT > 65535 )); then
-        log_error "Socks 端口无效: $SOCKS_PORT"
-        exit 1
-    fi
-
-    log_info "启用 Socks 分流"
+    validate_port "$SOCKS_PORT" Socks || exit 1
 }
 
 prepare_config_params() {
-    print_header "准备配置"
     prepare_ports
     prepare_shadowtls_params
     prepare_anytls_params
     prepare_shadowsocks_params
     prepare_socks_params
-    log_success "配置参数已就绪"
-}
-
-generate_padding_scheme_json() {
-    local scheme_str="${1:-$DEFAULT_PADDING_SCHEME}"
-
-    jq -n --arg scheme "$scheme_str" '$scheme | split("|") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))'
 }
 
 build_shadowtls_inbound() {
-    jq -n \
-        --argjson port "$SHADOWTLS_PORT" \
-        --arg password "$SHADOWTLS_PASSWORD" \
-        --arg domain "$SHADOWTLS_DOMAIN" \
+    jq -n --argjson port "$SHADOWTLS_PORT" --arg password "$SHADOWTLS_PASSWORD" --arg domain "$SHADOWTLS_DOMAIN" \
         '{
-          type: "shadowtls",
-          tag: "shadowtls-in",
-          listen: "::",
-          listen_port: $port,
-          detour: "shadowsocks-in",
-          version: 3,
-          users: [{ name: "ShadowTLS", password: $password }],
-          handshake: {
-            server: $domain,
-            server_port: 443
-          },
-          strict_mode: true,
-          wildcard_sni: "off"
+            type: "shadowtls",
+            tag: "shadowtls-in",
+            listen: "::",
+            listen_port: $port,
+            detour: "shadowsocks-in",
+            version: 3,
+            users: [{
+                name: "ShadowTLS",
+                password: $password
+            }],
+            handshake: {
+                server: $domain,
+                server_port: 443
+            },
+            strict_mode: true,
+            wildcard_sni: "off"
         }'
 }
 
 build_anytls_inbound() {
-    local padding_json
-    padding_json="$(generate_padding_scheme_json "$ANYTLS_SCHEME")"
+    local padding scheme
 
-    if [[ "$ANYTLS_CERT_MODE" == "manual" ]]; then
-        jq -n \
-            --argjson port "$ANYTLS_PORT" \
-            --arg password "$ANYTLS_PASSWORD" \
-            --arg domain "$ANYTLS_DOMAIN" \
-            --argjson padding "$padding_json" \
-            --arg cert_path "$ANYTLS_CERT_PATH" \
-            --arg key_path "$ANYTLS_KEY_PATH" \
+    scheme="${ANYTLS_SCHEME:-$DEFAULT_PADDING_SCHEME}"
+    padding="$(jq -n --arg scheme "$scheme" \
+        '$scheme | split("|") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')" || return 1
+    if [ "$ANYTLS_CERT_MODE" = manual ]; then
+        jq -n --argjson port "$ANYTLS_PORT" --arg password "$ANYTLS_PASSWORD" --arg domain "$ANYTLS_DOMAIN" \
+            --argjson padding "$padding" --arg cert "$ANYTLS_CERT_PATH" --arg key "$ANYTLS_KEY_PATH" \
             '{
-              type: "anytls",
-              tag: "anytls-in",
-              listen: "::",
-              listen_port: $port,
-              users: [{ name: "AnyCloud", password: $password }],
-              padding_scheme: $padding,
-              tls: {
-                enabled: true,
-                alpn: ["h2", "http/1.1"],
-                server_name: $domain,
-                certificate_path: $cert_path,
-                key_path: $key_path
-              }
+                type: "anytls",
+                tag: "anytls-in",
+                listen: "::",
+                listen_port: $port,
+                users: [{
+                    name: "AnyCloud",
+                    password: $password
+                }],
+                padding_scheme: $padding,
+                tls: {
+                    enabled: true,
+                    alpn: ["h2", "http/1.1"],
+                    server_name: $domain,
+                    certificate_path: $cert,
+                    key_path: $key
+                }
             }'
     else
-        jq -n \
-            --argjson port "$ANYTLS_PORT" \
-            --arg password "$ANYTLS_PASSWORD" \
-            --arg domain "$ANYTLS_DOMAIN" \
-            --argjson padding "$padding_json" \
-            --arg token "$ANYTLS_TOKEN" \
+        jq -n --argjson port "$ANYTLS_PORT" --arg password "$ANYTLS_PASSWORD" --arg domain "$ANYTLS_DOMAIN" \
+            --argjson padding "$padding" --arg token "$ANYTLS_TOKEN" \
             '{
-              type: "anytls",
-              tag: "anytls-in",
-              listen: "::",
-              listen_port: $port,
-              users: [{ name: "AnyCloud", password: $password }],
-              padding_scheme: $padding,
-              tls: {
-                enabled: true,
-                alpn: ["h2", "http/1.1"],
-                server_name: $domain,
-                acme: {
-                  domain: [$domain],
-                  email: "admin@xinsight.eu.org",
-                  provider: "letsencrypt",
-                  dns01_challenge: {
-                    provider: "cloudflare",
-                    api_token: $token
-                  }
+                type: "anytls",
+                tag: "anytls-in",
+                listen: "::",
+                listen_port: $port,
+                users: [{
+                    name: "AnyCloud",
+                    password: $password
+                }],
+                padding_scheme: $padding,
+                tls: {
+                    enabled: true,
+                    alpn: ["h2", "http/1.1"],
+                    server_name: $domain,
+                    acme: {
+                        domain: [$domain],
+                        email: "admin@xinsight.eu.org",
+                        provider: "letsencrypt",
+                        dns01_challenge: {
+                            provider: "cloudflare",
+                            api_token: $token
+                        }
+                    }
                 }
-              }
             }'
     fi
 }
 
 build_shadowsocks_inbound() {
-    jq -n \
-        --argjson port "$SS_PORT" \
-        --arg method "$SS_METHOD" \
-        --arg password "$SS_PASSWORD" \
+    jq -n --argjson port "$SS_PORT" --arg method "$SS_METHOD" --arg password "$SS_PASSWORD" \
         '{
-          type: "shadowsocks",
-          tag: "shadowsocks-in",
-          listen: "::",
-          listen_port: $port,
-          method: $method,
-          password: $password
+            type: "shadowsocks",
+            tag: "shadowsocks-in",
+            listen: "::",
+            listen_port: $port,
+            method: $method,
+            password: $password
         }'
 }
 
-build_socks_config() {
-    jq -n \
-        --arg socks_tag "$SOCKS_TAG" \
-        --arg direct_tag "$DIRECT_TAG" \
-        --arg socks_host "$SOCKS_HOST" \
-        --argjson socks_port "$SOCKS_PORT" \
-        --arg rule_set "$SOCKS_RULESET_TAG" \
-        --arg rule_format "$SOCKS_RULESET_FORMAT" \
-        --arg rule_url "$SOCKS_RULESET_URL" \
-        '{
-          outbounds: [
-            {
-              type: "socks",
-              tag: $socks_tag,
-              server: $socks_host,
-              server_port: $socks_port,
-              network: "tcp"
-            },
-            {
-              type: "direct",
-              tag: $direct_tag
-            }
-          ],
-          route: {
-            rules: [
-              {
-                rule_set: $rule_set,
-                action: "route",
-                outbound: $socks_tag
-              }
-            ],
-            rule_set: [
-              {
-                type: "remote",
-                tag: $rule_set,
-                format: $rule_format,
-                url: $rule_url
-              }
-            ],
-            final: $direct_tag
-          }
-        }'
+build_config() {
+    local inbounds='[]' inbound
+
+    if [ "$SHADOWTLS_ENABLED" -eq 1 ]; then
+        inbound="$(build_shadowtls_inbound)" || return 1
+        inbounds="$(jq -cn --argjson a "$inbounds" --argjson b "$inbound" '$a+[$b]')"
+    fi
+    if [ "$ANYTLS_ENABLED" -eq 1 ]; then
+        inbound="$(build_anytls_inbound)" || return 1
+        inbounds="$(jq -cn --argjson a "$inbounds" --argjson b "$inbound" '$a+[$b]')"
+    fi
+    if [ "$SS_ENABLED" -eq 1 ]; then
+        inbound="$(build_shadowsocks_inbound)" || return 1
+        inbounds="$(jq -cn --argjson a "$inbounds" --argjson b "$inbound" '$a+[$b]')"
+    fi
+    if [ "$SOCKS_ENABLED" -eq 1 ]; then
+        jq -n --argjson inbounds "$inbounds" --arg host "$SOCKS_HOST" \
+            --argjson port "$SOCKS_PORT" --arg url "$SOCKS_RULESET_URL" \
+            '{
+                log: {disabled: true},
+                inbounds: $inbounds,
+                outbounds: [
+                    {
+                        type: "socks",
+                        tag: "proxy",
+                        server: $host,
+                        server_port: $port,
+                        network: "tcp"
+                    },
+                    {
+                        type: "direct",
+                        tag: "direct"
+                    }
+                ],
+                route: {
+                    rules: [{
+                        rule_set: "pureSite",
+                        action: "route",
+                        outbound: "proxy"
+                    }],
+                    rule_set: [{
+                        type: "remote",
+                        tag: "pureSite",
+                        format: "source",
+                        url: $url
+                    }],
+                    final: "direct"
+                }
+            }'
+    else
+        jq -n --argjson inbounds "$inbounds" \
+            '{
+                log: {disabled: true},
+                inbounds: $inbounds
+            }'
+    fi
 }
 
-create_singbox_config() {
-    print_header "生成 sing-box 配置"
-    local config_dir="/etc/sing-box"
-    local config_file="${config_dir}/config.json"
-    local temp_file="${config_file}.tmp"
-    local inbounds_json="["
-    local socks_json
-    local first=1
-    local inbound
-
-    mkdir -p "$config_dir"
-    chmod 755 "$config_dir"
-
-    if [[ "$SHADOWTLS_ENABLED" -eq 1 ]]; then
-        inbound="$(build_shadowtls_inbound)"
-        inbounds_json+="$inbound"
-        first=0
-    fi
-
-    if [[ "$ANYTLS_ENABLED" -eq 1 ]]; then
-        inbound="$(build_anytls_inbound)"
-        [[ "$first" -eq 0 ]] && inbounds_json+=","
-        inbounds_json+="$inbound"
-        first=0
-    fi
-
-    if [[ "$SS_ENABLED" -eq 1 ]]; then
-        inbound="$(build_shadowsocks_inbound)"
-        [[ "$first" -eq 0 ]] && inbounds_json+=","
-        inbounds_json+="$inbound"
-    fi
-
-    inbounds_json+="]"
-
-    if [[ "$SOCKS_ENABLED" -eq 1 ]]; then
-        socks_json="$(build_socks_config)"
-        if ! jq -n \
-            --argjson inbounds "$inbounds_json" \
-            --argjson socks "$socks_json" \
-            '{ log: { disabled: true }, inbounds: $inbounds } + $socks' > "$temp_file"; then
-            log_error "sing-box 配置生成失败。"
-            rm -f "$temp_file"
-            exit 1
-        fi
-    elif ! jq -n --argjson inbounds "$inbounds_json" '{ log: { disabled: true }, inbounds: $inbounds }' > "$temp_file"; then
-        log_error "sing-box 配置生成失败。"
-        rm -f "$temp_file"
-        exit 1
-    fi
-
-    mv "$temp_file" "$config_file"
-    log_success "配置文件已生成: $config_file"
+get_current_version() {
+    local output
+    [ -x "$SINGBOX_BINARY" ] || return 1
+    output="$($SINGBOX_BINARY version 2>/dev/null | head -n 1)" || return 1
+    [[ "$output" =~ [0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.-]+)? ]] || return 1
+    printf '%s\n' "${BASH_REMATCH[0]}"
 }
 
-validate_singbox_config() {
-    local config_file="/etc/sing-box/config.json"
-
-    print_header "校验 sing-box 配置"
-    if ! sing-box check -c "$config_file"; then
-        log_error "sing-box 配置校验失败。"
-        exit 1
+get_latest_version() {
+    local version
+    version="$(wget -qO- --timeout=10 --tries=3 \
+        https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null |
+        jq -r .tag_name)" || return 1
+    if [ -z "$version" ] || [ "$version" = null ]; then
+        return 1
     fi
-
-    log_success "sing-box 配置校验通过"
+    printf '%s\n' "$version"
 }
 
-restart_singbox_service() {
-    print_header "启动 sing-box 服务"
+compare_versions() {
+    local left="${1#v}" right="${2#v}" highest
+    [ "$left" = "$right" ] && return 0
+    highest="$(printf '%s\n%s\n' "$left" "$right" | sort -V | tail -n 1)"
+    [ "$highest" = "$left" ] && return 1
+    return 2
+}
 
-    if ! systemctl enable sing-box >/dev/null 2>&1; then
-        log_error "sing-box 服务启用失败。"
-        exit 1
+download_package_file() {
+    local version="$1" target="$2"
+
+    [[ "$version" = v* ]] || version="v$version"
+    wget -q --timeout=20 --tries=3 -O "$target" \
+        "https://github.com/SagerNet/sing-box/releases/download/${version}/sing-box_${version#v}_linux_${ARCH}.deb" ||
+        return 1
+    [ -s "$target" ] || return 1
+    dpkg-deb --info "$target" >/dev/null 2>&1
+}
+
+install_package_version() {
+    local version="$1" temp_dir package extract_dir candidate actual
+
+    [[ "$version" = v* ]] || version="v$version"
+    [ -d "$TRANSACTION_DIR" ] || fail "sing-box 事务尚未开始。"
+    temp_dir="${TRANSACTION_DIR}/package"
+    mkdir "$temp_dir" || fail "无法创建 sing-box 下载临时目录。"
+    package="${temp_dir}/sing-box.deb"
+    log_info "正在下载 sing-box ${version#v}（${ARCH}）"
+    download_package_file "$version" "$package" || fail "sing-box 下载或软件包预检失败。"
+    extract_dir="${temp_dir}/extract"
+    mkdir "$extract_dir" || fail "无法创建软件包预检目录。"
+    dpkg-deb -x "$package" "$extract_dir" >/dev/null 2>&1 || fail "sing-box 软件包解包失败。"
+    candidate="${extract_dir}${SINGBOX_BINARY}"
+    [ -x "$candidate" ] || fail "软件包中未找到 sing-box 二进制。"
+    actual="$("$candidate" version 2>/dev/null | head -n 1)" || fail "sing-box 二进制预检失败。"
+    [[ "$actual" == *"${version#v}"* ]] || fail "sing-box 软件包版本不匹配。"
+    if [ -r "$SINGBOX_CONFIG_FILE" ] &&
+       ! "$candidate" check -c "$SINGBOX_CONFIG_FILE" >/dev/null 2>&1; then
+        fail "新版本无法加载现有 sing-box 配置。"
     fi
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$package" >/dev/null 2>&1 ||
+        fail "sing-box 软件包安装失败。"
+    PACKAGE_CHANGED=1
+}
 
+ensure_singbox() {
+    local version
+    if [ -x "$SINGBOX_BINARY" ] && [ -z "$SINGBOX_VERSION" ]; then
+        PACKAGE_CHANGED=0
+        return 0
+    fi
+    if [ -n "$SINGBOX_VERSION" ]; then
+        version="$SINGBOX_VERSION"
+    else
+        version="$(get_latest_version)" || fail "无法获取 sing-box 最新版本。"
+    fi
+    install_package_version "$version"
+}
+
+apply_config() {
+    local directory candidate result
+    directory="$(dirname "$SINGBOX_CONFIG_FILE")"
+    mkdir -p "$directory" || fail "无法创建 sing-box 配置目录。"
+    candidate="$(mktemp "${directory}/.config.json.XXXXXX")" || fail "无法创建 sing-box 候选配置。"
+    umask 077
+    if ! build_config > "$candidate"; then
+        rm -f "$candidate"
+        fail "sing-box 配置生成失败。"
+    fi
+    if ! jq -e . "$candidate" >/dev/null 2>&1; then
+        rm -f "$candidate"
+        fail "sing-box JSON 预检失败。"
+    fi
+    if ! "$SINGBOX_BINARY" check -c "$candidate" >/dev/null 2>&1; then
+        rm -f "$candidate"
+        fail "sing-box 配置预检失败。"
+    fi
+    if [ -f "$SINGBOX_CONFIG_FILE" ] && cmp -s "$candidate" "$SINGBOX_CONFIG_FILE"; then
+        rm -f "$candidate"
+        CONFIG_CHANGED=0
+        return 0
+    fi
+    if ! chmod 600 "$candidate" || ! mv -f "$candidate" "$SINGBOX_CONFIG_FILE"; then
+        rm -f "$candidate"
+        fail "sing-box 配置应用失败。"
+    fi
+    CONFIG_CHANGED=1
+    log_info "已更新 sing-box 配置：$SINGBOX_CONFIG_FILE"
+}
+
+begin_transaction() {
+    TRANSACTION_DIR="$(mktemp -d)" || fail "无法创建 sing-box 事务目录。"
     if systemctl is-active --quiet sing-box 2>/dev/null; then
-        log_info "重启 sing-box 服务..."
-        if ! systemctl restart sing-box >/dev/null 2>&1; then
-            log_error "sing-box 服务重启失败。"
-            log_error "查看日志: journalctl -u sing-box"
-            exit 1
+        SERVICE_WAS_ACTIVE=1
+    else
+        SERVICE_WAS_ACTIVE=0
+    fi
+    if systemctl is-enabled --quiet sing-box 2>/dev/null; then
+        SERVICE_WAS_ENABLED=1
+    else
+        SERVICE_WAS_ENABLED=0
+    fi
+    if [ -e "$SINGBOX_CONFIG_FILE" ]; then
+        cp -a "$SINGBOX_CONFIG_FILE" "${TRANSACTION_DIR}/config" || {
+            rm -rf "$TRANSACTION_DIR"
+            fail "无法备份 sing-box 配置。"
+        }
+        : > "${TRANSACTION_DIR}/config.exists"
+    fi
+    TRANSACTION_ACTIVE=1
+    trap rollback_transaction EXIT
+}
+
+rollback_transaction() {
+    local restore_failed=0 restore_candidate=""
+
+    [ "$TRANSACTION_ACTIVE" -eq 1 ] || return 0
+    if [ -e "${TRANSACTION_DIR}/config.exists" ]; then
+        mkdir -p "$(dirname "$SINGBOX_CONFIG_FILE")" || restore_failed=1
+        restore_candidate="$(mktemp "$(dirname "$SINGBOX_CONFIG_FILE")/.config.restore.XXXXXX")" ||
+            restore_failed=1
+        if [ -n "$restore_candidate" ]; then
+            if ! cp -a "${TRANSACTION_DIR}/config" "$restore_candidate" ||
+               ! mv -f "$restore_candidate" "$SINGBOX_CONFIG_FILE"; then
+                restore_failed=1
+            fi
+            rm -f "$restore_candidate" || restore_failed=1
         fi
     else
-        log_info "启动 sing-box 服务..."
-        if ! systemctl start sing-box >/dev/null 2>&1; then
-            log_error "sing-box 服务启动失败。"
-            log_error "查看日志: journalctl -u sing-box"
-            exit 1
+        rm -f "$SINGBOX_CONFIG_FILE" || restore_failed=1
+    fi
+    if [ "$SERVICE_WAS_ENABLED" -eq 1 ]; then
+        systemctl enable sing-box >/dev/null 2>&1 || restore_failed=1
+    elif systemctl is-enabled --quiet sing-box 2>/dev/null; then
+        systemctl disable sing-box >/dev/null 2>&1 || restore_failed=1
+    fi
+    if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
+        systemctl restart sing-box >/dev/null 2>&1 || restore_failed=1
+    elif systemctl is-active --quiet sing-box 2>/dev/null; then
+        systemctl stop sing-box >/dev/null 2>&1 || restore_failed=1
+    fi
+    TRANSACTION_ACTIVE=0
+    trap - EXIT
+    rm -rf "$TRANSACTION_DIR" || restore_failed=1
+    if [ "$restore_failed" -eq 1 ]; then
+        log_error "sing-box 配置或服务状态恢复失败。"
+        return 1
+    fi
+    log_warning "sing-box 变更失败，已恢复脚本管理的配置和服务状态。"
+}
+
+commit_transaction() {
+    [ "$TRANSACTION_ACTIVE" -eq 1 ] || return 0
+
+    TRANSACTION_ACTIVE=0
+    trap - EXIT
+    rm -rf "$TRANSACTION_DIR" || log_warning "sing-box 事务临时目录清理失败：$TRANSACTION_DIR"
+}
+
+converge_service() {
+    if ! systemctl is-enabled --quiet sing-box 2>/dev/null; then
+        if ! systemctl enable sing-box >/dev/null 2>&1; then
+            log_error "sing-box 服务启用失败。"
+            return 1
         fi
+        log_info "已启用系统服务：sing-box.service"
     fi
+    if systemctl is-active --quiet sing-box 2>/dev/null; then
+        if (( PACKAGE_CHANGED || CONFIG_CHANGED )); then
+            if ! systemctl restart sing-box >/dev/null 2>&1; then
+                log_error "sing-box 重启失败。"
+                return 1
+            fi
+            log_info "已重启系统服务：sing-box.service"
+        fi
+    else
+        if ! systemctl start sing-box >/dev/null 2>&1; then
+            log_error "sing-box 启动失败。"
+            return 1
+        fi
+        log_info "已启动系统服务：sing-box.service"
+    fi
+}
 
-    sleep 2
-    if ! systemctl is-active --quiet sing-box; then
+port_listening() {
+    ss -H -lntu 2>/dev/null | grep -Eq ":${1}[[:space:]]"
+}
+
+verify_service() {
+    if ! systemctl is-active --quiet sing-box 2>/dev/null; then
         log_error "sing-box 服务未运行。"
-        log_error "查看日志: journalctl -u sing-box"
-        exit 1
+        return 1
     fi
-
-    log_success "sing-box 服务运行中"
+    if [ "$SHADOWTLS_ENABLED" -eq 1 ] && ! port_listening "$SHADOWTLS_PORT"; then
+        log_error "ShadowTLS 未监听端口：$SHADOWTLS_PORT"
+        return 1
+    fi
+    if [ "$ANYTLS_ENABLED" -eq 1 ] && ! port_listening "$ANYTLS_PORT"; then
+        log_error "AnyTLS 未监听端口：$ANYTLS_PORT"
+        return 1
+    fi
+    if [ "$SS_ENABLED" -eq 1 ] && ! port_listening "$SS_PORT"; then
+        log_error "Shadowsocks 未监听端口：$SS_PORT"
+        return 1
+    fi
 }
 
 show_configuration() {
-    local server_ip
-    local status
-    local display_scheme
+    local ip
 
-    print_header "配置详情"
-    server_ip="$(get_ipv4_address)"
-    status="$(systemctl is-active sing-box 2>/dev/null || printf 'unknown')"
-
-    printf "%-22s %s\n" "服务:" "sing-box (${status})"
-    printf "%-22s %s\n" "服务器 IP:" "$server_ip"
-
-    if [[ "$SHADOWTLS_ENABLED" -eq 1 ]]; then
-        echo ""
-        echo "ShadowTLS:"
-        printf "%-22s %s\n" "端口:" "$SHADOWTLS_PORT"
-        printf "%-22s %s\n" "密码:" "$SHADOWTLS_PASSWORD"
-        printf "%-22s %s\n" "域名:" "$SHADOWTLS_DOMAIN"
-        printf "%-22s %s\n" "版本:" "3"
-        printf "%-22s %s\n" "后端:" "shadowsocks-in"
+    ip="$(wget -qO- --timeout=5 --tries=2 https://api.ipify.org 2>/dev/null)" || true
+    printf '\n=== sing-box 客户端配置 ===\n服务器：%s\n' "${ip:-无法获取 IP}"
+    if [ "$SHADOWTLS_ENABLED" -eq 1 ]; then
+        printf 'ShadowTLS 端口：%s\nShadowTLS 密码：%s\nShadowTLS 域名：%s\n' \
+            "$SHADOWTLS_PORT" "$SHADOWTLS_PASSWORD" "$SHADOWTLS_DOMAIN"
     fi
-
-    if [[ "$ANYTLS_ENABLED" -eq 1 ]]; then
-        display_scheme="${ANYTLS_SCHEME:-$DEFAULT_PADDING_SCHEME}"
-        echo ""
-        echo "AnyTLS:"
-        printf "%-22s %s\n" "端口:" "$ANYTLS_PORT"
-        printf "%-22s %s\n" "密码:" "$ANYTLS_PASSWORD"
-        printf "%-22s %s\n" "域名:" "$ANYTLS_DOMAIN"
-        printf "%-22s %s\n" "证书模式:" "$ANYTLS_CERT_MODE"
-        printf "%-22s %s\n" "Padding Scheme:" "$display_scheme"
-        if [[ "$ANYTLS_CERT_MODE" == "manual" ]]; then
-            printf "%-22s %s\n" "证书路径:" "$ANYTLS_CERT_PATH"
-            printf "%-22s %s\n" "私钥路径:" "$ANYTLS_KEY_PATH"
-        fi
+    if [ "$ANYTLS_ENABLED" -eq 1 ]; then
+        printf 'AnyTLS 端口：%s\nAnyTLS 密码：%s\nAnyTLS 域名：%s\n证书模式：%s\n' \
+            "$ANYTLS_PORT" "$ANYTLS_PASSWORD" "$ANYTLS_DOMAIN" "$ANYTLS_CERT_MODE"
     fi
-
-    if [[ "$SS_ENABLED" -eq 1 ]]; then
-        echo ""
-        echo "Shadowsocks:"
-        printf "%-22s %s\n" "端口:" "$SS_PORT"
-        printf "%-22s %s\n" "密码:" "$SS_PASSWORD"
-        printf "%-22s %s\n" "加密:" "$SS_METHOD"
+    if [ "$SS_ENABLED" -eq 1 ]; then
+        printf 'Shadowsocks 端口：%s\nShadowsocks 密码：%s\n加密：%s\n' \
+            "$SS_PORT" "$SS_PASSWORD" "$SS_METHOD"
     fi
-
-    if [[ "$SOCKS_ENABLED" -eq 1 ]]; then
-        echo ""
-        echo "Socks:"
-        printf "%-22s %s\n" "状态:" "enabled"
-        printf "%-22s %s\n" "Server:" "$SOCKS_HOST:$SOCKS_PORT"
-        printf "%-22s %s\n" "Ruleset:" "$SOCKS_RULESET_URL"
-        printf "%-22s %s\n" "Final:" "$DIRECT_TAG"
+    if [ "$SOCKS_ENABLED" -eq 1 ]; then
+        printf 'Socks：%s:%s\n规则集：%s\n' "$SOCKS_HOST" "$SOCKS_PORT" "$SOCKS_RULESET_URL"
     fi
-
-    echo ""
+    printf '===========================\n'
 }
 
-uninstall_service() {
-    print_header "卸载 sing-box"
+install_singbox() {
+    detect_arch
+    ensure_dependencies
+    ensure_time_sync
+    prepare_config_params
+    begin_transaction
+    ensure_singbox
+    apply_config
+    if ! converge_service || ! verify_service; then
+        if rollback_transaction; then
+            fail "sing-box 应用失败，配置和服务状态已恢复；软件包变更保留。"
+        fi
+        fail "sing-box 应用失败，且配置或服务状态恢复失败。"
+    fi
+    commit_transaction
+    [ "$PACKAGE_CHANGED" -eq 0 ] || log_info "已安装 sing-box 软件包。"
+    log_info "sing-box 配置完成并正在运行。"
+    show_configuration
+}
 
-    if ! managed_state_exists; then
-        log_success "sing-box 已不存在"
+update_singbox() {
+    local current latest result
+    detect_arch
+    ensure_dependencies
+    current="$(get_current_version)" || fail "sing-box 未安装。"
+    latest="$(get_latest_version)" || fail "无法获取 sing-box 最新版本。"
+    compare_versions "$latest" "$current"
+    result=$?
+    if [ "$result" -eq 0 ]; then
+        log_info "sing-box 已是最新版本：$current"
         return 0
     fi
-
-    log_info "停止服务: sing-box"
-    systemctl stop sing-box >/dev/null 2>&1 || true
-
-    log_info "禁用服务: sing-box"
-    systemctl disable sing-box >/dev/null 2>&1 || true
-
-    if package_known; then
-        log_info "卸载包: sing-box"
-        if ! DEBIAN_FRONTEND=noninteractive dpkg --purge sing-box >/dev/null 2>&1; then
-            log_error "sing-box 包卸载失败"
-            exit 1
-        fi
-    else
-        log_info "包未安装: sing-box"
+    if [ "$result" -eq 2 ]; then
+        log_info "当前 sing-box 版本高于最新发布版本，无需更新。"
+        return 0
     fi
-
-    remove_path /etc/sing-box || exit 1
-    remove_path /var/lib/sing-box || exit 1
-
-    log_info "重载 systemd daemon"
-    systemctl daemon-reload >/dev/null 2>&1 || true
-    systemctl reset-failed sing-box >/dev/null 2>&1 || true
-    cleanup_temp_files
-
-    verify_uninstalled || exit 1
-    log_success "sing-box 卸载完成"
+    begin_transaction
+    install_package_version "$latest"
+    if ! converge_service || ! verify_existing_listeners; then
+        if rollback_transaction; then
+            fail "sing-box 更新后服务验证失败，服务状态已恢复；新软件包保留。"
+        fi
+        fail "sing-box 更新后服务验证失败，且服务状态恢复失败。"
+    fi
+    commit_transaction
+    log_info "sing-box 已更新：${current} -> ${latest#v}"
 }
 
-run_installation() {
-    detect_arch
-    install_packages
-    ensure_time_sync
-    install_singbox
-    prepare_config_params
-    create_singbox_config
-    validate_singbox_config
-    restart_singbox_service
-    show_configuration
+verify_existing_listeners() {
+    if ! systemctl is-active --quiet sing-box 2>/dev/null; then
+        log_error "sing-box 服务未运行。"
+        return 1
+    fi
+    local port
+    while IFS= read -r port; do
+        if ! port_listening "$port"; then
+            log_error "sing-box 未监听端口：$port"
+            return 1
+        fi
+    done < <(jq -r '.inbounds[].listen_port' "$SINGBOX_CONFIG_FILE")
+}
+
+package_known() {
+    dpkg-query -W -f='${db:Status-Abbrev}' sing-box 2>/dev/null | grep -q '^ii '
+}
+
+verify_uninstalled() {
+    if systemctl is-active --quiet sing-box 2>/dev/null ||
+       systemctl cat sing-box.service >/dev/null 2>&1 ||
+       package_known || [ -e "$SINGBOX_CONFIG_FILE" ] ||
+       [ -e "$SINGBOX_STATE_DIR" ] || [ -e "$SINGBOX_BINARY" ]; then
+        fail "sing-box 卸载验证失败。"
+    fi
+}
+
+uninstall_singbox() {
+    if ! package_known && [ ! -e "$SINGBOX_CONFIG_FILE" ] && [ ! -e "$SINGBOX_STATE_DIR" ] &&
+       [ ! -e "$SINGBOX_BINARY" ] && ! systemctl cat sing-box.service >/dev/null 2>&1 &&
+       ! systemctl is-active --quiet sing-box 2>/dev/null; then
+        log_info "sing-box 已不存在，无需卸载。"
+        return 0
+    fi
+    if systemctl is-active --quiet sing-box 2>/dev/null; then
+        systemctl stop sing-box >/dev/null 2>&1 || fail "sing-box 服务停止失败。"
+        log_info "已停止服务：sing-box.service"
+    fi
+    if systemctl is-enabled --quiet sing-box 2>/dev/null; then
+        systemctl disable sing-box >/dev/null 2>&1 || fail "sing-box 服务禁用失败。"
+        log_info "已禁用服务：sing-box.service"
+    fi
+    if package_known; then
+        DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq sing-box >/dev/null 2>&1 ||
+            fail "sing-box 软件包卸载失败。"
+        log_info "已卸载软件包：sing-box"
+    fi
+    rm -rf "$SINGBOX_STATE_DIR" "$SINGBOX_BINARY" ||
+        fail "sing-box 文件清理失败。"
+    rm -f "$SINGBOX_CONFIG_FILE" || fail "sing-box 配置删除失败。"
+    rmdir "$(dirname "$SINGBOX_CONFIG_FILE")" >/dev/null 2>&1 || true
+    systemctl daemon-reload >/dev/null 2>&1 || fail "systemd daemon 重载失败。"
+    systemctl reset-failed sing-box >/dev/null 2>&1 || true
+    verify_uninstalled
+    log_info "sing-box 已卸载。"
 }
 
 main() {
     parse_args "$@"
-
-    if [[ "$UPDATE_REQUESTED" -eq 1 && "$UNINSTALL_REQUESTED" -eq 1 ]]; then
-        log_error "--update 和 --uninstall 不能同时使用。"
-        exit 1
-    fi
-
-    if [[ "$UPDATE_REQUESTED" -eq 0 && "$UNINSTALL_REQUESTED" -eq 0 ]]; then
+    if [ "$UPDATE_REQUESTED" -eq 0 ] && [ "$UNINSTALL_REQUESTED" -eq 0 ]; then
         parse_protocols
         validate_protocol_scope
     fi
-
-    require_root
-
-    if [[ "$UPDATE_REQUESTED" -eq 1 ]]; then
+    require_environment
+    if [ "$UPDATE_REQUESTED" -eq 1 ]; then
         update_singbox
-        exit $?
+    elif [ "$UNINSTALL_REQUESTED" -eq 1 ]; then
+        uninstall_singbox
+    else
+        install_singbox
     fi
-
-    if [[ "$UNINSTALL_REQUESTED" -eq 1 ]]; then
-        uninstall_service
-        exit 0
-    fi
-
-    run_installation
 }
 
 main "$@"

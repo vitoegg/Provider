@@ -1,229 +1,233 @@
-#!/usr/bin/env bash
-set -Eeuo pipefail
+#!/bin/bash
 
-SERVICE="mosdns.service"
-BIN="/usr/local/bin/mosdns"
-CONFIG_DIR="/etc/mosdns"
-CONFIG_FILE="${CONFIG_DIR}/config.yaml"
-RULE_DIR="${CONFIG_DIR}/rule"
-RESOLV_CONF="/etc/resolv.conf"
-PUBLIC_DNS=$'nameserver 8.8.8.8\nnameserver 1.1.1.1\n'
+set -o pipefail
 
-ARCH=""
+readonly SERVICE="mosdns.service"
+readonly BIN="/usr/local/bin/mosdns"
+readonly CONFIG_DIR="/etc/mosdns"
+readonly CONFIG_FILE="${CONFIG_DIR}/config.yaml"
+readonly RULE_DIR="${CONFIG_DIR}/rule"
+readonly RESOLV_CONF="/etc/resolv.conf"
+readonly PUBLIC_DNS=$'nameserver 8.8.8.8\nnameserver 1.1.1.1\n'
 CUSTOM_DNS=""
 ECS_REGION="TYO"
 ECS_IP=""
 IP_PRIORITY="prefer_ipv4"
 UNINSTALL=0
 INSTALL_ARGS=0
-RULE_FILES=()
 
-log() { printf '[INFO] %s\n' "$*"; }
-warn() { printf '[WARN] %s\n' "$*" >&2; }
-fail() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
+log_info() {
+    printf '[INFO] %s\n' "$*"
+}
 
-usage() {
-  cat <<EOF
-用法:
-  $0 [--install] [--dns DNS服务器地址] [--ecs HK|TYO|LA|OR|SEA] [--ipv4|--ipv6]
-  $0 --uninstall
+log_error() {
+    printf '[ERROR] %s\n' "$*" >&2
+}
 
-参数:
-  -i, --install           显式安装 mosdns，可省略
+fail() {
+    log_error "$*"
+    exit 1
+}
+
+show_help() {
+    cat <<'EOF'
+用法：
+  bash mosdns.sh [--install] [--dns DNS] [--ecs HK|TYO|LA|OR|SEA] [--ipv4|--ipv6]
+  bash mosdns.sh --uninstall
+参数：
+  -i, --install           显式安装 MosDNS，可省略
   -d, --dns DNS           自定义 DNS 服务器
-  -e, --ecs REGION        ECS 区域: HK, TYO, LA, OR, SEA
-  -4, --ipv4              IPv4 优先
+  -e, --ecs REGION        ECS 区域：HK、TYO、LA、OR、SEA；默认 TYO
+  -4, --ipv4              IPv4 优先，默认模式
   -6, --ipv6              IPv6 优先
-  -u, --uninstall         卸载 mosdns
+  -u, --uninstall         卸载 MosDNS
   -h, --help              显示帮助
+无参数时使用默认配置安装 MosDNS。
 EOF
 }
 
-DOMAIN_RULES=(
-  "https://mirror.1991991.xyz/RuleSet/Extra/MosDNS/google.txt|google.txt"
-  "https://mirror.1991991.xyz/RuleSet/Extra/MosDNS/reddit.txt|reddit.txt"
-)
-
-ecs_ip() {
-  case "$1" in
-    HK) printf '42.2.2.2' ;;
-    TYO) printf '106.152.210.210' ;;
-    LA) printf '107.119.53.53' ;;
-    OR) printf '12.75.216.200' ;;
-    SEA) printf '68.86.93.93' ;;
-    *) return 1 ;;
-  esac
-}
-
 parse_args() {
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      -h|--help) usage; exit 0 ;;
-      -u|--uninstall) UNINSTALL=1; shift ;;
-      -i|--install) INSTALL_ARGS=1; shift ;;
-      -d|--dns)
-        [ -n "${2:-}" ] && [[ "${2:-}" != -* ]] || fail "使用 -d 选项需要提供DNS服务器地址"
-        INSTALL_ARGS=1
-        CUSTOM_DNS="$2"
-        shift 2
-        ;;
-      -e|--ecs)
-        [ -n "${2:-}" ] && [[ "${2:-}" != -* ]] || fail "使用 -e 选项需要提供ECS位置 (HK/TYO/LA/OR/SEA)"
-        INSTALL_ARGS=1
-        ECS_REGION="$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]')"
-        shift 2
-        ;;
-      -4|--ipv4) INSTALL_ARGS=1; IP_PRIORITY="prefer_ipv4"; shift ;;
-      -6|--ipv6) INSTALL_ARGS=1; IP_PRIORITY="prefer_ipv6"; shift ;;
-      *) usage >&2; fail "未知参数: $1" ;;
-    esac
-  done
-
-  if [ "$UNINSTALL" -eq 1 ]; then
-    [ "$INSTALL_ARGS" -eq 0 ] || fail "不能混用安装参数和卸载参数"
-    return 0
-  fi
-
-  ECS_IP="$(ecs_ip "$ECS_REGION")" || fail "无效的ECS位置: $ECS_REGION"
+    local -A address_by_region=(
+        [HK]="42.2.2.2"
+        [TYO]="106.152.210.210"
+        [LA]="107.119.53.53"
+        [OR]="12.75.216.200"
+        [SEA]="68.86.93.93"
+    )
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            -u|--uninstall)
+                UNINSTALL=1
+                shift
+                ;;
+            -i|--install)
+                INSTALL_ARGS=1
+                shift
+                ;;
+            -d|--dns)
+                if [ -z "${2:-}" ] || [[ "$2" == -* ]]; then
+                    fail "--dns 缺少服务器地址"
+                fi
+                [[ "$2" =~ ^[][A-Za-z0-9.:-]+$ ]] || fail "无效的 DNS 服务器地址：$2"
+                CUSTOM_DNS="$2"
+                INSTALL_ARGS=1
+                shift 2
+                ;;
+            -e|--ecs)
+                if [ -z "${2:-}" ] || [[ "$2" == -* ]]; then
+                    fail "--ecs 缺少区域"
+                fi
+                ECS_REGION="$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]')"
+                INSTALL_ARGS=1
+                shift 2
+                ;;
+            -4|--ipv4)
+                IP_PRIORITY="prefer_ipv4"
+                INSTALL_ARGS=1
+                shift
+                ;;
+            -6|--ipv6)
+                IP_PRIORITY="prefer_ipv6"
+                INSTALL_ARGS=1
+                shift
+                ;;
+            *)
+                fail "未知参数：$1"
+                ;;
+        esac
+    done
+    if [ "$UNINSTALL" -eq 1 ]; then
+        [ "$INSTALL_ARGS" -eq 0 ] || fail "卸载参数不能与安装参数混用"
+        return 0
+    fi
+    ECS_IP="${address_by_region[$ECS_REGION]:-}"
+    [ -n "$ECS_IP" ] || fail "无效的 ECS 区域：$ECS_REGION"
 }
 
-require_root_systemd() {
-  [ "${EUID:-$(id -u)}" -eq 0 ] || fail "此脚本必须以root用户运行"
-  command -v systemctl >/dev/null 2>&1 || fail "此脚本需要 systemd/systemctl"
-}
-
-require_apt() {
-  command -v apt-get >/dev/null 2>&1 || fail "此脚本仅支持 Debian/Ubuntu apt 环境"
+require_environment() {
+    [ "${EUID:-$(id -u)}" -eq 0 ] || fail "此操作必须以 root 权限运行"
+    command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt-get 环境"
+    command -v systemctl >/dev/null 2>&1 || fail "未检测到 systemd"
 }
 
 ensure_dependencies() {
-  local missing=()
-  command -v wget >/dev/null 2>&1 || missing+=(wget)
-  command -v unzip >/dev/null 2>&1 || missing+=(unzip)
-  command -v ss >/dev/null 2>&1 || missing+=(iproute2)
-  [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
-
-  [ "${#missing[@]}" -eq 0 ] && return 0
-  log "安装依赖: ${missing[*]}"
-  env DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null || fail "依赖包索引更新失败"
-  env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null || fail "依赖安装失败"
-}
-
-detect_arch() {
-  case "$(uname -m)" in
-    x86_64) ARCH="amd64" ;;
-    aarch64) ARCH="arm64" ;;
-    *) fail "不支持的系统架构: $(uname -m)" ;;
-  esac
-}
-
-download_url() {
-  printf 'https://github.com/IrineSistiana/mosdns/releases/latest/download/mosdns-linux-%s.zip' "$ARCH"
+    local missing=()
+    command -v wget >/dev/null 2>&1 || missing+=(wget)
+    command -v unzip >/dev/null 2>&1 || missing+=(unzip)
+    command -v ss >/dev/null 2>&1 || missing+=(iproute2)
+    command -v diff >/dev/null 2>&1 || missing+=(diffutils)
+    [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
+    [ "${#missing[@]}" -gt 0 ] || return 0
+    log_info "正在安装缺失依赖：${missing[*]}"
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || fail "软件包索引更新失败"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
+        fail "依赖安装失败：${missing[*]}"
+    log_info "已安装依赖：${missing[*]}"
 }
 
 download() {
-  wget -q -O "$2" "$1"
-}
-
-service_exists() {
-  systemctl cat "$SERVICE" >/dev/null 2>&1 && return 0
-  systemctl list-unit-files "$SERVICE" 2>/dev/null |
-    awk -v unit="$SERVICE" '$1==unit { found=1 } END { exit !found }'
-}
-
-mosdns_exists() {
-  service_exists || [ -x "$BIN" ] || [ -e "$CONFIG_DIR" ]
+    if wget -q --https-only --timeout=15 --tries=3 -O "$2" "$1" && [ -s "$2" ]; then
+        return 0
+    fi
+    rm -f "$2"
+    return 1
 }
 
 udp53_listeners() {
-  ss -H -lunp 2>/dev/null | awk '
-    function is_local_dns(addr) {
-      return addr == "*:53" ||
-             addr == "0.0.0.0:53" ||
-             addr == "127.0.0.1:53" ||
-             addr == "[::]:53" ||
-             addr == "[::1]:53"
-    }
-    {
-      for (i = 1; i <= NF; i++) {
-        if (is_local_dns($i)) {
-          print
-          next
-        }
-      }
-    }
-  ' || true
-}
-
-port_53_free() {
-  [ -z "$(udp53_listeners)" ]
-}
-
-service_owns_udp53() {
-  local cgroup line pid
-  cgroup="$(systemctl show "$SERVICE" --property=ControlGroup --value 2>/dev/null || true)"
-  [ -n "$cgroup" ] || return 1
-
-  while IFS= read -r line; do
-    while IFS= read -r pid; do
-      [ -r "/proc/${pid}/cgroup" ] || continue
-      grep -Fq "$cgroup" "/proc/${pid}/cgroup" && return 0
-    done < <(printf '%s\n' "$line" | grep -oE 'pid=[0-9]+' | cut -d= -f2 || true)
-  done < <(udp53_listeners)
-  return 1
+    ss -H -lunp 2>/dev/null |
+        awk '$4 ~ /(^|\[::\]|0\.0\.0\.0|127\.0\.0\.1|\*):53$/ { print }'
 }
 
 set_dns() {
-  chattr -i "$RESOLV_CONF" 2>/dev/null || true
-  rm -f "$RESOLV_CONF"
-
-  if [ "$1" = "local" ]; then
-    printf 'nameserver 127.0.0.1\n' > "$RESOLV_CONF"
-    chattr +i "$RESOLV_CONF" 2>/dev/null || true
-  else
-    printf '%s' "$PUBLIC_DNS" > "$RESOLV_CONF"
-  fi
+    local mode="$1" candidate content message
+    candidate="$(mktemp "${RESOLV_CONF}.tmp.XXXXXX")" || fail "无法创建 DNS 候选配置"
+    if [ "$mode" = "local" ]; then
+        content=$'nameserver 127.0.0.1\n'
+        message="已将系统 DNS 设置为 127.0.0.1"
+    else
+        content="$PUBLIC_DNS"
+        message="已恢复公共 DNS：8.8.8.8、1.1.1.1"
+    fi
+    printf '%s' "$content" > "$candidate" || fail "无法生成 DNS 候选配置"
+    chattr -i "$RESOLV_CONF" 2>/dev/null || true
+    if cmp -s "$candidate" "$RESOLV_CONF" 2>/dev/null; then
+        rm -f "$candidate"
+        [ "$mode" != "local" ] || chattr +i "$RESOLV_CONF" 2>/dev/null || true
+        return 0
+    fi
+    if ! chmod 644 "$candidate" || ! mv -f "$candidate" "$RESOLV_CONF"; then
+        rm -f "$candidate"
+        fail "无法更新系统 DNS"
+    fi
+    [ "$mode" != "local" ] || chattr +i "$RESOLV_CONF" 2>/dev/null || true
+    log_info "$message"
 }
 
 install_binary() {
-  local tmp_dir
-  tmp_dir="$(mktemp -d)"
-
-  if ! (
-    cd "$tmp_dir"
-    download "$(download_url)" mosdns.zip
-    unzip -q mosdns.zip
-    chmod 755 mosdns
-    mv mosdns "$BIN"
-  ); then
+    local arch machine tmp_dir url
+    local -A arch_by_machine=(
+        [x86_64]="amd64"
+        [aarch64]="arm64"
+    )
+    machine="$(uname -m)"
+    arch="${arch_by_machine[$machine]:-}"
+    [ -n "$arch" ] || fail "不支持的系统架构：$machine"
+    url="https://github.com/IrineSistiana/mosdns/releases/latest/download/mosdns-linux-${arch}.zip"
+    tmp_dir="$(mktemp -d)" || fail "无法创建 MosDNS 临时目录"
+    if ! download "$url" "${tmp_dir}/mosdns.zip" ||
+        ! unzip -q "${tmp_dir}/mosdns.zip" -d "$tmp_dir" ||
+        ! chmod 755 "${tmp_dir}/mosdns" ||
+        ! "${tmp_dir}/mosdns" version >/dev/null 2>&1; then
+        rm -rf "$tmp_dir"
+        fail "MosDNS 下载或解包失败"
+    fi
+    if ! mkdir -p "$(dirname "$BIN")" || ! install -m 755 "${tmp_dir}/mosdns" "$BIN"; then
+        rm -rf "$tmp_dir"
+        fail "无法发布 MosDNS 程序"
+    fi
     rm -rf "$tmp_dir"
-    fail "mosdns 下载或安装失败"
-  fi
-
-  rm -rf "$tmp_dir"
 }
 
 download_domain_rules() {
-  local item url file
-  [ -n "$CUSTOM_DNS" ] || return 0
-
-  mkdir -p "$RULE_DIR"
-  RULE_FILES=()
-  for item in "${DOMAIN_RULES[@]}"; do
-    url="${item%%|*}"
-    file="${RULE_DIR}/${item##*|}"
-    download "$url" "$file" || fail "域名列表下载失败: ${file##*/}"
-    RULE_FILES+=("$file")
-  done
+    local stage name
+    local base_url="https://mirror.1991991.xyz/RuleSet/Extra/MosDNS"
+    RULES_CHANGED=0
+    if [ -z "$CUSTOM_DNS" ]; then
+        if [ -d "$RULE_DIR" ]; then
+            rm -rf "$RULE_DIR" || fail "无法删除 MosDNS 自定义规则"
+            RULES_CHANGED=1
+        fi
+        return 0
+    fi
+    mkdir -p "$CONFIG_DIR" || fail "无法创建 MosDNS 配置目录"
+    stage="$(mktemp -d "${CONFIG_DIR}/rule.tmp.XXXXXX")" || fail "无法创建规则候选目录"
+    for name in google reddit; do
+        download "${base_url}/${name}.txt" "${stage}/${name}.txt" || {
+            rm -rf "$stage"
+            fail "域名规则下载失败：${name}.txt"
+        }
+    done
+    if [ -d "$RULE_DIR" ] && diff -qr "$stage" "$RULE_DIR" >/dev/null 2>&1; then
+        rm -rf "$stage"
+        return 0
+    fi
+    if ! rm -rf "$RULE_DIR" || ! mv "$stage" "$RULE_DIR"; then
+        rm -rf "$stage"
+        fail "无法发布 MosDNS 域名规则"
+    fi
+    RULES_CHANGED=1
 }
 
-write_config() {
-  mkdir -p "$CONFIG_DIR"
-  {
-    cat <<'EOF'
+render_config() {
+    {
+        cat <<EOF
 log:
   level: error
-  file: "/etc/mosdns/mosdns.log"
+  file: "${CONFIG_DIR}/mosdns.log"
 
 plugins:
   - tag: cache
@@ -231,20 +235,19 @@ plugins:
     args:
       size: 8192
       lazy_cache_ttl: 86400
-      dump_file: "/etc/mosdns/cache.dump"
+      dump_file: "${CONFIG_DIR}/cache.dump"
       dump_interval: 1800
 
 EOF
-
-    if [ -n "$CUSTOM_DNS" ]; then
-      cat <<'EOF'
+        if [ -n "$CUSTOM_DNS" ]; then
+            cat <<'EOF'
   - tag: custom_domains
     type: domain_set
     args:
       files:
 EOF
-      printf '        - "%s"\n' "${RULE_FILES[@]}"
-      cat <<EOF
+            printf '        - "%s"\n' "${RULE_DIR}/google.txt" "${RULE_DIR}/reddit.txt"
+            cat <<EOF
 
   - tag: custom_dns
     type: forward
@@ -253,9 +256,8 @@ EOF
         - addr: "udp://${CUSTOM_DNS}"
 
 EOF
-    fi
-
-    cat <<'EOF'
+        fi
+        cat <<'EOF'
   - tag: main_dns
     type: forward
     args:
@@ -292,12 +294,10 @@ EOF
         exec: accept
 
 EOF
-
-    printf '      - exec: %s\n' "$IP_PRIORITY"
-    printf '      - exec: ecs %s\n' "$ECS_IP"
-
-    if [ -n "$CUSTOM_DNS" ]; then
-      cat <<'EOF'
+        printf '      - exec: %s\n' "$IP_PRIORITY"
+        printf '      - exec: ecs %s\n' "$ECS_IP"
+        if [ -n "$CUSTOM_DNS" ]; then
+            cat <<'EOF'
 
       - matches:
         - qname $custom_domains
@@ -306,9 +306,8 @@ EOF
         exec: accept
 
 EOF
-    fi
-
-    cat <<'EOF'
+        fi
+        cat <<'EOF'
       - exec: $core_resolve
 
   - tag: udp_server
@@ -317,84 +316,98 @@ EOF
       entry: main_sequence
       listen: "127.0.0.1:53"
 EOF
-  } > "$CONFIG_FILE"
+    } > "$1"
 }
 
-start_and_verify() {
-  if service_exists; then
-    systemctl restart "$SERVICE" >/dev/null || fail "服务重启失败"
-  else
-    "$BIN" service install -d "$CONFIG_DIR" -c "$CONFIG_FILE" >/dev/null 2>&1 || fail "服务安装失败"
-    "$BIN" service start >/dev/null || fail "服务启动失败"
-  fi
-  sleep 2
-
-  systemctl is-active --quiet "$SERVICE" || fail "mosdns 服务未处于 active 状态"
-  service_owns_udp53 || fail "mosdns 服务未监听 53 端口"
+write_config() {
+    local candidate
+    mkdir -p "$CONFIG_DIR" || fail "无法创建 MosDNS 配置目录"
+    candidate="$(mktemp "${CONFIG_FILE}.tmp.XXXXXX")" || fail "无法创建 MosDNS 候选配置"
+    if ! render_config "$candidate" || [ ! -s "$candidate" ]; then
+        rm -f "$candidate"
+        fail "无法生成 MosDNS 配置"
+    fi
+    CONFIG_CHANGED=0
+    if cmp -s "$candidate" "$CONFIG_FILE" 2>/dev/null; then
+        rm -f "$candidate"
+        return 0
+    fi
+    if ! chmod 644 "$candidate" || ! mv -f "$candidate" "$CONFIG_FILE"; then
+        rm -f "$candidate"
+        fail "无法发布 MosDNS 配置"
+    fi
+    CONFIG_CHANGED=1
 }
 
 apply_mosdns() {
-  detect_arch
-  require_apt
-  ensure_dependencies
-
-  if mosdns_exists && { [ ! -x "$BIN" ] || ! service_exists; }; then
-    warn "mosdns 安装不完整，重新安装"
-    uninstall_mosdns
-  fi
-
-  if ! mosdns_exists; then
-    port_53_free || fail "53 端口已被占用，请先停止其它 DNS 服务"
-    install_binary
-  else
-    log "更新 mosdns 配置"
-  fi
-
-  rm -rf "$RULE_DIR"
-  download_domain_rules
-  write_config
-  start_and_verify
-
-  set_dns local
-  grep -qx 'nameserver 127.0.0.1' "$RESOLV_CONF" || fail "系统DNS配置失败"
-  log "mosdns 安装完成"
+    local restart_needed=0
+    ensure_dependencies
+    if ! systemctl cat "$SERVICE" >/dev/null 2>&1 || [ ! -x "$BIN" ]; then
+        [ -z "$(udp53_listeners)" ] || fail "53 端口已被其他 DNS 服务占用"
+        log_info "正在安装 MosDNS"
+        install_binary
+    fi
+    download_domain_rules
+    write_config
+    if [ "$CONFIG_CHANGED" -eq 1 ] || [ "$RULES_CHANGED" -eq 1 ] ||
+        ! systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
+        restart_needed=1
+    fi
+    if systemctl cat "$SERVICE" >/dev/null 2>&1; then
+        if [ "$restart_needed" -eq 1 ]; then
+            systemctl restart "$SERVICE" >/dev/null 2>&1 ||
+                fail "MosDNS 启动失败，请执行：journalctl -u ${SERVICE} --no-pager"
+        fi
+    else
+        "$BIN" service install -d "$CONFIG_DIR" -c "$CONFIG_FILE" >/dev/null 2>&1 || fail "MosDNS 服务安装失败"
+        "$BIN" service start >/dev/null 2>&1 || fail "MosDNS 服务启动失败"
+    fi
+    if ! systemctl is-enabled --quiet "$SERVICE" 2>/dev/null; then
+        systemctl enable "$SERVICE" >/dev/null 2>&1 || fail "无法启用 MosDNS 服务"
+        log_info "已启用系统服务：${SERVICE}"
+    fi
+    sleep 2
+    systemctl is-active --quiet "$SERVICE" || fail "MosDNS 服务未运行"
+    udp53_listeners | grep -q 'mosdns' || fail "MosDNS 未持有 UDP 53 端口"
+    set_dns local
+    if [ "$restart_needed" -eq 1 ]; then
+        log_info "MosDNS 已启动，监听地址：127.0.0.1:53"
+    else
+        log_info "MosDNS 配置未变化，无需重新应用"
+    fi
 }
 
 uninstall_mosdns() {
-  if ! mosdns_exists; then
-    log "mosdns 已不存在"
-    return 0
-  fi
-
-  set_dns public
-  grep -qx 'nameserver 8.8.8.8' "$RESOLV_CONF" || fail "DNS配置还原失败"
-  grep -qx 'nameserver 1.1.1.1' "$RESOLV_CONF" || fail "DNS配置还原失败"
-
-  if [ -x "$BIN" ]; then
-    "$BIN" service stop >/dev/null 2>&1 || true
-    "$BIN" service uninstall >/dev/null 2>&1 || true
-  else
-    systemctl stop "$SERVICE" >/dev/null 2>&1 || true
-  fi
-
-  systemctl disable "$SERVICE" >/dev/null 2>&1 || true
-  rm -f "/etc/systemd/system/$SERVICE" "/lib/systemd/system/$SERVICE" "/usr/lib/systemd/system/$SERVICE"
-  rm -f "$BIN"
-  rm -rf "$CONFIG_DIR"
-  systemctl daemon-reload >/dev/null 2>&1 || true
-  systemctl is-active --quiet "$SERVICE" 2>/dev/null && fail "mosdns 服务仍处于 active 状态"
-  log "mosdns 卸载完成"
+    if ! systemctl cat "$SERVICE" >/dev/null 2>&1 && [ ! -x "$BIN" ] && [ ! -e "$CONFIG_DIR" ]; then
+        log_info "MosDNS 已不存在，无需卸载"
+        return 0
+    fi
+    if systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
+        systemctl stop "$SERVICE" >/dev/null 2>&1 || fail "无法停止 MosDNS 服务"
+        log_info "已停止系统服务：${SERVICE}"
+    fi
+    if systemctl is-enabled --quiet "$SERVICE" 2>/dev/null; then
+        systemctl disable "$SERVICE" >/dev/null 2>&1 || fail "无法禁用 MosDNS 服务"
+        log_info "已禁用系统服务：${SERVICE}"
+    fi
+    rm -f "/etc/systemd/system/$SERVICE" "/lib/systemd/system/$SERVICE" "/usr/lib/systemd/system/$SERVICE" ||
+        fail "无法删除 MosDNS service 文件"
+    rm -f "$BIN" || fail "无法删除 MosDNS 程序"
+    rm -rf "$CONFIG_DIR" || fail "无法删除 MosDNS 配置目录"
+    systemctl daemon-reload >/dev/null 2>&1 || fail "systemd 配置刷新失败"
+    systemctl is-active --quiet "$SERVICE" 2>/dev/null && fail "MosDNS 服务仍在运行"
+    set_dns public
+    log_info "MosDNS 已卸载，并恢复公共 DNS"
 }
 
 main() {
-  parse_args "$@"
-  require_root_systemd
-
-  if [ "$UNINSTALL" -eq 1 ]; then
-    uninstall_mosdns
-  else
-    apply_mosdns
-  fi
+    parse_args "$@"
+    require_environment
+    if [ "$UNINSTALL" -eq 1 ]; then
+        uninstall_mosdns
+    else
+        apply_mosdns
+    fi
 }
 
 main "$@"

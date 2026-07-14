@@ -1,397 +1,266 @@
 #!/bin/bash
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-BOLD='\033[1m'
+set -o pipefail
 
-CONFIG_FILE="/usr/local/etc/xray/config.json"
-XRAY_BIN="/usr/local/bin/xray"
-XRAY_SERVICE="xray"
-
+XRAY_BINARY="${XRAY_BINARY:-/usr/local/bin/xray}"
+XRAY_CONFIG_FILE="${XRAY_CONFIG_FILE:-/usr/local/etc/xray/config.json}"
+XRAY_INSTALLER_URL="https://github.com/XTLS/Xray-install/raw/main/install-release.sh"
 DEFAULT_PORT_START=50000
 DEFAULT_PORT_END=60000
 SS_METHOD="2022-blake3-aes-128-gcm"
-
-DIRECT_TAG="direct"
-SOCKS_TAG="proxy"
 ROUTE_DOMAINS=("domain:reddit.com" "domain:cloudflare.com")
-ROUTE_DOMAIN_DISPLAY="reddit.com, cloudflare.com"
 
 PROTOCOLS=""
 REALITY_ENABLED=0
 SS_ENABLED=0
 SOCKS_ENABLED=0
-
 UPDATE_REQUESTED=0
 UNINSTALL_REQUESTED=0
-
 REALITY_PORT=""
-REALITY_PORT_SET=0
 REALITY_DOMAIN=""
 REALITY_UUID=""
 REALITY_PRIVATE_KEY=""
 REALITY_PUBLIC_KEY=""
 REALITY_SHORT_ID=""
-
 SS_PORT=""
-SS_PORT_SET=0
 SS_PASSWORD=""
-
 SOCKS_HOST=""
 SOCKS_PORT=""
-
 USED_PORTS=()
+CONFIG_CHANGED=0
+XRAY_CHANGED=0
+TRANSACTION_DIR=""
+TRANSACTION_ACTIVE=0
+SERVICE_WAS_ACTIVE=0
+SERVICE_WAS_ENABLED=0
 
 log_info() {
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') [INFO] $*"
-}
-
-log_success() {
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') [SUCCESS] ${GREEN}$*${NC}"
+    printf '[INFO] %s\n' "$*"
 }
 
 log_warning() {
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') [WARNING] ${YELLOW}$*${NC}"
+    printf '[WARNING] %s\n' "$*" >&2
 }
 
 log_error() {
-    echo -e "$(date '+%Y-%m-%d %H:%M:%S') [ERROR] ${RED}$*${NC}" >&2
+    printf '[ERROR] %s\n' "$*" >&2
 }
 
-print_header() {
-    echo -e "\n${BOLD}=== $1 ===${NC}"
+fail() {
+    log_error "$*"
+    exit 1
 }
 
 show_usage() {
-    local name
-    name="$(basename "$0")"
-    cat << EOF
-用法:
-  bash ${name} --protocol reality|shadowsocks|reality,shadowsocks [OPTIONS]
+    cat <<'EOF'
+用法：
+  bash reality.sh --protocol reality|shadowsocks|reality,shadowsocks [OPTIONS]
+  bash reality.sh --update
+  bash reality.sh --uninstall
 
-协议:
+参数：
   --protocol LIST
-
-Reality:
   --reality-port PORT
   --reality-domain DOMAIN
   --reality-uuid UUID
   --reality-private-key KEY
   --reality-public-key KEY
   --reality-short-id ID
-
-Shadowsocks:
   --ss-port PORT
   --ss-password PASSWORD
-
-Socks:
   --socks-host HOST
   --socks-port PORT
-
-全局:
   --update
-  --uninstall
+  -u, --uninstall
   -h, --help
 EOF
 }
 
-need_value() {
-    local option="$1"
-    local value="${2:-}"
+parse_args() {
+    local option value target_name
+    local -A targets=(
+        [--protocol]=PROTOCOLS
+        [--reality-port]=REALITY_PORT
+        [--reality-domain]=REALITY_DOMAIN
+        [--reality-uuid]=REALITY_UUID
+        [--reality-private-key]=REALITY_PRIVATE_KEY
+        [--reality-public-key]=REALITY_PUBLIC_KEY
+        [--reality-short-id]=REALITY_SHORT_ID
+        [--ss-port]=SS_PORT
+        [--ss-password]=SS_PASSWORD
+        [--socks-host]=SOCKS_HOST
+        [--socks-port]=SOCKS_PORT
+    )
 
-    if [[ -z "$value" ]]; then
-        log_error "$option 缺少参数值。"
-        exit 1
+    while [ "$#" -gt 0 ]; do
+        option="${1%%=*}"
+        if [[ -v "targets[$option]" ]]; then
+            if [[ "$1" == *=* ]]; then
+                value="${1#*=}"
+                shift
+            else
+                if [ "$#" -le 1 ] || [[ "$2" == -* ]]; then
+                    fail "$1 缺少参数值。"
+                fi
+                value="$2"
+                shift 2
+            fi
+            [ -n "$value" ] || fail "$option 缺少参数值。"
+            target_name="${targets[$option]}"
+            printf -v "$target_name" '%s' "$value"
+            if [[ "$option" =~ ^--socks-(host|port)$ ]]; then
+                SOCKS_ENABLED=1
+            fi
+        elif [ "$1" = --update ]; then
+            UPDATE_REQUESTED=1
+            shift
+        elif [ "$1" = -u ] || [ "$1" = --uninstall ]; then
+            UNINSTALL_REQUESTED=1
+            shift
+        elif [ "$1" = -h ] || [ "$1" = --help ]; then
+            show_usage
+            exit 0
+        else
+            fail "未知参数：$1"
+        fi
+    done
+
+    if (( UPDATE_REQUESTED && UNINSTALL_REQUESTED )); then
+        fail "--update 和 --uninstall 不能同时使用。"
     fi
-
-    printf '%s' "$value"
+    if (( UPDATE_REQUESTED || UNINSTALL_REQUESTED )); then
+        if install_arguments_present; then
+            fail "更新或卸载不能同时使用协议或配置参数。"
+        fi
+    fi
 }
 
-parse_args() {
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --protocol)
-                PROTOCOLS="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --protocol=*)
-                PROTOCOLS="${1#*=}"
-                shift
-                ;;
-            --reality-port)
-                REALITY_PORT="$(need_value "$1" "${2:-}")"
-                REALITY_PORT_SET=1
-                shift 2
-                ;;
-            --reality-port=*)
-                REALITY_PORT="${1#*=}"
-                REALITY_PORT_SET=1
-                shift
-                ;;
-            --reality-domain)
-                REALITY_DOMAIN="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --reality-domain=*)
-                REALITY_DOMAIN="${1#*=}"
-                shift
-                ;;
-            --reality-uuid)
-                REALITY_UUID="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --reality-uuid=*)
-                REALITY_UUID="${1#*=}"
-                shift
-                ;;
-            --reality-private-key)
-                REALITY_PRIVATE_KEY="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --reality-private-key=*)
-                REALITY_PRIVATE_KEY="${1#*=}"
-                shift
-                ;;
-            --reality-public-key)
-                REALITY_PUBLIC_KEY="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --reality-public-key=*)
-                REALITY_PUBLIC_KEY="${1#*=}"
-                shift
-                ;;
-            --reality-short-id)
-                REALITY_SHORT_ID="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --reality-short-id=*)
-                REALITY_SHORT_ID="${1#*=}"
-                shift
-                ;;
-            --ss-port)
-                SS_PORT="$(need_value "$1" "${2:-}")"
-                SS_PORT_SET=1
-                shift 2
-                ;;
-            --ss-port=*)
-                SS_PORT="${1#*=}"
-                SS_PORT_SET=1
-                shift
-                ;;
-            --ss-password)
-                SS_PASSWORD="$(need_value "$1" "${2:-}")"
-                shift 2
-                ;;
-            --ss-password=*)
-                SS_PASSWORD="${1#*=}"
-                shift
-                ;;
-            --socks-host)
-                SOCKS_HOST="$(need_value "$1" "${2:-}")"
-                SOCKS_ENABLED=1
-                shift 2
-                ;;
-            --socks-host=*)
-                SOCKS_HOST="${1#*=}"
-                SOCKS_ENABLED=1
-                shift
-                ;;
-            --socks-port)
-                SOCKS_PORT="$(need_value "$1" "${2:-}")"
-                SOCKS_ENABLED=1
-                shift 2
-                ;;
-            --socks-port=*)
-                SOCKS_PORT="${1#*=}"
-                SOCKS_ENABLED=1
-                shift
-                ;;
-            --update)
-                UPDATE_REQUESTED=1
-                shift
-                ;;
-            -u|--uninstall)
-                UNINSTALL_REQUESTED=1
-                shift
-                ;;
-            -h|--help)
-                show_usage
-                exit 0
-                ;;
-            *)
-                log_error "未知参数: $1"
-                show_usage
-                exit 1
-                ;;
-        esac
-    done
+install_arguments_present() {
+    [ -n "$PROTOCOLS$REALITY_PORT$REALITY_DOMAIN$REALITY_UUID" ] ||
+        [ -n "$REALITY_PRIVATE_KEY$REALITY_PUBLIC_KEY$REALITY_SHORT_ID" ] ||
+        [ -n "$SS_PORT$SS_PASSWORD$SOCKS_HOST$SOCKS_PORT" ]
+}
+
+require_environment() {
+    [ "${EUID:-$(id -u)}" -eq 0 ] || fail "请使用 root 权限执行。"
+    command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt 环境。"
+    command -v systemctl >/dev/null 2>&1 || fail "当前系统未提供 systemd。"
+}
+
+ensure_dependencies() {
+    local missing=()
+
+    command -v curl >/dev/null 2>&1 || missing+=(curl)
+    [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
+    if [ "$UNINSTALL_REQUESTED" -eq 0 ]; then
+        command -v jq >/dev/null 2>&1 || missing+=(jq)
+        command -v ss >/dev/null 2>&1 || missing+=(iproute2)
+    fi
+    if [ "$UPDATE_REQUESTED" -eq 0 ] && [ "$UNINSTALL_REQUESTED" -eq 0 ]; then
+        command -v openssl >/dev/null 2>&1 || missing+=(openssl)
+        command -v shuf >/dev/null 2>&1 || missing+=(coreutils)
+    fi
+    [ "${#missing[@]}" -eq 0 ] && return 0
+    log_info "正在安装缺失依赖：${missing[*]}"
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || fail "软件包索引更新失败。"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
+        fail "依赖安装失败：${missing[*]}"
+    log_info "已安装依赖：${missing[*]}"
 }
 
 parse_protocols() {
-    local protocol
+    local protocol protocol_items=()
 
-    if [[ -z "$PROTOCOLS" ]]; then
-        log_error "缺少 --protocol。"
-        show_usage
-        exit 1
-    fi
-
+    [ -n "$PROTOCOLS" ] || fail "缺少 --protocol。"
     IFS=',' read -ra protocol_items <<< "$PROTOCOLS"
     for protocol in "${protocol_items[@]}"; do
         protocol="${protocol//[[:space:]]/}"
-        case "$protocol" in
-            reality)
-                REALITY_ENABLED=1
-                ;;
-            shadowsocks)
-                SS_ENABLED=1
-                ;;
-            "")
-                log_error "--protocol 包含空协议。"
-                exit 1
-                ;;
-            *)
-                log_error "不支持的协议: $protocol"
-                exit 1
-                ;;
-        esac
+        if [ "$protocol" = reality ]; then
+            REALITY_ENABLED=1
+        elif [ "$protocol" = shadowsocks ]; then
+            SS_ENABLED=1
+        elif [ -z "$protocol" ]; then
+            fail "--protocol 包含空协议。"
+        else
+            fail "不支持的协议：$protocol"
+        fi
     done
 }
 
 validate_protocol_scope() {
-    if [[ "$REALITY_ENABLED" -eq 0 ]]; then
-        if [[ -n "$REALITY_PORT$REALITY_DOMAIN$REALITY_UUID$REALITY_PRIVATE_KEY$REALITY_PUBLIC_KEY$REALITY_SHORT_ID" ]]; then
-            log_error "Reality 参数需要 --protocol reality。"
-            exit 1
-        fi
+    if [ "$REALITY_ENABLED" -eq 0 ] &&
+       [ -n "$REALITY_PORT$REALITY_DOMAIN$REALITY_UUID$REALITY_PRIVATE_KEY$REALITY_PUBLIC_KEY$REALITY_SHORT_ID" ]; then
+        fail "Reality 参数需要 --protocol reality。"
     fi
-
-    if [[ "$SS_ENABLED" -eq 0 ]]; then
-        if [[ -n "$SS_PORT$SS_PASSWORD" ]]; then
-            log_error "Shadowsocks 参数需要 --protocol shadowsocks。"
-            exit 1
-        fi
+    if [ "$SS_ENABLED" -eq 0 ] && [ -n "$SS_PORT$SS_PASSWORD" ]; then
+        fail "Shadowsocks 参数需要 --protocol shadowsocks。"
     fi
-}
-
-require_root() {
-    if [[ $EUID -ne 0 ]]; then
-        log_error "请使用 root 权限执行。"
-        exit 1
-    fi
-}
-
-check_curl() {
-    if command -v curl >/dev/null 2>&1; then
-        return 0
-    fi
-
-    print_header "安装依赖"
-    log_warning "curl 未安装，正在安装..."
-    if command -v apt-get >/dev/null 2>&1; then
-        apt-get update && apt-get install -y curl
-    elif command -v yum >/dev/null 2>&1; then
-        yum install -y curl
-    elif command -v dnf >/dev/null 2>&1; then
-        dnf install -y curl
-    elif command -v pacman >/dev/null 2>&1; then
-        pacman -S --noconfirm curl
-    else
-        log_error "无法自动安装 curl，请手动安装后重试。"
-        exit 1
-    fi
-
-    command -v curl >/dev/null 2>&1 || {
-        log_error "curl 安装失败。"
-        exit 1
-    }
-    log_success "curl 已就绪"
 }
 
 xray_command() {
     if command -v xray >/dev/null 2>&1; then
         command -v xray
-    elif [[ -x "$XRAY_BIN" ]]; then
-        printf '%s\n' "$XRAY_BIN"
+    elif [ -x "$XRAY_BINARY" ]; then
+        printf '%s\n' "$XRAY_BINARY"
     else
         return 1
     fi
 }
 
-ensure_xray_installed() {
-    print_header "安装 Xray"
-    if xray_command >/dev/null 2>&1 && systemctl cat "$XRAY_SERVICE" >/dev/null 2>&1; then
-        log_info "Xray 已存在: $(xray_command)"
-        return 0
-    fi
+run_xray_installer() {
+    local temp_dir installer status
 
-    log_info "开始安装 Xray..."
-    if bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install --without-geodata; then
-        log_success "Xray 安装完成"
-        return 0
-    fi
-
-    log_error "Xray 安装失败。"
-    return 1
+    temp_dir="$(mktemp -d)" || fail "无法创建 Xray 安装器临时目录。"
+    installer="${temp_dir}/install-release.sh"
+    curl --fail --silent --show-error --location --connect-timeout 10 --max-time 120 --retry 3 \
+        -o "$installer" "$XRAY_INSTALLER_URL" || {
+        rm -rf "$temp_dir"
+        fail "Xray 安装器下载失败。"
+    }
+    [ -s "$installer" ] || {
+        rm -rf "$temp_dir"
+        fail "Xray 安装器为空。"
+    }
+    bash -n "$installer" >/dev/null 2>&1 || {
+        rm -rf "$temp_dir"
+        fail "Xray 安装器语法校验失败。"
+    }
+    bash "$installer" "$@" >/dev/null 2>&1
+    status=$?
+    rm -rf "$temp_dir"
+    [ "$status" -eq 0 ] || fail "Xray 安装器执行失败。"
 }
 
-generate_port() {
-    local start="$1"
-    local end="$2"
-    local port
-
-    while true; do
-        port="$(shuf -i "${start}-${end}" -n 1)"
-        if [[ "$port" != *4* ]]; then
-            printf '%s\n' "$port"
-            return 0
-        fi
-    done
-}
-
-port_is_used() {
-    local candidate="$1"
-    local port
-
-    for port in "${USED_PORTS[@]}"; do
-        [[ "$port" == "$candidate" ]] && return 0
-    done
-
-    return 1
+port_in_use() {
+    ss -H -lntu 2>/dev/null | grep -Eq ":${1}[[:space:]]"
 }
 
 validate_port() {
-    local port="$1"
-    local name="$2"
-
-    if ! [[ "$port" =~ ^[0-9]+$ ]] || (( port < 1 || port > 65535 )); then
-        log_error "$name 端口无效: $port"
-        exit 1
+    if ! [[ "$1" =~ ^[0-9]+$ ]] || (( 10#$1 < 1 || 10#$1 > 65535 )); then
+        log_error "$2 端口无效：$1"
+        return 1
     fi
 }
 
-add_used_port() {
-    local port="$1"
-    local name="$2"
+port_is_reserved() {
+    local item
+    for item in "${USED_PORTS[@]}"; do
+        [ "$item" = "$1" ] && return 0
+    done
+    return 1
+}
 
-    validate_port "$port" "$name"
-    if port_is_used "$port"; then
-        log_error "端口冲突: $port"
-        exit 1
-    fi
-
-    USED_PORTS+=("$port")
+reserve_port() {
+    validate_port "$1" "$2" || exit 1
+    ! port_is_reserved "$1" || fail "端口冲突：$1"
+    USED_PORTS+=("$1")
 }
 
 generate_unique_port() {
     local port
-
     while true; do
-        port="$(generate_port "$DEFAULT_PORT_START" "$DEFAULT_PORT_END")"
-        if ! port_is_used "$port"; then
+        port="$(shuf -i "${DEFAULT_PORT_START}-${DEFAULT_PORT_END}" -n 1)" || fail "端口生成失败。"
+        if [[ "$port" != *4* ]] && ! port_is_reserved "$port" && ! port_in_use "$port"; then
             printf '%s\n' "$port"
             return 0
         fi
@@ -400,535 +269,442 @@ generate_unique_port() {
 
 prepare_ports() {
     USED_PORTS=()
-
-    if [[ "$REALITY_ENABLED" -eq 1 && -n "$REALITY_PORT" ]]; then
-        add_used_port "$REALITY_PORT" "Reality"
-    fi
-
-    if [[ "$SS_ENABLED" -eq 1 && -n "$SS_PORT" ]]; then
-        add_used_port "$SS_PORT" "Shadowsocks"
-    fi
-
-    if [[ "$REALITY_ENABLED" -eq 1 && -z "$REALITY_PORT" ]]; then
+    [ "$REALITY_ENABLED" -eq 0 ] || [ -z "$REALITY_PORT" ] || reserve_port "$REALITY_PORT" Reality
+    [ "$SS_ENABLED" -eq 0 ] || [ -z "$SS_PORT" ] || reserve_port "$SS_PORT" Shadowsocks
+    if [ "$REALITY_ENABLED" -eq 1 ] && [ -z "$REALITY_PORT" ]; then
         REALITY_PORT="$(generate_unique_port)"
-        add_used_port "$REALITY_PORT" "Reality"
-        log_info "生成 Reality 端口: $REALITY_PORT"
-    elif [[ "$REALITY_ENABLED" -eq 1 && "$REALITY_PORT_SET" -eq 1 ]]; then
-        log_info "使用指定 Reality 端口: $REALITY_PORT"
+        reserve_port "$REALITY_PORT" Reality
     fi
-
-    if [[ "$SS_ENABLED" -eq 1 && -z "$SS_PORT" ]]; then
+    if [ "$SS_ENABLED" -eq 1 ] && [ -z "$SS_PORT" ]; then
         SS_PORT="$(generate_unique_port)"
-        add_used_port "$SS_PORT" "Shadowsocks"
-        log_info "生成 Shadowsocks 端口: $SS_PORT"
-    elif [[ "$SS_ENABLED" -eq 1 && "$SS_PORT_SET" -eq 1 ]]; then
-        log_info "使用指定 Shadowsocks 端口: $SS_PORT"
+        reserve_port "$SS_PORT" Shadowsocks
     fi
 }
 
 validate_domain() {
-    local domain="$1"
+    local domain="$1" label pattern
 
-    [[ -n "$domain" && ${#domain} -le 253 &&
-        "$domain" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?([.][A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$ ]]
+    label='[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?'
+    pattern="^${label}([.]${label})*$"
+    [ -n "$domain" ] && [ "${#domain}" -le 253 ] && [[ "$domain" =~ $pattern ]]
 }
 
 generate_uuid() {
-    local bin
-    bin="$(xray_command)" || {
-        log_error "无法生成 UUID，请确保 Xray 已正确安装。"
-        exit 1
-    }
-    "$bin" uuid
+    local binary
+    binary="$(xray_command)" || fail "无法生成 UUID：Xray 未安装。"
+    "$binary" uuid || fail "UUID 生成失败。"
 }
 
 generate_x25519() {
-    local bin
-    bin="$(xray_command)" || {
-        log_error "无法生成 X25519 密钥，请确保 Xray 已正确安装。"
-        exit 1
-    }
-    "$bin" x25519
+    local binary
+    binary="$(xray_command)" || fail "无法生成 X25519 密钥：Xray 未安装。"
+    "$binary" x25519 || fail "X25519 密钥生成失败。"
 }
 
 parse_x25519_keys() {
-    local raw="$1"
-    local private_key public_key
+    local raw="$1" private_key public_key
 
-    private_key="$(printf '%s\n' "$raw" | awk -F: 'tolower($1) ~ /private/ { gsub(/[[:space:]\r\n\t]/, "", $2); print $2; exit }')"
-    public_key="$(printf '%s\n' "$raw" | awk -F: 'tolower($1) ~ /(public|password)/ { gsub(/[[:space:]\r\n\t]/, "", $2); print $2; exit }')"
-
-    if [[ -z "$private_key" || -z "$public_key" ]]; then
+    private_key="$(printf '%s\n' "$raw" | awk -F: '
+        tolower($1) ~ /private/ {
+            gsub(/[[:space:]\r\n\t]/, "", $2)
+            print $2
+            exit
+        }
+    ')"
+    public_key="$(printf '%s\n' "$raw" | awk -F: '
+        tolower($1) ~ /(public|password)/ {
+            gsub(/[[:space:]\r\n\t]/, "", $2)
+            print $2
+            exit
+        }
+    ')"
+    if [ -z "$private_key" ] || [ -z "$public_key" ]; then
         log_error "X25519 密钥解析失败。"
         return 1
     fi
-
     printf '%s|%s\n' "$private_key" "$public_key"
 }
 
-generate_shortid() {
-    openssl rand -hex 4
-}
-
-generate_ss_password() {
-    openssl rand -base64 16
-}
-
 prepare_reality_params() {
-    local keys parsed_keys
-
-    if [[ "$REALITY_ENABLED" -ne 1 ]]; then
-        return 0
-    fi
-
-    if [[ -z "$REALITY_DOMAIN" ]]; then
-        log_error "启用 Reality 时必须提供 --reality-domain。"
-        exit 1
-    fi
-    validate_domain "$REALITY_DOMAIN" || {
-        log_error "Reality 域名无效: $REALITY_DOMAIN"
-        exit 1
-    }
-    log_info "使用 Reality 域名: $REALITY_DOMAIN"
-
-    if [[ -z "$REALITY_UUID" ]]; then
-        REALITY_UUID="$(generate_uuid)"
-        log_info "生成 Reality UUID"
-    else
-        log_info "使用指定 Reality UUID"
-    fi
-
-    if [[ -n "$REALITY_PRIVATE_KEY$REALITY_PUBLIC_KEY" ]]; then
-        if [[ -z "$REALITY_PRIVATE_KEY" || -z "$REALITY_PUBLIC_KEY" ]]; then
-            log_error "--reality-private-key 和 --reality-public-key 必须同时提供。"
-            exit 1
+    local keys parsed
+    [ "$REALITY_ENABLED" -eq 1 ] || return 0
+    validate_domain "$REALITY_DOMAIN" || fail "Reality 域名无效：$REALITY_DOMAIN"
+    [ -n "$REALITY_UUID" ] || REALITY_UUID="$(generate_uuid)"
+    if [ -n "$REALITY_PRIVATE_KEY$REALITY_PUBLIC_KEY" ]; then
+        if [ -z "$REALITY_PRIVATE_KEY" ] || [ -z "$REALITY_PUBLIC_KEY" ]; then
+            fail "Reality 私钥和公钥必须同时提供。"
         fi
-        log_info "使用指定 Reality 密钥对"
     else
         keys="$(generate_x25519)"
-        parsed_keys="$(parse_x25519_keys "$keys")" || exit 1
-        REALITY_PRIVATE_KEY="${parsed_keys%%|*}"
-        REALITY_PUBLIC_KEY="${parsed_keys#*|}"
-        log_info "生成 Reality 密钥对"
+        parsed="$(parse_x25519_keys "$keys")" || exit 1
+        REALITY_PRIVATE_KEY="${parsed%%|*}"
+        REALITY_PUBLIC_KEY="${parsed#*|}"
     fi
-
-    if [[ -z "$REALITY_SHORT_ID" ]]; then
-        REALITY_SHORT_ID="$(generate_shortid)"
-        log_info "生成 Reality short id"
-    else
-        log_info "使用指定 Reality short id"
-    fi
+    [ -n "$REALITY_SHORT_ID" ] || REALITY_SHORT_ID="$(openssl rand -hex 4)" || fail "Reality short id 生成失败。"
 }
 
 prepare_shadowsocks_params() {
-    if [[ "$SS_ENABLED" -ne 1 ]]; then
-        return 0
-    fi
-
-    if [[ -z "$SS_PASSWORD" ]]; then
-        SS_PASSWORD="$(generate_ss_password)"
-        log_info "生成 Shadowsocks 密码"
-    else
-        log_info "使用指定 Shadowsocks 密码"
-    fi
+    [ "$SS_ENABLED" -eq 1 ] || return 0
+    [ -n "$SS_PASSWORD" ] || SS_PASSWORD="$(openssl rand -base64 16)" || fail "Shadowsocks 密码生成失败。"
 }
 
 prepare_socks_params() {
-    if [[ "$SOCKS_ENABLED" -ne 1 ]]; then
-        return 0
+    [ "$SOCKS_ENABLED" -eq 1 ] || return 0
+    if [ -z "$SOCKS_HOST" ] || [ -z "$SOCKS_PORT" ]; then
+        fail "启用 Socks 时必须同时提供 host 和 port。"
     fi
-
-    if [[ -z "$SOCKS_HOST" ]]; then
-        log_error "启用 Socks 时必须提供 --socks-host。"
-        exit 1
-    fi
-
-    if [[ -z "$SOCKS_PORT" ]]; then
-        log_error "启用 Socks 时必须提供 --socks-port。"
-        exit 1
-    fi
-
-    validate_port "$SOCKS_PORT" "Socks"
-    log_info "启用 Socks 分流: $ROUTE_DOMAIN_DISPLAY"
+    validate_port "$SOCKS_PORT" Socks || exit 1
 }
 
 prepare_config_params() {
-    print_header "准备配置"
     prepare_ports
     prepare_reality_params
     prepare_shadowsocks_params
     prepare_socks_params
-    log_success "配置参数已就绪"
-}
-
-json_escape() {
-    local value="$1"
-    value="${value//\\/\\\\}"
-    value="${value//\"/\\\"}"
-    value="${value//$'\n'/\\n}"
-    value="${value//$'\r'/\\r}"
-    value="${value//$'\t'/\\t}"
-    printf '%s' "$value"
-}
-
-json_string() {
-    printf '"%s"' "$(json_escape "$1")"
-}
-
-json_array() {
-    local first=1
-    local value
-
-    printf '['
-    for value in "$@"; do
-        if [[ "$first" -eq 0 ]]; then
-            printf ', '
-        fi
-        json_string "$value"
-        first=0
-    done
-    printf ']'
 }
 
 build_reality_inbound() {
-    cat << EOF
-    {
-      "tag": "reality-in",
-      "listen": "0.0.0.0",
-      "port": $REALITY_PORT,
-      "protocol": "vless",
-      "settings": {
-        "clients": [
-          {
-            "id": $(json_string "$REALITY_UUID"),
-            "flow": "xtls-rprx-vision"
-          }
-        ],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "raw",
-        "security": "reality",
-        "realitySettings": {
-          "fingerprint": "ios",
-          "target": "$(json_escape "$REALITY_DOMAIN"):443",
-          "serverNames": [
-            $(json_string "$REALITY_DOMAIN")
-          ],
-          "privateKey": $(json_string "$REALITY_PRIVATE_KEY"),
-          "shortIds": [
-            $(json_string "$REALITY_SHORT_ID")
-          ]
-        }
-      }
-    }
-EOF
+    jq -n --argjson port "$REALITY_PORT" --arg uuid "$REALITY_UUID" \
+        --arg domain "$REALITY_DOMAIN" --arg key "$REALITY_PRIVATE_KEY" \
+        --arg sid "$REALITY_SHORT_ID" \
+        '{
+            tag: "reality-in",
+            listen: "0.0.0.0",
+            port: $port,
+            protocol: "vless",
+            settings: {
+                clients: [{id: $uuid, flow: "xtls-rprx-vision"}],
+                decryption: "none"
+            },
+            streamSettings: {
+                network: "raw",
+                security: "reality",
+                realitySettings: {
+                    fingerprint: "ios",
+                    target: ($domain + ":443"),
+                    serverNames: [$domain],
+                    privateKey: $key,
+                    shortIds: [$sid]
+                }
+            }
+        }'
 }
 
 build_shadowsocks_inbound() {
-    cat << EOF
-    {
-      "tag": "shadowsocks-in",
-      "listen": "0.0.0.0",
-      "port": $SS_PORT,
-      "protocol": "shadowsocks",
-      "settings": {
-        "network": "tcp,udp",
-        "method": "$SS_METHOD",
-        "password": $(json_string "$SS_PASSWORD")
-      }
-    }
-EOF
-}
-
-build_direct_outbound() {
-    cat << EOF
-    {
-      "protocol": "freedom",
-      "tag": "$DIRECT_TAG"
-    }
-EOF
-}
-
-build_socks_outbound() {
-    cat << EOF
-    {
-      "protocol": "socks",
-      "tag": "$SOCKS_TAG",
-      "settings": {
-        "address": $(json_string "$SOCKS_HOST"),
-        "port": $SOCKS_PORT
-      }
-    }
-EOF
-}
-
-build_routing() {
-    cat << EOF
-  "routing": {
-    "domainStrategy": "AsIs",
-    "rules": [
-      {
-        "type": "field",
-        "network": "tcp",
-        "domain": $(json_array "${ROUTE_DOMAINS[@]}"),
-        "outboundTag": "$SOCKS_TAG"
-      }
-    ]
-  }
-EOF
+    jq -n --argjson port "$SS_PORT" --arg method "$SS_METHOD" --arg password "$SS_PASSWORD" \
+        '{
+            tag: "shadowsocks-in",
+            listen: "0.0.0.0",
+            port: $port,
+            protocol: "shadowsocks",
+            settings: {
+                network: "tcp,udp",
+                method: $method,
+                password: $password
+            }
+        }'
 }
 
 build_xray_config() {
-    local first
-
-    printf '{\n'
-    printf '  "log": {\n'
-    printf '    "loglevel": "error"\n'
-    printf '  },\n'
-    printf '  "inbounds": [\n'
-
-    first=1
-    if [[ "$REALITY_ENABLED" -eq 1 ]]; then
-        build_reality_inbound
-        first=0
+    local inbounds='[]' inbound outbounds routing='{}'
+    if [ "$REALITY_ENABLED" -eq 1 ]; then
+        inbound="$(build_reality_inbound)" || return 1
+        inbounds="$(jq -cn --argjson a "$inbounds" --argjson b "$inbound" '$a+[$b]')"
     fi
-    if [[ "$SS_ENABLED" -eq 1 ]]; then
-        [[ "$first" -eq 0 ]] && printf ',\n'
-        build_shadowsocks_inbound
-        first=0
+    if [ "$SS_ENABLED" -eq 1 ]; then
+        inbound="$(build_shadowsocks_inbound)" || return 1
+        inbounds="$(jq -cn --argjson a "$inbounds" --argjson b "$inbound" '$a+[$b]')"
     fi
-
-    printf '\n  ],\n'
-    printf '  "outbounds": [\n'
-    build_direct_outbound
-    if [[ "$SOCKS_ENABLED" -eq 1 ]]; then
-        printf ',\n'
-        build_socks_outbound
+    outbounds='[{"protocol":"freedom","tag":"direct"}]'
+    if [ "$SOCKS_ENABLED" -eq 1 ]; then
+        outbounds="$(jq -cn \
+            --argjson base "$outbounds" \
+            --arg host "$SOCKS_HOST" \
+            --argjson port "$SOCKS_PORT" \
+            '$base + [{
+                protocol: "socks",
+                tag: "proxy",
+                settings: {address: $host, port: $port}
+            }]')"
+        routing="$(jq -cn \
+            --argjson domains "$(printf '%s\n' "${ROUTE_DOMAINS[@]}" | jq -R . | jq -s .)" \
+            '{
+                domainStrategy: "AsIs",
+                rules: [{
+                    type: "field",
+                    network: "tcp",
+                    domain: $domains,
+                    outboundTag: "proxy"
+                }]
+            }')"
     fi
-    printf '\n  ]'
-    if [[ "$SOCKS_ENABLED" -eq 1 ]]; then
-        printf ',\n'
-        build_routing
-    fi
-    printf '\n}\n'
+    jq -n --argjson inbounds "$inbounds" --argjson outbounds "$outbounds" --argjson routing "$routing" \
+        '{
+            log: {loglevel: "error"},
+            inbounds: $inbounds,
+            outbounds: $outbounds
+        } + (if ($routing | length) > 0 then {routing: $routing} else {} end)'
 }
 
-create_xray_config() {
-    print_header "生成 Xray 配置"
-    local config_dir
-    local temp_file
+apply_config() {
+    local directory candidate binary
 
-    config_dir="$(dirname "$CONFIG_FILE")"
-    temp_file="${CONFIG_FILE}.tmp"
-
-    mkdir -p "$config_dir"
-    chmod 755 "$config_dir"
-
-    if ! build_xray_config > "$temp_file"; then
-        log_error "Xray 配置生成失败。"
-        rm -f "$temp_file"
-        exit 1
-    fi
-
-    mv "$temp_file" "$CONFIG_FILE"
-    log_success "配置文件已生成: $CONFIG_FILE"
-}
-
-validate_xray_config() {
-    print_header "校验 Xray 配置"
-    local bin
-    local output
-
-    bin="$(xray_command)" || {
-        log_error "未找到 xray 命令。"
-        exit 1
+    directory="$(dirname "$XRAY_CONFIG_FILE")"
+    mkdir -p "$directory" || fail "无法创建 Xray 配置目录。"
+    candidate="$(mktemp "${directory}/.config.json.XXXXXX")" || fail "无法创建 Xray 候选配置。"
+    umask 077
+    build_xray_config > "$candidate" || {
+        rm -f "$candidate"
+        fail "Xray 配置生成失败。"
     }
-
-    if output="$("$bin" run -test -config "$CONFIG_FILE" 2>&1)"; then
-        log_success "Xray 配置校验通过"
+    jq -e . "$candidate" >/dev/null 2>&1 || {
+        rm -f "$candidate"
+        fail "Xray JSON 预检失败。"
+    }
+    binary="$(xray_command)" || {
+        rm -f "$candidate"
+        fail "未找到 Xray。"
+    }
+    "$binary" run -test -config "$candidate" >/dev/null 2>&1 || {
+        rm -f "$candidate"
+        fail "Xray 配置预检失败。"
+    }
+    if [ -f "$XRAY_CONFIG_FILE" ] && cmp -s "$candidate" "$XRAY_CONFIG_FILE"; then
+        rm -f "$candidate"
+        CONFIG_CHANGED=0
         return 0
     fi
-
-    log_error "Xray 配置校验失败。"
-    printf '%s\n' "$output" >&2
-    exit 1
+    if ! chmod 600 "$candidate" || ! mv -f "$candidate" "$XRAY_CONFIG_FILE"; then
+        rm -f "$candidate"
+        fail "Xray 配置应用失败。"
+    fi
+    CONFIG_CHANGED=1
+    log_info "已更新 Xray 配置：$XRAY_CONFIG_FILE"
 }
 
-restart_xray_service() {
-    print_header "启动 Xray 服务"
-
-    if ! systemctl enable "$XRAY_SERVICE" >/dev/null 2>&1; then
-        log_error "Xray 服务启用失败。"
-        exit 1
+begin_transaction() {
+    TRANSACTION_DIR="$(mktemp -d)" || fail "无法创建 Xray 事务目录。"
+    if systemctl is-active --quiet xray 2>/dev/null; then
+        SERVICE_WAS_ACTIVE=1
+    else
+        SERVICE_WAS_ACTIVE=0
     fi
+    if systemctl is-enabled --quiet xray 2>/dev/null; then
+        SERVICE_WAS_ENABLED=1
+    else
+        SERVICE_WAS_ENABLED=0
+    fi
+    if [ -e "$XRAY_CONFIG_FILE" ]; then
+        cp -a "$XRAY_CONFIG_FILE" "${TRANSACTION_DIR}/config" || {
+            rm -rf "$TRANSACTION_DIR"
+            fail "无法备份 Xray 配置。"
+        }
+        : > "${TRANSACTION_DIR}/config.exists"
+    fi
+    CONFIG_CHANGED=0
+    TRANSACTION_ACTIVE=1
+    trap rollback_transaction EXIT
+}
 
-    if systemctl is-active --quiet "$XRAY_SERVICE" 2>/dev/null; then
-        log_info "重启 Xray 服务..."
-        if ! systemctl restart "$XRAY_SERVICE" >/dev/null 2>&1; then
-            log_error "Xray 服务重启失败。"
-            log_error "查看日志: journalctl -u $XRAY_SERVICE"
-            exit 1
+rollback_transaction() {
+    local restore_failed=0 restore_candidate=""
+
+    [ "$TRANSACTION_ACTIVE" -eq 1 ] || return 0
+    if [ -e "${TRANSACTION_DIR}/config.exists" ]; then
+        mkdir -p "$(dirname "$XRAY_CONFIG_FILE")" || restore_failed=1
+        restore_candidate="$(mktemp "$(dirname "$XRAY_CONFIG_FILE")/.config.restore.XXXXXX")" ||
+            restore_failed=1
+        if [ -n "$restore_candidate" ]; then
+            if ! cp -a "${TRANSACTION_DIR}/config" "$restore_candidate" ||
+               ! mv -f "$restore_candidate" "$XRAY_CONFIG_FILE"; then
+                restore_failed=1
+            fi
+            rm -f "$restore_candidate" || restore_failed=1
         fi
     else
-        log_info "启动 Xray 服务..."
-        if ! systemctl start "$XRAY_SERVICE" >/dev/null 2>&1; then
-            log_error "Xray 服务启动失败。"
-            log_error "查看日志: journalctl -u $XRAY_SERVICE"
-            exit 1
-        fi
+        rm -f "$XRAY_CONFIG_FILE" || restore_failed=1
     fi
+    if [ "$SERVICE_WAS_ENABLED" -eq 1 ]; then
+        systemctl enable xray >/dev/null 2>&1 || restore_failed=1
+    elif systemctl is-enabled --quiet xray 2>/dev/null; then
+        systemctl disable xray >/dev/null 2>&1 || restore_failed=1
+    fi
+    if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
+        systemctl restart xray >/dev/null 2>&1 || restore_failed=1
+    elif systemctl is-active --quiet xray 2>/dev/null; then
+        systemctl stop xray >/dev/null 2>&1 || restore_failed=1
+    fi
+    TRANSACTION_ACTIVE=0
+    trap - EXIT
+    rm -rf "$TRANSACTION_DIR" || restore_failed=1
+    if [ "$restore_failed" -eq 1 ]; then
+        log_error "Xray 配置或服务状态恢复失败。"
+        return 1
+    fi
+    log_warning "Xray 变更失败，已恢复脚本管理的配置和服务状态。"
+}
 
-    sleep 2
-    if ! systemctl is-active --quiet "$XRAY_SERVICE"; then
+commit_transaction() {
+    [ "$TRANSACTION_ACTIVE" -eq 1 ] || return 0
+    TRANSACTION_ACTIVE=0
+    trap - EXIT
+    rm -rf "$TRANSACTION_DIR" || log_warning "Xray 事务临时目录清理失败：$TRANSACTION_DIR"
+}
+
+ensure_xray_installed() {
+    if xray_command >/dev/null 2>&1 && systemctl cat xray.service >/dev/null 2>&1; then
+        XRAY_CHANGED=0
+        return 0
+    fi
+    run_xray_installer install --without-geodata
+    XRAY_CHANGED=1
+}
+
+converge_service() {
+    if ! systemctl is-enabled --quiet xray 2>/dev/null; then
+        if ! systemctl enable xray >/dev/null 2>&1; then
+            log_error "Xray 服务启用失败。"
+            return 1
+        fi
+        log_info "已启用系统服务：xray.service"
+    fi
+    if systemctl is-active --quiet xray 2>/dev/null; then
+        if (( XRAY_CHANGED || CONFIG_CHANGED )); then
+            if ! systemctl restart xray >/dev/null 2>&1; then
+                log_error "Xray 重启失败。"
+                return 1
+            fi
+            log_info "已重启系统服务：xray.service"
+        fi
+    elif ! systemctl start xray >/dev/null 2>&1; then
+        log_error "Xray 启动失败。"
+        return 1
+    else
+        log_info "已启动系统服务：xray.service"
+    fi
+}
+
+port_listening() {
+    ss -H -lntu 2>/dev/null | grep -Eq ":${1}[[:space:]]"
+}
+
+verify_service() {
+    if ! systemctl is-active --quiet xray 2>/dev/null; then
         log_error "Xray 服务未运行。"
-        log_error "查看日志: journalctl -u $XRAY_SERVICE"
-        exit 1
+        return 1
     fi
-
-    log_success "Xray 服务运行中"
+    if [ "$REALITY_ENABLED" -eq 1 ] && ! port_listening "$REALITY_PORT"; then
+        log_error "Reality 未监听端口：$REALITY_PORT"
+        return 1
+    fi
+    if [ "$SS_ENABLED" -eq 1 ] && ! port_listening "$SS_PORT"; then
+        log_error "Shadowsocks 未监听端口：$SS_PORT"
+        return 1
+    fi
 }
 
-get_ipv4_address() {
-    local ip
-    ip="$(curl -fsS --max-time 5 https://api.ipify.org 2>/dev/null || true)"
-
-    if [[ -z "$ip" ]]; then
-        printf '无法获取 IP\n'
-    else
-        printf '%s\n' "$ip"
-    fi
+verify_existing_listeners() {
+    local port
+    systemctl is-active --quiet xray 2>/dev/null || return 1
+    while IFS= read -r port; do
+        port_listening "$port" || return 1
+    done < <(jq -r '.inbounds[].port' "$XRAY_CONFIG_FILE")
 }
 
 show_configuration() {
-    local server_ip
-    local status
+    local ip
 
-    print_header "配置详情"
-    server_ip="$(get_ipv4_address)"
-    status="$(systemctl is-active "$XRAY_SERVICE" 2>/dev/null || printf 'unknown')"
-
-    printf "%-22s %s\n" "服务:" "xray (${status})"
-    printf "%-22s %s\n" "服务器 IP:" "$server_ip"
-
-    if [[ "$REALITY_ENABLED" -eq 1 ]]; then
-        echo ""
-        echo "Reality:"
-        printf "%-22s %s\n" "端口:" "$REALITY_PORT"
-        printf "%-22s %s\n" "协议:" "vless"
-        printf "%-22s %s\n" "UUID:" "$REALITY_UUID"
-        printf "%-22s %s\n" "域名:" "$REALITY_DOMAIN"
-        printf "%-22s %s\n" "PrivateKey:" "$REALITY_PRIVATE_KEY"
-        printf "%-22s %s\n" "PublicKey:" "$REALITY_PUBLIC_KEY"
-        printf "%-22s %s\n" "Short ID:" "$REALITY_SHORT_ID"
+    ip="$(curl --fail --silent --show-error --max-time 5 https://api.ipify.org 2>/dev/null)" || true
+    printf '\n=== Xray 客户端配置 ===\n服务器：%s\n' "${ip:-无法获取 IP}"
+    if [ "$REALITY_ENABLED" -eq 1 ]; then
+        printf 'Reality 端口：%s\nUUID：%s\n域名：%s\nPrivateKey：%s\nPublicKey：%s\nShort ID：%s\n' \
+            "$REALITY_PORT" "$REALITY_UUID" "$REALITY_DOMAIN" \
+            "$REALITY_PRIVATE_KEY" "$REALITY_PUBLIC_KEY" "$REALITY_SHORT_ID"
     fi
-
-    if [[ "$SS_ENABLED" -eq 1 ]]; then
-        echo ""
-        echo "Shadowsocks:"
-        printf "%-22s %s\n" "端口:" "$SS_PORT"
-        printf "%-22s %s\n" "密码:" "$SS_PASSWORD"
-        printf "%-22s %s\n" "加密:" "$SS_METHOD"
+    if [ "$SS_ENABLED" -eq 1 ]; then
+        printf 'Shadowsocks 端口：%s\nShadowsocks 密码：%s\n加密：%s\n' \
+            "$SS_PORT" "$SS_PASSWORD" "$SS_METHOD"
     fi
-
-    if [[ "$SOCKS_ENABLED" -eq 1 ]]; then
-        echo ""
-        echo "Socks:"
-        printf "%-22s %s\n" "状态:" "enabled"
-        printf "%-22s %s\n" "Server:" "$SOCKS_HOST:$SOCKS_PORT"
-        printf "%-22s %s\n" "Route domains:" "$ROUTE_DOMAIN_DISPLAY"
-        printf "%-22s %s\n" "Final:" "$DIRECT_TAG"
+    if [ "$SOCKS_ENABLED" -eq 1 ]; then
+        printf 'Socks：%s:%s\n分流域名：reddit.com, cloudflare.com\n' "$SOCKS_HOST" "$SOCKS_PORT"
     fi
+    printf '========================\n'
+}
 
-    echo ""
+install_reality() {
+    begin_transaction
+    ensure_xray_installed
+    prepare_config_params
+    apply_config
+    if ! converge_service || ! verify_service; then
+        if rollback_transaction; then
+            fail "Xray 应用失败，配置和服务状态已恢复；官方安装器变更保留。"
+        fi
+        fail "Xray 应用失败，且配置或服务状态恢复失败。"
+    fi
+    commit_transaction
+    log_info "Xray 配置完成并正在运行。"
+    show_configuration
 }
 
 update_xray() {
-    print_header "更新 Xray"
-    local service_was_running=0
+    local binary
 
-    if systemctl is-active --quiet "$XRAY_SERVICE" 2>/dev/null; then
-        service_was_running=1
+    begin_transaction
+    run_xray_installer install --without-geodata
+    XRAY_CHANGED=1
+    binary="$(xray_command)" || fail "Xray 更新后命令不存在。"
+    "$binary" run -test -config "$XRAY_CONFIG_FILE" >/dev/null 2>&1 ||
+        fail "新 Xray 无法加载现有配置；官方安装器变更已保留。"
+    if ! converge_service || ! verify_existing_listeners; then
+        if rollback_transaction; then
+            fail "Xray 更新后服务验证失败，服务状态已恢复；新版本保留。"
+        fi
+        fail "Xray 更新后服务验证失败，且服务状态恢复失败。"
     fi
+    commit_transaction
+    log_info "Xray 已更新并验证运行状态。"
+}
 
-    if ! bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install --without-geodata; then
-        log_error "Xray 更新失败。"
-        exit 1
+verify_uninstalled() {
+    if systemctl is-active --quiet xray 2>/dev/null ||
+       systemctl cat xray.service >/dev/null 2>&1 ||
+       [ -e "$XRAY_BINARY" ] || [ -e "$XRAY_CONFIG_FILE" ]; then
+        fail "Xray 卸载验证失败。"
     fi
-
-    if [[ "$service_was_running" -eq 1 ]]; then
-        systemctl restart "$XRAY_SERVICE" >/dev/null 2>&1 || {
-            log_error "Xray 服务重启失败。"
-            exit 1
-        }
-    fi
-
-    log_success "Xray 更新完成"
 }
 
 uninstall_xray() {
-    print_header "卸载 Xray"
-
-    if ! systemctl is-active --quiet "$XRAY_SERVICE" 2>/dev/null &&
-       ! systemctl cat "$XRAY_SERVICE" >/dev/null 2>&1 &&
-       ! xray_command >/dev/null 2>&1 && [[ ! -e "$CONFIG_FILE" ]]; then
-        log_success "Xray 已不存在"
+    if [ ! -e "$XRAY_BINARY" ] && [ ! -e "$XRAY_CONFIG_FILE" ] &&
+       ! systemctl is-active --quiet xray 2>/dev/null &&
+       ! systemctl cat xray.service >/dev/null 2>&1; then
+        log_info "Xray 已不存在，无需卸载。"
         return 0
     fi
-
-    log_info "停止服务: $XRAY_SERVICE"
-    systemctl stop "$XRAY_SERVICE" >/dev/null 2>&1 || true
-
-    log_info "禁用服务: $XRAY_SERVICE"
-    systemctl disable "$XRAY_SERVICE" >/dev/null 2>&1 || true
-
-    log_info "执行 Xray 卸载脚本"
-    if ! bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ remove --purge; then
-        log_error "Xray 卸载失败。"
-        exit 1
-    fi
-
-    systemctl daemon-reload >/dev/null 2>&1 || true
-    systemctl reset-failed "$XRAY_SERVICE" >/dev/null 2>&1 || true
-    log_success "Xray 卸载完成"
-}
-
-run_installation() {
-    ensure_xray_installed
-    prepare_config_params
-    create_xray_config
-    validate_xray_config
-    restart_xray_service
-    show_configuration
+    ensure_dependencies
+    run_xray_installer remove --purge
+    systemctl daemon-reload >/dev/null 2>&1 || fail "systemd daemon 重载失败。"
+    systemctl reset-failed xray >/dev/null 2>&1 || true
+    verify_uninstalled
+    log_info "Xray 已卸载。"
 }
 
 main() {
     parse_args "$@"
-
-    if [[ "$UPDATE_REQUESTED" -eq 1 && "$UNINSTALL_REQUESTED" -eq 1 ]]; then
-        log_error "--update 和 --uninstall 不能同时使用。"
-        exit 1
-    fi
-
-    if [[ "$UPDATE_REQUESTED" -eq 0 && "$UNINSTALL_REQUESTED" -eq 0 ]]; then
+    if [ "$UPDATE_REQUESTED" -eq 0 ] && [ "$UNINSTALL_REQUESTED" -eq 0 ]; then
         parse_protocols
         validate_protocol_scope
     fi
-
-    require_root
-    check_curl
-
-    if [[ "$UPDATE_REQUESTED" -eq 1 ]]; then
+    require_environment
+    if [ "$UPDATE_REQUESTED" -eq 1 ]; then
+        ensure_dependencies
         update_xray
-        exit 0
-    fi
-
-    if [[ "$UNINSTALL_REQUESTED" -eq 1 ]]; then
+    elif [ "$UNINSTALL_REQUESTED" -eq 1 ]; then
         uninstall_xray
-        exit 0
+    else
+        ensure_dependencies
+        install_reality
     fi
-
-    run_installation
 }
 
 main "$@"

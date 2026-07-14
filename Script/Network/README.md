@@ -27,9 +27,11 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 --socks-port PORT               Socks 服务端口
 --version VERSION               sing-box 版本
 --update                        更新 sing-box
---uninstall                     卸载 sing-box
+-u, --uninstall                 卸载 sing-box
 -h, --help                      显示帮助
 ```
+
+安装时必须提供 `--protocol`；无参数会直接报错。
 
 ### 示例命令
 ```bash
@@ -57,8 +59,10 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 -s password             Shadowsocks 密码
 -p port                 Shadowsocks 端口
 -u                      卸载
--h                      显示帮助
+-h, --help              显示帮助
 ```
+
+无参数时显示安装、更新、卸载菜单。
 
 ### 示例命令
 ```bash
@@ -79,6 +83,8 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 -u, --uninstall             卸载 Dante
 -h, --help                  显示帮助
 ```
+
+安装时 `--allow-ip` 必填；无参数会直接报错。
 
 ### 示例命令
 ```bash
@@ -101,6 +107,8 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 -k, --psk PSK           预共享密钥
 -h, --help              显示帮助
 ```
+
+无参数时显示安装、更新、卸载菜单。
 
 ### 示例命令
 ```bash
@@ -128,9 +136,11 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 --socks-host HOST               Socks 服务 IP
 --socks-port PORT               Socks 服务端口
 --update                        更新 Xray
---uninstall                     卸载 Xray
+-u, --uninstall                 卸载 Xray
 -h, --help                      显示帮助
 ```
+
+安装时必须提供 `--protocol`；无参数会直接报错。
 
 ### 示例命令
 ```bash
@@ -155,7 +165,10 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 -e, --ecs REGION        ECS 区域: HK, TYO, LA, OR, SEA
 -6, --ipv6 MODE         IPv6 模式: yes, no
 -u, --uninstall         卸载并恢复 DNS 为 1.1.1.1 / 8.8.8.8
+-h, --help              显示帮助
 ```
+
+无参数时安装 SmartDNS，或更新现有配置。
 
 ### 示例命令
 ```bash
@@ -173,11 +186,14 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 ```text
 -i, --install           显式安装，可省略
 -d, --dns DNS           自定义 DNS 服务器
--e, --ecs REGION        ECS 区域: HK, TYO, LA, SEA
+-e, --ecs REGION        ECS 区域: HK, TYO, LA, OR, SEA
 -4, --ipv4              IPv4 优先
 -6, --ipv6              IPv6 优先
 -u, --uninstall         卸载
+-h, --help              显示帮助
 ```
+
+无参数时使用默认配置安装 MosDNS。
 
 ### 示例命令
 ```bash
@@ -195,8 +211,10 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 ```text
 -6 yes|no               是否保留 IPv6 配置，默认 yes
 -u                      移除内核优化配置
--h                      显示帮助
+-h, --help              显示帮助
 ```
+
+无参数时应用默认内核网络优化配置。
 
 ### 示例命令
 ```bash
@@ -230,6 +248,8 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 RULE: <源端口>:<目标(IPv4/域名/local)>:<目标端口>[:SNAT_IP[:MSS]]
 ```
 
+无参数时显示帮助并返回失败，不会修改系统。
+
 ### 示例命令
 ```bash
 bash nftables.sh --add 10086:82.40.1.2:33333:10.100.1.2:auto
@@ -248,6 +268,8 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 --remove                删除 Telegram IP 映射和持久规则文件
 --help, -h              显示帮助
 ```
+
+无参数时显示帮助并返回失败，不会修改系统。
 
 ### 示例命令
 ```bash
@@ -270,7 +292,10 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 config=ssh              写入 SSH hardening 配置
 key=...                 确保 root 可使用该 ssh-ed25519 公钥，必要时写入 authorized_keys3
 allow=...               IPv4、IPv4 CIDR 或域名，逗号分隔
+-h, --help              显示帮助
 ```
+
+无参数时显示帮助并返回失败，不会修改系统。
 
 ### 示例命令
 ```bash
@@ -294,11 +319,37 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 --cache <domain>                    输出缓存记录
 --lookup <domain>                   输出缓存或即时解析 IPv4
 --cleanup unused                    无订阅时清理运行时
+-h, --help                          显示帮助
 ```
+
+无参数时显示帮助并返回失败，不会修改系统。
 
 ### 示例命令
 ```bash
 bash providerdns.sh --lookup example.com
+```
+
+## **warp.sh**
+
+### 下载
+```bash
+wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/warp.sh
+```
+
+### 参数说明
+```text
+--account ID             本地账户 ID，必须和 --name 成对出现；可重复使用
+--name NAME              WARP 设备名称，必须紧跟对应的 --account
+--license KEY            WARP+ license，对全部账户生效
+--remove, -u             清理全部 WARP 配置和生成产物
+-h, --help               显示帮助
+```
+
+无参数时显示错误并返回失败，不会修改系统。
+
+### 示例命令
+```bash
+bash warp.sh --account account-a --name device-a --account account-b --name device-b
 ```
 
 ## **run.sh**

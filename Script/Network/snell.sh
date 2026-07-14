@@ -1,248 +1,192 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-# Set PATH
-PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
-export PATH
+set -o pipefail
 
-###################
-# Constants
-###################
-CONF="/etc/snell/snell.conf"
-SYSTEMD="/etc/systemd/system/snell.service"
-DOWNLOAD_BASE="https://dl.nssurge.com/snell"
-SERVER_BIN="/usr/local/bin/snell-server"
-SYSTEMD_CHANGED=0
+SNELL_CONFIG_FILE="${SNELL_CONFIG_FILE:-/etc/snell/snell.conf}"
+SNELL_UNIT_FILE="${SNELL_UNIT_FILE:-/etc/systemd/system/snell.service}"
+SNELL_BINARY="${SNELL_BINARY:-/usr/local/bin/snell-server}"
+SNELL_DOWNLOAD_BASE="https://dl.nssurge.com/snell"
 
-# Color codes
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+ACTION=""
+VERSION=""
+PORT=""
+PSK=""
+BINARY_CHANGED=0
+CONFIG_CHANGED=0
+UNIT_CHANGED=0
+TRANSACTION_DIR=""
+TRANSACTION_ACTIVE=0
+SERVICE_WAS_ACTIVE=0
+SERVICE_WAS_ENABLED=0
 
-###################
-# Utility Functions
-###################
-print_message() {
-    local level=$1
-    local message=$2
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    case "$level" in
-        "info")    echo -e "${timestamp} ${BLUE}[INFO] ${message}${NC}" ;;
-        "success") echo -e "${timestamp} ${GREEN}[SUCCESS] ${message}${NC}" ;;
-        "warning") echo -e "${timestamp} ${YELLOW}[WARNING] ${message}${NC}" ;;
-        "error")   echo -e "${timestamp} ${RED}[ERROR] ${message}${NC}" ;;
-    esac
+log_info() {
+    printf '[INFO] %s\n' "$*"
 }
 
-check_root() {
-    if [[ $EUID -ne 0 ]]; then
-        print_message "error" "This script must be run as root. Please use sudo."
-        exit 1
+log_warning() {
+    printf '[WARNING] %s\n' "$*" >&2
+}
+
+log_error() {
+    printf '[ERROR] %s\n' "$*" >&2
+}
+
+fail() {
+    log_error "$*"
+    exit 1
+}
+
+show_usage() {
+    cat <<'EOF'
+用法：
+  bash snell.sh --install [VERSION] [--port PORT] [--psk PSK]
+  bash snell.sh --update [VERSION]
+  bash snell.sh --uninstall
+
+参数：
+  -i, --install [VERSION]  安装，可指定版本
+  -n, --update [VERSION]   更新，可指定版本
+  -u, --uninstall          卸载
+  -p, --port PORT          监听端口，范围 10000-60000
+  -k, --psk PSK            16 位字母数字预共享密钥
+  -h, --help               显示帮助
+
+无参数时显示交互菜单。
+EOF
+}
+
+parse_args() {
+    while [ "$#" -gt 0 ]; do
+        if [[ "$1" =~ ^(-i|--install|-n|--update|-u|--uninstall)$ ]]; then
+            [ -z "$ACTION" ] || fail "只能选择一个操作。"
+            if [[ "$1" =~ ^(-i|--install)$ ]]; then
+                ACTION=install
+            elif [[ "$1" =~ ^(-n|--update)$ ]]; then
+                ACTION=update
+            else
+                ACTION=uninstall
+            fi
+            shift
+            if [ "$ACTION" != uninstall ] && [ "$#" -gt 0 ] && [[ "$1" != -* ]]; then
+                VERSION="$1"
+                shift
+            fi
+        elif [[ "$1" =~ ^(-p|--port)$ ]]; then
+            if [ "$#" -le 1 ] || [[ "$2" == -* ]]; then
+                fail "$1 缺少参数值。"
+            fi
+            PORT="$2"
+            shift 2
+        elif [[ "$1" =~ ^(-k|--psk)$ ]]; then
+            if [ "$#" -le 1 ] || [[ "$2" == -* ]]; then
+                fail "$1 缺少参数值。"
+            fi
+            PSK="$2"
+            shift 2
+        elif [[ "$1" =~ ^(-h|--help)$ ]]; then
+            show_usage
+            exit 0
+        else
+            fail "未知参数：$1"
+        fi
+    done
+
+    if [ "$ACTION" != install ] && [ -n "$PORT$PSK" ]; then
+        fail "--port 和 --psk 只能用于安装。"
     fi
 }
 
-get_ipv4_address() {
-    local ip=$(wget -qO- -t1 -T2 https://api.ipify.org)
-    echo "${ip:-Unable to get IP address}"
+require_environment() {
+    [ "${EUID:-$(id -u)}" -eq 0 ] || fail "请使用 root 权限执行。"
+    command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt 环境。"
+    command -v systemctl >/dev/null 2>&1 || fail "当前系统未提供 systemd。"
 }
 
-###################
-# Version Management
-###################
-validate_version_format() {
-    local version=$1
-    if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        print_message "error" "Invalid version format. Please use format: X.Y.Z (e.g., 4.1.1)"
+ensure_dependencies() {
+    local missing=()
+
+    command -v wget >/dev/null 2>&1 || missing+=(wget)
+    [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
+    command -v unzip >/dev/null 2>&1 || missing+=(unzip)
+    command -v ss >/dev/null 2>&1 || missing+=(iproute2)
+    [ "${#missing[@]}" -eq 0 ] && return 0
+
+    log_info "正在安装缺失依赖：${missing[*]}"
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 ||
+        fail "软件包索引更新失败。"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
+        fail "依赖安装失败：${missing[*]}"
+    log_info "已安装依赖：${missing[*]}"
+}
+
+validate_value() {
+    local type="$1" value="$2"
+    if [ "$type" = version ] && ! [[ "$value" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        log_error "版本格式无效：$value；应为 X.Y.Z。"
         return 1
     fi
-    return 0
-}
-
-get_server_version() {
-    if [[ -f "$SERVER_BIN" ]]; then
-        # Try to get version from server binary
-        local raw_version
-        raw_version=$("$SERVER_BIN" -v 2>&1) || true
-        if [[ $raw_version =~ [0-9]+\.[0-9]+\.[0-9]+ ]]; then
-            echo "${BASH_REMATCH[0]}"
-            return 0
-        else
-            print_message "error" "Unable to get current version from server binary"
+    if [ "$type" = port ]; then
+        if ! [[ "$value" =~ ^[0-9]+$ ]] || (( 10#$value < 10000 || 10#$value > 60000 )); then
+            log_error "端口无效：$value；范围应为 10000-60000。"
             return 1
         fi
     fi
-    print_message "error" "Snell server binary not found"
-    return 1
-}
-
-prompt_version() {  
-    local new_version
-    while true; do
-        read -p "Enter the version number (e.g., 4.1.1): " new_version
-        if validate_version_format "$new_version"; then
-            echo "$new_version"
-            return 0
-        fi
-    done
-}
-
-version_gt() {
-    test "$(echo "$@" | tr " " "\n" | sort -V | head -n 1)" != "$1"
-}
-
-###################
-# System Detection
-###################
-detect_architecture() {
-    local arch=$(uname -m)
-    case "$arch" in
-        x86_64)   echo "amd64" ;;
-        i386|i686) echo "i386" ;;
-        aarch64)   echo "aarch64" ;;
-        armv7l)    echo "armv7l" ;;
-        *)
-            print_message "error" "Unsupported architecture: $arch"
-            exit 1
-            ;;
-    esac
-}
-
-###################
-# Service Management
-###################
-show_service_status() {
-    print_message "info" "Current service status:"
-    echo "----------------------------------------"
-    systemctl status snell --no-pager
-    echo "----------------------------------------"
-}
-
-stop_service() {
-    if systemctl is-active snell &>/dev/null; then
-        print_message "info" "Stopping Snell service..."
-        systemctl stop snell
-        sleep 2  # Give some time for the service to stop
+    if [ "$type" = psk ] && ! [[ "$value" =~ ^[A-Za-z0-9]{16}$ ]]; then
+        log_error "PSK 无效：必须是 16 位字母数字。"
+        return 1
     fi
 }
 
-remove_existing_server() {
-    if [[ -f "$SERVER_BIN" ]]; then
-        print_message "info" "Removing existing Snell server..."
-        stop_service
-        rm -f "$SERVER_BIN"
-    fi
-}
+detect_arch() {
+    local arch
 
-###################
-# Dependencies
-###################
-setup_dependencies() {
-    print_message "info" "Checking dependencies..."
-    local deps=("unzip" "wget")
-    local missing_deps=()
-
-    for dep in "${deps[@]}"; do
-        if ! command -v "$dep" >/dev/null 2>&1; then
-            missing_deps+=("$dep")
-        fi
-    done
-
-    if [ ${#missing_deps[@]} -gt 0 ]; then
-        print_message "info" "Installing missing dependencies: ${missing_deps[*]}"
-        if command -v apt-get >/dev/null 2>&1; then
-            apt-get update && apt-get install -y "${missing_deps[@]}"
-        elif command -v yum >/dev/null 2>&1; then
-            yum install -y "${missing_deps[@]}"
-        elif command -v dnf >/dev/null 2>&1; then
-            dnf install -y "${missing_deps[@]}"
-        elif command -v pacman >/dev/null 2>&1; then
-            pacman -Sy --noconfirm "${missing_deps[@]}"
-        else
-            print_message "error" "No supported package manager found. Please install ${missing_deps[*]} manually."
-            exit 1
-        fi
-        print_message "success" "Dependencies installed successfully"
+    arch="$(uname -m)"
+    if [ "$arch" = x86_64 ]; then
+        printf 'amd64\n'
+    elif [[ "$arch" =~ ^(i386|i686)$ ]]; then
+        printf 'i386\n'
+    elif [ "$arch" = aarch64 ]; then
+        printf 'aarch64\n'
+    elif [ "$arch" = armv7l ]; then
+        printf 'armv7l\n'
     else
-        print_message "success" "All dependencies are already installed"
+        fail "不支持的系统架构：$arch"
     fi
 }
 
-###################
-# Configuration
-###################
-validate_port() {
-    if [[ ! "$1" =~ ^[0-9]+$ ]] || [ "$1" -lt 10000 ] || [ "$1" -gt 60000 ]; then
-        print_message "error" "Invalid port. Must be between 10000 and 60000"
-        return 1
-    fi
-    return 0
+get_current_version() {
+    local output
+
+    [ -x "$SNELL_BINARY" ] || return 1
+    output="$("$SNELL_BINARY" -v 2>&1)" || return 1
+    [[ "$output" =~ [0-9]+\.[0-9]+\.[0-9]+ ]] || return 1
+    printf '%s\n' "${BASH_REMATCH[0]}"
 }
 
-validate_psk() {
-    if [[ ! "$1" =~ ^[A-Za-z0-9]{16}$ ]]; then
-        print_message "error" "Invalid PSK. Must be exactly 16 alphanumeric characters"
-        return 1
-    fi
-    return 0
-}
-
-get_valid_port() {
-    local port=$1
-    if [ -n "$port" ]; then
-        if validate_port "$port"; then
-            echo "$port"
-            return 0
-        fi
-        exit 1
-    fi
-    
-    while true; do
-        read -p "Enter port number (10000-60000): " port
-        if validate_port "$port"; then
-            echo "$port"
-            return 0
-        fi
+prepare_install_inputs() {
+    while [ -z "$PORT" ]; do
+        read -r -p '请输入端口（10000-60000）：' PORT || fail "未读取到端口。"
     done
-}
+    validate_value port "$PORT" || exit 1
 
-generate_psk() {
-    local psk=$1
-    if [ -n "$psk" ]; then
-        if validate_psk "$psk"; then
-            echo "$psk"
-            return 0
-        fi
-        exit 1
+    if [ -z "$PSK" ]; then
+        PSK="$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16 || true)"
+        [ "${#PSK}" -eq 16 ] || fail "PSK 生成失败。"
     fi
-    
-    psk=$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16)
-    echo "$psk"
+    validate_value psk "$PSK" || exit 1
 }
 
-create_config() {
-    local port=$1
-    local psk=$2
-    
-    print_message "info" "Creating configuration directory..."
-    mkdir -p /etc/snell
-    
-    print_message "info" "Creating configuration file..."
-    cat > "${CONF}" << EOF
+render_config() {
+    cat <<EOF
 [snell-server]
-listen = ::0:${port}
-psk = ${psk}
+listen = ::0:${PORT}
+psk = ${PSK}
 ipv6 = true
 EOF
-    print_message "success" "Configuration file created"
 }
 
-create_service() {
-    local temp_file="${SYSTEMD}.tmp"
-
-    print_message "info" "Checking system service..."
-    mkdir -p "$(dirname "$SYSTEMD")"
-    cat > "${temp_file}" << EOF
+render_service() {
+    cat <<EOF
 [Unit]
 Description=Snell Server
 After=network.target
@@ -250,7 +194,7 @@ After=network.target
 [Service]
 Type=simple
 LimitNOFILE=65536
-ExecStart=/usr/local/bin/snell-server -c ${CONF}
+ExecStart=${SNELL_BINARY} -c ${SNELL_CONFIG_FILE}
 Restart=always
 RestartSec=2
 TimeoutStopSec=15
@@ -258,318 +202,357 @@ TimeoutStopSec=15
 [Install]
 WantedBy=multi-user.target
 EOF
-
-    if [[ -f "$SYSTEMD" ]] && cmp -s "$temp_file" "$SYSTEMD"; then
-        rm -f "$temp_file"
-        SYSTEMD_CHANGED=0
-        print_message "info" "System service unchanged"
-        return 0
-    fi
-
-    mv -f "$temp_file" "$SYSTEMD"
-    SYSTEMD_CHANGED=1
-    print_message "success" "System service updated"
 }
 
-###################
-# Core Operations
-###################
-download_and_install() {
-    local version=$1
-    local arch=$(detect_architecture)
-    
-    # Remove existing server if present
-    remove_existing_server
-    
-    print_message "info" "Downloading Snell version ${version} for ${arch}..."
-    cd ~/ || exit
-    local download_url="${DOWNLOAD_BASE}/snell-server-v${version}-linux-${arch}.zip"
-    if ! wget --no-check-certificate -O snell.zip "$download_url"; then
-        print_message "error" "Failed to download Snell server"
-        exit 1
-    fi
-    print_message "success" "Download completed"
+publish_candidate() {
+    local candidate="$1" target="$2" mode="$3"
 
-    print_message "info" "Extracting files..."
-    if ! unzip -o snell.zip; then
-        print_message "error" "Failed to extract files"
-        rm -f snell.zip
-        exit 1
+    if [ -f "$target" ] && cmp -s "$candidate" "$target"; then
+        rm -f "$candidate"
+        return 10
     fi
-    rm -f snell.zip
-    
-    print_message "info" "Installing Snell server..."
-    chmod +x snell-server
-    mv -f snell-server "$SERVER_BIN"
-    print_message "success" "Snell server installed"
+    chmod "$mode" "$candidate" || return 1
+    mv -f "$candidate" "$target"
 }
 
-ensure_snell_installed() {
-    local version=$1
+begin_transaction() {
+    local targets names index
 
-    if [[ -f "$SERVER_BIN" && -z "$version" ]]; then
-        print_message "info" "Snell server already exists, skipping download"
-        return 0
-    fi
-
-    if [ -z "$version" ]; then
-        version=$(prompt_version)
+    targets=("$SNELL_BINARY" "$SNELL_CONFIG_FILE" "$SNELL_UNIT_FILE")
+    names=(binary config unit)
+    TRANSACTION_DIR="$(mktemp -d)" || fail "无法创建 Snell 事务目录。"
+    chmod 700 "$TRANSACTION_DIR" || {
+        rm -rf "$TRANSACTION_DIR"
+        fail "无法保护 Snell 事务目录。"
+    }
+    if systemctl is-active --quiet snell 2>/dev/null; then
+        SERVICE_WAS_ACTIVE=1
     else
-        if ! validate_version_format "$version"; then
-            exit 1
+        SERVICE_WAS_ACTIVE=0
+    fi
+    if systemctl is-enabled --quiet snell 2>/dev/null; then
+        SERVICE_WAS_ENABLED=1
+    else
+        SERVICE_WAS_ENABLED=0
+    fi
+
+    for index in "${!targets[@]}"; do
+        [ -e "${targets[$index]}" ] || continue
+        cp -a "${targets[$index]}" "${TRANSACTION_DIR}/${names[$index]}" || {
+            rm -rf "$TRANSACTION_DIR"
+            fail "无法备份 Snell 当前状态。"
+        }
+        : > "${TRANSACTION_DIR}/${names[$index]}.exists"
+    done
+    TRANSACTION_ACTIVE=1
+    trap rollback_transaction EXIT
+}
+
+rollback_transaction() {
+    local targets names index restore_failed=0
+
+    [ "$TRANSACTION_ACTIVE" -eq 1 ] || return 0
+    targets=("$SNELL_BINARY" "$SNELL_CONFIG_FILE" "$SNELL_UNIT_FILE")
+    names=(binary config unit)
+    for index in "${!targets[@]}"; do
+        if [ -e "${TRANSACTION_DIR}/${names[$index]}.exists" ]; then
+            if ! mkdir -p "$(dirname "${targets[$index]}")" ||
+               ! cp -a "${TRANSACTION_DIR}/${names[$index]}" "${targets[$index]}"; then
+                restore_failed=1
+            fi
+        else
+            rm -f "${targets[$index]}" || restore_failed=1
         fi
+    done
+
+    systemctl daemon-reload >/dev/null 2>&1 || restore_failed=1
+    if [ "$SERVICE_WAS_ENABLED" -eq 1 ]; then
+        systemctl enable snell >/dev/null 2>&1 || restore_failed=1
+    elif systemctl is-enabled --quiet snell 2>/dev/null; then
+        systemctl disable snell >/dev/null 2>&1 || restore_failed=1
+    fi
+    if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
+        systemctl restart snell >/dev/null 2>&1 || restore_failed=1
+    elif systemctl is-active --quiet snell 2>/dev/null; then
+        systemctl stop snell >/dev/null 2>&1 || restore_failed=1
     fi
 
-    download_and_install "$version"
-}
-
-update_server() {
-    local version=$1
-    print_message "info" "Updating Snell server to version ${version}..."
-    
-    # Download and install new version (which includes stopping service and removing old binary)
-    download_and_install "$version"
-    
-    restart_service
-}
-
-restart_service() {
-    if [[ "$SYSTEMD_CHANGED" -eq 1 ]]; then
-        print_message "info" "Reloading systemd..."
-        systemctl daemon-reload
-    fi
-    
-    print_message "info" "Enabling Snell service..."
-    systemctl enable snell
-    
-    if systemctl is-active snell &>/dev/null; then
-        print_message "info" "Restarting Snell service..."
-        systemctl restart snell
-    else
-        print_message "info" "Starting Snell service..."
-        systemctl start snell
-    fi
-
-    if systemctl is-active snell &> /dev/null; then
-        print_message "success" "Snell service is running"
-        show_service_status
-        return 0
-    else
-        print_message "error" "Snell service failed to start. Checking logs:"
-        show_service_status
+    TRANSACTION_ACTIVE=0
+    trap - EXIT
+    rm -rf "$TRANSACTION_DIR" || restore_failed=1
+    if [ "$restore_failed" -eq 1 ]; then
+        log_error "Snell 旧状态恢复失败，请检查文件和服务状态。"
         return 1
     fi
+    log_warning "Snell 变更失败，已恢复旧状态。"
+}
+
+commit_transaction() {
+    TRANSACTION_ACTIVE=0
+    trap - EXIT
+    rm -rf "$TRANSACTION_DIR" || log_warning "Snell 事务临时目录清理失败：$TRANSACTION_DIR"
+}
+
+apply_files() {
+    local config_dir unit_dir candidate result
+
+    config_dir="$(dirname "$SNELL_CONFIG_FILE")"
+    unit_dir="$(dirname "$SNELL_UNIT_FILE")"
+    mkdir -p "$config_dir" "$unit_dir" || fail "无法创建 Snell 配置目录。"
+    umask 077
+
+    candidate="$(mktemp "${config_dir}/.snell.conf.XXXXXX")" || fail "无法创建 Snell 候选配置。"
+    render_config > "$candidate" || {
+        rm -f "$candidate"
+        fail "Snell 配置生成失败。"
+    }
+    publish_candidate "$candidate" "$SNELL_CONFIG_FILE" 600
+    result=$?
+    if [ "$result" -eq 0 ]; then
+        CONFIG_CHANGED=1
+        log_info "已更新 Snell 配置：$SNELL_CONFIG_FILE"
+    elif [ "$result" -eq 10 ]; then
+        CONFIG_CHANGED=0
+    else
+        rm -f "$candidate"
+        fail "Snell 配置应用失败。"
+    fi
+
+    candidate="$(mktemp "${unit_dir}/.snell.service.XXXXXX")" || fail "无法创建 Snell unit 候选文件。"
+    render_service > "$candidate" || {
+        rm -f "$candidate"
+        fail "Snell unit 生成失败。"
+    }
+    publish_candidate "$candidate" "$SNELL_UNIT_FILE" 644
+    result=$?
+    if [ "$result" -eq 0 ]; then
+        UNIT_CHANGED=1
+        log_info "已更新系统服务：snell.service"
+    elif [ "$result" -eq 10 ]; then
+        UNIT_CHANGED=0
+    else
+        rm -f "$candidate"
+        fail "Snell unit 应用失败。"
+    fi
+}
+
+download_server() {
+    local version="$1" arch temp_dir archive candidate install_candidate output
+
+    validate_value version "$version" || exit 1
+    arch="$(detect_arch)"
+    [ -d "$TRANSACTION_DIR" ] || fail "Snell 事务尚未开始。"
+    temp_dir="$(mktemp -d "${TRANSACTION_DIR}/download.XXXXXX")" || fail "无法创建下载临时目录。"
+    archive="${temp_dir}/snell.zip"
+
+    log_info "正在下载 Snell ${version}（${arch}）"
+    wget -q --timeout=20 --tries=3 -O "$archive" \
+        "${SNELL_DOWNLOAD_BASE}/snell-server-v${version}-linux-${arch}.zip" || fail "Snell 下载失败。"
+    [ -s "$archive" ] || fail "Snell 下载文件为空。"
+    unzip -q "$archive" -d "$temp_dir" || fail "Snell 解压失败。"
+    candidate="${temp_dir}/snell-server"
+    [ -f "$candidate" ] || fail "压缩包中未找到 snell-server。"
+    chmod 755 "$candidate" || fail "Snell 二进制权限设置失败。"
+    output="$("$candidate" -v 2>&1)" || fail "Snell 二进制预检失败。"
+    [[ "$output" == *"$version"* ]] || fail "Snell 版本校验失败。"
+
+    if [ -f "$SNELL_BINARY" ] && cmp -s "$candidate" "$SNELL_BINARY"; then
+        BINARY_CHANGED=0
+        return 0
+    fi
+    mkdir -p "$(dirname "$SNELL_BINARY")" || fail "无法创建 Snell 安装目录。"
+    install_candidate="$(mktemp "$(dirname "$SNELL_BINARY")/.snell-server.XXXXXX")" ||
+        fail "无法创建 Snell 安装候选文件。"
+    if ! install -m 755 "$candidate" "$install_candidate"; then
+        rm -f "$install_candidate"
+        fail "Snell 二进制安装失败。"
+    fi
+    if ! mv -f "$install_candidate" "$SNELL_BINARY"; then
+        rm -f "$install_candidate"
+        fail "Snell 二进制安装失败。"
+    fi
+    BINARY_CHANGED=1
+}
+
+ensure_server() {
+    if [ -x "$SNELL_BINARY" ] && [ -z "$VERSION" ]; then
+        BINARY_CHANGED=0
+        return 0
+    fi
+    while [ -z "$VERSION" ]; do
+        read -r -p '请输入 Snell 版本（例如 4.1.1）：' VERSION || fail "未读取到 Snell 版本。"
+    done
+    download_server "$VERSION"
+}
+
+converge_service() {
+    if [ "$UNIT_CHANGED" -eq 1 ]; then
+        systemctl daemon-reload >/dev/null 2>&1 || {
+            log_error "systemd daemon 重载失败。"
+            return 1
+        }
+    fi
+    if ! systemctl is-enabled --quiet snell 2>/dev/null; then
+        systemctl enable snell >/dev/null 2>&1 || {
+            log_error "snell.service 启用失败。"
+            return 1
+        }
+        log_info "已启用系统服务：snell.service"
+    fi
+
+    if systemctl is-active --quiet snell 2>/dev/null; then
+        if (( BINARY_CHANGED || CONFIG_CHANGED || UNIT_CHANGED )); then
+            systemctl restart snell >/dev/null 2>&1 || {
+                log_error "Snell 重启失败，请执行：journalctl -u snell --no-pager"
+                return 1
+            }
+            log_info "已重启系统服务：snell.service"
+        fi
+    else
+        systemctl start snell >/dev/null 2>&1 || {
+            log_error "Snell 启动失败，请执行：journalctl -u snell --no-pager"
+            return 1
+        }
+        log_info "已启动系统服务：snell.service"
+    fi
+}
+
+verify_service() {
+    systemctl is-active --quiet snell 2>/dev/null || {
+        log_error "Snell 服务未运行，请执行：journalctl -u snell --no-pager"
+        return 1
+    }
+    ss -H -lntu 2>/dev/null | grep -Eq ":${PORT}[[:space:]]" || {
+        log_error "Snell 未监听端口：$PORT"
+        return 1
+    }
 }
 
 show_configuration() {
-    local port=$1
-    local psk=$2
-    local version=$3
-    local server_ip=$(get_ipv4_address)
-    
-    echo -e "\n${BLUE}=== Snell Configuration ===${NC}"
-    echo -e "Server IP:      ${GREEN}${server_ip}${NC}"
-    echo -e "Port:           ${GREEN}${port}${NC}"
-    echo -e "PSK:            ${GREEN}${psk}${NC}"
-    echo -e "Version:        ${GREEN}${version}${NC}"
-    echo -e "${BLUE}================================${NC}\n"
+    local current_version ip
+
+    current_version="$(get_current_version 2>/dev/null || printf '%s' "${VERSION:-未知}")"
+    ip="$(wget -qO- --timeout=5 --tries=2 https://api.ipify.org 2>/dev/null)" || true
+    cat <<EOF
+
+=== Snell 客户端配置 ===
+服务器：${ip:-无法获取 IP}
+端口：${PORT}
+PSK：${PSK}
+版本：${current_version}
+========================
+EOF
 }
 
-###################
-# Main Operations
-###################
-do_install() {
-    local version=$1
-    local port=$2
-    local psk=$3
-    
-    print_message "info" "Starting installation process..."
-    setup_dependencies
-    
-    # Get port and PSK
-    port=$(get_valid_port "$port")
-    psk=$(generate_psk "$psk")
-    
-    ensure_snell_installed "$version"
-    create_config "$port" "$psk"
-    create_service
-    
-    if restart_service; then
-        if [ -z "$version" ] && [[ -f "$SERVER_BIN" ]]; then
-            version="$("$SERVER_BIN" -v 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 || true)"
-        fi
-        show_configuration "$port" "$psk" "$version"
-    fi
+read_current_configuration() {
+    [ -r "$SNELL_CONFIG_FILE" ] || fail "未找到 Snell 配置：$SNELL_CONFIG_FILE"
+    PORT="$(sed -n 's/^listen = ::0:\([0-9][0-9]*\)$/\1/p' "$SNELL_CONFIG_FILE" | head -n 1)"
+    PSK="$(sed -n 's/^psk = \([A-Za-z0-9][A-Za-z0-9]*\)$/\1/p' "$SNELL_CONFIG_FILE" | head -n 1)"
+    validate_value port "$PORT" >/dev/null 2>&1 || fail "现有 Snell 端口无法解析。"
+    validate_value psk "$PSK" >/dev/null 2>&1 || fail "现有 Snell PSK 无法解析。"
 }
 
-do_update() {
-    local current_version
-    if ! current_version=$(get_server_version); then
-        print_message "error" "Snell may not be installed locally"
-        exit 1
-    fi
-    
-    local new_version=$1
-    
-    # Handle version input
-    if [ -z "$new_version" ]; then
-        new_version=$(prompt_version)
-    else
-        if ! validate_version_format "$new_version"; then
-            exit 1
+install_snell() {
+    ensure_dependencies
+    prepare_install_inputs
+    begin_transaction
+    ensure_server
+    apply_files
+    if ! converge_service || ! verify_service; then
+        if rollback_transaction; then
+            fail "Snell 应用失败，已恢复旧状态。"
         fi
+        fail "Snell 应用失败，且旧状态恢复失败。"
     fi
-    
-    if version_gt "$new_version" "$current_version"; then
-        print_message "info" "Update available: ${current_version} -> ${new_version}"
-        if update_server "$new_version"; then
-            show_configuration \
-                "$(grep -oP 'listen = ::0:\K[0-9]+' "$CONF")" \
-                "$(grep -oP 'psk = \K[A-Za-z0-9]+' "$CONF")" \
-                "$new_version"
-        fi
-    else
-        print_message "warning" "No update needed. Current version ${current_version} is up to date."
-    fi
+    commit_transaction
+    [ "$BINARY_CHANGED" -eq 0 ] || log_info "已安装 Snell 二进制。"
+    log_info "Snell 已启动，监听端口：$PORT"
+    show_configuration
 }
 
-do_uninstall() {
-    print_message "info" "Starting uninstallation process..."
+update_snell() {
+    local current_version highest
 
-    if [[ ! -e "$SYSTEMD" && ! -e "$CONF" && ! -e "$SERVER_BIN" ]] &&
-       ! systemctl is-active --quiet snell 2>/dev/null &&
-       ! systemctl cat snell.service >/dev/null 2>&1; then
-        print_message "success" "Snell server is already absent"
+    ensure_dependencies
+    current_version="$(get_current_version)" || fail "Snell 未安装或版本无法读取。"
+    while [ -z "$VERSION" ]; do
+        read -r -p '请输入目标 Snell 版本：' VERSION || fail "未读取到目标版本。"
+    done
+    validate_value version "$VERSION" || exit 1
+    highest="$(printf '%s\n%s\n' "$VERSION" "$current_version" | sort -V | tail -n 1)"
+    if [ "$highest" != "$VERSION" ] || [ "$VERSION" = "$current_version" ]; then
+        log_info "无需更新：当前版本 ${current_version}，目标版本 ${VERSION}。"
         return 0
     fi
-    
-    print_message "info" "Stopping Snell service..."
-    systemctl stop snell >/dev/null 2>&1 || true
-    
-    print_message "info" "Disabling Snell service..."
-    systemctl disable snell >/dev/null 2>&1 || true
-    
-    print_message "info" "Removing files..."
-    rm -f "${SYSTEMD}"
-    rm -f "${CONF}"
-    rm -f "$SERVER_BIN"
-    
-    print_message "info" "Reloading systemd..."
-    systemctl daemon-reload
-    
-    print_message "success" "Snell service has been successfully uninstalled."
+
+    begin_transaction
+    download_server "$VERSION"
+    read_current_configuration
+    if ! converge_service || ! verify_service; then
+        if rollback_transaction; then
+            fail "Snell 更新失败，已恢复旧状态。"
+        fi
+        fail "Snell 更新失败，且旧状态恢复失败。"
+    fi
+    commit_transaction
+    log_info "Snell 已更新：${current_version} -> ${VERSION}"
+    show_configuration
 }
 
-show_menu() {
-    echo -e "${BLUE}=== Snell Server Management ===${NC}"
-    echo "1. Install Snell Server"
-    echo "2. Update Snell Server"
-    echo "3. Uninstall Snell Server"
-    echo -e "${BLUE}=============================${NC}"
-}
-
-###################
-# Main Program
-###################
-main() {
-    check_root
-
-    local VERSION=""
-    local PORT=""
-    local PSK=""
-    local OP=""
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            -i|--install)
-                OP="install"
-                shift
-                if [ -n "$1" ] && [[ "$1" != -* ]]; then
-                    VERSION="$1"
-                    shift
-                fi
-                ;;
-            -n|--update)
-                OP="update"
-                shift
-                if [ -n "$1" ] && [[ "$1" != -* ]]; then
-                    VERSION="$1"
-                    shift
-                fi
-                ;;
-            -u|--uninstall)
-                OP="uninstall"
-                shift
-                ;;
-            -p|--port)
-                shift
-                if [ -n "$1" ] && [[ "$1" != -* ]]; then
-                    PORT="$1"
-                    shift
-                else
-                    print_message "error" "Port number is required after -p|--port"
-                    exit 1
-                fi
-                ;;
-            -k|--psk)
-                shift
-                if [ -n "$1" ] && [[ "$1" != -* ]]; then
-                    PSK="$1"
-                    shift
-                else
-                    print_message "error" "PSK is required after -k|--psk"
-                    exit 1
-                fi
-                ;;
-            -h|--help)
-                echo "Usage: $0 [-i|--install [VERSION]] [-n|--update [VERSION]] [-u|--uninstall] [-p|--port PORT] [-k|--psk PSK] [-h|--help]"
-                echo "VERSION format: X.Y.Z (e.g., 4.1.1)"
-                echo "PORT: Port number between 10000-60000"
-                echo "PSK: 16-character alphanumeric password"
-                exit
-                ;;
-            *)
-                print_message "error" "Unknown parameter: $1"
-                exit 1
-                ;;
-        esac
-    done
-
-    if [ -n "$OP" ]; then
-        case $OP in
-            install)
-                do_install "$VERSION" "$PORT" "$PSK"
-                ;;
-            update)
-                do_update "$VERSION"
-                ;;
-            uninstall)
-                do_uninstall
-                ;;
-        esac
-    else
-        # If no action parameter is passed, go to the interaction menu
-        show_menu
-        read -p "Please select an option (1-3): " choice
-        case $choice in
-            1)
-                do_install "" "$PORT" "$PSK"
-                ;;
-            2)
-                do_update
-                ;;
-            3)
-                do_uninstall
-                ;;
-            *)
-                print_message "error" "Invalid option. Please choose 1-3."
-                exit 1
-                ;;
-        esac
+uninstall_snell() {
+    if [ ! -e "$SNELL_BINARY" ] && [ ! -e "$SNELL_CONFIG_FILE" ] &&
+       [ ! -e "$SNELL_UNIT_FILE" ] && ! systemctl is-active --quiet snell 2>/dev/null &&
+       ! systemctl cat snell.service >/dev/null 2>&1; then
+        log_info "Snell 已不存在，无需卸载。"
+        return 0
     fi
 
-    exit
+    if systemctl is-active --quiet snell 2>/dev/null; then
+        systemctl stop snell >/dev/null 2>&1 || fail "Snell 服务停止失败。"
+        log_info "已停止系统服务：snell.service"
+    fi
+    if systemctl is-enabled --quiet snell 2>/dev/null; then
+        systemctl disable snell >/dev/null 2>&1 || fail "Snell 服务禁用失败。"
+        log_info "已禁用系统服务：snell.service"
+    fi
+    rm -f "$SNELL_UNIT_FILE" "$SNELL_CONFIG_FILE" "$SNELL_BINARY" || fail "Snell 文件删除失败。"
+    rmdir "$(dirname "$SNELL_CONFIG_FILE")" >/dev/null 2>&1 || true
+    systemctl daemon-reload >/dev/null 2>&1 || fail "systemd daemon 重载失败。"
+    systemctl reset-failed snell >/dev/null 2>&1 || true
+    if systemctl is-active --quiet snell 2>/dev/null ||
+       systemctl cat snell.service >/dev/null 2>&1 || [ -e "$SNELL_BINARY" ] ||
+       [ -e "$SNELL_CONFIG_FILE" ] || [ -e "$SNELL_UNIT_FILE" ]; then
+        fail "Snell 卸载验证失败。"
+    fi
+    log_info "Snell 已卸载。"
 }
 
-# Execute main program
+main() {
+    local choice
+
+    parse_args "$@"
+    require_environment
+    if [ -z "$ACTION" ]; then
+        printf '1. 安装 Snell\n2. 更新 Snell\n3. 卸载 Snell\n'
+        read -r -p '请选择（1-3）：' choice || fail "未读取到选择。"
+        if [ "$choice" = 1 ]; then
+            ACTION=install
+        elif [ "$choice" = 2 ]; then
+            ACTION=update
+        elif [ "$choice" = 3 ]; then
+            ACTION=uninstall
+        else
+            fail "无效选择：$choice"
+        fi
+    fi
+
+    if [ "$ACTION" = install ]; then
+        install_snell
+    elif [ "$ACTION" = update ]; then
+        update_snell
+    else
+        uninstall_snell
+    fi
+}
+
 main "$@"
