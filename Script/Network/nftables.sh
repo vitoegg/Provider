@@ -60,7 +60,7 @@ show_help() {
   $0 --uninstall|-u
 
 规则格式:
-  <源端口>:<目标(IPv4/域名/local)>:<目标端口>[:SNAT_IP[:MSS]]
+  <源端口>:<目标(IPv4/域名)>:<目标端口>[:SNAT_IP[:MSS]]
 EOF
 }
 
@@ -403,7 +403,7 @@ get_forwarding_ports_from_file() {
         return 0
     fi
     awk -F'|' \
-        'NF >= 8 && $1 ~ /^[0-9]+$/ && ($2 == "local" || $6 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) { print $1 }' \
+        'NF >= 8 && $1 ~ /^[0-9]+$/ && $2 == "remote" && $6 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ { print $1 }' \
         "$1" | sort -un | tr '\n' ',' | sed 's/,$//'
 }
 
@@ -432,7 +432,7 @@ parse_rule() {
     local rule_string="$1" src_port target dest_port snat_ip mss
     [[ "$rule_string" =~ ^[^:]+:[^:]+:[^:]+(:[^:]+(:[^:]+)?)?$ ]] || {
         log_error "规则格式错误: $rule_string"
-        log_error "正确格式: 端口:目标(IPv4/域名/local):端口[:SNAT_IP[:MSS]]"
+        log_error "正确格式: 端口:目标(IPv4/域名):端口[:SNAT_IP[:MSS]]"
         return 1
     }
     IFS=':' read -r src_port target dest_port snat_ip mss <<< "$rule_string"
@@ -457,33 +457,24 @@ parse_rule() {
 
     case "$target" in
         local|localhost|127.0.0.1)
-            if [ -n "$snat_ip$mss" ]; then
-                log_error "本地转发不支持 SNAT/MSS 扩展字段: $rule_string"
-                return 1
-            fi
-            PARSED_MODE="local"
-            PARSED_TARGET="127.0.0.1"
-            PARSED_TYPE="local"
-            PARSED_IP="127.0.0.1"
-            PARSED_STATUS="ok"
-            ;;
-        *)
-            PARSED_MODE="remote"
-            PARSED_TARGET="$target"
-            if validate_ip_address "$target"; then
-                PARSED_TYPE="ipv4"
-                PARSED_IP="$target"
-                PARSED_STATUS="ok"
-            elif validate_domain_name "$target"; then
-                PARSED_TYPE="domain"
-                PARSED_IP=""
-                PARSED_STATUS="pending"
-            else
-                log_error "无效的目标地址: $target"
-                return 1
-            fi
+            log_error "不再支持本地转发: $target"
+            return 1
             ;;
     esac
+    PARSED_MODE="remote"
+    PARSED_TARGET="$target"
+    if validate_ip_address "$target"; then
+        PARSED_TYPE="ipv4"
+        PARSED_IP="$target"
+        PARSED_STATUS="ok"
+    elif validate_domain_name "$target"; then
+        PARSED_TYPE="domain"
+        PARSED_IP=""
+        PARSED_STATUS="pending"
+    else
+        log_error "无效的目标地址: $target"
+        return 1
+    fi
     PARSED_SRC_PORT="$src_port"
     PARSED_DEST_PORT="$dest_port"
     PARSED_SNAT_IP="$snat_ip"
@@ -616,24 +607,20 @@ render_ruleset() {
     awk -F'|' -v nat="$NAT_TABLE_NAME" -v filter="$FILTER_TABLE_NAME" \
         -v protect="$protect_flag" -v allow="$allow_ports" -v noping="$protect_noping" '
         function rule(s) { return "        " s "\n" }
-        NF>=8 && $6 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {
-            if ($2=="remote") {
-                pre=pre rule("tcp dport " $1 " dnat to " $6 ":" $4) rule("udp dport " $1 " dnat to " $6 ":" $4)
-                fwd = fwd rule("ct status dnat ip daddr " $6 " tcp dport " $4 " accept") \
-                    rule("ct status dnat ip daddr " $6 " udp dport " $4 " accept")
-                if ($9!="") {
-                    post = post rule("ip daddr " $6 " tcp dport " $4 " snat to " $9) \
-                        rule("ip daddr " $6 " udp dport " $4 " snat to " $9)
-                } else {
-                    post = post rule("ct status dnat ip daddr " $6 " tcp dport " $4 " masquerade") \
-                        rule("ct status dnat ip daddr " $6 " udp dport " $4 " masquerade")
-                }
-                if ($10!="") {
-                    value=($10=="auto" ? "rt mtu" : $10)
-                    mss=mss rule("ip daddr " $6 " tcp dport " $4 " tcp flags syn tcp option maxseg size set " value)
-                }
-            } else if ($2=="local") {
-                out=out rule("tcp dport " $1 " dnat to " $6 ":" $4) rule("udp dport " $1 " dnat to " $6 ":" $4)
+        NF>=8 && $2=="remote" && $6 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {
+            pre=pre rule("tcp dport " $1 " dnat to " $6 ":" $4) rule("udp dport " $1 " dnat to " $6 ":" $4)
+            fwd = fwd rule("ct status dnat ip daddr " $6 " tcp dport " $4 " accept") \
+                rule("ct status dnat ip daddr " $6 " udp dport " $4 " accept")
+            if ($9!="") {
+                post = post rule("ip daddr " $6 " tcp dport " $4 " snat to " $9) \
+                    rule("ip daddr " $6 " udp dport " $4 " snat to " $9)
+            } else {
+                post = post rule("ct status dnat ip daddr " $6 " tcp dport " $4 " masquerade") \
+                    rule("ct status dnat ip daddr " $6 " udp dport " $4 " masquerade")
+            }
+            if ($10!="") {
+                value=($10=="auto" ? "rt mtu" : $10)
+                mss=mss rule("ip daddr " $6 " tcp dport " $4 " tcp flags syn tcp option maxseg size set " value)
             }
         }
         END {
@@ -643,8 +630,6 @@ render_ruleset() {
             print "\ntable ip " nat " {\n    chain prerouting {\n" \
                 "        type nat hook prerouting priority -100; policy accept;"
             printf "%s", pre
-            print "    }\n\n    chain output {\n        type nat hook output priority -100; policy accept;"
-            printf "%s", out
             print "    }\n\n    chain postrouting {\n        type nat hook postrouting priority 100; policy accept;"
             printf "%s", post
             print "    }\n}"
@@ -916,8 +901,9 @@ remove_rule_from_state() (
 )
 
 rule_batch() (
-    local action="$1" protect_noping="$2" candidate now rule rc operation duplicate_mode
-    local protect_flag=1 success=0 skipped=0 failed=0
+    local action="$1" protect_noping="$2" candidate now rule rc operation duplicate_mode status
+    local protect_flag=1 success=0 skipped=0 failed=0 active_success=0
+    local -a accepted_rules=()
     shift 2
     if [ $# -eq 0 ]; then
         log_error "未提供任何规则"
@@ -956,6 +942,7 @@ rule_batch() (
         case "$rc" in
             0)
                 success=$((success + 1))
+                [ "$action" = "delete" ] || accepted_rules+=("$rule")
                 ;;
             2)
                 skipped=$((skipped + 1))
@@ -993,20 +980,24 @@ rule_batch() (
             log_warning "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
         return 1
     }
-    if [ "$DOMAIN_RULES_DROPPED" -gt 0 ]; then
-        skipped=$((skipped + DOMAIN_RULES_DROPPED))
-        success=$((success - DOMAIN_RULES_DROPPED))
-        if [ "$success" -lt 0 ]; then
-            success=0
-        fi
-    fi
-    if [ "$action" != "delete" ] && [ "$success" -eq 0 ]; then
-        log_warning "没有规则变更：跳过 ${skipped} 条，失败 ${failed} 条"
-        if [ "$action" = "replace" ] && [ "$(state_domain_count "$RULES_STATE_FILE")" -gt 0 ]; then
+    if [ "$action" != "delete" ]; then
+        for rule in "${accepted_rules[@]}"; do
+            parse_rule "$rule" || return 1
+            status=$(state_rule_status "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" \
+                "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_SNAT_IP" "$PARSED_MSS")
+            if [ "$status" = "exact" ]; then
+                active_success=$((active_success + 1))
+            else
+                skipped=$((skipped + 1))
+            fi
+        done
+        success="$active_success"
+        if [ "$success" -eq 0 ]; then
             sync_providerdns_subscription "$RULES_STATE_FILE" ||
                 log_warning "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
+            log_error "没有可应用的有效规则，已保留原有配置"
+            return 1
         fi
-        return 0
     fi
     apply_candidate_state "$candidate" "$protect_flag" "${operation}转发规则" "" "$protect_noping" || {
         sync_providerdns_subscription "$RULES_STATE_FILE" ||
@@ -1373,9 +1364,7 @@ display_rules() {
         if [ -n "$mss" ]; then
             extra="${extra} MSS: ${mss}"
         fi
-        if [ "$mode" = "local" ]; then
-            printf '%s) [本地] 端口：%s -> %s:%s (TCP+UDP)\n' "$count" "$src_port" "$target" "$dest_port"
-        elif [ "$target_type" = "domain" ]; then
+        if [ "$target_type" = "domain" ]; then
             printf '%s) 端口：%s -> 域名：%s:%s 当前 IP：%s 状态：%s%s\n' \
                 "$count" "$src_port" "$target" "$dest_port" "${resolved_ip:-未解析}" "${status:-unknown}" "$extra"
         else

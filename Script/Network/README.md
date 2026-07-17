@@ -245,7 +245,7 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 --protect sync          同步保护端口
 --uninstall, -u         卸载脚本产物
 
-RULE: <源端口>:<目标(IPv4/域名/local)>:<目标端口>[:SNAT_IP[:MSS]]
+RULE: <源端口>:<目标(IPv4/域名)>:<目标端口>[:SNAT_IP[:MSS]]
 ```
 
 无参数时显示帮助并返回失败，不会修改系统。
