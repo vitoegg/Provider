@@ -255,27 +255,6 @@ RULE: <源端口>:<目标(IPv4/域名)>:<目标端口>[:SNAT_IP[:MSS]]
 bash nftables.sh --add 10086:82.40.1.2:33333:10.100.1.2:auto
 ```
 
-## **telegramip.sh**
-
-### 下载
-```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/telegramip.sh
-```
-
-### 参数说明
-```text
---apply                 下载远程 NFT，创建或替换 Telegram IP 映射
---remove                删除 Telegram IP 映射和持久规则文件
---help, -h              显示帮助
-```
-
-无参数时显示帮助并返回失败，不会修改系统。
-
-### 示例命令
-```bash
-bash telegramip.sh --apply
-```
-
 ## **sshg.sh**
 
 ### 下载
@@ -327,45 +306,4 @@ wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network
 ### 示例命令
 ```bash
 bash providerdns.sh --lookup example.com
-```
-
-## **warp.sh**
-
-### 下载
-```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/warp.sh
-```
-
-### 参数说明
-```text
---account ID             本地账户 ID，必须和 --name 成对出现；可重复使用
---name NAME              WARP 设备名称，必须紧跟对应的 --account
---license KEY            WARP+ license，对全部账户生效
---remove, -u             清理全部 WARP 配置和生成产物
--h, --help               显示帮助
-```
-
-无参数时显示错误并返回失败，不会修改系统。
-
-### 示例命令
-```bash
-bash warp.sh --account account-a --name device-a --account account-b --name device-b
-```
-
-## **run.sh**
-
-### 下载
-```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/run.sh
-```
-
-### 参数说明
-```text
--h, --help              显示帮助
-/path/to/cloudserver.plan 执行 plan 文件
-```
-
-### 示例命令
-```bash
-bash run.sh /path/to/cloudserver.plan
 ```
