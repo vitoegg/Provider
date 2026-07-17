@@ -8,9 +8,8 @@ NFT_TABLE="sshg"
 PROVIDERDNS_BIN="${PROVIDERDNS_BIN:-}"
 PROVIDERDNS_CONSUMER="sshg"
 SSH_CONFIG_CHANGED=0
-SSHG_TRANSACTION_DIR=""
-SSHG_TRANSACTION_DNS=0
 SSHG_NFT_TOUCHED=0
+SERVICE_ALLOW_MARK="0x40000000"
 SSHD_DROPIN="${ROOT_PREFIX}/etc/ssh/sshd_config.d/00-sshg.conf"
 KEY_FILE="${ROOT_PREFIX}/root/.ssh/authorized_keys3"
 STATE_DIR="${ROOT_PREFIX}/etc/sshg"
@@ -18,10 +17,7 @@ ALLOW_IPV4_FILE="${ROOT_PREFIX}/etc/sshg/allow.ipv4"
 ALLOW_DOMAIN_FILE="${ROOT_PREFIX}/etc/sshg/allow.domain"
 NFT_FILE="${ROOT_PREFIX}/etc/nftables.d/sshg.nft"
 NFT_MAIN_FILE="${ROOT_PREFIX}/etc/nftables.conf"
-SSHG_TRANSACTION_TARGETS=(
-    "$ALLOW_IPV4_FILE" "$ALLOW_DOMAIN_FILE" "$NFT_FILE"
-    "$NFT_MAIN_FILE" "$KEY_FILE" "$SSHD_DROPIN"
-)
+NFT_INCLUDE_MARKER="# Managed by Provider sshg.sh"
 
 log_info() {
     [ "${SSHG_QUIET:-${QUIET:-0}}" = "1" ] || printf '[INFO] %s\n' "$*"
@@ -36,9 +32,6 @@ log_error() {
 }
 
 fail() {
-    if [ -n "$SSHG_TRANSACTION_DIR" ]; then
-        rollback_transaction
-    fi
     log_error "$*"
     exit 1
 }
@@ -177,74 +170,6 @@ nft_cmd() {
 
 systemctl_cmd() {
     command_path "${SSHG_SYSTEMCTL:-}" systemctl
-}
-
-begin_transaction() {
-    local include_allow="$1" index target transaction_dir
-    transaction_dir="$(
-        umask 077
-        mktemp -d "${TMPDIR:-/tmp}/sshg-transaction.XXXXXX"
-    )" ||
-        fail "无法创建事务快照目录"
-    if [ -d "$STATE_DIR" ] && ! : > "${transaction_dir}/state-dir"; then
-        rm -rf "$transaction_dir"
-        fail "无法记录事务状态目录"
-    fi
-    for index in "${!SSHG_TRANSACTION_TARGETS[@]}"; do
-        target="${SSHG_TRANSACTION_TARGETS[$index]}"
-        [ -e "$target" ] || [ -L "$target" ] || continue
-        if ! cp -Pp "$target" "${transaction_dir}/${index}"; then
-            rm -rf "$transaction_dir"
-            fail "无法创建事务快照：$target"
-        fi
-    done
-    SSHG_TRANSACTION_DIR="$transaction_dir"
-    SSHG_TRANSACTION_DNS="$include_allow"
-}
-
-rollback_live_nft() {
-    local nft
-    nft="$(nft_cmd 2>/dev/null || true)"
-    [ -n "$nft" ] || return 1
-    if [ -s "$NFT_FILE" ]; then
-        "$nft" -f "$NFT_FILE" >/dev/null 2>&1
-        return
-    fi
-    "$nft" delete table inet "$NFT_TABLE" >/dev/null 2>&1
-}
-
-rollback_transaction() {
-    local index target snapshot failed=0
-    [ -n "$SSHG_TRANSACTION_DIR" ] || return 0
-    for index in "${!SSHG_TRANSACTION_TARGETS[@]}"; do
-        target="${SSHG_TRANSACTION_TARGETS[$index]}"
-        snapshot="${SSHG_TRANSACTION_DIR}/${index}"
-        if ! rm -f "$target"; then
-            failed=1
-            continue
-        fi
-        [ -e "$snapshot" ] || [ -L "$snapshot" ] || continue
-        if ! mkdir -p "$(dirname "$target")" || ! cp -Pp "$snapshot" "$target"; then
-            failed=1
-        fi
-    done
-    if [ ! -e "${SSHG_TRANSACTION_DIR}/state-dir" ]; then
-        rmdir "$STATE_DIR" 2>/dev/null || true
-    fi
-    if [ "$SSHG_NFT_TOUCHED" = "1" ] && ! rollback_live_nft; then
-        failed=1
-    fi
-    if [ "$SSHG_TRANSACTION_DNS" = "1" ] && ! reconcile_sshg_dns >/dev/null 2>&1; then
-        failed=1
-    fi
-    rm -rf "$SSHG_TRANSACTION_DIR"
-    SSHG_TRANSACTION_DIR=""
-    [ "$failed" = "0" ] || log_error "事务回滚未完全成功，请检查 SSH、nftables 与 ProviderDNS 状态"
-}
-
-commit_transaction() {
-    rm -rf "$SSHG_TRANSACTION_DIR" || log_warning "无法清理事务快照：$SSHG_TRANSACTION_DIR"
-    SSHG_TRANSACTION_DIR=""
 }
 
 key_file_has_key() {
@@ -538,9 +463,14 @@ EOF
         type filter hook input priority -20; policy accept;
         ct state established,related accept
         iifname "lo" accept
-        meta nfproto ipv4 tcp dport { ${ports} } ip saddr @allowed_ipv4 accept
+        meta nfproto ipv4 tcp dport { ${ports} } ip saddr @allowed_ipv4 meta mark set meta mark | ${SERVICE_ALLOW_MARK} accept
         meta nfproto ipv4 tcp dport { ${ports} } drop
         meta nfproto ipv6 tcp dport { ${ports} } drop
+    }
+
+    chain input_cleanup {
+        type filter hook input priority 10; policy accept;
+        tcp dport { ${ports} } meta mark & ${SERVICE_ALLOW_MARK} != 0 meta mark set meta mark & 0xbfffffff
     }
 }
 EOF
@@ -562,7 +492,7 @@ ensure_nft_include() {
     else
         chmod 644 "$tmp" 2>/dev/null || true
     fi
-    if ! printf '\n%s\ninclude "/etc/nftables.d/*.nft"\n' '# Managed by Provider sshg.sh' >> "$tmp"; then
+    if ! printf '\n%s\ninclude "/etc/nftables.d/sshg.nft"\n' "$NFT_INCLUDE_MARKER" >> "$tmp"; then
         rm -f "$tmp"
         return 1
     fi
@@ -571,6 +501,24 @@ ensure_nft_include() {
         return 1
     fi
     log_info "已写入 nftables include：$NFT_MAIN_FILE"
+}
+
+remove_nft_include() {
+    local tmp
+    [ -f "$NFT_MAIN_FILE" ] || return 0
+    grep -Fqx "$NFT_INCLUDE_MARKER" "$NFT_MAIN_FILE" || return 0
+    tmp="$(mktemp "${NFT_MAIN_FILE}.XXXXXX")" || fail "无法创建 nftables 主配置候选"
+    if ! awk -v marker="$NFT_INCLUDE_MARKER" '
+        $0 == marker { owned = 1; next }
+        owned && $0 ~ /^[[:space:]]*include[[:space:]]+"?\/etc\/nftables[.]d\/sshg[.]nft"?[[:space:]]*$/ {
+            owned = 0
+            next
+        }
+        { owned = 0; print }
+    ' "$NFT_MAIN_FILE" > "$tmp" || ! mv "$tmp" "$NFT_MAIN_FILE"; then
+        rm -f "$tmp"
+        fail "无法清理 nftables include"
+    fi
 }
 
 ensure_nft_service() {
@@ -751,7 +699,8 @@ remove_path_report() {
 
 sshg_resources_exist() {
     [[ -e "$SSHD_DROPIN" || -L "$SSHD_DROPIN" || -e "$KEY_FILE" || -L "$KEY_FILE" ||
-        -e "$NFT_FILE" || -L "$NFT_FILE" || -d "$STATE_DIR" ]]
+        -e "$NFT_FILE" || -L "$NFT_FILE" || -d "$STATE_DIR" ]] ||
+        grep -Fqx "$NFT_INCLUDE_MARKER" "$NFT_MAIN_FILE" 2>/dev/null
 }
 
 remove_all() {
@@ -769,6 +718,7 @@ remove_all() {
     remove_path_report "$KEY_FILE" "托管 root 公钥"
     remove_path_report "$NFT_FILE" "NFT 持久规则"
     remove_path_report "$STATE_DIR" "sshg 业务状态目录"
+    remove_nft_include
     if providerdns_unset_sshg; then
         log_info "已取消 Provider DNS 注册：${PROVIDERDNS_CONSUMER}"
     else
@@ -781,7 +731,7 @@ remove_all() {
 
 main() {
     local action="" raw_action="${1:-}" allow_values="" key_value="" config_value="" arg
-    local allow_seen=0 key_seen=0 config_seen=0 transaction_allow=1
+    local allow_seen=0 key_seen=0 config_seen=0
     case "$raw_action" in
         --apply|--reset|--sync|--remove)
             action="${raw_action#--}"
@@ -851,12 +801,6 @@ main() {
     require_root
     [[ "$action" =~ ^(apply|reset|sync)$ ]] && ensure_sshg_dependencies
     acquire_lock
-    if [ "$action" = "apply" ]; then
-        transaction_allow="$allow_seen"
-    elif [ "$action" = "hook" ]; then
-        transaction_allow=0
-    fi
-    begin_transaction "$transaction_allow"
     case "$action" in
         apply|reset)
             if [ "$allow_seen" = "1" ]; then
@@ -888,7 +832,6 @@ main() {
             remove_all
             ;;
     esac
-    commit_transaction
 }
 
 main "$@"

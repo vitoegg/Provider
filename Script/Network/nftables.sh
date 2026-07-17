@@ -23,6 +23,7 @@ readonly PROVIDERDNS_CONSUMER="forwardaws"
 PROVIDERDNS_BIN="${PROVIDERDNS_BIN:-}"
 readonly PROVIDERDNS_LOCAL_NAME="providerdns.sh"
 readonly DEFAULT_EXCLUDE_PORTS="53"
+readonly SERVICE_ALLOW_MARK="0x40000000"
 readonly FORWARDAWS_TIMEZONE="Asia/Shanghai"
 readonly FORWARDAWS_TIMEZONE_FALLBACK="UTC-8"
 
@@ -254,7 +255,7 @@ nft_main_config_has_forwardaws_include() {
 }
 
 ensure_nft_main_config_include() (
-    local include_line='include "/etc/nftables.d/*.nft"' tmp
+    local include_line='include "/etc/nftables.d/forwardaws.nft"' tmp
     if ! nft_main_config_has_forwardaws_include; then
         tmp="$(mktemp "${NFT_MAIN_CONFIG_FILE}.XXXXXX")" || return 1
         trap 'rm -f "$tmp"' EXIT
@@ -377,7 +378,8 @@ parse_local_endpoint() {
 }
 
 detect_runtime_public_ports() {
-    local listeners ports="" endpoint parsed addr port
+    local listeners protocol endpoint parsed addr port
+    local v4_tcp="" v4_udp="" v6_tcp="" v6_udp=""
     command -v ss >/dev/null 2>&1 || {
         log_error "缺少依赖命令：ss"
         return 1
@@ -386,46 +388,68 @@ detect_runtime_public_ports() {
         log_error "无法检测监听端口，拒绝应用端口保护"
         return 1
     }
-    while IFS= read -r endpoint; do
+    while IFS='|' read -r protocol endpoint; do
         [ -n "$endpoint" ] || continue
         parsed=$(parse_local_endpoint "$endpoint")
         IFS='|' read -r addr port <<< "$parsed"
         validate_port "$port" || continue
         [[ "$addr" == "::1" || "$addr" =~ ^127\. ]] && continue
-        ports="${ports}${ports:+,}${port}"
-    done < <(printf '%s\n' "$listeners" | awk '{ print $(NF - 1) }')
-    normalize_ports "$ports"
-}
-
-get_forwarding_ports_from_file() {
-    if [ ! -s "$1" ]; then
-        printf '\n'
-        return 0
-    fi
-    awk -F'|' \
-        'NF >= 8 && $1 ~ /^[0-9]+$/ && $2 == "remote" && $6 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ { print $1 }' \
-        "$1" | sort -un | tr '\n' ',' | sed 's/,$//'
+        case "${protocol}:${addr}" in
+            tcp:*:*)
+                v6_tcp="${v6_tcp}${v6_tcp:+,}${port}"
+                ;;
+            udp:*:*)
+                v6_udp="${v6_udp}${v6_udp:+,}${port}"
+                ;;
+            tcp:\*)
+                v4_tcp="${v4_tcp}${v4_tcp:+,}${port}"
+                v6_tcp="${v6_tcp}${v6_tcp:+,}${port}"
+                ;;
+            udp:\*)
+                v4_udp="${v4_udp}${v4_udp:+,}${port}"
+                v6_udp="${v6_udp}${v6_udp:+,}${port}"
+                ;;
+            tcp:*)
+                v4_tcp="${v4_tcp}${v4_tcp:+,}${port}"
+                ;;
+            udp:*)
+                v4_udp="${v4_udp}${v4_udp:+,}${port}"
+                ;;
+        esac
+    done < <(printf '%s\n' "$listeners" | awk '{ print $1 "|" $(NF - 1) }')
+    printf '%s|%s|%s|%s\n' \
+        "$(normalize_ports "$v4_tcp")" "$(normalize_ports "$v4_udp")" \
+        "$(normalize_ports "$v6_tcp")" "$(normalize_ports "$v6_udp")"
 }
 
 get_auto_allow_ports() {
-    local state_file="${1:-$RULES_STATE_FILE}" ssh_ports forward_ports runtime_ports exclude_ports merged filtered port
+    local ssh_ports runtime_ports exclude_ports port
+    local v4_tcp v4_udp v6_tcp v6_udp
     local -a ssh_ports_arr
     ssh_ports=$(detect_ssh_ports) || return 1
-    forward_ports=$(get_forwarding_ports_from_file "$state_file")
     runtime_ports=$(detect_runtime_public_ports) || return 1
+    IFS='|' read -r v4_tcp v4_udp v6_tcp v6_udp <<< "$runtime_ports"
     exclude_ports="$DEFAULT_EXCLUDE_PORTS"
     [ -z "${FORWARDAWS_EXCLUDE_PORTS:-}" ] || exclude_ports="${exclude_ports},${FORWARDAWS_EXCLUDE_PORTS}"
     exclude_ports=$(filter_ports "$exclude_ports")
-    merged=$(normalize_ports "${ssh_ports},${forward_ports},${runtime_ports}")
-    filtered=$(filter_ports "$merged" "$exclude_ports")
+    v4_tcp=$(filter_ports "$v4_tcp" "$exclude_ports")
+    v4_udp=$(filter_ports "$v4_udp" "$exclude_ports")
+    v6_tcp=$(filter_ports "$v6_tcp" "$exclude_ports")
+    v6_udp=$(filter_ports "$v6_udp" "$exclude_ports")
     IFS=',' read -ra ssh_ports_arr <<< "$ssh_ports"
     for port in "${ssh_ports_arr[@]}"; do
         validate_port "$port" || continue
-        if [[ ",$filtered," != *",$port,"* ]]; then
-            filtered=$(normalize_ports "${filtered},${port}")
-        fi
+        v4_tcp=$(normalize_ports "${v4_tcp},${port}")
+        v6_tcp=$(normalize_ports "${v6_tcp},${port}")
     done
-    printf '%s\n' "$filtered"
+    printf '%s|%s|%s|%s\n' "$v4_tcp" "$v4_udp" "$v6_tcp" "$v6_udp"
+}
+
+format_allow_ports() {
+    local v4_tcp v4_udp v6_tcp v6_udp
+    IFS='|' read -r v4_tcp v4_udp v6_tcp v6_udp <<< "$1"
+    printf 'IPv4/TCP=%s，IPv4/UDP=%s，IPv6/TCP=%s，IPv6/UDP=%s\n' \
+        "${v4_tcp:--}" "${v4_udp:--}" "${v6_tcp:--}" "${v6_udp:--}"
 }
 
 parse_rule() {
@@ -597,33 +621,35 @@ prepare_candidate_domains() {
 
 render_ruleset() {
     local state_file="$1" protect_flag="$2" output_file="$3" allow_ports="${4:-}" protect_noping="${5:-0}"
-    if [ "$protect_flag" = "1" ] && [ -z "$allow_ports" ]; then
+    if [ "$protect_flag" = "1" ] && [ -z "${allow_ports//|/}" ]; then
         allow_ports=$(get_auto_allow_ports "$state_file") || return 1
-        if [ -z "$allow_ports" ]; then
+        if [ -z "${allow_ports//|/}" ]; then
             log_error "保护端口列表为空，拒绝渲染保护链"
             return 1
         fi
     fi
     awk -F'|' -v nat="$NAT_TABLE_NAME" -v filter="$FILTER_TABLE_NAME" \
-        -v protect="$protect_flag" -v allow="$allow_ports" -v noping="$protect_noping" '
+        -v protect="$protect_flag" -v allow="$allow_ports" -v noping="$protect_noping" \
+        -v service_mark="$SERVICE_ALLOW_MARK" '
         function rule(s) { return "        " s "\n" }
         NF>=8 && $2=="remote" && $6 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ {
-            pre=pre rule("tcp dport " $1 " dnat to " $6 ":" $4) rule("udp dport " $1 " dnat to " $6 ":" $4)
-            fwd = fwd rule("ct status dnat ip daddr " $6 " tcp dport " $4 " accept") \
-                rule("ct status dnat ip daddr " $6 " udp dport " $4 " accept")
+            pre=pre rule("fib daddr type local tcp dport " $1 " dnat to " $6 ":" $4) \
+                rule("fib daddr type local udp dport " $1 " dnat to " $6 ":" $4)
             if ($9!="") {
-                post = post rule("ip daddr " $6 " tcp dport " $4 " snat to " $9) \
-                    rule("ip daddr " $6 " udp dport " $4 " snat to " $9)
+                post = post rule("ct status dnat ip daddr " $6 " tcp dport " $4 " snat to " $9) \
+                    rule("ct status dnat ip daddr " $6 " udp dport " $4 " snat to " $9)
             } else {
                 post = post rule("ct status dnat ip daddr " $6 " tcp dport " $4 " masquerade") \
                     rule("ct status dnat ip daddr " $6 " udp dport " $4 " masquerade")
             }
             if ($10!="") {
                 value=($10=="auto" ? "rt mtu" : $10)
-                mss=mss rule("ip daddr " $6 " tcp dport " $4 " tcp flags syn tcp option maxseg size set " value)
+                mss=mss rule("ct status dnat ip daddr " $6 " tcp dport " $4 \
+                    " tcp flags syn tcp option maxseg size set " value)
             }
         }
         END {
+            split(allow, allow_group, "|")
             print "#!/usr/sbin/nft -f"
             print "# forwardaws generated by nftables.sh"
             print "\ntable ip " nat "\ndelete table ip " nat "\ntable inet " filter "\ndelete table inet " filter
@@ -641,24 +667,28 @@ render_ruleset() {
             }
             if (protect=="1") {
                 print "    chain input {\n        type filter hook input priority 0; policy drop;"
-                print "        iifname \"lo\" accept\n        ct state established,related accept"
+                print "        iifname \"lo\" accept"
+                print "        meta mark & " service_mark " != 0 meta mark set meta mark & 0xbfffffff accept"
+                print "        ct state established,related accept"
                 if (noping!="0") {
                     if (noping!="1") {
                         print "        ip saddr { " noping " } ip protocol icmp icmp type echo-request accept"
                     }
                     print "        ip protocol icmp icmp type echo-request drop"
-                    print "        ip6 nexthdr icmpv6 icmpv6 type echo-request drop"
+                    print "        meta l4proto ipv6-icmp icmpv6 type echo-request drop"
                 }
-                print "        ip protocol icmp accept\n        ip6 nexthdr icmpv6 accept"
+                print "        ip protocol icmp accept\n        meta l4proto ipv6-icmp accept"
                 print "        ip6 saddr fe80::/10 udp sport 547 udp dport 546 limit rate 20/second accept"
-                print "        tcp dport { " allow " } accept\n        udp dport { " allow " } accept\n    }"
-            }
-            if (fwd!="") {
-                print "    chain forward {\n        type filter hook forward priority 0; policy accept;\n" \
-                    "        ct state established,related accept;"
-                printf "%s", fwd
+                if (allow_group[1]!="") print "        meta nfproto ipv4 tcp dport { " allow_group[1] " } accept"
+                if (allow_group[2]!="") print "        meta nfproto ipv4 udp dport { " allow_group[2] " } accept"
+                if (allow_group[3]!="") print "        meta nfproto ipv6 tcp dport { " allow_group[3] " } accept"
+                if (allow_group[4]!="") print "        meta nfproto ipv6 udp dport { " allow_group[4] " } accept"
                 print "    }"
             }
+            print "    chain forward {\n        type filter hook forward priority 0; policy drop;"
+            print "        ct state invalid drop"
+            print "        ct status dnat accept"
+            print "        ct state related accept\n    }"
             print "}"
         }
     ' "$state_file" > "$output_file"
@@ -725,28 +755,31 @@ apply_candidate_state() (
         return 0
     fi
     if [ "$rules_changed" -eq 1 ] || [ "$live_missing" -eq 1 ]; then
-        if ! run_nft_file "-c" "预检" "$nft_tmp" "$desc" ||
-            ! run_nft_file "" "应用" "$nft_tmp" "$desc"; then
-            return 1
-        fi
+        run_nft_file "-c" "预检" "$nft_tmp" "$desc" || return 1
+    fi
+    if [ "$state_changed" -eq 1 ] && ! mv "$state_tmp" "$RULES_STATE_FILE"; then
+        log_error "状态文件发布失败，运行规则未变：$RULES_STATE_FILE"
+        return 1
+    fi
+    if [ "$config_changed" -eq 1 ] && ! mv "$config_tmp" "$CONFIG_FILE"; then
+        log_error "配置文件发布失败，运行规则未变：$CONFIG_FILE"
+        return 1
     fi
     if [ "$rules_changed" -eq 1 ]; then
         mv "$nft_tmp" "$FORWARDAWS_RULES_FILE" || {
-            log_error "运行规则已应用，但持久规则发布失败：$FORWARDAWS_RULES_FILE"
+            log_error "持久规则发布失败，运行规则未变：$FORWARDAWS_RULES_FILE"
             return 1
         }
         chmod 600 "$FORWARDAWS_RULES_FILE" 2>/dev/null || true
     fi
-    if [ "$state_changed" -eq 1 ] && ! mv "$state_tmp" "$RULES_STATE_FILE"; then
-        log_error "运行规则已应用，但状态文件发布失败：$RULES_STATE_FILE"
-        return 1
-    fi
-    if [ "$config_changed" -eq 1 ] && ! mv "$config_tmp" "$CONFIG_FILE"; then
-        log_error "运行规则已应用，但配置文件发布失败：$CONFIG_FILE"
-        return 1
-    fi
     if [ "$include_missing" -eq 1 ] || [ "$rules_changed" -eq 1 ]; then
         ensure_nft_main_config_include || return 1
+    fi
+    if [ "$rules_changed" -eq 1 ] || [ "$live_missing" -eq 1 ]; then
+        if ! run_nft_file "" "应用" "$FORWARDAWS_RULES_FILE" "$desc"; then
+            log_error "持久状态已发布，但运行规则未应用；修复后请重新执行当前命令"
+            return 1
+        fi
     fi
     if [ "$forwarding_needs_update" -eq 1 ]; then
         ensure_ipv4_forwarding_enabled || return 1
@@ -1066,7 +1099,7 @@ apply_protection_state() (
     [ "$reset_rules" != "1" ] || sync_providerdns_subscription "$RULES_STATE_FILE" || return 1
     reconcile_protection_timer || return 1
     if [ "$protect_flag" = "1" ]; then
-        log_info "${success_msg}: $current_ports"
+        log_info "${success_msg}: $(format_allow_ports "$current_ports")"
     else
         log_info "$success_msg"
     fi
@@ -1138,22 +1171,19 @@ run_protection_enable_command() {
 }
 
 remove_nft_main_config_include_if_unused() (
-    local tmp_file other_file keep_include=0
+    local tmp_file
     [ -f "$NFT_MAIN_CONFIG_FILE" ] || return 0
     grep -Fqx "$NFT_INCLUDE_MARKER" "$NFT_MAIN_CONFIG_FILE" || return 0
-    other_file=$(find "$NFT_INCLUDE_DIR" -maxdepth 1 -name '*.nft' ! -name 'forwardaws.nft' -print -quit 2>/dev/null)
-    [ -z "$other_file" ] || keep_include=1
 
     tmp_file=$(mktemp "${NFT_MAIN_CONFIG_FILE}.XXXXXX") || return 1
     trap 'rm -f "$tmp_file"' EXIT
-    awk -v marker="$NFT_INCLUDE_MARKER" -v keep="$keep_include" '
+    awk -v marker="$NFT_INCLUDE_MARKER" '
         $0 == marker {
             owned = 1
             next
         }
-        owned && $0 ~ /^[[:space:]]*include[[:space:]]+"?\/etc\/nftables[.]d\/(forwardaws|[*])[.]nft"?[[:space:]]*$/ {
+        owned && $0 ~ /^[[:space:]]*include[[:space:]]+"?\/etc\/nftables[.]d\/forwardaws[.]nft"?[[:space:]]*$/ {
             owned = 0
-            if (keep == 1) print
             next
         }
         { owned = 0; print }
@@ -1285,7 +1315,7 @@ show_protection_status() {
     if [ "$protect_flag" = "1" ]; then
         auto_ports=$(get_auto_allow_ports "$RULES_STATE_FILE") || return 1
         printf '保护状态：已开启\n'
-        printf '当前放行端口：%s\n' "$auto_ports"
+        printf '当前放行端口：%s\n' "$(format_allow_ports "$auto_ports")"
         case "$protect_noping" in
             0)
                 printf 'Ping：允许\n'

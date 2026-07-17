@@ -8,10 +8,11 @@ readonly SERVICE_NAME="danted.service"
 readonly NFT_CONFIG_FILE="/etc/nftables.conf"
 readonly NFT_RULES_FILE="/etc/nftables.d/socks.nft"
 readonly NFT_TABLE="socks_guard"
+readonly NFT_INCLUDE_MARKER="# Managed by Provider socks.sh"
+readonly SERVICE_ALLOW_MARK="0x40000000"
 PORT=""
 UNINSTALL=0
 ALLOW_IPS=()
-
 log_info() {
     printf '[INFO] %s\n' "$*"
 }
@@ -76,7 +77,6 @@ parse_args() {
         fi
     fi
 }
-
 validate_ipv4() {
     local IFS='.' ip="$1" octet octets
     [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
@@ -116,7 +116,6 @@ ensure_dependencies() {
         fail "依赖安装失败：${missing[*]}"
     log_info "已安装依赖：${missing[*]}"
 }
-
 enable_service_if_needed() {
     systemctl is-enabled --quiet "$1" 2>/dev/null && return 0
     systemctl enable "$1" >/dev/null 2>&1 || fail "无法启用服务：$1"
@@ -124,8 +123,14 @@ enable_service_if_needed() {
 }
 
 prepare_port() {
-    local candidate listeners
-    [ -n "$PORT" ] && return 0
+    local candidate listeners managed_port
+    if [ -n "$PORT" ]; then
+        listeners="$(ss -H -lntu "sport = :$PORT" 2>/dev/null)" || fail "无法读取当前监听端口"
+        managed_port="$(sed -n 's/^internal: .* port = \([0-9][0-9]*\)$/\1/p' "$CONFIG_FILE" 2>/dev/null)"
+        [ -z "$listeners" ] || [ "$managed_port" = "$PORT" ] ||
+            fail "端口 ${PORT} 已被其它服务占用"
+        return 0
+    fi
     while true; do
         candidate=$((RANDOM % 10001 + 20000))
         if [[ "$candidate" == *4* ]]; then
@@ -139,8 +144,36 @@ prepare_port() {
     done
 }
 
+ensure_nft_include() {
+    local tmp
+    grep -Eq '^[[:space:]]*include[[:space:]]+"?/etc/nftables[.]d/([*]|socks)[.]nft"?[[:space:]]*$' \
+        "$NFT_CONFIG_FILE" 2>/dev/null && return 0
+    tmp="$(mktemp "${NFT_CONFIG_FILE}.XXXXXX")" || fail "无法创建 nftables 主配置候选"
+    if [ -e "$NFT_CONFIG_FILE" ]; then
+        cp -p "$NFT_CONFIG_FILE" "$tmp" || fail "无法读取 nftables 主配置"
+    else
+        chmod 644 "$tmp" 2>/dev/null || true
+    fi
+    if ! printf '\n%s\ninclude "/etc/nftables.d/socks.nft"\n' "$NFT_INCLUDE_MARKER" >> "$tmp" ||
+        ! mv "$tmp" "$NFT_CONFIG_FILE"; then
+        fail "无法写入 nftables include"
+    fi
+    log_info "已添加 SOCKS nftables 持久化规则"
+}
+
+remove_nft_include() {
+    local tmp
+    [ -f "$NFT_CONFIG_FILE" ] || return 0
+    tmp="$(mktemp "${NFT_CONFIG_FILE}.XXXXXX")" || fail "无法创建 nftables 主配置候选"
+    awk -v marker="$NFT_INCLUDE_MARKER" '
+        $0 != marker &&
+        $0 !~ /^[[:space:]]*include[[:space:]]+"?\/etc\/nftables[.]d\/socks[.]nft"?[[:space:]]*$/
+    ' "$NFT_CONFIG_FILE" > "$tmp" || fail "清理 socks.nft include 失败"
+    mv "$tmp" "$NFT_CONFIG_FILE" || fail "清理 socks.nft include 失败"
+}
+
 apply_config() (
-    local IFS=, interface ip config_candidate nft_candidate nft_changed=0
+    local IFS=, interface ip config_candidate nft_candidate nft_changed=0 config_changed=0
     interface="$(ip -4 route show default | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -n 1)"
     [ -n "$interface" ] || fail "无法确定默认 IPv4 出口网卡"
     mkdir -p "$(dirname "$CONFIG_FILE")" "$(dirname "$NFT_RULES_FILE")" || fail "无法创建 SOCKS 配置目录"
@@ -188,31 +221,34 @@ table inet ${NFT_TABLE} {
 
     chain input {
         type filter hook input priority -20; policy accept;
-        meta nfproto ipv4 tcp dport ${PORT} ip saddr @allowed_ipv4 accept
+        meta nfproto ipv4 tcp dport ${PORT} ip saddr @allowed_ipv4 meta mark set meta mark | ${SERVICE_ALLOW_MARK} accept
         tcp dport ${PORT} drop
         udp dport ${PORT} drop
+    }
+    chain input_cleanup {
+        type filter hook input priority 10; policy accept;
+        tcp dport ${PORT} meta mark & ${SERVICE_ALLOW_MARK} != 0 meta mark set meta mark & 0xbfffffff
     }
 }
 EOF
     /usr/sbin/danted -V -f "$config_candidate" >/dev/null 2>&1 || fail "Dante 配置预检失败"
     /usr/sbin/nft -c -f "$nft_candidate" >/dev/null 2>&1 || fail "SOCKS NFT 规则预检失败"
-    if ! grep -Eq '^[[:space:]]*include[[:space:]]+"?/etc/nftables[.]d/([*]|socks)[.]nft"?[[:space:]]*$' \
-        "$NFT_CONFIG_FILE" 2>/dev/null; then
-        printf '\ninclude "/etc/nftables.d/socks.nft"\n' >> "$NFT_CONFIG_FILE" || fail "无法写入 nftables include"
-        log_info "已添加 SOCKS nftables 持久化规则"
-    fi
+    ensure_nft_include
     enable_service_if_needed nftables.service
     if ! cmp -s "$nft_candidate" "$NFT_RULES_FILE" 2>/dev/null; then
         mv -f "$nft_candidate" "$NFT_RULES_FILE" || fail "无法发布 SOCKS NFT 规则"
         nft_changed=1
+    fi
+    if ! cmp -s "$config_candidate" "$CONFIG_FILE" 2>/dev/null; then
+        mv -f "$config_candidate" "$CONFIG_FILE" || fail "无法发布 Dante 配置"
+        config_changed=1
     fi
     if [ "$nft_changed" -eq 1 ] || ! /usr/sbin/nft list table inet "$NFT_TABLE" >/dev/null 2>&1; then
         /usr/sbin/nft -f "$NFT_RULES_FILE" >/dev/null 2>&1 ||
             fail "无法应用 SOCKS NFT 规则，请检查：nft list table inet ${NFT_TABLE}"
     fi
     enable_service_if_needed "$SERVICE_NAME"
-    if ! cmp -s "$config_candidate" "$CONFIG_FILE" 2>/dev/null; then
-        mv -f "$config_candidate" "$CONFIG_FILE" || fail "无法发布 Dante 配置"
+    if [ "$config_changed" -eq 1 ]; then
         systemctl restart "$SERVICE_NAME" >/dev/null 2>&1 ||
             fail "Dante 重启失败，请执行：journalctl -u ${SERVICE_NAME} --no-pager"
     elif ! systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
@@ -252,10 +288,7 @@ uninstall_dante() {
         /usr/sbin/nft delete table inet "$NFT_TABLE" >/dev/null 2>&1 || fail "删除 SOCKS NFT 表失败"
     fi
     rm -f "$CONFIG_FILE" "$NFT_RULES_FILE" || fail "删除 Dante 配置失败"
-    if [ -f "$NFT_CONFIG_FILE" ] && grep -Eq '/etc/nftables[.]d/socks[.]nft' "$NFT_CONFIG_FILE"; then
-        sed -i.bak '\|/etc/nftables[.]d/socks[.]nft|d' "$NFT_CONFIG_FILE" || fail "清理 socks.nft include 失败"
-        rm -f "${NFT_CONFIG_FILE}.bak"
-    fi
+    remove_nft_include
     log_info "Dante SOCKS 已卸载"
 }
 
