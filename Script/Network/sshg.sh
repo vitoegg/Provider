@@ -52,7 +52,7 @@ show_help() {
 
 参数：
   config=ssh     应用 SSH 加固配置
-  key=...        写入 root 使用的 ssh-ed25519 公钥
+  key=...        写入 root 使用的 SSH 公钥
   allow=...      逗号分隔的 IPv4、IPv4 CIDR 或域名
 
 兼容入口：apply、reset、sync、remove；hook 仅供 ProviderDNS 回调使用。
@@ -111,7 +111,10 @@ public_key_id() {
             ;;
     esac
     read -r key_type key_body _ <<< "$key"
-    [ "$key_type" = "ssh-ed25519" ] || return 1
+    case "$key_type" in
+        ssh-ed25519|ssh-rsa) ;;
+        *) return 1 ;;
+    esac
     [[ "$key_body" =~ ^[A-Za-z0-9+/=]+$ ]] || return 1
     printf '%s %s\n' "$key_type" "$key_body"
 }
