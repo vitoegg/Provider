@@ -146,6 +146,15 @@ format_epoch_time() {
         printf '%s\n' "$ts"
 }
 
+format_domain_status() {
+    local status="${1:-}"
+    [ "$status" != "ok" ] || status="正常"
+    [ "$status" != "pending" ] || status="待解析"
+    [ "$status" != "failed" ] || status="解析失败"
+    [ "$status" != "cache_missing" ] || status="缓存缺失"
+    printf '%s\n' "${status:-未知}"
+}
+
 get_script_absolute_path() {
     readlink -f "$0" 2>/dev/null
 }
@@ -177,7 +186,7 @@ run_providerdns() {
 
 providerdns_refresh() {
     require_providerdns || return 1
-    PROVIDERDNS_LOCK_WAIT="${PROVIDERDNS_LOCK_WAIT:-10}" run_providerdns --refresh
+    PROVIDERDNS_QUIET=1 PROVIDERDNS_LOCK_WAIT="${PROVIDERDNS_LOCK_WAIT:-10}" run_providerdns --refresh
 }
 
 providerdns_set_forwardaws() {
@@ -186,12 +195,12 @@ providerdns_set_forwardaws() {
     script_path=$(get_script_absolute_path)
     printf -v quoted_script_path '%q' "$script_path"
     hook_command="FORWARDAWS_QUIET=1 FORWARDAWS_LOCK_WAIT=10 /bin/bash ${quoted_script_path} --ddns apply"
-    run_providerdns --set "$PROVIDERDNS_CONSUMER" "$domains_file" "$hook_command"
+    PROVIDERDNS_QUIET=1 run_providerdns --set "$PROVIDERDNS_CONSUMER" "$domains_file" "$hook_command"
 }
 
 providerdns_unset_forwardaws() {
     providerdns_bin >/dev/null || return 0
-    run_providerdns --unset "$PROVIDERDNS_CONSUMER"
+    PROVIDERDNS_QUIET=1 run_providerdns --unset "$PROVIDERDNS_CONSUMER"
 }
 
 require_root() {
@@ -433,9 +442,9 @@ get_auto_allow_ports() {
     [ -z "${FORWARDAWS_EXCLUDE_PORTS:-}" ] || exclude_ports="${exclude_ports},${FORWARDAWS_EXCLUDE_PORTS}"
     exclude_ports=$(filter_ports "$exclude_ports")
     v4_tcp=$(filter_ports "$v4_tcp" "$exclude_ports")
-    v4_udp=$(filter_ports "$v4_udp" "$exclude_ports")
+    v4_udp=$(filter_ports "$v4_udp" "${exclude_ports},68")
     v6_tcp=$(filter_ports "$v6_tcp" "$exclude_ports")
-    v6_udp=$(filter_ports "$v6_udp" "$exclude_ports")
+    v6_udp=$(filter_ports "$v6_udp" "${exclude_ports},546")
     IFS=',' read -ra ssh_ports_arr <<< "$ssh_ports"
     for port in "${ssh_ports_arr[@]}"; do
         validate_port "$port" || continue
@@ -446,10 +455,9 @@ get_auto_allow_ports() {
 }
 
 format_allow_ports() {
-    local v4_tcp v4_udp v6_tcp v6_udp
-    IFS='|' read -r v4_tcp v4_udp v6_tcp v6_udp <<< "$1"
-    printf 'IPv4/TCP=%s，IPv4/UDP=%s，IPv6/TCP=%s，IPv6/UDP=%s\n' \
-        "${v4_tcp:--}" "${v4_udp:--}" "${v6_tcp:--}" "${v6_udp:--}"
+    local ports="${1//|/,}"
+    ports=$(normalize_ports "$ports")
+    printf '%s\n' "${ports:-无}"
 }
 
 parse_rule() {
@@ -678,6 +686,7 @@ render_ruleset() {
                     print "        meta l4proto ipv6-icmp icmpv6 type echo-request drop"
                 }
                 print "        ip protocol icmp accept\n        meta l4proto ipv6-icmp accept"
+                print "        meta nfproto ipv4 udp sport 67 udp dport 68 limit rate 20/second accept"
                 print "        ip6 saddr fe80::/10 udp sport 547 udp dport 546 limit rate 20/second accept"
                 if (allow_group[1]!="") print "        meta nfproto ipv4 tcp dport { " allow_group[1] " } accept"
                 if (allow_group[2]!="") print "        meta nfproto ipv4 udp dport { " allow_group[2] " } accept"
@@ -934,7 +943,7 @@ remove_rule_from_state() (
 )
 
 rule_batch() (
-    local action="$1" protect_noping="$2" candidate now rule rc operation duplicate_mode status
+    local action="$1" protect_noping="$2" candidate now rule rc operation duplicate_mode status summary
     local protect_flag=1 success=0 skipped=0 failed=0 active_success=0
     local -a accepted_rules=()
     shift 2
@@ -998,7 +1007,7 @@ rule_batch() (
             apply_candidate_state "$candidate" "$protect_flag" \
                 "${operation}转发规则" "" "$protect_noping" || return 1
             reconcile_protection_timer || return 1
-            [ "$action" = "delete" ] || show_protection_status
+            log_info "Ping 策略已更新"
         fi
         log_warning "没有规则变更：跳过 ${skipped} 条，失败 ${failed} 条"
         [ "$failed" -eq 0 ]
@@ -1006,7 +1015,7 @@ rule_batch() (
     fi
 
     if [ "$(state_domain_count "$candidate")" -gt 0 ]; then
-        log_info "检测到域名规则，正在刷新解析"
+        log_info "正在刷新域名解析"
     fi
     prepare_candidate_domains "$candidate" || {
         sync_providerdns_subscription "$RULES_STATE_FILE" ||
@@ -1037,11 +1046,11 @@ rule_batch() (
             log_warning "Provider DNS 订阅回滚失败，请手动执行 --ddns sync"
         return 1
     }
-    log_info "${operation}完成：成功 ${success}，跳过 ${skipped}，失败 ${failed}"
+    summary="已${operation} ${success} 条转发规则"
+    [ "$skipped" -eq 0 ] || summary="${summary}，跳过 ${skipped} 条"
+    [ "$failed" -eq 0 ] || summary="${summary}，失败 ${failed} 条"
+    log_info "$summary"
     reconcile_protection_timer || return 1
-    if [ "$action" != "delete" ]; then
-        show_protection_status || return 1
-    fi
     [ "$failed" -eq 0 ]
 )
 
@@ -1098,11 +1107,7 @@ apply_protection_state() (
     apply_candidate_state "$candidate" "$protect_flag" "$desc" "$current_ports" "$protect_noping" || return 1
     [ "$reset_rules" != "1" ] || sync_providerdns_subscription "$RULES_STATE_FILE" || return 1
     reconcile_protection_timer || return 1
-    if [ "$protect_flag" = "1" ]; then
-        log_info "${success_msg}: $(format_allow_ports "$current_ports")"
-    else
-        log_info "$success_msg"
-    fi
+    log_info "$success_msg"
 )
 
 sync_protection_ports() {
@@ -1156,18 +1161,17 @@ run_protection_enable_command() {
     case "$mode" in
         on)
             desc="正在开启端口保护模式..."
-            success="端口保护已开启，开放端口"
+            success="端口保护已开启"
             ;;
         only)
             desc="正在切换纯保护模式..."
-            success="纯保护模式已开启，开放端口"
+            success="纯保护模式已开启"
             reset_rules=1
             ;;
     esac
     ensure_for_write || return 1
     run_mutation "$desc" apply_protection_state \
-        1 "$desc" "$success" "$protect_noping" "$reset_rules" || return 1
-    show_protection_status
+        1 "$desc" "$success" "$protect_noping" "$reset_rules"
 }
 
 remove_nft_main_config_include_if_unused() (
@@ -1311,47 +1315,45 @@ show_protection_status() {
     local protect_flag protect_noping auto_ports
     protect_flag=$(get_config_value "PROTECTION_ENABLED" "0")
     protect_noping=$(get_config_value "PROTECT_NOPING" "0")
-    printf '%s\n' '端口保护状态'
+    printf '%s\n' '本机防护'
     if [ "$protect_flag" = "1" ]; then
         auto_ports=$(get_auto_allow_ports "$RULES_STATE_FILE") || return 1
-        printf '保护状态：已开启\n'
-        printf '当前放行端口：%s\n' "$(format_allow_ports "$auto_ports")"
+        printf '%s\n' '- 状态：开启'
+        printf -- '- 服务端口：%s\n' "$(format_allow_ports "$auto_ports")"
         case "$protect_noping" in
             0)
-                printf 'Ping：允许\n'
+                printf '%s\n' '- Ping：允许'
                 ;;
             1)
-                printf 'Ping：已禁止\n'
+                printf '%s\n' '- Ping：禁止'
                 ;;
             *)
-                printf 'Ping：仅允许 %s\n' "$protect_noping"
+                printf -- '- Ping：仅允许 %s\n' "$protect_noping"
                 ;;
         esac
     else
-        printf '保护状态：未开启\n'
+        printf '%s\n' '- 状态：关闭'
     fi
     if ! has_systemctl; then
-        printf '自动同步：systemctl 不可用\n'
+        printf '%s\n' '- 自动同步：不可用'
     elif systemctl is-enabled --quiet "$PROTECT_TIMER_NAME" 2>/dev/null &&
         systemctl is-active --quiet "$PROTECT_TIMER_NAME" 2>/dev/null; then
-        printf '自动同步：已启用\n'
+        printf '%s\n' '- 自动同步：启用'
     else
-        printf '自动同步：未启用\n'
+        printf '%s\n' '- 自动同步：关闭'
     fi
 }
 
 show_ddns_rules() {
-    local count=1 domain resolved_ip status updated_at refs
+    local domain resolved_ip status updated_at
     [ "$(state_domain_count "$RULES_STATE_FILE")" -gt 0 ] || {
         log_warning "未找到 DDNS 域名规则"
         return 0
     }
-    printf '%s\n' 'DDNS 域名规则状态'
-    while IFS='|' read -r domain resolved_ip status updated_at refs; do
-        printf '%s) 域名：%s 当前 IP：%s 状态：%s 更新时间：%s 转发：%s\n' \
-            "$count" "$domain" "${resolved_ip:-未解析}" "${status:-unknown}" \
-            "$(format_epoch_time "$updated_at")" "$refs"
-        count=$((count + 1))
+    while IFS='|' read -r domain resolved_ip status updated_at; do
+        printf '%s\n- 当前 IP：%s\n- 状态：%s\n- 更新时间：%s\n\n' \
+            "$domain" "${resolved_ip:-未解析}" "$(format_domain_status "$status")" \
+            "$(format_epoch_time "$updated_at")"
     done < <(awk -F'|' '
         NF>=8 && $5=="domain" {
             domain=$3
@@ -1366,43 +1368,39 @@ show_ddns_rules() {
                 ip[domain]=$6
                 status[domain]=$7
             }
-            ref=$1 "->" $4
-            refs[domain]=(refs[domain] ? refs[domain] "," ref : ref)
         }
         END {
             for (i=1; i<=count; i++) {
                 domain=order[i]
-                print domain "|" ip[domain] "|" status[domain] "|" updated[domain] "|" refs[domain]
+                print domain "|" ip[domain] "|" status[domain] "|" updated[domain]
             }
         }
     ' "$RULES_STATE_FILE")
 }
 
 display_rules() {
-    local count=1 src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss extra
-    [ -s "$RULES_STATE_FILE" ] || {
-        log_warning "未找到转发规则"
-        return 0
-    }
-    printf '%s\n' '端口转发规则'
-    while IFS='|' read -r src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss; do
-        [ -n "$src_port$mode$target$dest_port" ] || continue
-        extra=""
-        if [ -n "$snat_ip" ]; then
-            extra=" SNAT: ${snat_ip}"
-        fi
-        if [ -n "$mss" ]; then
-            extra="${extra} MSS: ${mss}"
-        fi
-        if [ "$target_type" = "domain" ]; then
-            printf '%s) 端口：%s -> 域名：%s:%s 当前 IP：%s 状态：%s%s\n' \
-                "$count" "$src_port" "$target" "$dest_port" "${resolved_ip:-未解析}" "${status:-unknown}" "$extra"
-        else
-            printf '%s) 端口：%s -> 目标：%s:%s (TCP+UDP)%s\n' \
-                "$count" "$src_port" "$target" "$dest_port" "$extra"
-        fi
-        count=$((count + 1))
-    done < "$RULES_STATE_FILE"
+    local src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss
+    local extra
+    printf '%s\n' '端口转发'
+    if [ -s "$RULES_STATE_FILE" ]; then
+        while IFS='|' read -r src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss; do
+            [ -n "$src_port$mode$target$dest_port" ] || continue
+            extra=""
+            [ -z "$snat_ip" ] || extra="SNAT：${snat_ip}"
+            if [ -n "$mss" ]; then
+                [ "$mss" != "auto" ] || mss="自动"
+                extra="${extra}${extra:+，}MSS：${mss}"
+            fi
+            if [ "$target_type" = "domain" ]; then
+                status=$(format_domain_status "$status")
+                extra="解析：${resolved_ip:-未解析}，${status}${extra:+，${extra}}"
+            fi
+            printf -- '- %s -> %s:%s%s\n' \
+                "$src_port" "$target" "$dest_port" "${extra:+（${extra}）}"
+        done < "$RULES_STATE_FILE"
+    else
+        printf '%s\n' '- 无'
+    fi
     printf '\n'
     show_protection_status
 }
@@ -1484,8 +1482,7 @@ main() {
                     require_arg_count 0 "保护模式 off 不支持额外参数: $*" "$@" || return 1
                     ensure_for_write || return 1
                     run_mutation "正在关闭端口保护模式..." apply_protection_state \
-                        0 "关闭端口保护" "端口保护已关闭" || return 1
-                    show_protection_status
+                        0 "关闭端口保护" "端口保护已关闭"
                     ;;
                 status)
                     require_arg_count 0 "保护模式 status 不支持额外参数: $*" "$@" || return 1
