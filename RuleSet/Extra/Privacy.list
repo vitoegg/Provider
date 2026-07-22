@@ -1,5 +1,5 @@
-# 更新时间: 2026-06-16 18:16:28
-# 规则条数: 966
+# 更新时间: 2026-07-22 15:38:01
+# 规则条数: 964
 # 规则来源:
 # - https://https://github.com/TG-Twilight/AWAvenue-Ads-Rule
 # - https://https://github.com/vitoegg/Provider
@@ -344,7 +344,6 @@
 .dc.sigmob.cn
 .de.tynt.com
 .diagnosis.ad.xiaomi.com
-.dig.bdurl.net
 .dl.zuimeitianqi.com
 .dlogs.bwton.com
 .dm.toutiao.com
@@ -558,7 +557,6 @@
 .mazu.m.qq.com
 .mbdlog.iqiyi.com
 .mcdn.bilivideo.cn
-.mcs.zijieapi.com
 .medproad.com
 .metrics.icloud.com
 .metrics.mzstatic.com
