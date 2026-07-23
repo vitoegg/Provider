@@ -100,7 +100,7 @@ require_environment() {
 
 ensure_dependencies() {
     local missing=()
-    command -v wget >/dev/null 2>&1 || missing+=(wget)
+    command -v curl >/dev/null 2>&1 || missing+=(curl)
     [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
     command -v jq >/dev/null 2>&1 || missing+=(jq)
     command -v tar >/dev/null 2>&1 || missing+=(tar)
@@ -182,7 +182,7 @@ get_current_version() {
 
 get_latest_version() {
     local version
-    version="$(wget -qO- --timeout=10 --tries=3 \
+    version="$(curl -fSsL --connect-timeout 5 --max-time 15 --retry 2 \
         https://api.github.com/repos/shadowsocks/shadowsocks-rust/releases 2>/dev/null |
         jq -r '[.[] | select(.prerelease == false and .draft == false) | .tag_name][0]')" || return 1
     if [ -z "$version" ] || [ "$version" = null ]; then
@@ -329,9 +329,9 @@ download_server() {
     archive="${temp_dir}/${archive_name}"
     checksum="${archive}.sha256"
     log_info "正在下载 Shadowsocks ${version#v}（${arch}）"
-    wget -q --timeout=20 --tries=3 -O "$archive" "${release_url}/${archive_name}" ||
+    curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o "$archive" "${release_url}/${archive_name}" ||
         fail "Shadowsocks 下载失败。"
-    wget -q --timeout=20 --tries=3 -O "$checksum" "${release_url}/${archive_name}.sha256" ||
+    curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o "$checksum" "${release_url}/${archive_name}.sha256" ||
         fail "Shadowsocks 校验文件下载失败。"
     [ -s "$archive" ] || fail "Shadowsocks 下载文件为空。"
     [ -s "$checksum" ] || fail "Shadowsocks 校验文件为空。"
@@ -491,7 +491,7 @@ verify_service() {
 
 show_configuration() {
     local ip
-    ip="$(wget -qO- --timeout=5 --tries=2 https://api.ipify.org 2>/dev/null)" || true
+    ip="$(curl -fSs --max-time 5 --retry 1 https://api.ipify.org 2>/dev/null)" || true
     cat <<EOF
 
 === Shadowsocks 客户端配置 ===

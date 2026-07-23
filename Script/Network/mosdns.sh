@@ -116,7 +116,7 @@ require_environment() {
 
 ensure_dependencies() {
     local missing=()
-    command -v wget >/dev/null 2>&1 || missing+=(wget)
+    command -v curl >/dev/null 2>&1 || missing+=(curl)
     command -v unzip >/dev/null 2>&1 || missing+=(unzip)
     command -v ss >/dev/null 2>&1 || missing+=(iproute2)
     command -v diff >/dev/null 2>&1 || missing+=(diffutils)
@@ -130,7 +130,7 @@ ensure_dependencies() {
 }
 
 download() {
-    if wget -q --https-only --timeout=15 --tries=3 -O "$2" "$1" && [ -s "$2" ]; then
+    if curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o "$2" "$1" && [ -s "$2" ]; then
         return 0
     fi
     rm -f "$2"

@@ -113,7 +113,9 @@ public_key_id() {
     read -r key_type key_body _ <<< "$key"
     case "$key_type" in
         ssh-ed25519|ssh-rsa) ;;
-        *) return 1 ;;
+        *)
+            return 1
+            ;;
     esac
     [[ "$key_body" =~ ^[A-Za-z0-9+/=]+$ ]] || return 1
     printf '%s %s\n' "$key_type" "$key_body"

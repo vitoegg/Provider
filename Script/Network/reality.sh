@@ -230,7 +230,7 @@ run_xray_installer() {
 
     temp_dir="$(mktemp -d)" || fail "无法创建 Xray 安装器临时目录。"
     installer="${temp_dir}/install-release.sh"
-    curl --fail --silent --show-error --location --connect-timeout 10 --max-time 120 --retry 3 \
+    curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 \
         -o "$installer" "$XRAY_INSTALLER_URL" || {
         rm -rf "$temp_dir"
         fail "Xray 安装器下载失败。"
@@ -668,7 +668,7 @@ verify_uninstalled() {
 show_configuration() {
     local ip
 
-    ip="$(curl --fail --silent --show-error --max-time 5 https://api.ipify.org 2>/dev/null)" || true
+    ip="$(curl -fSs --max-time 5 --retry 1 https://api.ipify.org 2>/dev/null)" || true
     printf '\n=== Xray 客户端配置 ===\n服务器：%s\n' "${ip:-无法获取 IP}"
     if [ "$REALITY_ENABLED" -eq 1 ]; then
         printf 'Reality 端口：%s\nUUID：%s\n域名：%s\nPrivateKey：%s\nPublicKey：%s\nShort ID：%s\n' \

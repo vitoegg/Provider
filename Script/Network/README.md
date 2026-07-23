@@ -4,7 +4,7 @@
 
 ### 下载
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/singbox.sh
+curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/singbox.sh
 ```
 
 ### 参数说明
@@ -51,7 +51,7 @@ bash singbox.sh \
 
 ### 下载
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/shadowsocks.sh
+curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/shadowsocks.sh
 ```
 
 ### 参数说明
@@ -73,7 +73,7 @@ bash shadowsocks.sh -s password -p 25252
 
 ### 下载
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/socks.sh
+curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/socks.sh
 ```
 
 ### 参数说明
@@ -95,7 +95,7 @@ bash socks.sh --port 28080 --allow-ip 1.2.3.4,5.6.7.8
 
 ### 下载
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/snell.sh
+curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/snell.sh
 ```
 
 ### 参数说明
@@ -119,7 +119,7 @@ bash snell.sh --install 4.1.1 --port 23456 --psk abcdefgh12345678
 
 ### 下载
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/reality.sh
+curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/reality.sh
 ```
 
 ### 参数说明
@@ -157,7 +157,7 @@ bash reality.sh \
 
 ### 下载
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/smartdns.sh
+curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/smartdns.sh
 ```
 
 ### 参数说明
@@ -179,7 +179,7 @@ bash smartdns.sh --ecs TYO
 
 ### 下载
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/mosdns.sh
+curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/mosdns.sh
 ```
 
 ### 参数说明
@@ -204,7 +204,7 @@ bash mosdns.sh --install --ecs TYO --ipv4
 
 ### 下载
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/kernel.sh
+curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/kernel.sh
 ```
 
 ### 参数说明
@@ -225,7 +225,7 @@ bash kernel.sh -6 no
 
 ### 下载
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/nftables.sh
+curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/nftables.sh
 ```
 
 ### 参数说明
@@ -261,7 +261,7 @@ bash nftables.sh --add 10086:82.40.1.2:33333:10.100.1.2:auto
 
 ### 下载
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/sshg.sh
+curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/sshg.sh
 ```
 
 ### 参数说明
@@ -287,7 +287,7 @@ bash sshg.sh --reset config=ssh allow=1.2.3.4,1.2.3.0/24,example.com key='ssh-ed
 
 ### 下载
 ```bash
-wget -N https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/providerdns.sh
+curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/providerdns.sh
 ```
 
 ### 参数说明

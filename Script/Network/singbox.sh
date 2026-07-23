@@ -221,7 +221,7 @@ require_environment() {
 
 ensure_dependencies() {
     local missing=()
-    command -v wget >/dev/null 2>&1 || missing+=(wget)
+    command -v curl >/dev/null 2>&1 || missing+=(curl)
     [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
     command -v jq >/dev/null 2>&1 || missing+=(jq)
     command -v dpkg-deb >/dev/null 2>&1 || missing+=(dpkg)
@@ -553,7 +553,7 @@ get_current_version() {
 
 get_latest_version() {
     local version
-    version="$(wget -qO- --timeout=10 --tries=3 \
+    version="$(curl -fSsL --connect-timeout 5 --max-time 15 --retry 2 \
         https://api.github.com/repos/SagerNet/sing-box/releases/latest 2>/dev/null |
         jq -r .tag_name)" || return 1
     if [ -z "$version" ] || [ "$version" = null ]; then
@@ -574,7 +574,7 @@ download_package_file() {
     local version="$1" target="$2"
 
     [[ "$version" = v* ]] || version="v$version"
-    wget -q --timeout=20 --tries=3 -O "$target" \
+    curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o "$target" \
         "https://github.com/SagerNet/sing-box/releases/download/${version}/sing-box_${version#v}_linux_${ARCH}.deb" ||
         return 1
     [ -s "$target" ] || return 1
@@ -847,7 +847,7 @@ verify_uninstalled() {
 show_configuration() {
     local ip
 
-    ip="$(wget -qO- --timeout=5 --tries=2 https://api.ipify.org 2>/dev/null)" || true
+    ip="$(curl -fSs --max-time 5 --retry 1 https://api.ipify.org 2>/dev/null)" || true
     printf '\n=== sing-box 客户端配置 ===\n服务器：%s\n' "${ip:-无法获取 IP}"
     if [ "$SHADOWTLS_ENABLED" -eq 1 ]; then
         printf 'ShadowTLS 端口：%s\nShadowTLS 密码：%s\nShadowTLS 域名：%s\n' \

@@ -123,7 +123,7 @@ require_environment() {
 ensure_dependencies() {
     local missing=()
 
-    command -v wget >/dev/null 2>&1 || missing+=(wget)
+    command -v curl >/dev/null 2>&1 || missing+=(curl)
     [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
     command -v unzip >/dev/null 2>&1 || missing+=(unzip)
     [ "${#missing[@]}" -eq 0 ] && return 0
@@ -343,7 +343,7 @@ download_server() {
     archive="${temp_dir}/snell.zip"
 
     log_info "正在下载 Snell ${version}（${arch}）"
-    wget -q --timeout=20 --tries=3 -O "$archive" \
+    curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o "$archive" \
         "${SNELL_DOWNLOAD_BASE}/snell-server-v${version}-linux-${arch}.zip" || fail "Snell 下载失败。"
     [ -s "$archive" ] || fail "Snell 下载文件为空。"
     unzip -q "$archive" -d "$temp_dir" || fail "Snell 解压失败。"
@@ -506,7 +506,7 @@ show_configuration() {
     local current_version ip
 
     current_version="$(get_current_version 2>/dev/null || printf '%s' "${VERSION:-未知}")"
-    ip="$(wget -qO- --timeout=5 --tries=2 https://api.ipify.org 2>/dev/null)" || true
+    ip="$(curl -fSs --max-time 5 --retry 1 https://api.ipify.org 2>/dev/null)" || true
     cat <<EOF
 
 === Snell 客户端配置 ===

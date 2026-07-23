@@ -99,7 +99,7 @@ ensure_dependencies() {
     command -v jq >/dev/null 2>&1 || missing+=(jq)
     command -v tar >/dev/null 2>&1 || missing+=(tar)
     command -v ss >/dev/null 2>&1 || missing+=(iproute2)
-    command -v wget >/dev/null 2>&1 || missing+=(wget)
+    command -v curl >/dev/null 2>&1 || missing+=(curl)
     command -v cmp >/dev/null 2>&1 || missing+=(diffutils)
     [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
     [ "${#missing[@]}" -gt 0 ] || return 0
@@ -121,7 +121,7 @@ select_release_asset() {
             fail "不支持的系统架构：$arch"
             ;;
     esac
-    json="$(wget -q --https-only --timeout=15 --tries=3 -O - "$API_URL")" ||
+    json="$(curl -fSsL --connect-timeout 5 --max-time 15 --retry 2 "$API_URL")" ||
         fail "无法获取 SmartDNS release 信息"
     [ -n "$json" ] || fail "SmartDNS release 信息为空"
     DOWNLOAD_URL="$(printf '%s' "$json" | jq -r --arg arch "$arch" '
@@ -141,7 +141,7 @@ run_installer() {
     tmp_dir="$(mktemp -d)" || fail "无法创建 SmartDNS 临时目录"
     (
         cd "$tmp_dir" || exit 1
-        wget -q --https-only --timeout=15 --tries=3 -O smartdns.tar.gz "$DOWNLOAD_URL" || exit 1
+        curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o smartdns.tar.gz "$DOWNLOAD_URL" || exit 1
         [ -s smartdns.tar.gz ] || exit 1
         tar -xzf smartdns.tar.gz || exit 1
         cd smartdns || exit 1
