@@ -20,10 +20,6 @@ payload:
   - 'production-openaicom-storage.azureedge.net'
   - 'client-api.arkoselabs.com'
   - 'openai-api.arkoselabs.com'
-  # > Tracking
-  - '+.o33249.ingest.sentry.io'
-  - 'openaicom.imgix.net'
-  - 'browser-intake-datadoghq.com'
 
   # Claude
   - '+.anthropic.com'
