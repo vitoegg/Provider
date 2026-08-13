@@ -1,5 +1,5 @@
-# 更新时间: 2026-08-10 14:15:36
-# 规则条数: 111577
+# 更新时间: 2026-08-13 14:21:12
+# 规则条数: 111580
 # 规则来源:
 # - https://https://github.com/blackmatrix7/ios_rule_script
 # - https://https://github.com/vitoegg/Provider
@@ -51332,6 +51332,8 @@
 .iot688.com
 .iot889.com
 .iotachem.com
+.iotaskyt.com
+.iotaskyty.com
 .iotbay.com
 .iotfair.net
 .iotku.com
@@ -87241,6 +87243,7 @@
 .tbbbk.com
 .tbcache.com
 .tbcdn.com
+.tbdesk.com
 .tbh5.com
 .tbhcc.com
 .tbhelper.com
