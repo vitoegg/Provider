@@ -1,76 +1,77 @@
 {
-  "mosdns_rules": {
-    "reject": {
-      "name": "MOSDNS_REJECT",
+  "mosdns_rules": [
+    {
+      "id": "reject",
       "path": "RuleSet/Extra/MosDNS/reject.txt",
-      "description": "MosDNS 拦截规则集",
-      "format": "adguard",
-      "urls": [
-        "https://raw.githubusercontent.com/miaoermua/AdguardFilter/main/rule.txt",
-        "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Mosdns_v5.txt",
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/BaseSet/MosDNS/blocklist.txt"
-      ]
+      "sources": {
+        "domain_adguard": [
+          "https://raw.githubusercontent.com/miaoermua/AdguardFilter/main/rule.txt",
+          "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Mosdns_v5.txt"
+        ],
+        "domain_mosdns": [
+          "RuleSet/Extra/BaseSet/MosDNS/blocklist.txt"
+        ]
+      }
     },
-    "china": {
-      "name": "MOSDNS_CHINA",
-      "path": "RuleSet/Extra/MosDNS/china.txt",
-      "description": "MosDNS 中国域名规则集",
-      "format": "surge_domain_set",
-      "urls": [
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/BaseSet/MosDNS/whitelist.txt",
-        "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list",
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Direct/ChinaSite.list"
-      ],
-      "exclude_urls": [
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/MosDNS/apple.txt",
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/MosDNS/reject.txt",
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/MosDNS/direct.txt"
-      ]
-    },
-    "foreign": {
-      "name": "MOSDNS_FOREIGN",
-      "path": "RuleSet/Extra/MosDNS/foreign.txt",
-      "description": "MosDNS 海外域名规则集",
-      "format": "surge_domain_set",
-      "urls": [
-        "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Global/Global_Domain.list",
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/BaseSet/MosDNS/global.txt",
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Proxy/AI.list"
-      ],
-      "exclude_urls": [
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/MosDNS/apple.txt",
-        "https://raw.githubusercontent.com/vitoegg/Provider/master/RuleSet/Extra/MosDNS/reject.txt"
-      ]
-    },
-    "apple": {
-      "name": "MOSDNS_APPLE",
+    {
+      "id": "apple",
       "path": "RuleSet/Extra/MosDNS/apple.txt",
-      "description": "MosDNS 苹果域名规则集",
-      "format": "surge_domain_set",
-      "urls": [
-        "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple_Domain.list",
-        "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt",
-        "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt"
+      "sources": {
+        "domain_surge": [
+          "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Apple/Apple_Domain.list",
+          "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt",
+          "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt"
+        ]
+      }
+    },
+    {
+      "id": "china",
+      "path": "RuleSet/Extra/MosDNS/china.txt",
+      "sources": {
+        "domain_mosdns": [
+          "RuleSet/Extra/BaseSet/MosDNS/whitelist.txt"
+        ],
+        "domain_surge": [
+          "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list",
+          "RuleSet/Direct/ChinaSite.list"
+        ]
+      },
+      "exclude": [
+        "RuleSet/Extra/MosDNS/apple.txt",
+        "RuleSet/Extra/MosDNS/reject.txt",
+        "RuleSet/Extra/MosDNS/direct.txt"
       ]
     },
-    "geoip": {
-      "name": "MOSDNS_GEOIP",
-      "path": "RuleSet/Extra/MosDNS/geoip.txt",
-      "description": "MosDNS 中国 IP 规则集",
-      "format": "ip_cidr",
-      "urls": [
-        "https://raw.githubusercontent.com/Loyalsoldier/geoip/release/text/cn.txt",
-        "https://raw.githubusercontent.com/pmkol/easymosdns/rules/china_ip_list.txt",
-        "https://raw.githubusercontent.com/Masaiki/GeoIP2-CN/release/CN-ip-cidr.txt"
-      ],
-      "nft_urls": [
-        "https://raw.githubusercontent.com/nikkinikki-org/OpenWrt-nikki/main/nikki/files/nftables/geoip_cn.nft"
+    {
+      "id": "foreign",
+      "path": "RuleSet/Extra/MosDNS/foreign.txt",
+      "sources": {
+        "domain_surge": [
+          "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/Global/Global_Domain.list",
+          "RuleSet/Proxy/AI.list"
+        ],
+        "domain_mosdns": [
+          "RuleSet/Extra/BaseSet/MosDNS/global.txt"
+        ]
+      },
+      "exclude": [
+        "RuleSet/Extra/MosDNS/apple.txt",
+        "RuleSet/Extra/MosDNS/reject.txt"
       ]
+    },
+    {
+      "id": "geoip",
+      "path": "RuleSet/Extra/MosDNS/geoip.txt",
+      "sources": {
+        "ip_cidr": [
+          "https://raw.githubusercontent.com/Loyalsoldier/geoip/release/text/cn.txt",
+          "https://raw.githubusercontent.com/pmkol/easymosdns/rules/china_ip_list.txt",
+          "https://raw.githubusercontent.com/Masaiki/GeoIP2-CN/release/CN-ip-cidr.txt"
+        ],
+        "ip_nft": [
+          "https://raw.githubusercontent.com/nikkinikki-org/OpenWrt-nikki/main/nikki/files/nftables/geoip_cn.nft"
+        ]
+      }
     }
-  },
-  "config_info": {
-    "version": "1.3",
-    "last_updated": "2026-05-09",
-    "description": "MosDNS 规则配置文件"
-  }
+  ]
 }

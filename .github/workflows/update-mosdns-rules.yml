@@ -27,26 +27,16 @@ jobs:
           python-version: '3.x'
         id: python
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq curl
-
       - name: Update MosDNS RuleSets
         id: check_changes
-        run: |
-          # 赋予脚本执行权限
-          chmod +x ${GITHUB_WORKSPACE}/Script/Workflow/mosdns_rules.sh
-          chmod +x ${GITHUB_WORKSPACE}/Script/Workflow/mosdns_rules.py
-
-          # 执行MosDNS规则更新脚本
-          ${GITHUB_WORKSPACE}/Script/Workflow/mosdns_rules.sh
+        run: python3 ${GITHUB_WORKSPACE}/Script/Workflow/mosdns_rules.py
 
       - name: Commit and Push Changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          git add -- RuleSet/Extra/MosDNS/*.txt
           git commit -m "Update MosDNS rules: ${{ steps.check_changes.outputs.change_summary }}"
           git push
         env:

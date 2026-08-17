@@ -11,18 +11,30 @@ MosDNS规则处理脚本
 6. 支持用MosDNS域名规则排除被覆盖的域名
 """
 
-import argparse
+import json
 import ipaddress
-import sys
-import time
 import os
 import re
-from typing import List, Tuple, Dict
+import sys
+import tempfile
+import time
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import Dict, Iterable, List, Tuple
 
 # 编译正则模式以提升性能
 REGEX_PATTERN = re.compile(r'[\*\[\]\(\)\\+\?\^\$\|]')
 DOMAIN_PATTERN = re.compile(r'^[a-zA-Z0-9._-]+$')
-SUPPORTED_FORMATS = ("adguard", "surge_domain_set", "ip_cidr")
+DOMAIN_FAMILY = "domain"
+IP_FAMILY = "ip"
+FORMAT_FAMILIES = {
+    "domain_adguard": DOMAIN_FAMILY,
+    "domain_surge": DOMAIN_FAMILY,
+    "domain_mosdns": DOMAIN_FAMILY,
+    "ip_cidr": IP_FAMILY,
+    "ip_nft": IP_FAMILY,
+}
 
 def is_regex_rule(rule: str) -> bool:
     """检查MosDNS规则是否为正则表达式规则"""
@@ -380,20 +392,19 @@ def is_covered_by_domain_rule(domain: str, domain_rules: set) -> bool:
             return True
     return False
 
-def load_exclude_rules(exclude_file: str) -> List[str]:
+def parse_exclude_rules(lines: Iterable[str], label: str) -> List[str]:
     """加载MosDNS排除规则，非MosDNS域名规则直接失败。"""
     exclude_rules = []
 
-    with open(exclude_file, 'r', encoding='utf-8') as file_handle:
-        for line_number, line in enumerate(file_handle, start=1):
-            converted_rule, rule_type = convert_mosdns_domain_rule(line)
-            if rule_type == "comment":
-                continue
-            if rule_type != "converted":
-                raise ValueError(
-                    f"排除规则文件第 {line_number} 行不是有效MosDNS域名规则: {line.strip()}"
-                )
-            exclude_rules.append(converted_rule)
+    for line_number, line in enumerate(lines, start=1):
+        converted_rule, rule_type = convert_mosdns_domain_rule(line)
+        if rule_type == "comment":
+            continue
+        if rule_type != "converted":
+            raise ValueError(
+                f"排除规则 {label} 第 {line_number} 行无效: {line.strip()}"
+            )
+        exclude_rules.append(converted_rule)
 
     optimized_rules, _ = optimize_domains(exclude_rules)
     return optimized_rules
@@ -456,264 +467,315 @@ def optimize_ip_networks(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
 
     return [network.with_prefixlen for network in kept_networks], stats
 
-def load_nft_ip_cidr_rules(nft_file: str) -> List[str]:
+def parse_nft_ip_cidr_rules(lines: Iterable[str], label: str) -> List[str]:
     """从nftables set elements中提取IP/CIDR规则。"""
     nft_rules = []
     in_elements = False
 
-    with open(nft_file, 'r', encoding='utf-8') as file_handle:
-        for line_number, line in enumerate(file_handle, start=1):
-            content = line.split('#', 1)[0].strip()
-            if not content:
+    for line_number, line in enumerate(lines, start=1):
+        content = line.split('#', 1)[0].strip()
+        if not content:
+            continue
+
+        if not in_elements:
+            if 'elements' not in content or '{' not in content:
                 continue
+            in_elements = True
+            content = content.split('{', 1)[1]
 
-            if not in_elements:
-                if 'elements' not in content or '{' not in content:
-                    continue
-                in_elements = True
-                content = content.split('{', 1)[1]
+        if '}' in content:
+            content = content.split('}', 1)[0]
+            in_elements = False
 
-            if '}' in content:
-                content = content.split('}', 1)[0]
-                in_elements = False
-
-            for token in content.split(','):
-                token = token.strip()
-                if not token:
-                    continue
-                converted_rule, rule_type = convert_ip_cidr_rule(token)
-                if rule_type != "converted":
-                    raise ValueError(
-                        f"nft IP集合第 {line_number} 行不是有效IP/CIDR规则: {token}"
-                    )
-                nft_rules.append(converted_rule)
+        for token in content.split(','):
+            token = token.strip()
+            if not token:
+                continue
+            converted_rule, rule_type = convert_ip_cidr_rule(token)
+            if rule_type != "converted":
+                raise ValueError(
+                    f"nft IP集合 {label} 第 {line_number} 行无效: {token}"
+                )
+            nft_rules.append(converted_rule)
 
     if in_elements:
-        raise ValueError(f"nft IP集合文件未正确闭合: {nft_file}")
+        raise ValueError(f"nft IP集合未正确闭合: {label}")
     if not nft_rules:
-        raise ValueError(f"未从nft IP集合文件提取到有效IP/CIDR规则: {nft_file}")
+        raise ValueError(f"未从nft IP集合提取到有效IP/CIDR规则: {label}")
 
     return nft_rules
 
-def check_ip_cidr_rules(input_file: str) -> int:
-    """校验文件中是否仍存在重复或被父网段覆盖的CIDR规则"""
-    parsed_rules = []
+def clean_rule_lines(content: str) -> Iterable[str]:
+    """执行各文本格式共用的轻量清理。"""
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if (
+            not line or
+            line.startswith(('#', ';', '!', '//', '/*')) or
+            line.startswith('payload:') or
+            '*/' in line
+        ):
+            continue
+        line = re.sub(r'\s+[#!;].*$', '', line).strip()
+        if line:
+            yield line
 
-    with open(input_file, 'r', encoding='utf-8') as file_handle:
-        for line_number, line in enumerate(file_handle, start=1):
-            converted_rule, rule_type = convert_ip_cidr_rule(line)
-            if rule_type == "comment":
-                continue
-            if rule_type != "converted":
-                print(
-                    f"CIDR校验失败: 第 {line_number} 行不是有效的IP/CIDR规则: {line.strip()}",
-                    file=sys.stderr
-                )
-                return 1
-            parsed_rules.append(converted_rule)
 
-    unique_rules = set(parsed_rules)
-    duplicate_count = len(parsed_rules) - len(unique_rules)
-    kept_networks, coverage_stats, covered_samples = remove_covered_ip_networks(
-        [ipaddress.ip_network(rule, strict=False) for rule in unique_rules]
-    )
+def convert_lines(lines: Iterable[str], converter) -> List[str]:
+    converted_rules = []
+    for line in lines:
+        converted_rule, rule_type = converter(line)
+        if rule_type in ("converted", "mosdns"):
+            converted_rules.append(converted_rule)
+    return converted_rules
 
-    if duplicate_count > 0:
-        print(f"CIDR校验失败: 发现 {duplicate_count} 条完全重复规则", file=sys.stderr)
-    if coverage_stats["covered_subnets"] > 0:
-        if covered_samples:
-            parent_rule, child_rule = covered_samples[0]
-            print(
-                f"CIDR校验失败: 发现被父网段覆盖的子网段: {child_rule} <- {parent_rule}",
-                file=sys.stderr
-            )
-        else:
-            print(
-                f"CIDR校验失败: 发现 {coverage_stats['covered_subnets']} 条被父网段覆盖的子网段",
-                file=sys.stderr
-            )
 
-    if duplicate_count > 0 or coverage_stats["covered_subnets"] > 0:
-        return 1
-
-    print(
-        f"CIDR校验通过: 共 {len(kept_networks)} 条规则，无重复且无覆盖子网段",
-        file=sys.stderr
-    )
-    return 0
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="MosDNS规则处理脚本")
-    parser.add_argument("input_file", help="输入文件路径")
-    parser.add_argument(
-        "--format",
-        choices=SUPPORTED_FORMATS,
-        default="adguard",
-        help="输入规则格式，默认 adguard"
-    )
-    parser.add_argument(
-        "--check-redundant-ip-cidr",
-        action="store_true",
-        help="仅校验输入文件中是否还存在重复或被父网段覆盖的CIDR规则"
-    )
-    parser.add_argument(
-        "--exclude-file",
-        help="MosDNS域名排除规则文件，仅支持 domain: 和 full:"
-    )
-    parser.add_argument(
-        "--nft-file",
-        help="nftables IP集合文件，仅支持 ip_cidr 格式"
-    )
-    return parser.parse_args()
-
-def main():
-    args = parse_args()
-    input_file = args.input_file
-
-    converter = convert_adguard_to_mosdns
-    optimizer = optimize_domains
-    if args.format == "surge_domain_set":
-        converter = convert_surge_domain_set_to_mosdns
-    elif args.format == "ip_cidr":
-        converter = convert_ip_cidr_rule
-        optimizer = optimize_ip_networks
-
-    if not os.path.exists(input_file):
-        print("错误: 输入文件 '{}' 不存在".format(input_file), file=sys.stderr)
-        sys.exit(1)
-
-    if args.check_redundant_ip_cidr:
-        sys.exit(check_ip_cidr_rules(input_file))
-
-    if args.exclude_file:
-        if args.format == "ip_cidr":
-            print("错误: IP/CIDR规则不支持域名排除文件", file=sys.stderr)
-            sys.exit(1)
-        if not os.path.exists(args.exclude_file):
-            print("错误: 排除规则文件 '{}' 不存在".format(args.exclude_file), file=sys.stderr)
-            sys.exit(1)
-
-    if args.nft_file:
-        if args.format != "ip_cidr":
-            print("错误: nft IP集合仅支持 ip_cidr 格式", file=sys.stderr)
-            sys.exit(1)
-        if not os.path.exists(args.nft_file):
-            print("错误: nft IP集合文件 '{}' 不存在".format(args.nft_file), file=sys.stderr)
-            sys.exit(1)
-
-    start_time = time.time()
-
-    # 初始化统计信息
-    conversion_stats = {
-        "total_lines": 0,
-        "comments": 0,
-        "allow_rules": 0,
-        "keyword_or_regexp_rules": 0,
-        "regex_rules": 0,
-        "converted": 0,
-        "mosdns_format": 0,
-        "invalid": 0,
-        "unknown": 0
+def convert_source(rule_format: str, content: str, label: str) -> List[str]:
+    converters = {
+        "domain_adguard": convert_adguard_to_mosdns,
+        "domain_surge": convert_surge_domain_set_to_mosdns,
+        "domain_mosdns": convert_mosdns_domain_rule,
+        "ip_cidr": convert_ip_cidr_rule,
     }
 
-    has_exclude = bool(args.exclude_file and args.format != "ip_cidr")
-    total_steps = 6 if has_exclude else 5
-    optimize_step = 4 if has_exclude else 3
+    if rule_format == "ip_nft":
+        rules = parse_nft_ip_cidr_rules(content.splitlines(), label)
+    else:
+        converter = converters.get(rule_format)
+        if converter is None:
+            raise ValueError(f"不支持的规则格式: {rule_format}")
+        rules = convert_lines(clean_rule_lines(content), converter)
 
-    print(f"[1/{total_steps}] 读取和转换规则文件，输入格式: {args.format}...", file=sys.stderr)
+    if not rules:
+        raise ValueError(f"来源未产生有效规则: {label}")
+    return rules
 
-    converted_rules = []
 
-    try:
-        with open(input_file, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                conversion_stats["total_lines"] += 1
+def workspace_path(workspace: Path, relative_path: str) -> Path:
+    path = (workspace / relative_path).resolve()
+    if path != workspace and workspace not in path.parents:
+        raise ValueError(f"路径超出工作区: {relative_path}")
+    return path
 
-                if not line:
-                    continue
 
-                converted_rule, rule_type = converter(line)
+def read_location(workspace: Path, location: str) -> str:
+    if location.startswith(("https://", "http://")):
+        request = urllib.request.Request(
+            location,
+            headers={"User-Agent": "Provider-MosDNS-Workflow"}
+        )
+        with urllib.request.urlopen(request, timeout=30) as response:
+            data = response.read()
+        if not data:
+            raise ValueError(f"下载内容为空: {location}")
+        return data.decode("utf-8")
 
-                # 统计转换结果
-                if rule_type == "comment":
-                    conversion_stats["comments"] += 1
-                elif rule_type == "allow":
-                    conversion_stats["allow_rules"] += 1
-                elif rule_type == "keyword_or_regexp":
-                    conversion_stats["keyword_or_regexp_rules"] += 1
-                elif rule_type == "regex":
-                    conversion_stats["regex_rules"] += 1
-                elif rule_type == "converted":
-                    conversion_stats["converted"] += 1
-                    converted_rules.append(converted_rule)
-                elif rule_type == "mosdns":
-                    conversion_stats["mosdns_format"] += 1
-                    converted_rules.append(converted_rule)
-                elif rule_type == "invalid":
-                    conversion_stats["invalid"] += 1
-                else:
-                    conversion_stats["unknown"] += 1
+    path = workspace_path(workspace, location)
+    if not path.is_file():
+        raise FileNotFoundError(f"本地来源不存在: {location}")
+    content = path.read_text(encoding="utf-8")
+    if not content:
+        raise ValueError(f"本地来源为空: {location}")
+    return content
+
+
+def load_config(workspace: Path) -> List[Dict]:
+    config_path = workspace / "Script/Workflow/mosdns_config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    rules = config.get("mosdns_rules")
+    if not isinstance(rules, list) or not rules:
+        raise ValueError("mosdns_rules 必须是非空数组")
+
+    seen_ids = set()
+    seen_paths = set()
+    for rule in rules:
+        rule_id = rule.get("id")
+        output_path = rule.get("path")
+        sources = rule.get("sources")
+        if not isinstance(rule_id, str) or not rule_id or rule_id in seen_ids:
+            raise ValueError(f"规则 id 无效或重复: {rule_id}")
+        if not isinstance(output_path, str) or not output_path or output_path in seen_paths:
+            raise ValueError(f"规则 path 无效或重复: {output_path}")
+        if not isinstance(sources, dict) or not sources:
+            raise ValueError(f"规则 {rule_id} 的 sources 必须是非空对象")
+        for rule_format, locations in sources.items():
+            if rule_format not in FORMAT_FAMILIES:
+                raise ValueError(f"规则 {rule_id} 使用了未知格式: {rule_format}")
+            if not isinstance(locations, list) or not locations or not all(
+                isinstance(location, str) and location for location in locations
+            ):
+                raise ValueError(f"规则 {rule_id} 的 {rule_format} 来源无效")
+        excludes = rule.get("exclude", [])
+        if not isinstance(excludes, list) or not all(
+            isinstance(path, str) and path for path in excludes
+        ):
+            raise ValueError(f"规则 {rule_id} 的 exclude 无效")
+        seen_ids.add(rule_id)
+        seen_paths.add(output_path)
+    return rules
+
+
+def load_locations(workspace: Path, rules: List[Dict]) -> Dict[str, str]:
+    output_paths = {rule["path"] for rule in rules}
+    locations = {
+        location
+        for rule in rules
+        for source_locations in rule["sources"].values()
+        for location in source_locations
+    }
+    locations.update(
+        exclude_path
+        for rule in rules
+        for exclude_path in rule.get("exclude", [])
+        if exclude_path not in output_paths
+    )
+    ordered_locations = sorted(locations)
+    with ThreadPoolExecutor(max_workers=min(8, len(ordered_locations))) as executor:
+        contents = executor.map(
+            lambda location: read_location(workspace, location),
+            ordered_locations
+        )
+        return dict(zip(ordered_locations, contents))
+
+
+def build_rulesets(
+    rules: List[Dict],
+    contents: Dict[str, str]
+) -> Dict[str, List[str]]:
+    output_paths = {rule["path"] for rule in rules}
+    generated = {}
+
+    for rule in rules:
+        rule_id = rule["id"]
+        families = {FORMAT_FAMILIES[rule_format] for rule_format in rule["sources"]}
+        if len(families) != 1:
+            raise ValueError(f"规则 {rule_id} 不能混合域名与 IP 来源")
+        family = next(iter(families))
+
+        converted_rules = []
+        for rule_format, locations in rule["sources"].items():
+            for location in locations:
+                converted_rules.extend(convert_source(
+                    rule_format,
+                    contents[location],
+                    f"{rule_id}:{location}"
+                ))
 
         filtered_rules = converted_rules
-        exclusion_stats = None
-        nft_rule_count = 0
-        if args.format == "ip_cidr":
-            if args.nft_file:
-                nft_rules = load_nft_ip_cidr_rules(args.nft_file)
-                nft_rule_count = len(nft_rules)
-                filtered_rules.extend(nft_rules)
-            optimization_step_label = "优化IP规则"
+        exclude_paths = rule.get("exclude", [])
+        if exclude_paths:
+            if family != DOMAIN_FAMILY:
+                raise ValueError(f"IP 规则 {rule_id} 不支持 exclude")
+            exclude_rules = []
+            for exclude_path in exclude_paths:
+                if exclude_path in output_paths:
+                    if exclude_path not in generated:
+                        raise ValueError(
+                            f"规则 {rule_id} 的依赖尚未生成: {exclude_path}"
+                        )
+                    exclude_rules.extend(generated[exclude_path])
+                else:
+                    exclude_rules.extend(parse_exclude_rules(
+                        clean_rule_lines(contents[exclude_path]),
+                        exclude_path
+                    ))
+            exclude_rules, _ = optimize_domains(exclude_rules)
+            filtered_rules, _ = apply_domain_exclusions(
+                filtered_rules,
+                exclude_rules
+            )
+
+        if family == DOMAIN_FAMILY:
+            filtered_rules, _ = filter_regex_rules(filtered_rules)
+            final_rules, _ = optimize_domains(filtered_rules)
         else:
-            print(f"[2/{total_steps}] 过滤正则表达式规则 ({len(converted_rules)} 条)...", file=sys.stderr)
-            filtered_rules, regex_count = filter_regex_rules(converted_rules)
-            conversion_stats["regex_rules"] = regex_count
-            if args.exclude_file:
-                print(f"[3/{total_steps}] 应用域名排除规则: {args.exclude_file}...", file=sys.stderr)
-                exclude_rules = load_exclude_rules(args.exclude_file)
-                filtered_rules, exclusion_stats = apply_domain_exclusions(filtered_rules, exclude_rules)
-            optimization_step_label = "优化域名规则"
+            final_rules, _ = optimize_ip_networks(filtered_rules)
 
-        print(f"[{optimize_step}/{total_steps}] {optimization_step_label} ({len(filtered_rules)} 条)...", file=sys.stderr)
+        if not final_rules:
+            raise ValueError(f"规则 {rule_id} 的最终产物为空")
+        generated[rule["path"]] = final_rules
+        print(f"{rule_id}: {len(converted_rules)} -> {len(final_rules)} 条")
 
-        final_rules, optimization_stats = optimizer(filtered_rules)
+    return generated
 
-        print(f"[{optimize_step + 1}/{total_steps}] 生成最终规则 ({len(final_rules)} 条)...", file=sys.stderr)
 
-        # 输出最终规则
-        for rule in final_rules:
-            print(rule)
+def atomic_write(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        text=True
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
+        os.fchmod(descriptor, mode)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as file_handle:
+            file_handle.write(content)
+        os.replace(temporary_path, path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
-        print(f"[{optimize_step + 2}/{total_steps}] 输出统计信息...", file=sys.stderr)
 
-        # 输出统计信息
-        end_time = time.time()
-        print(f"处理时间: {end_time - start_time:.2f} 秒", file=sys.stderr)
-        print(f"总行数: {conversion_stats['total_lines']}", file=sys.stderr)
-        print(f"注释行: {conversion_stats['comments']}", file=sys.stderr)
-        print(f"允许规则: {conversion_stats['allow_rules']}", file=sys.stderr)
-        print(f"Keyword/Regexp规则: {conversion_stats['keyword_or_regexp_rules']}", file=sys.stderr)
-        print(f"正则规则: {conversion_stats['regex_rules']}", file=sys.stderr)
-        print(f"转换规则: {conversion_stats['converted']}", file=sys.stderr)
-        print(f"MosDNS格式: {conversion_stats['mosdns_format']}", file=sys.stderr)
-        print(f"无效规则: {conversion_stats['invalid']}", file=sys.stderr)
-        print(f"未知格式: {conversion_stats['unknown']}", file=sys.stderr)
-        print(f"重复规则: {optimization_stats['duplicates']}", file=sys.stderr)
-        if args.format != "ip_cidr":
-            if exclusion_stats is not None:
-                print(f"排除规则: {exclusion_stats['exclude_rules']}", file=sys.stderr)
-                print(f"被domain排除规则覆盖: {exclusion_stats['excluded_by_domain']}", file=sys.stderr)
-                print(f"被full排除规则精确命中: {exclusion_stats['excluded_by_full']}", file=sys.stderr)
-            print(f"被父域名覆盖: {optimization_stats['wildcard_covered']}", file=sys.stderr)
-            print(f"被domain规则覆盖的full规则: {optimization_stats['domain_covered_full']}", file=sys.stderr)
-        else:
-            print(f"被父网段覆盖的子网段: {optimization_stats['covered_subnets']}", file=sys.stderr)
-            print(f"nft IP集合规则: {nft_rule_count}", file=sys.stderr)
-        print(f"最终保留: {optimization_stats['kept']}", file=sys.stderr)
+def publish_rulesets(
+    workspace: Path,
+    rules: List[Dict],
+    generated: Dict[str, List[str]]
+) -> List[str]:
+    summaries = []
+    pending_writes = []
 
-    except Exception as e:
-        print(f"处理出错: {str(e)}", file=sys.stderr)
-        sys.exit(1)
+    for rule in rules:
+        relative_path = rule["path"]
+        output_path = workspace_path(workspace, relative_path)
+        new_rules = generated[relative_path]
+        old_rules = set()
+        if output_path.is_file():
+            old_rules = {
+                line.strip()
+                for line in output_path.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            }
+        new_rule_set = set(new_rules)
+        if old_rules == new_rule_set:
+            continue
+        added = len(new_rule_set - old_rules)
+        removed = len(old_rules - new_rule_set)
+        summaries.append(f"{rule['id']} (+{added} -{removed})")
+        pending_writes.append((output_path, "\n".join(new_rules) + "\n"))
+
+    for output_path, content in pending_writes:
+        atomic_write(output_path, content)
+    return summaries
+
+
+def write_github_output(summaries: List[str]) -> None:
+    output_path = os.environ.get("GITHUB_OUTPUT")
+    if not output_path:
+        return
+    with open(output_path, "a", encoding="utf-8") as file_handle:
+        file_handle.write(f"has_changes={'true' if summaries else 'false'}\n")
+        file_handle.write(
+            f"change_summary={', '.join(summaries) if summaries else 'no changes'}\n"
+        )
+
+
+def main() -> int:
+    start_time = time.time()
+    workspace = Path(os.environ.get("GITHUB_WORKSPACE", Path.cwd())).resolve()
+    try:
+        rules = load_config(workspace)
+        contents = load_locations(workspace, rules)
+        generated = build_rulesets(rules, contents)
+        summaries = publish_rulesets(workspace, rules, generated)
+        write_github_output(summaries)
+    except Exception as error:
+        print(f"错误: {error}", file=sys.stderr)
+        return 1
+
+    print(f"完成: {len(rules)} 个规则集，用时 {time.time() - start_time:.2f} 秒")
+    return 0
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
