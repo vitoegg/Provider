@@ -1,27 +1,52 @@
 {
-  "upstream_repos": [
-    {
-      "name": "jdpro",
-      "owner": "6dylan6",
-      "repo": "jdpro",
-      "branch": "main",
-      "description": "6dylan6 的 JD 脚本仓库"
-    },
-    {
-      "name": "faker2",
-      "owner": "shufflewzc",
-      "repo": "faker2",
-      "branch": "main",
-      "description": "faker2 的 JD 脚本仓库"
-    }
-  ],
-  "file_patterns": {
-    "prefix": "jd_",
-    "extensions": [".js", ".py", ".sh", ".ts"],
-    "exclude": ["sendNotify.js", "sendNotify.py"]
-  },
+  "timezone": "Asia/Shanghai",
   "telegram": {
     "parse_mode": "HTML",
     "disable_web_page_preview": true
+  },
+  "tasks": {
+    "default_lookback_hours": 24,
+    "repositories": [
+      {
+        "id": "jdpro",
+        "name": "jdpro",
+        "repo": "6dylan6/jdpro",
+        "branch": "main"
+      },
+      {
+        "id": "faker2",
+        "name": "faker2",
+        "repo": "shufflewzc/faker2",
+        "branch": "main"
+      }
+    ],
+    "files": {
+      "prefix": "jd_",
+      "extensions": [".js", ".py", ".sh", ".ts"]
+    }
+  },
+  "versions": {
+    "sources": [
+      {
+        "id": "immortalwrt_kernel",
+        "name": "ImmortalWrt Kernel",
+        "type": "openwrt_kernel",
+        "repo": "immortalwrt/immortalwrt",
+        "branch": "openwrt-25.12",
+        "patchver": "6.12"
+      },
+      {
+        "id": "mihomo_core",
+        "name": "Mihomo Core",
+        "type": "github_latest_release",
+        "repo": "MetaCubeX/mihomo"
+      },
+      {
+        "id": "openwrt_release",
+        "name": "OpenWrt Release",
+        "type": "github_latest_release",
+        "repo": "openwrt/openwrt"
+      }
+    ]
   }
 }

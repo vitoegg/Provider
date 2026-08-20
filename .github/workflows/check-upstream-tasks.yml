@@ -7,10 +7,18 @@ on:
   workflow_dispatch:
     inputs:
       hours:
-        description: '检查最近多少小时的变更 (默认24小时)'
+        description: '首次建态或游标失效时回溯多少小时 (默认24小时)'
         required: false
         default: '24'
         type: string
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: check-upstream-tasks
+  cancel-in-progress: false
 
 jobs:
   check-upstream:
@@ -21,26 +29,36 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Setup Timezone
-        run: sudo timedatectl set-timezone "Asia/Shanghai"
-
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.x'
 
-      - name: Install dependencies
-        run: |
-          pip install requests
+      - name: Restore Upstream Task State
+        uses: actions/cache/restore@v5
+        with:
+          path: ${{ runner.temp }}/upstream-task-state
+          key: upstream-task-state-${{ github.run_id }}
+          restore-keys: |
+            upstream-task-state-
 
       - name: Check Upstream Changes
+        id: check_tasks
         env:
           GITHUB_TOKEN: ${{ github.token }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          CHECK_HOURS: ${{ github.event.inputs.hours || '24' }}
-        run: |
-          python ${GITHUB_WORKSPACE}/Script/Workflow/upstream_tasks.py
+          MONITOR_STATE_FILE: ${{ runner.temp }}/upstream-task-state/state.json
+        run: >-
+          python ${GITHUB_WORKSPACE}/Script/Workflow/upstream_monitor.py
+          tasks --hours ${{ github.event.inputs.hours || '24' }}
+
+      - name: Save Upstream Task State
+        if: steps.check_tasks.outputs.cache_save == 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: ${{ runner.temp }}/upstream-task-state
+          key: upstream-task-state-${{ steps.check_tasks.outputs.state_key }}-${{ github.run_id }}
 
       - name: Delete old Workflows
         uses: ophub/delete-releases-workflows@main
