@@ -1,8 +1,8 @@
-# 更新时间: 2026-07-28 15:42:45
-# 规则条数: 964
+# 更新时间: 2026-08-21 00:06:45
+# 规则条数: 963
 # 规则来源:
-# - https://https://github.com/TG-Twilight/AWAvenue-Ads-Rule
-# - https://https://github.com/vitoegg/Provider
+# - https://github.com/TG-Twilight/AWAvenue-Ads-Rule
+# - https://github.com/vitoegg/Provider
 
 .1500020991.vodplayer.wxamedia.com
 .1500022744.vodplayer.wxamedia.com
@@ -519,7 +519,6 @@
 .log-verify.hiaiabc.com
 .log.ad.xiaomi.com
 .log.aispeech.com
-.log.aliyuncs.com
 .log.amemv.com
 .log.appstore3.huan.tv
 .log.avlyun.com

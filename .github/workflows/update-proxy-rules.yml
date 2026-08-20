@@ -29,22 +29,16 @@ jobs:
           python-version: '3.x'
         id: python
 
-      - name: Install jq
-        run: sudo apt-get install -y jq
-
       - name: Update RuleSets
         id: check_changes
-        run: |
-          # 赋予脚本执行权限
-          chmod +x ${GITHUB_WORKSPACE}/Script/Workflow/proxy_rules.sh
-          # 执行规则更新脚本
-          ${GITHUB_WORKSPACE}/Script/Workflow/proxy_rules.sh
+        run: python3 ${GITHUB_WORKSPACE}/Script/Workflow/proxy_rules.py
 
       - name: Commit and Push Changes
         if: steps.check_changes.outputs.has_changes == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          git add -- RuleSet/
           git commit -m "Update rules: ${{ steps.check_changes.outputs.change_summary }}"
           git push
         env:

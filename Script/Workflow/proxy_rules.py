@@ -1,358 +1,402 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-规则处理脚本
-功能: 去重域名规则、优化规则集合
+代理规则处理脚本
+功能:
+1. 按配置聚合本地与远程的 Surge domain-set 规则来源
+2. 规范化并校验域名规则，剔除非法条目
+3. 泛域名互相覆盖去重，并裁剪被泛域名覆盖的精确域名
+4. 集合差分判定变更后原子写入产物
 """
 
-import sys
-import time
+import json
 import os
 import re
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, Iterable, List, Set, Tuple
 
-def is_valid_domain(domain):
-    """
-    验证域名是否合法
-    
-    Args:
-        domain (str): 要验证的域名
-        
-    Returns:
-        bool: 域名是否合法
-    """
+DOMAIN_PATTERN = re.compile(r'^[a-zA-Z0-9.-]+$')
+GITHUB_RAW_PATTERN = re.compile(r'^https?://raw\.githubusercontent\.com/([^/]+/[^/]+)/')
+INLINE_COMMENT_PATTERN = re.compile(r'\s+[#!;].*$')
+REPO_HOMEPAGE = "https://github.com/vitoegg/Provider"
+CONFIG_RELATIVE_PATH = "Script/Workflow/proxy_config.json"
+DOWNLOAD_ATTEMPTS = 3
+DOWNLOAD_TIMEOUT = 30
+MAX_WORKERS = 8
+
+WILDCARD_KIND = "wildcard"
+EXACT_KIND = "exact"
+
+
+def is_valid_domain(domain: str) -> bool:
+    """校验域名是否合法（不含前导点）。"""
     if not domain or len(domain) > 253:
         return False
-    
-    # 检查是否包含非法字符
-    if not re.match(r'^[a-zA-Z0-9.-]+$', domain):
+    if not DOMAIN_PATTERN.match(domain):
         return False
-    
-    # 检查是否以点开始或结束（除了泛域名的情况）
-    if domain.startswith('.') or domain.endswith('.'):
+    if domain.startswith('.') or domain.endswith('.') or '..' in domain:
         return False
-    
-    # 检查是否有连续的点
-    if '..' in domain:
-        return False
-    
-    # 检查每个部分的长度
-    parts = domain.split('.')
-    for part in parts:
+    for part in domain.split('.'):
         if not part or len(part) > 63:
             return False
-        # 每个部分不能以连字符开始或结束
         if part.startswith('-') or part.endswith('-'):
             return False
-    
     return True
 
 
-def sanitize_rule(line):
+def convert_domain_set_rule(line: str) -> Tuple[str, str]:
     """
-    清理和验证规则行
-    
-    Args:
-        line (str): 原始规则行
-        
-    Returns:
-        tuple: (is_valid, cleaned_rule, is_wildcard)
+    解析 Surge domain-set 规则
+    .example.com -> 泛域名, example.com -> 精确域名
+    返回: (规则, 类型) 类型为 wildcard / exact / invalid
     """
-    line = line.strip()
-    
-    # 跳过空行和注释
-    if not line or line.startswith('#'):
-        return False, None, False
-    
-    # 处理泛域名
-    if line.startswith('.'):
-        domain = line[1:]
-        if is_valid_domain(domain):
-            return True, line, True
-        else:
-            return False, None, False
-    else:
-        # 处理精确域名
-        if is_valid_domain(line):
-            return True, line, False
-        else:
-            return False, None, False
+    rule = line.strip().lower()
+
+    if rule.startswith('.'):
+        if is_valid_domain(rule[1:]):
+            return rule, WILDCARD_KIND
+        return "", "invalid"
+
+    if is_valid_domain(rule):
+        return rule, EXACT_KIND
+    return "", "invalid"
 
 
-def read_and_classify_rules(input_file):
+def clean_rule_lines(content: str) -> Iterable[str]:
+    """剔除注释、空行与非规则行，并去掉行尾行内注释。"""
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if (
+            not line or
+            line.startswith(('#', ';', '!', '//', '/*')) or
+            line.startswith('payload:') or
+            '*/' in line
+        ):
+            continue
+        line = INLINE_COMMENT_PATTERN.sub('', line).strip()
+        if line:
+            yield line
+
+
+def convert_source(content: str, label: str) -> Tuple[List[str], int]:
+    """将单个来源转换为规则列表，返回 (规则列表, 无效条数)。"""
+    rules = []
+    invalid_count = 0
+
+    for line in clean_rule_lines(content):
+        rule, kind = convert_domain_set_rule(line)
+        if kind == "invalid":
+            invalid_count += 1
+            continue
+        rules.append(rule)
+
+    if not rules:
+        raise ValueError(f"来源未产生有效规则: {label}")
+    return rules, invalid_count
+
+
+def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
     """
-    读取和分类规则
-    
-    Args:
-        input_file (str): 输入文件路径
-        
-    Returns:
-        tuple: (wildcard_rules, exact_rules, stats)
-        
-    Raises:
-        FileNotFoundError: 文件不存在
-        PermissionError: 文件权限不足
-        UnicodeDecodeError: 文件编码错误
+    去重并裁剪被覆盖的规则:
+    1. 完全相同的规则去重
+    2. 泛域名被更短的泛域名覆盖则丢弃
+    3. 精确域名被泛域名的父域覆盖则丢弃
     """
     stats = {
-        "total": 0,
+        "total": len(rules),
         "duplicates": 0,
-        "invalid": 0
+        "wildcard_covered": 0,
+        "exact_covered": 0,
+        "kept": 0,
     }
-    
-    all_rules = set()
-    wildcard_rules = []
-    exact_rules = []
-    
-    print("[1/4] 读取规则文件...", file=sys.stderr)
-    
-    try:
-        with open(input_file, 'r', encoding='utf-8') as f:
-            for line_num, line in enumerate(f, 1):
-                try:
-                    stats["total"] += 1
-                    
-                    # 清理和验证规则
-                    is_valid, cleaned_rule, is_wildcard = sanitize_rule(line)
-                    
-                    if not is_valid:
-                        if line.strip() and not line.strip().startswith('#'):
-                            stats["invalid"] += 1
-                            print(f"警告: 第{line_num}行无效规则: {line.strip()[:50]}{'...' if len(line.strip()) > 50 else ''}", file=sys.stderr)
-                        continue
-                    
-                    # 基础去重
-                    if cleaned_rule in all_rules:
-                        stats["duplicates"] += 1
-                        continue
-                        
-                    all_rules.add(cleaned_rule)
-                    
-                    # 区分泛域名和精确域名规则
-                    if is_wildcard:
-                        domain = cleaned_rule[1:]  # 去掉前导点
-                        wildcard_rules.append((domain, cleaned_rule))
-                    else:
-                        exact_rules.append(cleaned_rule)
-                        
-                except Exception as e:
-                    print(f"错误: 处理第{line_num}行时发生错误: {str(e)}", file=sys.stderr)
-                    continue
-    
-    except FileNotFoundError:
-        raise FileNotFoundError(f"输入文件 '{input_file}' 不存在")
-    except PermissionError:
-        raise PermissionError(f"无权限读取文件 '{input_file}'")
-    except UnicodeDecodeError as e:
-        raise UnicodeDecodeError(e.encoding, e.object, e.start, e.end, 
-                                f"文件 '{input_file}' 编码错误，请检查文件是否为UTF-8编码")
-    except Exception as e:
-        raise RuntimeError(f"读取文件 '{input_file}' 时发生未知错误: {str(e)}")
-    
-    if stats["invalid"] > 0:
-        print(f"警告: 发现 {stats['invalid']} 条无效规则，已跳过", file=sys.stderr)
-    
-    # 检查是否有有效规则
-    total_valid = len(wildcard_rules) + len(exact_rules)
-    if total_valid == 0:
-        print("警告: 没有找到任何有效规则", file=sys.stderr)
-    
-    return wildcard_rules, exact_rules, stats
 
+    seen: Set[str] = set()
+    wildcards: List[str] = []
+    exacts: List[str] = []
 
-def process_wildcard_rules(wildcard_rules):
-    """
-    处理泛域名规则，去除被覆盖的规则
-    
-    Args:
-        wildcard_rules (list): 泛域名规则列表
-        
-    Returns:
-        tuple: (kept_wildcards, wildcard_domains, covered_count)
-    """
-    print(f"[2/4] 处理泛域名规则 ({len(wildcard_rules)} 条)...", file=sys.stderr)
-    
-    # 预先计算所有域名的分割结果，避免重复计算
-    wildcard_data = []
-    for domain, original in wildcard_rules:
+    for rule in rules:
+        if rule in seen:
+            stats["duplicates"] += 1
+            continue
+        seen.add(rule)
+        if rule.startswith('.'):
+            wildcards.append(rule[1:])
+        else:
+            exacts.append(rule)
+
+    kept_wildcard_domains: Set[str] = set()
+    kept_wildcards: List[str] = []
+    for domain in sorted(wildcards, key=lambda item: (item.count('.'), item)):
         parts = domain.split('.')
-        wildcard_data.append((domain, original, parts, len(parts)))
-    
-    # 按域名层级和字典序排序，优先处理短域名
-    wildcard_data.sort(key=lambda x: (x[3], x[0]))
-    
-    wildcard_domains = set()
-    kept_wildcards = []
-    covered_count = 0
-    
-    for domain, original, domain_parts, part_count in wildcard_data:
-        keep = True
-        # 检查是否被更短的泛域名覆盖
-        for i in range(1, part_count):
-            parent = '.'.join(domain_parts[i:])
-            if parent in wildcard_domains:
-                keep = False
-                covered_count += 1
-                break
-        
-        if keep:
-            wildcard_domains.add(domain)
-            kept_wildcards.append(original)
-    
-    return kept_wildcards, wildcard_domains, covered_count
+        if any(
+            '.'.join(parts[index:]) in kept_wildcard_domains
+            for index in range(1, len(parts))
+        ):
+            stats["wildcard_covered"] += 1
+            continue
+        kept_wildcard_domains.add(domain)
+        kept_wildcards.append(f".{domain}")
+
+    kept_exacts: List[str] = []
+    for domain in exacts:
+        parts = domain.split('.')
+        if any(
+            '.'.join(parts[index:]) in kept_wildcard_domains
+            for index in range(1, len(parts))
+        ):
+            stats["exact_covered"] += 1
+            continue
+        kept_exacts.append(domain)
+
+    final_rules = sorted(kept_wildcards + kept_exacts)
+    stats["kept"] = len(final_rules)
+    return final_rules, stats
 
 
-def process_exact_rules(exact_rules, wildcard_domains):
-    """
-    处理精确域名规则，去除被泛域名覆盖的规则
-    
-    Args:
-        exact_rules (list): 精确域名规则列表
-        wildcard_domains (set): 泛域名集合
-        
-    Returns:
-        tuple: (kept_exact, covered_count)
-    """
-    print(f"[3/4] 处理精确域名规则 ({len(exact_rules)} 条)...", file=sys.stderr)
-    
-    kept_exact = []
-    covered_count = 0
-    
-    for line in exact_rules:
-        keep = True
-        # 检查是否被泛域名覆盖
-        domain_parts = line.split('.')
-        part_count = len(domain_parts)
-        
-        # 从1开始，避免检查自身
-        for i in range(1, part_count):
-            parent = '.'.join(domain_parts[i:])
-            if parent in wildcard_domains:
-                keep = False
-                covered_count += 1
-                break
-        
-        if keep:
-            kept_exact.append(line)
-    
-    return kept_exact, covered_count
+def is_remote(location: str) -> bool:
+    return location.startswith(("https://", "http://"))
 
 
-def generate_final_output(kept_wildcards, kept_exact):
-    """
-    生成最终输出
-    
-    Args:
-        kept_wildcards (list): 保留的泛域名规则
-        kept_exact (list): 保留的精确域名规则
-    """
-    print(f"[4/4] 生成最终规则...", file=sys.stderr)
-    
-    # 合并并排序输出
-    all_rules = kept_wildcards + kept_exact
-    for rule in sorted(all_rules):
-        print(rule)
+def source_display(location: str) -> str:
+    """生成规则来源注释使用的展示地址。"""
+    if not is_remote(location):
+        return REPO_HOMEPAGE
+    matched = GITHUB_RAW_PATTERN.match(location)
+    if matched:
+        return f"https://github.com/{matched.group(1)}"
+    return location
 
 
-def print_statistics(stats, wildcard_covered, exact_covered, kept_count, processing_time):
-    """
-    打印处理统计信息
-    
-    Args:
-        stats (dict): 基础统计信息
-        wildcard_covered (int): 被覆盖的泛域名数量
-        exact_covered (int): 被覆盖的精确域名数量
-        kept_count (int): 保留的规则数量
-        processing_time (float): 处理时间
-    """
-    print(f"处理时间: {processing_time:.2f} 秒", file=sys.stderr)
-    print(f"总规则数: {stats['total']}", file=sys.stderr)
-    print(f"重复规则: {stats['duplicates']}", file=sys.stderr)
-    if 'invalid' in stats:
-        print(f"无效规则: {stats['invalid']}", file=sys.stderr)
-    print(f"泛域名被覆盖: {wildcard_covered}", file=sys.stderr)
-    print(f"精确域名被覆盖: {exact_covered}", file=sys.stderr)
-    print(f"保留规则: {kept_count}", file=sys.stderr)
+def workspace_path(workspace: Path, relative_path: str) -> Path:
+    path = (workspace / relative_path).resolve()
+    if path != workspace and workspace not in path.parents:
+        raise ValueError(f"路径超出工作区: {relative_path}")
+    return path
 
 
-def main():
-    """
-    主函数：协调整个处理流程
-    """
-    # 检查命令行参数
-    if len(sys.argv) < 2:
-        print("用法: {} <输入文件路径>".format(sys.argv[0]), file=sys.stderr)
-        print("示例: {} rules.txt".format(sys.argv[0]), file=sys.stderr)
-        sys.exit(1)
-        
-    input_file = sys.argv[1]
-    
-    # 检查输入文件是否存在
-    if not os.path.exists(input_file):
-        print(f"错误: 输入文件 '{input_file}' 不存在", file=sys.stderr)
-        sys.exit(1)
-    
-    # 检查文件是否可读
-    if not os.access(input_file, os.R_OK):
-        print(f"错误: 无权限读取文件 '{input_file}'", file=sys.stderr)
-        sys.exit(1)
-    
-    # 检查文件大小
+def download(location: str) -> str:
+    """带重试的远程下载。"""
+    last_error = None
+    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+        try:
+            request = urllib.request.Request(
+                location,
+                headers={"User-Agent": "Provider-Proxy-Workflow"}
+            )
+            with urllib.request.urlopen(request, timeout=DOWNLOAD_TIMEOUT) as response:
+                data = response.read()
+            if not data:
+                raise ValueError("下载内容为空")
+            return data.decode("utf-8")
+        except (urllib.error.URLError, OSError, ValueError) as error:
+            last_error = error
+            if attempt < DOWNLOAD_ATTEMPTS:
+                time.sleep(attempt * 2)
+    raise RuntimeError(f"下载失败({DOWNLOAD_ATTEMPTS} 次): {location} -> {last_error}")
+
+
+def read_location(workspace: Path, location: str) -> str:
+    if is_remote(location):
+        return download(location)
+
+    path = workspace_path(workspace, location)
+    if not path.is_file():
+        raise FileNotFoundError(f"本地来源不存在: {location}")
+    content = path.read_text(encoding="utf-8")
+    if not content:
+        raise ValueError(f"本地来源为空: {location}")
+    return content
+
+
+def load_config(workspace: Path) -> List[Dict]:
+    config_path = workspace / CONFIG_RELATIVE_PATH
+    if not config_path.is_file():
+        raise FileNotFoundError(f"配置文件不存在: {CONFIG_RELATIVE_PATH}")
+
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    rules = config.get("rules")
+    if not isinstance(rules, list) or not rules:
+        raise ValueError("rules 必须是非空数组")
+
+    seen_names: Set[str] = set()
+    seen_paths: Set[str] = set()
+    for rule in rules:
+        name = rule.get("name")
+        output_path = rule.get("path")
+        sources = rule.get("sources")
+        if not isinstance(name, str) or not name or name in seen_names:
+            raise ValueError(f"规则 name 无效或重复: {name}")
+        if not isinstance(output_path, str) or not output_path or output_path in seen_paths:
+            raise ValueError(f"规则 path 无效或重复: {output_path}")
+        if not isinstance(sources, list) or not sources or not all(
+            isinstance(source, str) and source for source in sources
+        ):
+            raise ValueError(f"规则 {name} 的 sources 无效")
+        seen_names.add(name)
+        seen_paths.add(output_path)
+    return rules
+
+
+def load_locations(workspace: Path, rules: List[Dict]) -> Dict[str, str]:
+    """并发读取所有非产物来源，任一失败即整体失败。"""
+    output_paths = {rule["path"] for rule in rules}
+    locations = sorted({
+        source
+        for rule in rules
+        for source in rule["sources"]
+        if source not in output_paths
+    })
+    with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(locations))) as executor:
+        contents = executor.map(
+            lambda location: read_location(workspace, location),
+            locations
+        )
+        return dict(zip(locations, contents))
+
+
+def build_rulesets(rules: List[Dict], contents: Dict[str, str]) -> Dict[str, List[str]]:
+    """按配置顺序生成规则集，后续规则可直接引用先前生成的产物。"""
+    output_paths = {rule["path"] for rule in rules}
+    generated: Dict[str, List[str]] = {}
+
+    for rule in rules:
+        name = rule["name"]
+        collected: List[str] = []
+        invalid_total = 0
+
+        for source in rule["sources"]:
+            if source in output_paths:
+                if source not in generated:
+                    raise ValueError(f"规则 {name} 的依赖尚未生成: {source}")
+                collected.extend(generated[source])
+                continue
+            source_rules, invalid_count = convert_source(
+                contents[source],
+                f"{name}:{source}"
+            )
+            collected.extend(source_rules)
+            invalid_total += invalid_count
+
+        final_rules, stats = optimize_domains(collected)
+        if not final_rules:
+            raise ValueError(f"规则 {name} 的最终产物为空")
+
+        generated[rule["path"]] = final_rules
+        print(
+            f"{name}: {stats['total']} -> {stats['kept']} 条 "
+            f"(重复 {stats['duplicates']}, 泛域名覆盖 {stats['wildcard_covered']}, "
+            f"精确域名覆盖 {stats['exact_covered']}, 无效 {invalid_total})"
+        )
+
+    return generated
+
+
+def render_ruleset(rule: Dict, final_rules: List[str]) -> str:
+    """生成含头部注释的产物内容。"""
+    lines = [
+        f"# 更新时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"# 规则条数: {len(final_rules)}",
+        "# 规则来源:",
+    ]
+    lines.extend(f"# - {source_display(source)}" for source in rule["sources"])
+    lines.append("")
+    lines.extend(final_rules)
+    return "\n".join(lines) + "\n"
+
+
+def atomic_write(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        text=True
+    )
+    temporary_path = Path(temporary_name)
     try:
-        file_size = os.path.getsize(input_file)
-        if file_size == 0:
-            print(f"警告: 输入文件 '{input_file}' 为空", file=sys.stderr)
-        elif file_size > 100 * 1024 * 1024:  # 100MB
-            print(f"警告: 输入文件 '{input_file}' 较大 ({file_size / 1024 / 1024:.1f}MB)，处理可能需要较长时间", file=sys.stderr)
-    except OSError as e:
-        print(f"警告: 无法获取文件大小: {str(e)}", file=sys.stderr)
-    
+        mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
+        os.fchmod(descriptor, mode)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as file_handle:
+            file_handle.write(content)
+        os.replace(temporary_path, path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
+def read_existing_rules(path: Path) -> Set[str]:
+    if not path.is_file():
+        return set()
+    return {
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith('#')
+    }
+
+
+def publish_rulesets(
+    workspace: Path,
+    rules: List[Dict],
+    generated: Dict[str, List[str]]
+) -> List[str]:
+    """仅在规则内容变化时落盘，返回变更摘要。"""
+    summaries = []
+    pending_writes = []
+
+    for rule in rules:
+        relative_path = rule["path"]
+        output_path = workspace_path(workspace, relative_path)
+        final_rules = generated[relative_path]
+        old_rules = read_existing_rules(output_path)
+        new_rules = set(final_rules)
+
+        if old_rules == new_rules:
+            print(f"{rule['name']}: 无变化")
+            continue
+
+        added = len(new_rules - old_rules)
+        removed = len(old_rules - new_rules)
+        label = Path(relative_path).stem
+        summaries.append(f"{label}(+{added}/-{removed})")
+        pending_writes.append((output_path, render_ruleset(rule, final_rules)))
+        print(f"{rule['name']}: 新增 {added} 条, 移除 {removed} 条")
+
+    for output_path, content in pending_writes:
+        atomic_write(output_path, content)
+    return summaries
+
+
+def write_github_output(summaries: List[str]) -> None:
+    output_path = os.environ.get("GITHUB_OUTPUT")
+    if not output_path:
+        return
+    with open(output_path, "a", encoding="utf-8") as file_handle:
+        file_handle.write(f"has_changes={'true' if summaries else 'false'}\n")
+        if summaries:
+            file_handle.write(f"change_summary={' '.join(summaries)}\n")
+
+
+def main() -> int:
     start_time = time.time()
-    
+    workspace = Path(os.environ.get("GITHUB_WORKSPACE", Path.cwd())).resolve()
     try:
-        # 1. 读取和分类规则
-        wildcard_rules, exact_rules, read_stats = read_and_classify_rules(input_file)
-        
-        # 检查是否有有效规则
-        total_valid = len(wildcard_rules) + len(exact_rules)
-        if total_valid == 0:
-            print("错误: 没有找到任何有效规则，无法继续处理", file=sys.stderr)
-            sys.exit(1)
-        
-        # 2. 处理泛域名规则
-        kept_wildcards, wildcard_domains, wildcard_covered = process_wildcard_rules(wildcard_rules)
-        
-        # 3. 处理精确域名规则
-        kept_exact, exact_covered = process_exact_rules(exact_rules, wildcard_domains)
-        
-        # 4. 生成最终输出
-        generate_final_output(kept_wildcards, kept_exact)
-        
-        # 5. 输出统计信息
-        end_time = time.time()
-        kept_count = len(kept_wildcards) + len(kept_exact)
-        print_statistics(read_stats, wildcard_covered, exact_covered, kept_count, end_time - start_time)
-    
-    except FileNotFoundError as e:
-        print(f"文件错误: {str(e)}", file=sys.stderr)
-        sys.exit(1)
-    except PermissionError as e:
-        print(f"权限错误: {str(e)}", file=sys.stderr)
-        sys.exit(1)
-    except UnicodeDecodeError as e:
-        print(f"编码错误: {str(e)}", file=sys.stderr)
-        print("建议: 请确保输入文件使用UTF-8编码", file=sys.stderr)
-        sys.exit(1)
-    except MemoryError:
-        print("内存错误: 文件过大，系统内存不足", file=sys.stderr)
-        print("建议: 将大文件分割为小文件后处理", file=sys.stderr)
-        sys.exit(1)
-    except KeyboardInterrupt:
-        print("用户中断了处理过程", file=sys.stderr)
-        sys.exit(130)  # 标准的中断退出码
-    except Exception as e:
-        print(f"未知错误: {str(e)}", file=sys.stderr)
-        print("请检查输入文件格式是否正确，或联系开发者报告问题", file=sys.stderr)
-        sys.exit(1)
+        rules = load_config(workspace)
+        contents = load_locations(workspace, rules)
+        generated = build_rulesets(rules, contents)
+        summaries = publish_rulesets(workspace, rules, generated)
+        write_github_output(summaries)
+    except Exception as error:
+        print(f"错误: {error}", file=sys.stderr)
+        return 1
+
+    print(f"完成: {len(rules)} 个规则集，用时 {time.time() - start_time:.2f} 秒")
+    return 0
+
 
 if __name__ == "__main__":
-    main() 
+    sys.exit(main())
