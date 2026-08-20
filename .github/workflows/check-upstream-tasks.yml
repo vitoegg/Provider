@@ -25,17 +25,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.x'
 
       - name: Restore Upstream Task State
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/upstream-task-state
           key: upstream-task-state-${{ github.run_id }}
@@ -55,7 +55,7 @@ jobs:
 
       - name: Save Upstream Task State
         if: steps.check_tasks.outputs.cache_save == 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/upstream-task-state
           key: upstream-task-state-${{ steps.check_tasks.outputs.state_key }}-${{ github.run_id }}

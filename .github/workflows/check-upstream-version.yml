@@ -21,17 +21,17 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
       - name: Setup Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: '3.x'
 
       - name: Restore Upstream Version State
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v6
         with:
           path: ${{ runner.temp }}/immortalwrt-kernel-state
           key: upstream-version-state-${{ github.run_id }}
@@ -50,7 +50,7 @@ jobs:
 
       - name: Save Upstream Version State
         if: steps.check_version.outputs.cache_save == 'true'
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v6
         with:
           path: ${{ runner.temp }}/immortalwrt-kernel-state
           key: upstream-version-state-${{ steps.check_version.outputs.state_key }}-${{ github.run_id }}
