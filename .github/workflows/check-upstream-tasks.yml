@@ -2,15 +2,8 @@ name: Check Upstream Tasks
 
 on:
   schedule:
-    # 每天 UTC 0:00 执行 (北京时间 8:00)
-    - cron: '0 0 * * *'
+    - cron: '17 0 * * *'
   workflow_dispatch:
-    inputs:
-      hours:
-        description: '首次建态或游标失效时回溯多少小时 (默认24小时)'
-        required: false
-        default: '24'
-        type: string
 
 permissions:
   contents: read
@@ -51,7 +44,7 @@ jobs:
           MONITOR_STATE_FILE: ${{ runner.temp }}/upstream-task-state/state.json
         run: >-
           python ${GITHUB_WORKSPACE}/Script/Workflow/upstream_monitor.py
-          tasks --hours ${{ github.event.inputs.hours || '24' }}
+          tasks --hours 24
 
       - name: Save Upstream Task State
         if: steps.check_tasks.outputs.cache_save == 'true'

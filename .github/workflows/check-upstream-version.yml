@@ -2,8 +2,7 @@ name: Check Upstream Version
 
 on:
   schedule:
-    # 每天 UTC 1:00 执行 (北京时间 9:00)
-    - cron: '0 1 * * *'
+    - cron: '22 1 * * *'
   workflow_dispatch:
 
 permissions:
