@@ -2,7 +2,8 @@
   "timezone": "Asia/Shanghai",
   "telegram": {
     "parse_mode": "HTML",
-    "disable_web_page_preview": true
+    "disable_web_page_preview": true,
+    "photo": "https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/upstream.webp"
   },
   "tasks": {
     "default_lookback_hours": 24,
@@ -26,7 +27,6 @@
     }
   },
   "versions": {
-    "photo": "https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/upstream.webp",
     "sources": [
       {
         "id": "immortalwrt_kernel",

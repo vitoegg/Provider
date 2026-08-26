@@ -26,6 +26,12 @@ MAX_COMMIT_PAGES = 20
 COMPARE_FILE_LIMIT = 300
 TELEGRAM_TEXT_LIMIT = 4096
 TELEGRAM_CAPTION_LIMIT = 1024
+HTML_TAG = re.compile(r"<[^>]+>")
+TASK_CATEGORIES = (
+    ("🆕", "新增", "added"),
+    ("✏️", "修改", "modified"),
+    ("🗑️", "删除", "removed"),
+)
 
 
 class MonitorError(Exception):
@@ -40,8 +46,22 @@ class NotFoundError(MonitorError):
     pass
 
 
+class SendRejected(MonitorError):
+    pass
+
+
 class CursorError(MonitorError):
     pass
+
+
+def telegram_length(text):
+    plain = html.unescape(HTML_TAG.sub("", text))
+    return len(plain.encode("utf-16-le")) // 2
+
+
+def render_entry(icon, name, url, body_lines):
+    title = f'{icon} <a href="{html.escape(url, quote=True)}"><b>{html.escape(name)}</b></a>'
+    return "\n".join([title, *body_lines])
 
 
 def log(event, **fields):
@@ -83,6 +103,7 @@ def validate_config(config):
         raise ConfigError("telegram.parse_mode 目前只支持 HTML")
     if not isinstance(telegram.get("disable_web_page_preview"), bool):
         raise ConfigError("telegram.disable_web_page_preview 必须是布尔值")
+    require_string(telegram.get("photo"), "telegram.photo")
 
     tasks = require_object(config.get("tasks"), "tasks")
     lookback = tasks.get("default_lookback_hours")
@@ -107,7 +128,6 @@ def validate_config(config):
     if any(not isinstance(ext, str) or not ext.startswith(".") for ext in extensions):
         raise ConfigError("tasks.files.extensions 必须是以点开头的字符串数组")
     versions = require_object(config.get("versions"), "versions")
-    require_string(versions.get("photo"), "versions.photo")
     sources = require_list(versions.get("sources"), "versions.sources")
     source_ids = set()
     for index, item in enumerate(sources):
@@ -170,6 +190,7 @@ class HttpClient:
     def request(self, method, url, *, headers=None, data=None):
         request_headers = {"User-Agent": USER_AGENT, **(headers or {})}
         safe_url = re.sub(r"(api\.telegram\.org/bot)[^/]+", r"\1<redacted>", url)
+        idempotent = method == "GET"
         for attempt in range(MAX_ATTEMPTS):
             request = urllib.request.Request(
                 url,
@@ -182,7 +203,10 @@ class HttpClient:
                     return response.read().decode("utf-8")
             except urllib.error.HTTPError as err:
                 detail = err.read().decode("utf-8", errors="replace")
-                if attempt + 1 < MAX_ATTEMPTS and self._retryable_http_error(err):
+                retryable = (
+                    self._retryable_http_error(err) if idempotent else err.code == 429
+                )
+                if attempt + 1 < MAX_ATTEMPTS and retryable:
                     delay = self._retry_delay(err, attempt)
                     log(
                         "request_retry",
@@ -195,11 +219,16 @@ class HttpClient:
                     continue
                 if err.code == 404:
                     raise NotFoundError(f"{method} {safe_url} 失败: HTTP 404") from err
-                raise MonitorError(
+                error_class = (
+                    SendRejected
+                    if not idempotent and 400 <= err.code < 500
+                    else MonitorError
+                )
+                raise error_class(
                     f"{method} {safe_url} 失败: HTTP {err.code} {detail}"
                 ) from err
             except (urllib.error.URLError, TimeoutError) as err:
-                if attempt + 1 < MAX_ATTEMPTS:
+                if idempotent and attempt + 1 < MAX_ATTEMPTS:
                     delay = min(2 ** attempt, MAX_RETRY_DELAY)
                     log("request_retry", attempt=attempt + 1, delay=delay, url=safe_url)
                     time.sleep(delay)
@@ -315,8 +344,8 @@ class TelegramClient:
 
     def _post(self, method, limit, fields):
         body = fields.get("text") or fields.get("caption", "")
-        if len(body) > limit:
-            raise MonitorError(f"Telegram {method} 内容超过 {limit} 字符")
+        if telegram_length(body) > limit:
+            raise SendRejected(f"Telegram {method} 内容超过 {limit} 字符")
         if self.dry_run:
             log("telegram_dry_run", method=method, **fields)
             return
@@ -354,14 +383,9 @@ class TelegramClient:
                     "parse_mode": self.config["parse_mode"],
                 },
             )
-        except MonitorError as err:
+        except SendRejected as err:
             log("telegram_photo_fallback", error=str(err))
             self.send(caption)
-
-    def send_all(self, messages):
-        for message in messages:
-            self.send(message)
-
 
 @dataclass
 class TaskInfo:
@@ -375,6 +399,7 @@ class RepoTaskChanges:
     repo_name: str
     head_sha: str
     bootstrap: bool
+    url: str = ""
     added: list = field(default_factory=list)
     modified: list = field(default_factory=list)
     removed: list = field(default_factory=list)
@@ -546,6 +571,7 @@ def collect_task_changes(http, repo_config, patterns, previous_head, hours):
         repo_name=repo_config["name"],
         head_sha=current_head,
         bootstrap=bootstrap,
+        url=f"https://github.com/{owner}/{repo}/commit/{current_head}",
     )
 
     def add_current(filename, target):
@@ -593,71 +619,57 @@ def collect_task_changes(http, repo_config, patterns, previous_head, hours):
     return changes
 
 
-def task_detail_messages(changes):
-    messages = []
-    categories = (
-        ("🆕 新增任务", changes.added, True),
-        ("🗑️ 删除任务", changes.removed, False),
-        ("📝 修改任务", changes.modified, True),
-    )
-    for title, tasks, include_name in categories:
-        if not tasks:
-            continue
-        prefix = f"<b>📦 {html.escape(changes.repo_name)} · {title}</b>\n<blockquote expandable>\n"
-        suffix = "\n</blockquote>"
-        lines = []
+def task_lines(changes):
+    items = []
+    for icon, label, field_name in TASK_CATEGORIES:
+        tasks = getattr(changes, field_name)
+        title = f"{icon} <b>{label} {len(tasks)}</b>"
         for task in tasks:
-            line = f"• <code>{html.escape(task.task_id)}</code>"
-            if include_name:
-                line += f" - {html.escape(task.task_name)}"
-            candidate = prefix + "\n".join([*lines, line]) + suffix
-            if len(candidate) > TELEGRAM_TEXT_LIMIT and lines:
-                messages.append(prefix + "\n".join(lines) + suffix)
-                lines = [line]
-            else:
-                lines.append(line)
-        if lines:
-            message = prefix + "\n".join(lines) + suffix
-            if len(message) > TELEGRAM_TEXT_LIMIT:
-                raise MonitorError(f"任务详情单行超过 Telegram 限制: {changes.repo_name}")
-            messages.append(message)
-    return messages
+            line = f"<code>{html.escape(task.task_id)}</code>"
+            if task.task_name:
+                line += f" {html.escape(task.task_name)}"
+            items.append((title, line))
+    return items
 
 
-def build_task_messages(all_changes, hours, current_time):
-    bootstrap = any(changes.bootstrap for changes in all_changes)
-    lines = [
-        "<b>📋 上游仓库任务变更通知</b>",
-        f"<i>检测时间: {html.escape(current_time)}</i>",
-    ]
-    if bootstrap:
-        lines.append(f"<i>首次回溯: 最近 {hours} 小时</i>")
-    lines.append("")
+def task_block(items, keep):
+    rows = []
+    previous_title = ""
+    for title, line in items[:keep]:
+        if title != previous_title:
+            rows.append(title)
+            previous_title = title
+        rows.append(line)
+    if keep < len(items):
+        rows.append(f"… 另有 {len(items) - keep} 项")
+    return ["<blockquote expandable>", *rows, "</blockquote>"]
 
+
+def build_task_message(all_changes, hours, current_time):
     changed = [changes for changes in all_changes if changes.has_changes]
     if not changed:
-        lines.append("✅ 无任务变更")
-        return ["\n".join(lines)]
+        return ""
 
-    for changes in changed:
-        lines.extend(
-            [
-                f"<b>📦 {html.escape(changes.repo_name)}</b>",
-                (
-                    f"➕ {len(changes.added)}　➖ {len(changes.removed)}　"
-                    f"✏️ {len(changes.modified)}"
-                ),
-                "",
-            ]
-        )
-    summary = "\n".join(lines).rstrip()
-    if len(summary) > TELEGRAM_TEXT_LIMIT:
-        raise MonitorError("任务汇总超过 Telegram 消息限制")
+    header = ["📋 <b>上游任务变更</b>", f"🕐 {html.escape(current_time)}"]
+    if any(changes.bootstrap for changes in all_changes):
+        header.append(f"<i>首次回溯 {hours} 小时</i>")
+    listed = [(changes, task_lines(changes)) for changes in changed]
 
-    messages = [summary]
-    for changes in changed:
-        messages.extend(task_detail_messages(changes))
-    return messages
+    def assemble(keep):
+        parts = ["\n".join(header)]
+        for changes, items in listed:
+            body = task_block(items, keep)
+            parts.append(render_entry("📦", changes.repo_name, changes.url, body))
+        return "\n\n".join(parts)
+
+    low, high = 0, max(len(items) for _, items in listed)
+    while low < high:
+        middle = (low + high + 1) // 2
+        if telegram_length(assemble(middle)) <= TELEGRAM_CAPTION_LIMIT:
+            low = middle
+        else:
+            high = middle - 1
+    return assemble(low)
 
 
 def normalize_task_state(state):
@@ -697,7 +709,11 @@ def run_tasks(config, http, telegram, state_path, hours, dry_run, zone):
         current_heads[repo_config["id"]] = changes.head_sha
 
     current_time = datetime.now(zone).strftime("%Y-%m-%d %H:%M %Z")
-    telegram.send_all(build_task_messages(all_changes, hours, current_time))
+    message = build_task_message(all_changes, hours, current_time)
+    if message:
+        telegram.send_photo(message, config["telegram"]["photo"])
+    else:
+        log("tasks_unchanged")
     current_state = {
         "schema_version": 1,
         "mode": "tasks",
@@ -852,15 +868,13 @@ def changed_versions(previous, current, sources):
 def build_version_message(changes):
     parts = ["🚀 <b>上游版本更新</b>"]
     for item in changes:
-        parts.append(
-            f"\n{item['icon']} "
-            f"<a href=\"{html.escape(item['url'], quote=True)}\">"
-            f"<b>{html.escape(item['name'])}</b></a>\n"
+        body = [
             f"<code>{html.escape(item['previous'])}</code> ➜ "
-            f"<code>{html.escape(item['version'])}</code>\n"
-            f"🕐 {html.escape(item['updated_at'])}"
-        )
-    return "\n".join(parts)
+            f"<code>{html.escape(item['version'])}</code>",
+            f"🕐 {html.escape(item['updated_at'])}",
+        ]
+        parts.append(render_entry(item["icon"], item["name"], item["url"], body))
+    return "\n\n".join(parts)
 
 
 def run_versions(config, http, telegram, state_path, dry_run, zone):
@@ -882,7 +896,7 @@ def run_versions(config, http, telegram, state_path, dry_run, zone):
         log("upstream_changed", sources=[change["id"] for change in changes])
         telegram.send_photo(
             build_version_message(changes),
-            config["versions"]["photo"],
+            config["telegram"]["photo"],
         )
         write_state(state_path, current, dry_run)
         return
