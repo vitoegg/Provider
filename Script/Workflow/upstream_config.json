@@ -26,10 +26,12 @@
     }
   },
   "versions": {
+    "photo": "https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/upstream.webp",
     "sources": [
       {
         "id": "immortalwrt_kernel",
         "name": "ImmortalWrt Kernel",
+        "icon": "🐧",
         "type": "openwrt_kernel",
         "repo": "immortalwrt/immortalwrt",
         "branch": "openwrt-25.12",
@@ -38,12 +40,14 @@
       {
         "id": "mihomo_core",
         "name": "Mihomo Core",
+        "icon": "⚡",
         "type": "github_latest_release",
         "repo": "MetaCubeX/mihomo"
       },
       {
         "id": "openwrt_release",
         "name": "OpenWrt Release",
+        "icon": "🏷️",
         "type": "github_latest_release",
         "repo": "openwrt/openwrt"
       }

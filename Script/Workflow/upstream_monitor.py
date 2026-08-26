@@ -24,7 +24,8 @@ MAX_ATTEMPTS = 4
 MAX_RETRY_DELAY = 60
 MAX_COMMIT_PAGES = 20
 COMPARE_FILE_LIMIT = 300
-TELEGRAM_MESSAGE_LIMIT = 4096
+TELEGRAM_TEXT_LIMIT = 4096
+TELEGRAM_CAPTION_LIMIT = 1024
 
 
 class MonitorError(Exception):
@@ -106,6 +107,7 @@ def validate_config(config):
     if any(not isinstance(ext, str) or not ext.startswith(".") for ext in extensions):
         raise ConfigError("tasks.files.extensions 必须是以点开头的字符串数组")
     versions = require_object(config.get("versions"), "versions")
+    require_string(versions.get("photo"), "versions.photo")
     sources = require_list(versions.get("sources"), "versions.sources")
     source_ids = set()
     for index, item in enumerate(sources):
@@ -311,19 +313,28 @@ class TelegramClient:
         self.token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
         self.chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
 
-    def send(self, message):
-        if len(message) > TELEGRAM_MESSAGE_LIMIT:
-            raise MonitorError(f"Telegram 消息超过 {TELEGRAM_MESSAGE_LIMIT} 字符")
+    def _post(self, method, limit, fields):
+        body = fields.get("text") or fields.get("caption", "")
+        if len(body) > limit:
+            raise MonitorError(f"Telegram {method} 内容超过 {limit} 字符")
         if self.dry_run:
-            log("telegram_dry_run", message=message)
+            log("telegram_dry_run", method=method, **fields)
             return
         if not self.token or not self.chat_id:
             raise MonitorError("缺少 TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID")
-
         result = self.http.post_form(
-            f"https://api.telegram.org/bot{self.token}/sendMessage",
+            f"https://api.telegram.org/bot{self.token}/{method}",
+            {"chat_id": self.chat_id, **fields},
+        )
+        if not isinstance(result, dict) or not result.get("ok"):
+            raise MonitorError(f"Telegram 通知发送失败: {result}")
+        log("telegram_sent", method=method)
+
+    def send(self, message):
+        self._post(
+            "sendMessage",
+            TELEGRAM_TEXT_LIMIT,
             {
-                "chat_id": self.chat_id,
                 "text": message,
                 "parse_mode": self.config["parse_mode"],
                 "disable_web_page_preview": str(
@@ -331,9 +342,21 @@ class TelegramClient:
                 ).lower(),
             },
         )
-        if not isinstance(result, dict) or not result.get("ok"):
-            raise MonitorError(f"Telegram 通知发送失败: {result}")
-        log("telegram_sent")
+
+    def send_photo(self, caption, photo):
+        try:
+            self._post(
+                "sendPhoto",
+                TELEGRAM_CAPTION_LIMIT,
+                {
+                    "photo": photo,
+                    "caption": caption,
+                    "parse_mode": self.config["parse_mode"],
+                },
+            )
+        except MonitorError as err:
+            log("telegram_photo_fallback", error=str(err))
+            self.send(caption)
 
     def send_all(self, messages):
         for message in messages:
@@ -588,14 +611,14 @@ def task_detail_messages(changes):
             if include_name:
                 line += f" - {html.escape(task.task_name)}"
             candidate = prefix + "\n".join([*lines, line]) + suffix
-            if len(candidate) > TELEGRAM_MESSAGE_LIMIT and lines:
+            if len(candidate) > TELEGRAM_TEXT_LIMIT and lines:
                 messages.append(prefix + "\n".join(lines) + suffix)
                 lines = [line]
             else:
                 lines.append(line)
         if lines:
             message = prefix + "\n".join(lines) + suffix
-            if len(message) > TELEGRAM_MESSAGE_LIMIT:
+            if len(message) > TELEGRAM_TEXT_LIMIT:
                 raise MonitorError(f"任务详情单行超过 Telegram 限制: {changes.repo_name}")
             messages.append(message)
     return messages
@@ -628,7 +651,7 @@ def build_task_messages(all_changes, hours, current_time):
             ]
         )
     summary = "\n".join(lines).rstrip()
-    if len(summary) > TELEGRAM_MESSAGE_LIMIT:
+    if len(summary) > TELEGRAM_TEXT_LIMIT:
         raise MonitorError("任务汇总超过 Telegram 消息限制")
 
     messages = [summary]
@@ -816,32 +839,28 @@ def changed_versions(previous, current, sources):
         if previous_item and previous_item["version"] != current_item["version"]:
             changes.append(
                 {
+                    **current_item,
                     "id": source_id,
                     "name": source["name"],
-                    "previous_version": previous_item["version"],
-                    "current": current_item,
+                    "icon": source.get("icon", "📦"),
+                    "previous": previous_item["version"],
                 }
             )
     return changes
 
 
 def build_version_message(changes):
-    lines = ["🚀 <b>上游版本更新</b>", ""]
-    for change in changes:
-        current = change["current"]
-        lines.extend(
-            [
-                f"<b>{html.escape(change['name'])}</b>",
-                (
-                    f"版本：<code>{html.escape(change['previous_version'])}</code>"
-                    f" → <code>{html.escape(current['version'])}</code>"
-                ),
-                f"更新时间：<code>{html.escape(current['updated_at'])}</code>",
-                f"链接：<a href=\"{html.escape(current['url'], quote=True)}\">查看更新</a>",
-                "",
-            ]
+    parts = ["🚀 <b>上游版本更新</b>"]
+    for item in changes:
+        parts.append(
+            f"\n{item['icon']} "
+            f"<a href=\"{html.escape(item['url'], quote=True)}\">"
+            f"<b>{html.escape(item['name'])}</b></a>\n"
+            f"<code>{html.escape(item['previous'])}</code> ➜ "
+            f"<code>{html.escape(item['version'])}</code>\n"
+            f"🕐 {html.escape(item['updated_at'])}"
         )
-    return "\n".join(lines).rstrip()
+    return "\n".join(parts)
 
 
 def run_versions(config, http, telegram, state_path, dry_run, zone):
@@ -861,7 +880,10 @@ def run_versions(config, http, telegram, state_path, dry_run, zone):
     changes = changed_versions(previous, current, sources)
     if changes:
         log("upstream_changed", sources=[change["id"] for change in changes])
-        telegram.send(build_version_message(changes))
+        telegram.send_photo(
+            build_version_message(changes),
+            config["versions"]["photo"],
+        )
         write_state(state_path, current, dry_run)
         return
 
