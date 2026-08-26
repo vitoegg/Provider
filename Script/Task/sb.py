@@ -30,7 +30,7 @@ SB_USER_AGENT = os.environ.get(
 TIMEOUT = 30
 START_DELAY = (30, 300)
 SUBMIT_DELAY = (3, 8)
-REQUIRED_COOKIES = {"__Host-bbs_csrf", "__Host-bbs_session"}
+REQUIRED_COOKIES = {"__Host-bbs_session"}
 CHALLENGE_MARKERS = (
     "cf-chl-",
     "cf-browser-verification",
