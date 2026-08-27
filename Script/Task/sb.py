@@ -116,69 +116,65 @@ def wait_random_interval(delay_range, stage):
     time.sleep(delay)
 
 
+def failure(category, message):
+    return {"success": False, "category": category, "message": message}
+
+
 def validate_response(response, stage):
-    """验证响应状态与来源；异常时返回用户可读消息。"""
+    """验证响应状态与来源；异常时返回分类结果。"""
     status = response.status_code
     if status in {401, 403, 429}:
-        return f"❌ {stage}被拒绝（HTTP {status}），已停止且不会重试"
+        return failure("访问受限", f"{stage}被拒绝（HTTP {status}）")
     if status >= 500:
-        return f"❌ {stage}服务异常（HTTP {status}），已停止且不会重试"
+        return failure("请求失败", f"签到服务异常（HTTP {status}）")
     if status >= 400:
-        return f"❌ {stage}请求失败（HTTP {status}），已停止且不会重试"
+        return failure("请求失败", f"{stage}请求失败（HTTP {status}）")
 
     response_url = urlparse(response.url)
     expected_url = urlparse(SB_URL)
     if response_url.scheme != "https" or response_url.netloc != expected_url.netloc:
-        return f"❌ {stage}响应跳转到非论坛域名，已停止"
+        return failure("结果异常", f"{stage}响应跳转到非论坛域名")
 
     if response_url.path.rstrip("/") in {"/login", "/signin/login"}:
-        return "❌ Cookie 已失效，签到页面跳转到登录页"
+        return failure("登录失效", "Cookie 已失效")
 
     content_type = response.headers.get("Content-Type", "").lower()
     if "text/html" not in content_type:
-        return f"❌ {stage}返回非 HTML 内容，已停止"
+        return failure("结果异常", f"{stage}返回非 HTML 内容")
 
     html = response.text.lower()
     if any(marker in html for marker in CHALLENGE_MARKERS):
-        return f"❌ {stage}遇到 Cloudflare 验证，已停止且不会尝试绕过"
+        return failure("访问受限", f"{stage}遇到 Cloudflare 验证")
 
-    return ""
+    return None
 
 
 def parse_signin_result(html):
     """解析签到后的页面结果。"""
     text = page_text(html)
-    success = re.search(
-        r"签到成功。?\s*连续签到第\s*(\d+)\s*天[，,\s]+"
-        r"今日获得\s*(\d+)\s*饼",
-        text,
-    )
+    days = re.search(r"连续签到第\s*(\d+)\s*天", text)
+    reward = re.search(r"今日获得\s*(\d+)\s*饼", text)
+    details = {
+        "days": days.group(1) if days else "",
+        "reward": reward.group(1) if reward else "",
+    }
 
-    if success:
-        days, points = success.groups()
-        return {
-            "success": True,
-            "message": f"✅ 签到成功：连续签到第 {days} 天，今日获得 {points} 饼",
-        }
-    if "签到成功" in text:
-        return {"success": True, "message": "✅ 签到成功"}
     if "今日已签到" in text or "已经签到" in text:
-        return {"success": True, "message": "⚠️ 今日已签到"}
+        return {"success": True, "message": "今日已签到", **details}
+    if "签到成功" in text:
+        return {"success": True, "message": "签到成功", **details}
 
-    return {"success": False, "message": "❌ 未识别到签到结果"}
+    return failure("结果异常", "未识别到签到结果")
 
 
 def sb_signin(cookie):
     """执行烧饼论坛签到。"""
     if not cookie:
-        return {"success": False, "message": "❌ 未设置 SB_COOKIE 环境变量"}
+        return failure("配置错误", "未设置 SB_COOKIE")
 
     missing = missing_cookie_names(cookie)
     if missing:
-        return {
-            "success": False,
-            "message": f"❌ Cookie 缺少必要字段：{', '.join(missing)}",
-        }
+        return failure("配置错误", f"Cookie 缺少必要字段：{', '.join(missing)}")
 
     session = build_session(cookie)
     signin_url = f"{SB_URL}/signin/"
@@ -188,18 +184,15 @@ def sb_signin(cookie):
         response = session.get(signin_url, timeout=TIMEOUT)
         error = validate_response(response, "签到页面")
         if error:
-            return {"success": False, "message": error}
+            return error
 
         if "今日已签到" in page_text(response.text):
-            return {"success": True, "message": "⚠️ 今日已签到"}
+            return parse_signin_result(response.text)
 
         parser = SigninFormParser()
         parser.feed(response.text)
         if not parser.csrf_token:
-            return {
-                "success": False,
-                "message": "❌ 未找到签到表单，Cookie 可能已失效",
-            }
+            return failure("登录失效", "未找到签到表单，Cookie 可能已失效")
 
         wait_random_interval(SUBMIT_DELAY, "提交签到前")
         response = session.post(
@@ -210,21 +203,37 @@ def sb_signin(cookie):
         )
         error = validate_response(response, "签到提交")
         if error:
-            return {"success": False, "message": error}
+            return error
         return parse_signin_result(response.text)
     except requests.RequestException as error:
-        return {"success": False, "message": f"❌ 签到请求异常：{error}"}
+        return failure("网络异常", f"连接签到服务失败：{error}")
 
 
-def send_notification(result):
-    """发送青龙通知。"""
-    content = f"{result['message']}\n🕐 签到时间：{time.strftime('%Y-%m-%d %H:%M:%S')}"
+def build_notification(result):
+    """生成简洁的签到通知。"""
+    if result["success"]:
+        status = result["message"]
+        if result.get("reward"):
+            status += f",获得{result['reward']}饼"
+        lines = [f"🎯【今日签到】：{status}"]
+        if result.get("days"):
+            lines.append(f"📅【连续签到】：已签到{result['days']}天")
+    else:
+        lines = [f"❌【{result['category']}】：{result['message']}"]
+
+    lines.append(f"⏰ {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    return "\n".join(lines)
+
+
+def message_push(title, message):
+    """调用青龙系统通知。"""
 
     try:
-        from notify import send as ql_notify
-
-        ql_notify("烧饼论坛每日签到", content)
-        print("📤 青龙通知推送成功")
+        response = QLAPI.systemNotify({"title": title, "content": message})
+        if response.get("code", 400) == 200:
+            print("📤 青龙通知推送成功")
+        else:
+            print(f"❌ 青龙通知推送失败：{response}")
     except Exception as error:
         print(f"❌ 青龙通知推送失败：{error}")
 
@@ -233,7 +242,8 @@ def main():
     print("🚀 烧饼论坛签到脚本启动")
     result = sb_signin(SB_COOKIE)
     print(result["message"])
-    send_notification(result)
+    content = build_notification(result)
+    message_push("烧饼论坛签到", content)
 
 
 if __name__ == "__main__":
