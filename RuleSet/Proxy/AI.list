@@ -4,6 +4,10 @@
 # > ChatGPT
 .openai.com
 .chatgpt.com
+.chatgpt.site
+.chat.com
+# > Prism
+.crixet.com
 # > Sora
 .sora.com
 # > Advanced Voice
@@ -12,18 +16,21 @@
 .turn.livekit.cloud
 # > Chat GPT API & CDN
 .oaistatic.com
+.oaistatsig.com
 .oaiusercontent.com
 .webpubsub.azure.com
+openaicom.imgix.net
 chat.openai.com.cdn.cloudflare.net
 openaiapi-site.azureedge.net
 openaicom-api-bdcpf8c6d2e9atf6.z01.azurefd.net
+openaiassets.blob.core.windows.net
 openaicomproductionae4b.blob.core.windows.net
 production-openaicom-storage.azureedge.net
 client-api.arkoselabs.com
 openai-api.arkoselabs.com
 # > Tracking
-.o33249.ingest.sentry.io
-openaicom.imgix.net
+o33249.ingest.sentry.io
+openai.qualtrics.com
 browser-intake-datadoghq.com
 
 # Claude
@@ -32,6 +39,7 @@ browser-intake-datadoghq.com
 .claude.com
 .clau.de
 .claudemcpclient.com
+.claudemcpcontent.com
 .claudeusercontent.com
 cdn.anthropic.com
 cdn.usefathom.com
@@ -50,26 +58,53 @@ anthropic-com.ghost.io
 .aistudio.google.com
 .makersuite.google.com
 .generativeai.google
+.ai.studio
 ai.google.dev
 alkalicore-pa.clients6.google.com
+webchannel-alkalimakersuite-pa.clients6.google.com
 waa-pa.clients6.google.com
 # > Google Gemini
 .apis.google.com
 .bard.google.com
+.gemini.google
 .gemini.google.com
+.gemini.gstatic.com
 .aisandbox-pa.googleapis.com
 .robinfrontend-pa.googleapis.com
+# > Gemini Code Assist
+cloudaicompanion.googleapis.com
+cloudcode-pa.googleapis.com
+daily-cloudcode-pa.googleapis.com
+.aicode.googleapis.com
+.aida.googleapis.com
 # > Google NotebookLM
 .notebooklm.google
 .notebooklm.google.com
+.notebook.google.com
+notebooklm-pa.googleapis.com
+notebooklm.googleapis.com
 # > Google DeepMind
 .deepmind.com
 .deepmind.google
+# > Google Jules
+.jules.google
+.jules.google.com
+# > Google AI Labs
+.labs.google
+.labs.google.com
+.flow.google
+# > Google Opal
+.opal.google
+.opal.google.com
 # > Google Antigravity
 .antigravity.google
+antigravity-pa.googleapis.com
+antigravity.googleapis.com
 .daily-cloudcode-pa.sandbox.googleapis.com
 antigravity-unleash.goog
 antigravity-auto-updater-974169037036.us-central1.run.app
+# > Google Stitch
+.stitch.withgoogle.com
 
 # Grok
 .x.ai
@@ -78,7 +113,11 @@ antigravity-auto-updater-974169037036.us-central1.run.app
 
 # Perplexity AI
 .perplexity.ai
+.perplexity.com
+.pplx.ai
 perplexity-ai.cloudflareaccess.com
+ppl-ai-file-upload.s3.amazonaws.com
+pplx-res.cloudinary.com
 
 # Vibe Coding
 # > OpenCode
