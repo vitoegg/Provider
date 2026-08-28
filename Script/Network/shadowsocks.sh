@@ -140,17 +140,13 @@ ensure_time_sync() {
     fail "systemd-timesyncd 已运行，但时间尚未同步。"
 }
 
-detect_arch() {
+detect_target() {
     local arch
     arch="$(uname -m)"
-    if [[ "$arch" =~ ^(i386|i686)$ ]]; then
-        printf 'i686\n'
-    elif [[ "$arch" =~ ^(armv6l|armv7.*)$ ]]; then
-        printf 'arm\n'
-    elif [[ "$arch" =~ ^(armv8.*|aarch64)$ ]]; then
-        printf 'aarch64\n'
-    elif [ "$arch" = x86_64 ]; then
-        printf 'x86_64\n'
+    if [ "$arch" = x86_64 ]; then
+        printf 'x86_64-unknown-linux-musl\n'
+    elif [ "$arch" = aarch64 ]; then
+        printf 'aarch64-unknown-linux-musl\n'
     else
         fail "不支持的系统架构：$arch"
     fi
@@ -319,16 +315,16 @@ rollback_transaction() {
 }
 
 download_server() {
-    local version="$1" arch archive_name release_url temp_dir archive checksum
+    local version="$1" target archive_name release_url temp_dir archive checksum
     local candidate install_candidate output
-    arch="$(detect_arch)"
-    archive_name="shadowsocks-${version}.${arch}-unknown-linux-gnu.tar.xz"
+    target="$(detect_target)"
+    archive_name="shadowsocks-${version}.${target}.tar.xz"
     release_url="https://github.com/shadowsocks/shadowsocks-rust/releases/download/${version}"
     [ -d "$TRANSACTION_DIR" ] || fail "Shadowsocks 事务尚未开始。"
     temp_dir="$(mktemp -d "${TRANSACTION_DIR}/download.XXXXXX")" || fail "无法创建下载临时目录。"
     archive="${temp_dir}/${archive_name}"
     checksum="${archive}.sha256"
-    log_info "正在下载 Shadowsocks ${version#v}（${arch}）"
+    log_info "正在下载 Shadowsocks ${version#v}（${target}）"
     curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o "$archive" "${release_url}/${archive_name}" ||
         fail "Shadowsocks 下载失败。"
     curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o "$checksum" "${release_url}/${archive_name}.sha256" ||
@@ -342,7 +338,9 @@ download_server() {
     candidate="${temp_dir}/ssserver"
     [ -f "$candidate" ] || fail "压缩包中未找到 ssserver。"
     chmod 755 "$candidate" || fail "ssserver 权限设置失败。"
-    output="$("$candidate" -V 2>&1)" || fail "ssserver 二进制预检失败。"
+    if ! output="$("$candidate" -V 2>&1)"; then
+        fail "ssserver 二进制预检失败：${output:-无错误输出}"
+    fi
     [[ "$output" == *"${version#v}"* ]] || fail "ssserver 版本校验失败。"
     if [ -f "$SS_BINARY" ] && cmp -s "$candidate" "$SS_BINARY"; then
         BINARY_CHANGED=0
