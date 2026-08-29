@@ -2,7 +2,7 @@ name: Update MosDNS Rules
 
 on:
   schedule:
-    - cron: '33 7 * * 5'
+    - cron: '33 2 * * 5'
   workflow_dispatch:
 
 jobs:
