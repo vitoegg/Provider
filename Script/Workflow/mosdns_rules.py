@@ -1,31 +1,47 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-MosDNS规则处理脚本
-功能:
-1. 将AdGuard Home规则转换为MosDNS规则
-2. 将Surge domain-set规则转换为MosDNS规则
-3. 将IP/CIDR规则规范化为纯CIDR格式
-4. 去掉正则匹配类型的规则
-5. 按规则类型执行去重和优化
-6. 支持用MosDNS域名规则排除被覆盖的域名
-"""
 
-import json
 import ipaddress
+import json
 import os
 import re
 import sys
 import tempfile
 import time
 import urllib.request
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Set, Tuple
 
-# 编译正则模式以提升性能
-REGEX_PATTERN = re.compile(r'[\*\[\]\(\)\\+\?\^\$\|]')
-DOMAIN_PATTERN = re.compile(r'^[a-zA-Z0-9._-]+$')
+DOMAIN = "domain"
+FULL = "full"
+DomainRule = Tuple[str, str]
+
+LABEL_PATTERN = r'(?!-)[a-z0-9-]{1,63}(?<!-)'
+TLD_PATTERN = r'(?!-)[a-z][a-z0-9-]{0,62}(?<!-)'
+MULTI_LABEL_DOMAIN = re.compile(
+    rf'^(?=.{{1,253}}$)({LABEL_PATTERN}\.)+{TLD_PATTERN}$'
+)
+ANY_LABEL_DOMAIN = re.compile(
+    rf'^(?=.{{1,253}}$)(({LABEL_PATTERN}\.)*{TLD_PATTERN}|{LABEL_PATTERN})$'
+)
+IPV4_PATTERN = re.compile(r'^\d{1,3}(\.\d{1,3}){3}$')
+INLINE_COMMENT_PATTERN = re.compile(r'\s+#')
+TRAILING_COMMENT_PATTERN = re.compile(r'\s+[#!;].*$')
+
+COSMETIC_MARKERS = (
+    '#@$?#', '#@$#', '#$?#', '#@?#', '#@%#',
+    '#$#', '#?#', '#%#', '#@#', '##', '$@$', '$$'
+)
+ADBLOCK_MARKERS = ('||', '@@', '##', '#%#', '#$#', '#?#')
+DNS_MODIFIERS = frozenset({
+    'badfilter', 'client', 'ctag', 'denyallow',
+    'dnsrewrite', 'dnstype', 'important', 'respgeo'
+})
+UNCONDITIONAL_MODIFIERS = frozenset({'important'})
+REMOTE_PREFIXES = ("https://", "http://")
+
 DOMAIN_FAMILY = "domain"
 IP_FAMILY = "ip"
 FORMAT_FAMILIES = {
@@ -36,477 +52,71 @@ FORMAT_FAMILIES = {
     "ip_nft": IP_FAMILY,
 }
 
-def is_regex_rule(rule: str) -> bool:
-    """检查MosDNS规则是否为正则表达式规则"""
-    if rule.startswith('domain:') or rule.startswith('full:'):
-        domain_part = rule.split(':', 1)[1]
-        return bool(REGEX_PATTERN.search(domain_part))
-    return False
 
-def convert_adguard_to_mosdns(rule: str) -> Tuple[str, str]:
-    """
-    将AdGuard Home规则转换为MosDNS规则
-    返回: (转换后的规则, 规则类型)
-    """
-    original_rule = rule.strip()
-
-    # 跳过注释和空行
-    if not original_rule or original_rule.startswith('#') or original_rule.startswith('!'):
-        return "", "comment"
-
-    # 跳过允许规则（@@开头）
-    if original_rule.startswith('@@'):
-        return "", "allow"
-
-    # 跳过 keyword: 和 regexp: 类型规则
-    if original_rule.startswith('keyword:') or original_rule.startswith('regexp:'):
-        return "", "keyword_or_regexp"
-
-    # 格式7: 已经是MosDNS格式 (domain:example.com 或 full:example.com)
-    if original_rule.startswith('domain:') or original_rule.startswith('full:'):
-        return original_rule, "mosdns"
-
-    # 处理不同格式的AdGuard规则
-    domain = ""
-    rule_type = "unknown"
-
-    # 格式1: ||example.com^
-    if original_rule.startswith('||') and original_rule.endswith('^'):
-        domain = original_rule[2:-1]
-        rule_type = "domain"
-
-    # 格式2: ||example.com^$third-party
-    elif original_rule.startswith('||') and '^' in original_rule:
-        domain = original_rule[2:original_rule.index('^')]
-        rule_type = "domain"
-
-    # 格式3: |http://example.com
-    elif original_rule.startswith('|http://'):
-        domain = original_rule[8:]
-        if '/' in domain:
-            domain = domain[:domain.index('/')]
-        rule_type = "domain"
-
-    # 格式4: |https://example.com
-    elif original_rule.startswith('|https://'):
-        domain = original_rule[9:]
-        if '/' in domain:
-            domain = domain[:domain.index('/')]
-        rule_type = "domain"
-
-    # 格式6: .example.com (泛域名)
-    elif original_rule.startswith('.'):
-        domain = original_rule
-        rule_type = "wildcard"
-
-    # 格式5: example.com (简单域名格式)
-    elif '.' in original_rule and not original_rule.startswith('.'):
-        domain = original_rule
-        rule_type = "domain"
-
-    # 清理域名
-    if domain:
-        # 移除端口号
-        if ':' in domain and not domain.startswith('domain:') and not domain.startswith('full:'):
-            domain = domain[:domain.index(':')]
-
-        # 移除路径
-        if '/' in domain:
-            domain = domain[:domain.index('/')]
-
-        # 移除查询参数
-        if '?' in domain:
-            domain = domain[:domain.index('?')]
-
-        # 基本验证域名格式（允许一些特殊字符，后续再过滤）
-        if not re.match(r'^[a-zA-Z0-9._*+?^$|()\[\]\\-]+$', domain):
-            return "", "invalid"
-
-        # 转换为MosDNS格式
-        if rule_type == "wildcard":
-            return f"domain:{domain[1:]}", "converted"
-        else:
-            return f"domain:{domain}", "converted"
-
-    return "", "unknown"
-
-def convert_surge_domain_set_to_mosdns(rule: str) -> Tuple[str, str]:
-    """
-    将Surge domain-set规则转换为MosDNS规则
-    .example.com -> domain:example.com
-    example.com -> full:example.com
-    """
-    original_rule = rule.strip()
-
-    # 跳过注释和空行
-    if not original_rule or original_rule.startswith('#') or original_rule.startswith(';') or original_rule.startswith('//'):
-        return "", "comment"
-
-    rule_type = ""
-    domain = ""
-
-    # 兼容Surge逗号规则，当前上游主要是domain-set纯域名格式
-    if ',' in original_rule:
-        parts = [part.strip() for part in original_rule.split(',', 2)]
-        if len(parts) < 2:
-            return "", "invalid"
-
-        surge_type = parts[0].upper()
-        domain = parts[1]
-
-        if surge_type == "DOMAIN-SUFFIX":
-            rule_type = "domain"
-        elif surge_type == "DOMAIN":
-            rule_type = "full"
-        else:
-            return "", "unknown"
-    elif original_rule.startswith('.'):
-        domain = original_rule[1:]
-        rule_type = "domain"
-    else:
-        domain = original_rule
-        rule_type = "full"
-
-    domain = domain.strip().lower()
-
-    if not domain or domain.startswith('.') or domain.endswith('.') or '..' in domain:
-        return "", "invalid"
-
-    if not DOMAIN_PATTERN.match(domain):
-        return "", "invalid"
-
-    if rule_type == "domain":
-        return f"domain:{domain}", "converted"
-
-    return f"full:{domain}", "converted"
-
-def convert_ip_cidr_rule(rule: str) -> Tuple[str, str]:
-    """
-    将IP规则统一转换为标准CIDR格式
-    支持以下输入:
-    1. 1.2.3.0/24
-    2. 240e::/20
-    3. 1.2.3.4 -> 1.2.3.4/32
-    4. IP-CIDR,1.2.3.0/24,no-resolve
-    """
-    original_rule = rule.strip()
-
-    if (
-        not original_rule or
-        original_rule.startswith('#') or
-        original_rule.startswith(';') or
-        original_rule.startswith('!') or
-        original_rule.startswith('//')
-    ):
-        return "", "comment"
-
-    if ',' in original_rule:
-        parts = [part.strip() for part in original_rule.split(',')]
-        if len(parts) >= 2 and parts[0].upper() in ("IP-CIDR", "IP-CIDR6"):
-            original_rule = parts[1]
-
-    try:
-        if '/' in original_rule:
-            network = ipaddress.ip_network(original_rule, strict=False)
-        else:
-            address = ipaddress.ip_address(original_rule)
-            prefix_length = 32 if address.version == 4 else 128
-            network = ipaddress.ip_network(f"{address}/{prefix_length}", strict=False)
-    except ValueError:
-        return "", "invalid"
-
-    return network.with_prefixlen, "converted"
-
-def filter_regex_rules(rules: List[str]) -> Tuple[List[str], int]:
-    """
-    过滤掉正则表达式规则
-    返回: (过滤后的规则列表, 被过滤的数量)
-    """
-    filtered_rules = []
-    regex_count = 0
-
-    for rule in rules:
-        if is_regex_rule(rule):
-            regex_count += 1
-        else:
-            filtered_rules.append(rule)
-
-    return filtered_rules, regex_count
-
-def convert_mosdns_domain_rule(rule: str) -> Tuple[str, str]:
-    """严格解析MosDNS域名规则，仅接受 domain: 和 full:。"""
-    original_rule = rule.strip()
-
-    if (
-        not original_rule or
-        original_rule.startswith('#') or
-        original_rule.startswith(';') or
-        original_rule.startswith('!') or
-        original_rule.startswith('//')
-    ):
-        return "", "comment"
-
-    if original_rule.startswith('domain:'):
-        prefix = "domain"
-        domain = original_rule[7:]
-    elif original_rule.startswith('full:'):
-        prefix = "full"
-        domain = original_rule[5:]
-    else:
-        return "", "invalid"
-
-    domain = domain.strip().lower()
-
-    if not domain or domain.startswith('.') or domain.endswith('.') or '..' in domain:
-        return "", "invalid"
-
-    if not DOMAIN_PATTERN.match(domain):
-        return "", "invalid"
-
-    return f"{prefix}:{domain}", "converted"
-
-def sort_ip_network_key(network) -> Tuple[int, int, int]:
-    """为IP网络生成稳定排序键"""
-    return (network.version, int(network.network_address), network.prefixlen)
-
-def remove_covered_ip_networks(networks) -> Tuple[List, Dict[str, int], List[Tuple[str, str]]]:
-    """
-    严格去重IP规则:
-    1. 保留更大父网段
-    2. 删除被父网段完整覆盖的子网段
-    3. 不主动聚合相邻网段
-    """
-    kept_networks = []
-    coverage_stats = {"covered_subnets": 0}
-    max_end_by_version = {4: -1, 6: -1}
-    max_end_network_by_version = {4: None, 6: None}
-    covered_samples = []
-
-    for network in sorted(networks, key=sort_ip_network_key):
-        version = network.version
-        network_end = int(network.broadcast_address)
-        if network_end <= max_end_by_version[version]:
-            coverage_stats["covered_subnets"] += 1
-            parent_network = max_end_network_by_version[version]
-            if parent_network is not None and len(covered_samples) < 5:
-                covered_samples.append((parent_network.with_prefixlen, network.with_prefixlen))
-            continue
-
-        kept_networks.append(network)
-        max_end_by_version[version] = network_end
-        max_end_network_by_version[version] = network
-
-    return kept_networks, coverage_stats, covered_samples
-
-def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
-    """
-    优化域名规则，合并重复和包含关系的域名
-    返回: (优化后的规则列表, 统计信息)
-    """
-    stats = {
-        "total": len(rules),
-        "duplicates": 0,
-        "wildcard_covered": 0,
-        "domain_covered_full": 0,
-        "kept": 0
-    }
-
-    # 分离不同类型的规则
-    domain_rules = []  # domain:example.com
-    full_rules = []    # full:example.com
-    other_rules = []   # 其他格式
-
-    for rule in rules:
-        if rule.startswith('domain:'):
-            domain_rules.append(rule[7:])  # 去掉 domain: 前缀
-        elif rule.startswith('full:'):
-            full_rules.append(rule[5:])  # 去掉 full: 前缀
-        else:
-            other_rules.append(rule)
-
-    # 去重
-    original_count = len(domain_rules) + len(full_rules) + len(other_rules)
-    domain_rules = list(set(domain_rules))
-    full_rules = list(set(full_rules))
-    other_rules = list(set(other_rules))
-
-    stats["duplicates"] = original_count - len(domain_rules) - len(full_rules) - len(other_rules)
-
-    # 优化domain规则 - 按域名长度排序，短的在前
-    sorted_domains = sorted(domain_rules, key=lambda x: (len(x.split('.')), x))
-
-    # 使用集合进行高效查找
-    kept_domains = set()
-    for domain in sorted_domains:
-        is_covered = False
-        domain_parts = domain.split('.')
-
-        # 检查是否被已保留的更短域名覆盖
-        for i in range(1, len(domain_parts)):
-            parent_domain = '.'.join(domain_parts[i:])
-            if parent_domain in kept_domains:
-                # 确保父域名确实能覆盖当前域名
-                if domain.endswith('.' + parent_domain):
-                    is_covered = True
-                    stats["wildcard_covered"] += 1
-                    break
-
-        if not is_covered:
-            kept_domains.add(domain)
-
-    # 处理 full 规则 - 检查是否被 domain 规则覆盖
-    kept_full_rules = []
-    for full_domain in full_rules:
-        is_covered = False
-
-        # 检查 full 域名本身是否在 domain 集合中
-        if full_domain in kept_domains:
-            is_covered = True
-            stats["domain_covered_full"] += 1
-        else:
-            # 检查 full 域名的任何父域名是否在 domain 集合中
-            domain_parts = full_domain.split('.')
-            for i in range(1, len(domain_parts)):
-                parent_domain = '.'.join(domain_parts[i:])
-                if parent_domain in kept_domains:
-                    is_covered = True
-                    stats["domain_covered_full"] += 1
-                    break
-
-        if not is_covered:
-            kept_full_rules.append(f"full:{full_domain}")
-
-    # 组装最终规则
-    optimized_domains = [f"domain:{d}" for d in kept_domains]
-    final_rules = optimized_domains + kept_full_rules + other_rules
-    stats["kept"] = len(final_rules)
-
-    return sorted(final_rules), stats
-
-def is_covered_by_domain_rule(domain: str, domain_rules: set) -> bool:
-    """判断域名是否被 domain: 规则覆盖。"""
-    domain_parts = domain.split('.')
-    for index in range(len(domain_parts)):
-        parent_domain = '.'.join(domain_parts[index:])
-        if parent_domain in domain_rules:
-            return True
-    return False
-
-def parse_exclude_rules(lines: Iterable[str], label: str) -> List[str]:
-    """加载MosDNS排除规则，非MosDNS域名规则直接失败。"""
-    exclude_rules = []
-
-    for line_number, line in enumerate(lines, start=1):
-        converted_rule, rule_type = convert_mosdns_domain_rule(line)
-        if rule_type == "comment":
-            continue
-        if rule_type != "converted":
-            raise ValueError(
-                f"排除规则 {label} 第 {line_number} 行无效: {line.strip()}"
-            )
-        exclude_rules.append(converted_rule)
-
-    optimized_rules, _ = optimize_domains(exclude_rules)
-    return optimized_rules
-
-def apply_domain_exclusions(rules: List[str], exclude_rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
-    """按MosDNS domain/full语义移除被排除规则覆盖的域名。"""
-    stats = {
-        "exclude_rules": len(exclude_rules),
-        "excluded_by_domain": 0,
-        "excluded_by_full": 0,
-        "kept": 0
-    }
-
-    exclude_domains = set()
-    exclude_fulls = set()
-
-    for rule in exclude_rules:
-        if rule.startswith('domain:'):
-            exclude_domains.add(rule[7:])
-        elif rule.startswith('full:'):
-            exclude_fulls.add(rule[5:])
-
-    filtered_rules = []
-    for rule in rules:
-        if rule.startswith('domain:'):
-            domain = rule[7:].lower()
-            if is_covered_by_domain_rule(domain, exclude_domains):
-                stats["excluded_by_domain"] += 1
-                continue
-        elif rule.startswith('full:'):
-            domain = rule[5:].lower()
-            if is_covered_by_domain_rule(domain, exclude_domains):
-                stats["excluded_by_domain"] += 1
-                continue
-            if domain in exclude_fulls:
-                stats["excluded_by_full"] += 1
-                continue
-
-        filtered_rules.append(rule)
-
-    stats["kept"] = len(filtered_rules)
-    return filtered_rules, stats
-
-def optimize_ip_networks(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
-    """
-    规范化IP规则，执行完全重复去重和父网段覆盖子网段裁剪
-    """
-    unique_rules = set(rules)
-    unique_networks = [
-        ipaddress.ip_network(rule, strict=False)
-        for rule in unique_rules
+def is_valid_domain(domain: str, allow_apex: bool) -> bool:
+    pattern = ANY_LABEL_DOMAIN if allow_apex else MULTI_LABEL_DOMAIN
+    return bool(pattern.match(domain))
+
+
+def covered_by(domain: str, suffixes: Set[str], strict: bool = False) -> bool:
+    labels = domain.split('.')
+    start = 1 if strict else 0
+    return any(
+        '.'.join(labels[index:]) in suffixes
+        for index in range(start, len(labels))
+    )
+
+
+def optimize_domains(rules: Iterable[DomainRule]) -> List[DomainRule]:
+    rules = list(rules)
+    suffixes = {domain for kind, domain in rules if kind == DOMAIN}
+    exacts = {domain for kind, domain in rules if kind == FULL}
+
+    kept_suffixes: Set[str] = set()
+    for domain in sorted(suffixes, key=lambda item: (item.count('.'), item)):
+        if not covered_by(domain, kept_suffixes, strict=True):
+            kept_suffixes.add(domain)
+
+    return sorted(
+        [(DOMAIN, domain) for domain in kept_suffixes] +
+        [(FULL, domain) for domain in exacts if not covered_by(domain, kept_suffixes)]
+    )
+
+
+def exclude_domains(
+    rules: Iterable[DomainRule],
+    excludes: Iterable[DomainRule]
+) -> List[DomainRule]:
+    excludes = list(excludes)
+    exclude_suffixes = {domain for kind, domain in excludes if kind == DOMAIN}
+    exclude_exacts = {domain for kind, domain in excludes if kind == FULL}
+
+    return [
+        (kind, domain)
+        for kind, domain in rules
+        if not covered_by(domain, exclude_suffixes)
+        and not (kind == FULL and domain in exclude_exacts)
     ]
-    kept_networks, coverage_stats, _ = remove_covered_ip_networks(unique_networks)
-    stats = {
-        "total": len(rules),
-        "duplicates": len(rules) - len(unique_rules),
-        "covered_subnets": coverage_stats["covered_subnets"],
-        "kept": len(kept_networks)
-    }
 
-    return [network.with_prefixlen for network in kept_networks], stats
 
-def parse_nft_ip_cidr_rules(lines: Iterable[str], label: str) -> List[str]:
-    """从nftables set elements中提取IP/CIDR规则。"""
-    nft_rules = []
-    in_elements = False
+def optimize_networks(networks: Iterable) -> List:
+    kept = []
+    max_end = {4: -1, 6: -1}
 
-    for line_number, line in enumerate(lines, start=1):
-        content = line.split('#', 1)[0].strip()
-        if not content:
+    for network in sorted(
+        set(networks),
+        key=lambda item: (item.version, int(item.network_address), item.prefixlen)
+    ):
+        end = int(network.broadcast_address)
+        if end <= max_end[network.version]:
             continue
+        kept.append(network)
+        max_end[network.version] = end
 
-        if not in_elements:
-            if 'elements' not in content or '{' not in content:
-                continue
-            in_elements = True
-            content = content.split('{', 1)[1]
+    return kept
 
-        if '}' in content:
-            content = content.split('}', 1)[0]
-            in_elements = False
-
-        for token in content.split(','):
-            token = token.strip()
-            if not token:
-                continue
-            converted_rule, rule_type = convert_ip_cidr_rule(token)
-            if rule_type != "converted":
-                raise ValueError(
-                    f"nft IP集合 {label} 第 {line_number} 行无效: {token}"
-                )
-            nft_rules.append(converted_rule)
-
-    if in_elements:
-        raise ValueError(f"nft IP集合未正确闭合: {label}")
-    if not nft_rules:
-        raise ValueError(f"未从nft IP集合提取到有效IP/CIDR规则: {label}")
-
-    return nft_rules
 
 def clean_rule_lines(content: str) -> Iterable[str]:
-    """执行各文本格式共用的轻量清理。"""
     for raw_line in content.splitlines():
         line = raw_line.strip()
         if (
@@ -516,39 +126,234 @@ def clean_rule_lines(content: str) -> Iterable[str]:
             '*/' in line
         ):
             continue
-        line = re.sub(r'\s+[#!;].*$', '', line).strip()
+        line = TRAILING_COMMENT_PATTERN.sub('', line).strip()
         if line:
             yield line
 
 
-def convert_lines(lines: Iterable[str], converter) -> List[str]:
-    converted_rules = []
-    for line in lines:
-        converted_rule, rule_type = converter(line)
-        if rule_type in ("converted", "mosdns"):
-            converted_rules.append(converted_rule)
-    return converted_rules
+def is_adblock_source(content: str) -> bool:
+    for raw_line in content.splitlines():
+        line = raw_line.strip().lower()
+        if line.startswith('[adblock'):
+            return True
+        if line and not line.startswith(('!', '#')):
+            if any(marker in line for marker in ADBLOCK_MARKERS):
+                return True
+    return False
 
 
-def convert_source(rule_format: str, content: str, label: str) -> List[str]:
-    converters = {
-        "domain_adguard": convert_adguard_to_mosdns,
-        "domain_surge": convert_surge_domain_set_to_mosdns,
-        "domain_mosdns": convert_mosdns_domain_rule,
-        "ip_cidr": convert_ip_cidr_rule,
-    }
+def parse_adguard_line(
+    line: str,
+    allow_apex: bool,
+    adblock_source: bool
+) -> Tuple[List[DomainRule], str]:
+    if not line:
+        return [], "empty"
+    if line.startswith('!'):
+        return [], "directive" if line.startswith('!#') else "comment"
+    if line.startswith('['):
+        return [], "header"
+    if any(marker in line for marker in COSMETIC_MARKERS):
+        return [], "cosmetic"
+    if line.startswith('#'):
+        return [], "comment"
 
-    if rule_format == "ip_nft":
-        rules = parse_nft_ip_cidr_rules(content.splitlines(), label)
+    line = INLINE_COMMENT_PATTERN.split(line, 1)[0].strip()
+    if not line:
+        return [], "comment"
+    if line.startswith('@@'):
+        return [], "exception"
+    if len(line) > 2 and line.startswith('/') and line.endswith('/'):
+        return [], "regex"
+
+    fields = line.split()
+    if len(fields) > 1:
+        if not IPV4_PATTERN.match(fields[0]) and ':' not in fields[0]:
+            return [], "url_pattern"
+        hosts = [field.lower() for field in fields[1:]]
+        if not all(is_valid_domain(host, False) for host in hosts):
+            return [], "invalid"
+        return [(FULL, host) for host in hosts], "hosts"
+
+    if line.startswith('||'):
+        body = line[2:]
+        separator = body.find('^')
+        if separator == -1:
+            domain = body
+        else:
+            domain = body[:separator]
+            trailer = body[separator + 1:]
+            if trailer:
+                if not trailer.startswith('$'):
+                    return [], "url_pattern"
+                names = {
+                    modifier.split('=', 1)[0].lstrip('~').strip()
+                    for modifier in trailer[1:].split(',')
+                }
+                if not names <= DNS_MODIFIERS:
+                    return [], "unsupported_modifier"
+                if not names <= UNCONDITIONAL_MODIFIERS:
+                    return [], "conditional"
+    elif adblock_source or line.startswith('|') or any(
+        character in line for character in '/$*^'
+    ):
+        return [], "url_pattern"
     else:
-        converter = converters.get(rule_format)
-        if converter is None:
-            raise ValueError(f"不支持的规则格式: {rule_format}")
-        rules = convert_lines(clean_rule_lines(content), converter)
+        domain = line
+
+    domain = domain.lower()
+    if not is_valid_domain(domain, allow_apex):
+        return [], "invalid"
+    return [(DOMAIN, domain)], "converted"
+
+
+def parse_adguard(content: str, allow_apex: bool) -> Tuple[List[DomainRule], Counter]:
+    adblock_source = is_adblock_source(content)
+    rules: List[DomainRule] = []
+    stats: Counter = Counter()
+
+    for raw_line in content.splitlines():
+        parsed, reason = parse_adguard_line(
+            raw_line.strip(), allow_apex, adblock_source
+        )
+        stats[reason] += 1
+        rules.extend(parsed)
+
+    return rules, stats
+
+
+def parse_surge_line(line: str, allow_apex: bool) -> Tuple[List[DomainRule], str]:
+    if ',' in line:
+        parts = [part.strip() for part in line.split(',', 2)]
+        if len(parts) < 2:
+            return [], "invalid"
+        surge_type = parts[0].upper()
+        domain = parts[1]
+        if surge_type == "DOMAIN-SUFFIX":
+            kind = DOMAIN
+        elif surge_type == "DOMAIN":
+            kind = FULL
+        else:
+            return [], "unsupported"
+    elif line.startswith('.'):
+        domain = line[1:]
+        kind = DOMAIN
+    else:
+        domain = line
+        kind = FULL
+
+    domain = domain.strip().lower()
+    if not is_valid_domain(domain, allow_apex):
+        return [], "invalid"
+    return [(kind, domain)], "converted"
+
+
+def parse_mosdns_line(line: str, allow_apex: bool) -> Tuple[List[DomainRule], str]:
+    kind, separator, domain = line.partition(':')
+    if not separator or kind not in (DOMAIN, FULL):
+        return [], "unsupported"
+
+    domain = domain.strip().lower()
+    if not is_valid_domain(domain, allow_apex):
+        return [], "invalid"
+    return [(kind, domain)], "converted"
+
+
+def parse_ip_cidr_line(line: str) -> Tuple[List, str]:
+    if ',' in line:
+        parts = [part.strip() for part in line.split(',')]
+        if len(parts) >= 2 and parts[0].upper() in ("IP-CIDR", "IP-CIDR6"):
+            line = parts[1]
+
+    try:
+        if '/' in line:
+            return [ipaddress.ip_network(line, strict=False)], "converted"
+        address = ipaddress.ip_address(line)
+        prefix_length = 32 if address.version == 4 else 128
+        return [ipaddress.ip_network(f"{address}/{prefix_length}")], "converted"
+    except ValueError:
+        return [], "invalid"
+
+
+def parse_nft(content: str, label: str) -> Tuple[List, Counter]:
+    networks = []
+    in_elements = False
+
+    for line_number, raw_line in enumerate(content.splitlines(), start=1):
+        text = raw_line.split('#', 1)[0].strip()
+        if not text:
+            continue
+
+        if not in_elements:
+            if 'elements' not in text or '{' not in text:
+                continue
+            in_elements = True
+            text = text.split('{', 1)[1]
+
+        if '}' in text:
+            text = text.split('}', 1)[0]
+            in_elements = False
+
+        for token in text.split(','):
+            token = token.strip()
+            if not token:
+                continue
+            parsed, reason = parse_ip_cidr_line(token)
+            if reason != "converted":
+                raise ValueError(f"nft IP集合 {label} 第 {line_number} 行无效: {token}")
+            networks.extend(parsed)
+
+    if in_elements:
+        raise ValueError(f"nft IP集合未正确闭合: {label}")
+    return networks, Counter()
+
+
+LINE_PARSERS = {
+    "domain_surge": parse_surge_line,
+    "domain_mosdns": parse_mosdns_line,
+}
+
+
+def parse_source(
+    rule_format: str,
+    content: str,
+    label: str,
+    allow_apex: bool,
+    strict: bool = False
+) -> Tuple[List, Counter]:
+    if rule_format == "ip_nft":
+        rules, stats = parse_nft(content, label)
+    elif rule_format == "domain_adguard":
+        rules, stats = parse_adguard(content, allow_apex)
+    else:
+        rules = []
+        stats = Counter()
+        for line_number, line in enumerate(clean_rule_lines(content), start=1):
+            if rule_format == "ip_cidr":
+                parsed, reason = parse_ip_cidr_line(line)
+            else:
+                parsed, reason = LINE_PARSERS[rule_format](line, allow_apex)
+            stats[reason] += 1
+            if reason != "converted" and strict:
+                raise ValueError(f"来源 {label} 第 {line_number} 行无效: {line}")
+            rules.extend(parsed)
 
     if not rules:
         raise ValueError(f"来源未产生有效规则: {label}")
-    return rules
+    return rules, stats
+
+
+def format_ignored(stats: Counter) -> str:
+    ignored = {
+        reason: count
+        for reason, count in stats.items()
+        if reason not in ("converted", "hosts", "comment", "empty", "header")
+    }
+    if not ignored:
+        return ""
+    return " 忽略: " + ", ".join(
+        f"{reason}={count}" for reason, count in sorted(ignored.items())
+    )
 
 
 def workspace_path(workspace: Path, relative_path: str) -> Path:
@@ -559,7 +364,7 @@ def workspace_path(workspace: Path, relative_path: str) -> Path:
 
 
 def read_location(workspace: Path, location: str) -> str:
-    if location.startswith(("https://", "http://")):
+    if location.startswith(REMOTE_PREFIXES):
         request = urllib.request.Request(
             location,
             headers={"User-Agent": "Provider-MosDNS-Workflow"}
@@ -638,12 +443,31 @@ def load_locations(workspace: Path, rules: List[Dict]) -> Dict[str, str]:
         return dict(zip(ordered_locations, contents))
 
 
-def build_rulesets(
-    rules: List[Dict],
-    contents: Dict[str, str]
-) -> Dict[str, List[str]]:
+def collect_excludes(
+    rule: Dict,
+    contents: Dict[str, str],
+    generated: Dict[str, List],
+    output_paths: Set[str]
+) -> List[DomainRule]:
+    excludes: List[DomainRule] = []
+
+    for exclude_path in rule.get("exclude", []):
+        if exclude_path in output_paths:
+            if exclude_path not in generated:
+                raise ValueError(f"规则 {rule['id']} 的依赖尚未生成: {exclude_path}")
+            excludes.extend(generated[exclude_path])
+        else:
+            parsed, _ = parse_source(
+                "domain_mosdns", contents[exclude_path], exclude_path, True, strict=True
+            )
+            excludes.extend(parsed)
+
+    return optimize_domains(excludes)
+
+
+def build_rulesets(rules: List[Dict], contents: Dict[str, str]) -> Dict[str, List]:
     output_paths = {rule["path"] for rule in rules}
-    generated = {}
+    generated: Dict[str, List] = {}
 
     for rule in rules:
         rule_id = rule["id"]
@@ -652,51 +476,43 @@ def build_rulesets(
             raise ValueError(f"规则 {rule_id} 不能混合域名与 IP 来源")
         family = next(iter(families))
 
-        converted_rules = []
+        parsed_rules = []
         for rule_format, locations in rule["sources"].items():
             for location in locations:
-                converted_rules.extend(convert_source(
+                source_rules, stats = parse_source(
                     rule_format,
                     contents[location],
-                    f"{rule_id}:{location}"
-                ))
+                    f"{rule_id}:{location}",
+                    not location.startswith(REMOTE_PREFIXES)
+                )
+                parsed_rules.extend(source_rules)
+                ignored = format_ignored(stats)
+                if ignored:
+                    print(f"  {rule_id} <- {location.rsplit('/', 1)[-1]}:{ignored}")
 
-        filtered_rules = converted_rules
-        exclude_paths = rule.get("exclude", [])
-        if exclude_paths:
-            if family != DOMAIN_FAMILY:
-                raise ValueError(f"IP 规则 {rule_id} 不支持 exclude")
-            exclude_rules = []
-            for exclude_path in exclude_paths:
-                if exclude_path in output_paths:
-                    if exclude_path not in generated:
-                        raise ValueError(
-                            f"规则 {rule_id} 的依赖尚未生成: {exclude_path}"
-                        )
-                    exclude_rules.extend(generated[exclude_path])
-                else:
-                    exclude_rules.extend(parse_exclude_rules(
-                        clean_rule_lines(contents[exclude_path]),
-                        exclude_path
-                    ))
-            exclude_rules, _ = optimize_domains(exclude_rules)
-            filtered_rules, _ = apply_domain_exclusions(
-                filtered_rules,
-                exclude_rules
-            )
-
+        source_count = len(parsed_rules)
         if family == DOMAIN_FAMILY:
-            filtered_rules, _ = filter_regex_rules(filtered_rules)
-            final_rules, _ = optimize_domains(filtered_rules)
+            excludes = collect_excludes(rule, contents, generated, output_paths)
+            if excludes:
+                parsed_rules = exclude_domains(parsed_rules, excludes)
+            final_rules = optimize_domains(parsed_rules)
         else:
-            final_rules, _ = optimize_ip_networks(filtered_rules)
+            if rule.get("exclude"):
+                raise ValueError(f"IP 规则 {rule_id} 不支持 exclude")
+            final_rules = optimize_networks(parsed_rules)
 
         if not final_rules:
             raise ValueError(f"规则 {rule_id} 的最终产物为空")
         generated[rule["path"]] = final_rules
-        print(f"{rule_id}: {len(converted_rules)} -> {len(final_rules)} 条")
+        print(f"{rule_id}: {source_count} -> {len(final_rules)} 条")
 
     return generated
+
+
+def render(family: str, rules: List) -> List[str]:
+    if family == DOMAIN_FAMILY:
+        return [f"{kind}:{domain}" for kind, domain in rules]
+    return [network.with_prefixlen for network in rules]
 
 
 def atomic_write(path: Path, content: str) -> None:
@@ -720,15 +536,19 @@ def atomic_write(path: Path, content: str) -> None:
 def publish_rulesets(
     workspace: Path,
     rules: List[Dict],
-    generated: Dict[str, List[str]]
+    generated: Dict[str, List]
 ) -> List[str]:
     summaries = []
     pending_writes = []
 
     for rule in rules:
         relative_path = rule["path"]
+        family = next(
+            FORMAT_FAMILIES[rule_format] for rule_format in rule["sources"]
+        )
         output_path = workspace_path(workspace, relative_path)
-        new_rules = generated[relative_path]
+        new_rules = render(family, generated[relative_path])
+
         old_rules = set()
         if output_path.is_file():
             old_rules = {
@@ -736,12 +556,14 @@ def publish_rulesets(
                 for line in output_path.read_text(encoding="utf-8").splitlines()
                 if line.strip()
             }
+
         new_rule_set = set(new_rules)
         if old_rules == new_rule_set:
             continue
-        added = len(new_rule_set - old_rules)
-        removed = len(old_rules - new_rule_set)
-        summaries.append(f"{rule['id']} (+{added} -{removed})")
+
+        summaries.append(
+            f"{rule['id']} (+{len(new_rule_set - old_rules)} -{len(old_rules - new_rule_set)})"
+        )
         pending_writes.append((output_path, "\n".join(new_rules) + "\n"))
 
     for output_path, content in pending_writes:

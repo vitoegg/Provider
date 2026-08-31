@@ -5,8 +5,7 @@
       "path": "RuleSet/Extra/MosDNS/reject.txt",
       "sources": {
         "domain_adguard": [
-          "https://raw.githubusercontent.com/miaoermua/AdguardFilter/main/rule.txt",
-          "https://raw.githubusercontent.com/damengzhu/banad/refs/heads/main/jiekouAD.txt"
+          "https://raw.githubusercontent.com/miaoermua/AdguardFilter/main/rule.txt"
         ],
         "domain_mosdns": [
           "https://raw.githubusercontent.com/TG-Twilight/AWAvenue-Ads-Rule/main/Filters/AWAvenue-Ads-Rule-Mosdns_v5.txt",
