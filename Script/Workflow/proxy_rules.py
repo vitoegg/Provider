@@ -22,7 +22,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Iterable, List, Set, Tuple
 
-DOMAIN_PATTERN = re.compile(r'^[a-zA-Z0-9.-]+$')
+LABEL_PATTERN = r'(?!-)[a-z0-9-]{1,63}(?<!-)'
+TLD_PATTERN = r'(?!-)[a-z][a-z0-9-]{0,62}(?<!-)'
+DOMAIN_PATTERN = re.compile(
+    rf'^(?=.{{1,253}}$)({LABEL_PATTERN}\.)*{TLD_PATTERN}$'
+)
 GITHUB_RAW_PATTERN = re.compile(r'^https?://raw\.githubusercontent\.com/([^/]+/[^/]+)/')
 INLINE_COMMENT_PATTERN = re.compile(r'\s+[#!;].*$')
 REPO_HOMEPAGE = "https://github.com/vitoegg/Provider"
@@ -37,18 +41,7 @@ EXACT_KIND = "exact"
 
 def is_valid_domain(domain: str) -> bool:
     """校验域名是否合法（不含前导点）。"""
-    if not domain or len(domain) > 253:
-        return False
-    if not DOMAIN_PATTERN.match(domain):
-        return False
-    if domain.startswith('.') or domain.endswith('.') or '..' in domain:
-        return False
-    for part in domain.split('.'):
-        if not part or len(part) > 63:
-            return False
-        if part.startswith('-') or part.endswith('-'):
-            return False
-    return True
+    return bool(DOMAIN_PATTERN.match(domain))
 
 
 def convert_domain_set_rule(line: str) -> Tuple[str, str]:
@@ -149,7 +142,7 @@ def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
         parts = domain.split('.')
         if any(
             '.'.join(parts[index:]) in kept_wildcard_domains
-            for index in range(1, len(parts))
+            for index in range(len(parts))
         ):
             stats["exact_covered"] += 1
             continue

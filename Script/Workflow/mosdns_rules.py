@@ -20,11 +20,8 @@ DomainRule = Tuple[str, str]
 
 LABEL_PATTERN = r'(?!-)[a-z0-9-]{1,63}(?<!-)'
 TLD_PATTERN = r'(?!-)[a-z][a-z0-9-]{0,62}(?<!-)'
-MULTI_LABEL_DOMAIN = re.compile(
-    rf'^(?=.{{1,253}}$)({LABEL_PATTERN}\.)+{TLD_PATTERN}$'
-)
-ANY_LABEL_DOMAIN = re.compile(
-    rf'^(?=.{{1,253}}$)(({LABEL_PATTERN}\.)*{TLD_PATTERN}|{LABEL_PATTERN})$'
+DOMAIN_PATTERN = re.compile(
+    rf'^(?=.{{1,253}}$)({LABEL_PATTERN}\.)*{TLD_PATTERN}$'
 )
 IPV4_PATTERN = re.compile(r'^\d{1,3}(\.\d{1,3}){3}$')
 INLINE_COMMENT_PATTERN = re.compile(r'\s+#')
@@ -53,9 +50,8 @@ FORMAT_FAMILIES = {
 }
 
 
-def is_valid_domain(domain: str, allow_apex: bool) -> bool:
-    pattern = ANY_LABEL_DOMAIN if allow_apex else MULTI_LABEL_DOMAIN
-    return bool(pattern.match(domain))
+def is_valid_domain(domain: str) -> bool:
+    return bool(DOMAIN_PATTERN.match(domain))
 
 
 def covered_by(domain: str, suffixes: Set[str], strict: bool = False) -> bool:
@@ -144,7 +140,6 @@ def is_adblock_source(content: str) -> bool:
 
 def parse_adguard_line(
     line: str,
-    allow_apex: bool,
     adblock_source: bool
 ) -> Tuple[List[DomainRule], str]:
     if not line:
@@ -171,7 +166,7 @@ def parse_adguard_line(
         if not IPV4_PATTERN.match(fields[0]) and ':' not in fields[0]:
             return [], "url_pattern"
         hosts = [field.lower() for field in fields[1:]]
-        if not all(is_valid_domain(host, False) for host in hosts):
+        if not all(is_valid_domain(host) for host in hosts):
             return [], "invalid"
         return [(FULL, host) for host in hosts], "hosts"
 
@@ -202,27 +197,25 @@ def parse_adguard_line(
         domain = line
 
     domain = domain.lower()
-    if not is_valid_domain(domain, allow_apex):
+    if not is_valid_domain(domain):
         return [], "invalid"
     return [(DOMAIN, domain)], "converted"
 
 
-def parse_adguard(content: str, allow_apex: bool) -> Tuple[List[DomainRule], Counter]:
+def parse_adguard(content: str) -> Tuple[List[DomainRule], Counter]:
     adblock_source = is_adblock_source(content)
     rules: List[DomainRule] = []
     stats: Counter = Counter()
 
     for raw_line in content.splitlines():
-        parsed, reason = parse_adguard_line(
-            raw_line.strip(), allow_apex, adblock_source
-        )
+        parsed, reason = parse_adguard_line(raw_line.strip(), adblock_source)
         stats[reason] += 1
         rules.extend(parsed)
 
     return rules, stats
 
 
-def parse_surge_line(line: str, allow_apex: bool) -> Tuple[List[DomainRule], str]:
+def parse_surge_line(line: str) -> Tuple[List[DomainRule], str]:
     if ',' in line:
         parts = [part.strip() for part in line.split(',', 2)]
         if len(parts) < 2:
@@ -243,18 +236,18 @@ def parse_surge_line(line: str, allow_apex: bool) -> Tuple[List[DomainRule], str
         kind = FULL
 
     domain = domain.strip().lower()
-    if not is_valid_domain(domain, allow_apex):
+    if not is_valid_domain(domain):
         return [], "invalid"
     return [(kind, domain)], "converted"
 
 
-def parse_mosdns_line(line: str, allow_apex: bool) -> Tuple[List[DomainRule], str]:
+def parse_mosdns_line(line: str) -> Tuple[List[DomainRule], str]:
     kind, separator, domain = line.partition(':')
     if not separator or kind not in (DOMAIN, FULL):
         return [], "unsupported"
 
     domain = domain.strip().lower()
-    if not is_valid_domain(domain, allow_apex):
+    if not is_valid_domain(domain):
         return [], "invalid"
     return [(kind, domain)], "converted"
 
@@ -318,13 +311,12 @@ def parse_source(
     rule_format: str,
     content: str,
     label: str,
-    allow_apex: bool,
     strict: bool = False
 ) -> Tuple[List, Counter]:
     if rule_format == "ip_nft":
         rules, stats = parse_nft(content, label)
     elif rule_format == "domain_adguard":
-        rules, stats = parse_adguard(content, allow_apex)
+        rules, stats = parse_adguard(content)
     else:
         rules = []
         stats = Counter()
@@ -332,7 +324,7 @@ def parse_source(
             if rule_format == "ip_cidr":
                 parsed, reason = parse_ip_cidr_line(line)
             else:
-                parsed, reason = LINE_PARSERS[rule_format](line, allow_apex)
+                parsed, reason = LINE_PARSERS[rule_format](line)
             stats[reason] += 1
             if reason != "converted" and strict:
                 raise ValueError(f"来源 {label} 第 {line_number} 行无效: {line}")
@@ -458,7 +450,7 @@ def collect_excludes(
             excludes.extend(generated[exclude_path])
         else:
             parsed, _ = parse_source(
-                "domain_mosdns", contents[exclude_path], exclude_path, True, strict=True
+                "domain_mosdns", contents[exclude_path], exclude_path, strict=True
             )
             excludes.extend(parsed)
 
@@ -482,8 +474,7 @@ def build_rulesets(rules: List[Dict], contents: Dict[str, str]) -> Dict[str, Lis
                 source_rules, stats = parse_source(
                     rule_format,
                     contents[location],
-                    f"{rule_id}:{location}",
-                    not location.startswith(REMOTE_PREFIXES)
+                    f"{rule_id}:{location}"
                 )
                 parsed_rules.extend(source_rules)
                 ignored = format_ignored(stats)
