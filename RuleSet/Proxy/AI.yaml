@@ -121,6 +121,8 @@ payload:
   - 'pplx-res.cloudinary.com'
 
   # Vibe Coding
+  # > Herdr
+  - '+.herdr.dev'
   # > OpenCode
   - '+.opencode.ai'
   # > Pi
