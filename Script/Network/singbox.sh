@@ -15,6 +15,7 @@ ARCH=""
 PROTOCOLS=""
 SHADOWTLS_ENABLED=0
 ANYTLS_ENABLED=0
+TROJAN_ENABLED=0
 SS_ENABLED=0
 SOCKS_ENABLED=0
 UPDATE_REQUESTED=0
@@ -31,6 +32,11 @@ ANYTLS_CERT_MODE=""
 ANYTLS_TOKEN=""
 ANYTLS_CERT_PATH=""
 ANYTLS_KEY_PATH=""
+TROJAN_PORT=""
+TROJAN_PASSWORD=""
+TROJAN_DOMAIN=""
+TROJAN_CERT_PATH=""
+TROJAN_KEY_PATH=""
 SS_PORT=""
 SS_PASSWORD=""
 SOCKS_HOST=""
@@ -68,7 +74,7 @@ show_usage() {
   bash singbox.sh --uninstall
 
 协议：
-  --protocol LIST                 anytls、shadowsocks、shadowtls，支持逗号组合
+  --protocol LIST                 anytls、shadowsocks、shadowtls、trojan，支持逗号组合
   --shadowtls-port PORT           ShadowTLS 端口
   --shadowtls-password PASSWORD   ShadowTLS 密码
   --shadowtls-domain DOMAIN       ShadowTLS 单域名
@@ -80,6 +86,11 @@ show_usage() {
   --anytls-token TOKEN            Cloudflare API Token
   --anytls-cert-path PATH         证书路径
   --anytls-key-path PATH          私钥路径
+  --trojan-port PORT              Trojan 端口
+  --trojan-password PASSWORD      Trojan 密码
+  --trojan-domain DOMAIN          Trojan 域名
+  --trojan-cert-path PATH         证书路径
+  --trojan-key-path PATH          私钥路径
   --ss-port PORT                  Shadowsocks 端口
   --ss-password PASSWORD          Shadowsocks 密码
   --socks-host HOST               Socks 服务地址
@@ -106,6 +117,11 @@ parse_args() {
         [--anytls-token]=ANYTLS_TOKEN
         [--anytls-cert-path]=ANYTLS_CERT_PATH
         [--anytls-key-path]=ANYTLS_KEY_PATH
+        [--trojan-port]=TROJAN_PORT
+        [--trojan-password]=TROJAN_PASSWORD
+        [--trojan-domain]=TROJAN_DOMAIN
+        [--trojan-cert-path]=TROJAN_CERT_PATH
+        [--trojan-key-path]=TROJAN_KEY_PATH
         [--ss-port]=SS_PORT
         [--ss-password]=SS_PASSWORD
         [--socks-host]=SOCKS_HOST
@@ -160,6 +176,7 @@ install_arguments_present() {
     [ -n "$PROTOCOLS$SHADOWTLS_PORT$SHADOWTLS_PASSWORD$SHADOWTLS_DOMAIN" ] ||
         [ -n "$ANYTLS_PORT$ANYTLS_PASSWORD$ANYTLS_DOMAIN$ANYTLS_SCHEME" ] ||
         [ -n "$ANYTLS_CERT_MODE$ANYTLS_TOKEN$ANYTLS_CERT_PATH$ANYTLS_KEY_PATH" ] ||
+        [ -n "$TROJAN_PORT$TROJAN_PASSWORD$TROJAN_DOMAIN$TROJAN_CERT_PATH$TROJAN_KEY_PATH" ] ||
         [ -n "$SS_PORT$SS_PASSWORD$SOCKS_HOST$SOCKS_PORT$SINGBOX_VERSION" ]
 }
 
@@ -179,6 +196,9 @@ parse_protocols() {
                 ;;
             shadowsocks)
                 SS_ENABLED=1
+                ;;
+            trojan)
+                TROJAN_ENABLED=1
                 ;;
             '')
                 fail "--protocol 包含空协议。"
@@ -203,6 +223,9 @@ validate_protocol_scope() {
     fi
     if [ "$SS_ENABLED" -eq 0 ] && [ -n "$SS_PORT$SS_PASSWORD" ]; then
         fail "Shadowsocks 参数需要 --protocol shadowsocks。"
+    fi
+    if [ "$TROJAN_ENABLED" -eq 0 ] && [ -n "$TROJAN_PORT$TROJAN_PASSWORD$TROJAN_DOMAIN$TROJAN_CERT_PATH$TROJAN_KEY_PATH" ]; then
+        fail "Trojan 参数需要 --protocol trojan。"
     fi
 }
 
@@ -314,6 +337,7 @@ prepare_ports() {
     USED_PORTS=()
     [ "$SHADOWTLS_ENABLED" -eq 0 ] || [ -z "$SHADOWTLS_PORT" ] || reserve_port "$SHADOWTLS_PORT" ShadowTLS
     [ "$ANYTLS_ENABLED" -eq 0 ] || [ -z "$ANYTLS_PORT" ] || reserve_port "$ANYTLS_PORT" AnyTLS
+    [ "$TROJAN_ENABLED" -eq 0 ] || [ -z "$TROJAN_PORT" ] || reserve_port "$TROJAN_PORT" Trojan
     [ "$SS_ENABLED" -eq 0 ] || [ -z "$SS_PORT" ] || reserve_port "$SS_PORT" Shadowsocks
     if [ "$SHADOWTLS_ENABLED" -eq 1 ] && [ -z "$SHADOWTLS_PORT" ]; then
         SHADOWTLS_PORT="$(generate_unique_port)"
@@ -322,6 +346,10 @@ prepare_ports() {
     if [ "$ANYTLS_ENABLED" -eq 1 ] && [ -z "$ANYTLS_PORT" ]; then
         ANYTLS_PORT="$(generate_unique_port)"
         reserve_port "$ANYTLS_PORT" AnyTLS
+    fi
+    if [ "$TROJAN_ENABLED" -eq 1 ] && [ -z "$TROJAN_PORT" ]; then
+        TROJAN_PORT="$(generate_unique_port)"
+        reserve_port "$TROJAN_PORT" Trojan
     fi
     if [ "$SS_ENABLED" -eq 1 ] && [ -z "$SS_PORT" ]; then
         SS_PORT="$(generate_unique_port)"
@@ -372,6 +400,15 @@ prepare_anytls_params() {
     esac
 }
 
+prepare_trojan_params() {
+    [ "$TROJAN_ENABLED" -eq 1 ] || return 0
+    [ -n "$TROJAN_PASSWORD" ] || TROJAN_PASSWORD="$(generate_password)"
+    [ -n "$TROJAN_DOMAIN" ] || fail "启用 Trojan 时必须提供 --trojan-domain。"
+    if [ ! -f "$TROJAN_CERT_PATH" ] || [ ! -f "$TROJAN_KEY_PATH" ]; then
+        fail "Trojan 证书文件不存在。"
+    fi
+}
+
 prepare_shadowsocks_params() {
     [ "$SS_ENABLED" -eq 1 ] || return 0
     [ -n "$SS_PASSWORD" ] || SS_PASSWORD="$(generate_password)"
@@ -389,6 +426,7 @@ prepare_config_params() {
     prepare_ports
     prepare_shadowtls_params
     prepare_anytls_params
+    prepare_trojan_params
     prepare_shadowsocks_params
     prepare_socks_params
 }
@@ -473,6 +511,32 @@ build_anytls_inbound() {
     fi
 }
 
+build_trojan_inbound() {
+    jq -n --argjson port "$TROJAN_PORT" --arg password "$TROJAN_PASSWORD" --arg domain "$TROJAN_DOMAIN" \
+        --arg cert "$TROJAN_CERT_PATH" --arg key "$TROJAN_KEY_PATH" \
+        '{
+            type: "trojan",
+            tag: "trojan-in",
+            listen: "::",
+            listen_port: $port,
+            users: [{
+                name: "Trojan",
+                password: $password
+            }],
+            tls: {
+                enabled: true,
+                alpn: ["http/1.1"],
+                server_name: $domain,
+                certificate_path: $cert,
+                key_path: $key
+            },
+            transport: {
+                type: "ws",
+                path: "/img"
+            }
+        }'
+}
+
 build_shadowsocks_inbound() {
     jq -n --argjson port "$SS_PORT" --arg method "$SS_METHOD" --arg password "$SS_PASSWORD" \
         '{
@@ -494,6 +558,10 @@ build_config() {
     fi
     if [ "$ANYTLS_ENABLED" -eq 1 ]; then
         inbound="$(build_anytls_inbound)" || return 1
+        inbounds="$(jq -cn --argjson a "$inbounds" --argjson b "$inbound" '$a+[$b]')"
+    fi
+    if [ "$TROJAN_ENABLED" -eq 1 ]; then
+        inbound="$(build_trojan_inbound)" || return 1
         inbounds="$(jq -cn --argjson a "$inbounds" --argjson b "$inbound" '$a+[$b]')"
     fi
     if [ "$SS_ENABLED" -eq 1 ]; then
@@ -856,6 +924,10 @@ show_configuration() {
     if [ "$ANYTLS_ENABLED" -eq 1 ]; then
         printf 'AnyTLS 端口：%s\nAnyTLS 密码：%s\nAnyTLS 域名：%s\n证书模式：%s\n' \
             "$ANYTLS_PORT" "$ANYTLS_PASSWORD" "$ANYTLS_DOMAIN" "$ANYTLS_CERT_MODE"
+    fi
+    if [ "$TROJAN_ENABLED" -eq 1 ]; then
+        printf 'Trojan 端口：%s\nTrojan 密码：%s\nTrojan 域名：%s\nTrojan WS 路径：/img\n' \
+            "$TROJAN_PORT" "$TROJAN_PASSWORD" "$TROJAN_DOMAIN"
     fi
     if [ "$SS_ENABLED" -eq 1 ]; then
         printf 'Shadowsocks 端口：%s\nShadowsocks 密码：%s\n加密：%s\n' \

@@ -9,7 +9,7 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 
 ### 参数说明
 ```text
---protocol LIST                 anytls、shadowsocks、shadowtls，支持逗号组合
+--protocol LIST                 anytls、shadowsocks、shadowtls、trojan，支持逗号组合
 --shadowtls-port PORT           ShadowTLS 端口
 --shadowtls-password PASSWORD   ShadowTLS 密码
 --shadowtls-domain DOMAIN       ShadowTLS 单域名，启用时自动配置 Shadowsocks
@@ -21,6 +21,11 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 --anytls-token TOKEN            Cloudflare API Token
 --anytls-cert-path PATH         证书路径
 --anytls-key-path PATH          私钥路径
+--trojan-port PORT              Trojan 端口
+--trojan-password PASSWORD      Trojan 密码
+--trojan-domain DOMAIN          Trojan 域名
+--trojan-cert-path PATH         证书路径
+--trojan-key-path PATH          私钥路径
 --ss-port PORT                  Shadowsocks 端口
 --ss-password PASSWORD          Shadowsocks 密码
 --socks-host HOST               Socks 服务 IP
@@ -45,6 +50,13 @@ bash singbox.sh \
   --anytls-token YOUR_CF_TOKEN \
   --socks-host 1.2.3.4 \
   --socks-port 1080
+
+bash singbox.sh \
+  --protocol trojan \
+  --trojan-domain stream.example.com \
+  --trojan-port 443 \
+  --trojan-cert-path /path/to/cert.pem \
+  --trojan-key-path /path/to/key.pem
 ```
 
 ## **shadowsocks.sh**
