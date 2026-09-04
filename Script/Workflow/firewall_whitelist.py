@@ -3,6 +3,7 @@
 
 import ipaddress
 import os
+import random
 import re
 import sys
 import tempfile
@@ -12,21 +13,38 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, List, Optional, Set
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 from zoneinfo import ZoneInfo
 
 CODE_PATTERN = re.compile(r"^\d{6}$")
 TRAILING_COMMENT_PATTERN = re.compile(r"\s+[#!;].*$")
 ELEMENT_PATTERN = re.compile(r"^\s*(\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}),?\s*$")
-IPLIST_URL = (
-    "https://raw.githubusercontent.com/metowolf/iplist/refs/heads/master"
-    "/data/cncity/{code}.txt"
+MIRRORS = (
+    "https://raw.githubusercontent.com/metowolf/iplist/refs/heads/master",
+    "https://metowolf.github.io/iplist",
+)
+CNCITY_PATH = "/data/cncity/{code}.txt"
+ISP_PATH = "/data/isp/{name}.txt"
+CLOUD_PROVIDERS = (
+    "aliyun",
+    "baidu",
+    "bytedance",
+    "huawei",
+    "ksyun",
+    "microsoft",
+    "tencent",
+    "ucloud",
+    "volcengine",
 )
 BASESET_RELATIVE = "RuleSet/Extra/BaseSet/Firewall/whitelist.txt"
 OUTPUT_RELATIVE = "RuleSet/Extra/Firewall/whitelist.nft"
 USER_AGENT = "Provider-Firewall-Workflow"
-DOWNLOAD_ATTEMPTS = 3
+DOWNLOAD_ROUNDS = 3
 DOWNLOAD_TIMEOUT = 30
+RETRY_BACKOFF = 2
+RETRY_JITTER = 0.3
+RETRIABLE_ERRORS = (urllib.error.URLError, OSError, ValueError, UnicodeDecodeError)
+PERMANENT_EXCEPTIONS = (408, 429)
 OUTPUT_DELIMITER = "FIREWALL_WHITELIST_EOF"
 TIMEZONE = ZoneInfo("Asia/Shanghai")
 
@@ -78,43 +96,99 @@ def parse_networks(content: str, label: str, allow_empty: bool = False) -> List[
     return networks
 
 
-def download(url: str) -> str:
+def http_get(url: str) -> str:
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=DOWNLOAD_TIMEOUT) as response:
+        data = response.read()
+    if not data:
+        raise ValueError("下载内容为空")
+    return data.decode("utf-8")
+
+
+def is_permanent(error: BaseException) -> bool:
+    return (
+        isinstance(error, urllib.error.HTTPError)
+        and 400 <= error.code < 500
+        and error.code not in PERMANENT_EXCEPTIONS
+    )
+
+
+def fetch_source(label: str, path: str) -> List[ipaddress.IPv4Network]:
     last_error: Optional[BaseException] = None
-    for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
-        try:
-            request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-            with urllib.request.urlopen(request, timeout=DOWNLOAD_TIMEOUT) as response:
-                data = response.read()
-            if not data:
-                raise ValueError("下载内容为空")
-            return data.decode("utf-8")
-        except (urllib.error.URLError, OSError, ValueError, UnicodeDecodeError) as error:
-            last_error = error
-            if attempt < DOWNLOAD_ATTEMPTS:
-                time.sleep(attempt * 2)
-    raise RuntimeError(f"上游获取失败({DOWNLOAD_ATTEMPTS} 次): {url} -> {last_error}")
-
-
-def fetch_city(code: str) -> List[ipaddress.IPv4Network]:
-    return parse_networks(download(IPLIST_URL.format(code=code)), code)
-
-
-def load_city_networks(codes: List[str]) -> List[ipaddress.IPv4Network]:
-    networks: List[ipaddress.IPv4Network] = []
-    errors: List[str] = []
-    with ThreadPoolExecutor(max_workers=min(8, len(codes))) as executor:
-        futures = [executor.submit(fetch_city, code) for code in codes]
-        for code, future in zip(codes, futures):
-            try:
-                city_networks = future.result()
-            except Exception as error:
-                errors.append(f"{code}: {error}")
+    dead: Set[str] = set()
+    for round_index in range(DOWNLOAD_ROUNDS):
+        for mirror in MIRRORS:
+            if mirror in dead:
                 continue
-            print(f"{code}: {len(city_networks)} 条")
-            networks.extend(city_networks)
+            try:
+                return parse_networks(http_get(mirror + path), label)
+            except RETRIABLE_ERRORS as error:
+                last_error = error
+                if is_permanent(error):
+                    dead.add(mirror)
+                print(f"{label}: {mirror} 失败 -> {error}", file=sys.stderr)
+        if len(dead) == len(MIRRORS):
+            break
+        if round_index < DOWNLOAD_ROUNDS - 1:
+            backoff = RETRY_BACKOFF * (round_index + 1)
+            time.sleep(backoff * random.uniform(1 - RETRY_JITTER, 1 + RETRY_JITTER))
+    raise RuntimeError(f"{last_error}")
+
+
+def fetch_networks(
+    sources: List[Tuple[str, str]],
+) -> Dict[str, List[ipaddress.IPv4Network]]:
+    results: Dict[str, List[ipaddress.IPv4Network]] = {}
+    errors: List[str] = []
+    with ThreadPoolExecutor(max_workers=min(8, len(sources))) as executor:
+        futures = [executor.submit(fetch_source, label, path) for label, path in sources]
+        for (label, _), future in zip(sources, futures):
+            try:
+                networks = future.result()
+            except Exception as error:
+                errors.append(f"{label}: {error}")
+                continue
+            print(f"{label}: {len(networks)} 条")
+            results[label] = networks
     if errors:
         raise RuntimeError("上游获取失败:\n" + "\n".join(errors))
-    return networks
+    return results
+
+
+def summarize_range(start: int, end: int) -> Iterable[ipaddress.IPv4Network]:
+    return ipaddress.summarize_address_range(
+        ipaddress.IPv4Address(start), ipaddress.IPv4Address(end)
+    )
+
+
+def exclude_networks(
+    base: List[ipaddress.IPv4Network],
+    excluded: List[ipaddress.IPv4Network],
+) -> List[ipaddress.IPv4Network]:
+    bounds = [
+        (int(network.network_address), int(network.broadcast_address))
+        for network in ipaddress.collapse_addresses(excluded)
+    ]
+    kept: List[ipaddress.IPv4Network] = []
+    index = 0
+    for network in ipaddress.collapse_addresses(base):
+        start = int(network.network_address)
+        end = int(network.broadcast_address)
+        while index < len(bounds) and bounds[index][1] < start:
+            index += 1
+        cursor = start
+        probe = index
+        while probe < len(bounds) and bounds[probe][0] <= end:
+            hole_start, hole_end = bounds[probe]
+            if hole_start > cursor:
+                kept.extend(summarize_range(cursor, hole_start - 1))
+            cursor = max(cursor, hole_end + 1)
+            if cursor > end:
+                break
+            probe += 1
+        if cursor <= end:
+            kept.extend(summarize_range(cursor, end))
+    return kept
 
 
 def load_baseset(path: Path) -> List[ipaddress.IPv4Network]:
@@ -197,9 +271,17 @@ def main() -> int:
         output_path = workspace_path(workspace, OUTPUT_RELATIVE)
         baseset_path = workspace_path(workspace, BASESET_RELATIVE)
 
-        networks = load_city_networks(codes)
-        networks.extend(load_baseset(baseset_path))
-        collapsed = list(ipaddress.collapse_addresses(networks))
+        baseset = load_baseset(baseset_path)
+        sources = [(code, CNCITY_PATH.format(code=code)) for code in codes]
+        sources.extend((name, ISP_PATH.format(name=name)) for name in CLOUD_PROVIDERS)
+        fetched = fetch_networks(sources)
+
+        city = [network for code in codes for network in fetched[code]]
+        cloud = [network for name in CLOUD_PROVIDERS for network in fetched[name]]
+        kept = exclude_networks(city, cloud)
+        print(f"云段剔除：{len(cloud)} 条云段，{len(city)} -> {len(kept)} 条")
+
+        collapsed = list(ipaddress.collapse_addresses(kept + baseset))
         nft_text = render_nft(collapsed)
 
         existing_text = output_path.read_text(encoding="utf-8") if output_path.is_file() else ""
@@ -213,7 +295,7 @@ def main() -> int:
         if has_changes:
             atomic_write(output_path, nft_text)
             caption = build_caption(len(old_elements), len(new_elements), added, removed)
-            print(f"已写入 {output_path}：{len(networks)} -> {len(collapsed)} 条（+{added} -{removed}）")
+            print(f"已写入 {output_path}：{len(city) + len(baseset)} -> {len(collapsed)} 条（+{added} -{removed}）")
         else:
             print(f"无变化：{len(collapsed)} 条")
 
