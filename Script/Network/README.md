@@ -243,11 +243,11 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 ### 参数说明
 ```text
 --help, -h                         显示帮助
---list, -l                         查看转发与保护状态
---add, -a RULE [...] [--protect [whitelist=VALUE] [ping=VALUE]]
---delete, -d RULE [...] [--protect [whitelist=VALUE] [ping=VALUE]]
---replace, -r RULE [...] [--protect [whitelist=VALUE] [ping=VALUE]]
---protect [whitelist=VALUE] [ping=VALUE]
+--list, -l                         查看已发布的转发与防护规则
+--add, -a RULE [...] [--protect [whitelist=/ABSOLUTE/PATH.nft] [ping=VALUE]]
+--delete, -d RULE [...] [--protect [whitelist=/ABSOLUTE/PATH.nft] [ping=VALUE]]
+--replace, -r RULE [...] [--protect [whitelist=/ABSOLUTE/PATH.nft] [ping=VALUE]]
+--protect [whitelist=/ABSOLUTE/PATH.nft] [ping=VALUE]
 --sync                             解析域名并重新对齐规则
 --clean ping|whitelist|forward|protect|all
 ```

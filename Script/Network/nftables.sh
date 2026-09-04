@@ -47,16 +47,16 @@ show_help() {
 用法:
   $0 --help|-h
   $0 --list|-l
-  $0 --add|-a <规则> [规则 ...] [--protect [whitelist=<值>] [ping=<值>]]
-  $0 --delete|-d <规则> [规则 ...] [--protect [whitelist=<值>] [ping=<值>]]
-  $0 --replace|-r <规则> [规则 ...] [--protect [whitelist=<值>] [ping=<值>]]
-  $0 --protect [whitelist=<值>] [ping=<值>]
+  $0 --add|-a <规则> [规则 ...] [--protect [whitelist=<绝对路径>.nft] [ping=<值>]]
+  $0 --delete|-d <规则> [规则 ...] [--protect [whitelist=<绝对路径>.nft] [ping=<值>]]
+  $0 --replace|-r <规则> [规则 ...] [--protect [whitelist=<绝对路径>.nft] [ping=<值>]]
+  $0 --protect [whitelist=<绝对路径>.nft] [ping=<值>]
   $0 --sync
   $0 --clean <ping|whitelist|forward|protect|all>
 规则格式:
   <源端口>:<目标(IPv4/域名)>:<目标端口>[:SNAT_IP[:MSS]]
 保护值:
-  whitelist=any|off|<绝对路径>.nft
+  whitelist=<绝对路径>.nft
   ping=any|off|<IPv4或域名逗号列表>
 EOF
 }
@@ -143,16 +143,6 @@ normalize_whitelist_path() {
     fi
     printf '%s\n' "$path"
 }
-validate_whitelist_spec() {
-    case "$1" in
-        any|off)
-            printf '%s\n' "$1"
-            ;;
-        *)
-            normalize_whitelist_path "$1"
-            ;;
-    esac
-}
 parse_rule() {
     local rule_string="$1" src_port target dest_port snat_ip mss
     [[ "$rule_string" =~ ^[^:]+:[^:]+:[^:]+(:[^:]+(:[^:]+)?)?$ ]] || {
@@ -222,7 +212,7 @@ parse_protect_fields() {
                     log_error "whitelist 值不能为空"
                     return 1
                 fi
-                PARSED_WHITELIST=$(validate_whitelist_spec "$value") || return 1
+                PARSED_WHITELIST=$(normalize_whitelist_path "$value") || return 1
                 PARSED_WHITELIST_SET=1
                 ;;
             ping=*)
@@ -411,7 +401,7 @@ load_config() {
         return 1
     }
     case "$CURRENT_WHITELIST" in
-        any|off|/*.nft) ;;
+        any|/*.nft) ;;
         *)
             log_error "whitelist 状态无效: $CURRENT_WHITELIST"
             return 1
@@ -624,11 +614,6 @@ get_auto_allow_ports() {
     done
     printf '%s|%s|%s|%s\n' "$v4_tcp" "$v4_udp" "$v6_tcp" "$v6_udp"
 }
-format_allow_ports() {
-    local ports="${1//|/,}"
-    ports=$(normalize_ports "$ports")
-    printf '%s\n' "${ports:-无}"
-}
 make_state_line() {
     printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
         "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "${9:-}" "${10:-}"
@@ -825,22 +810,20 @@ render_ruleset() {
                 print "        ip protocol icmp accept\n        meta l4proto ipv6-icmp accept"
                 print "        meta nfproto ipv4 udp sport 67 udp dport 68 limit rate 20/second accept"
                 print "        ip6 saddr fe80::/10 udp sport 547 udp dport 546 limit rate 20/second accept"
-                if (whitelist=="any") {
+                if (whitelist ~ /^\//) {
+                    if (ports[1]!="") print "        ip saddr @whitelist4 meta nfproto ipv4 tcp dport { " ports[1] " } accept"
+                    if (ports[2]!="") print "        ip saddr @whitelist4 meta nfproto ipv4 udp dport { " ports[2] " } accept"
+                } else {
                     if (ports[1]!="") print "        meta nfproto ipv4 tcp dport { " ports[1] " } accept"
                     if (ports[2]!="") print "        meta nfproto ipv4 udp dport { " ports[2] " } accept"
                     if (ports[3]!="") print "        meta nfproto ipv6 tcp dport { " ports[3] " } accept"
                     if (ports[4]!="") print "        meta nfproto ipv6 udp dport { " ports[4] " } accept"
-                } else if (whitelist ~ /^\//) {
-                    if (ports[1]!="") print "        ip saddr @whitelist4 meta nfproto ipv4 tcp dport { " ports[1] " } accept"
-                    if (ports[2]!="") print "        ip saddr @whitelist4 meta nfproto ipv4 udp dport { " ports[2] " } accept"
                 }
                 print "    }"
             }
             print "    chain forward {\n        type filter hook forward priority 0; policy drop;"
             print "        ct state invalid drop"
-            if (whitelist=="off") {
-                print "        ct state established,related accept"
-            } else if (whitelist ~ /^\//) {
+            if (whitelist ~ /^\//) {
                 print "        ct state established,related accept"
                 print "        ct status dnat ip saddr @whitelist4 accept"
             } else {
@@ -1332,52 +1315,38 @@ clean_all() {
     rm -f "$GLOBAL_LOCK_FILE" || failed=1
     return "$failed"
 }
-unit_script_missing() {
-    local script
-    script=$(awk -F'"' '/^ExecStart=/ { print $2; exit }' \
-        "${SYSTEMD_SYSTEM_DIR}/${1}" 2>/dev/null)
-    [ -n "$script" ] && [ ! -f "$script" ]
-}
-show_protection_status() {
-    local ports timer_status="关闭" whitelist_watch="关闭" whitelist_note=""
-    load_config || return 1
-    printf '%s\n' '本机防护'
-    if [ "$CURRENT_PROTECTION" = 1 ]; then
-        printf '%s\n' '- 状态：开启'
-    else
-        printf '%s\n' '- 状态：关闭'
-    fi
-    [[ "$CURRENT_WHITELIST" != /* ]] ||
-        normalize_whitelist_path "$CURRENT_WHITELIST" >/dev/null 2>&1 ||
-        whitelist_note="（无效）"
-    printf -- '- Whitelist：%s%s\n' "$CURRENT_WHITELIST" "$whitelist_note"
-    printf -- '- Ping：%s\n' "$CURRENT_PING"
-    if [ "$CURRENT_PROTECTION" = 1 ]; then
-        if [ "$EUID" -ne 0 ]; then
-            printf -- '- 服务端口：%s\n' '需 root 查询'
-        elif ports=$(get_auto_allow_ports); then
-            printf -- '- 服务端口：%s\n' "$(format_allow_ports "$ports")"
-        else
-            printf -- '- 服务端口：%s\n' '查询失败'
-        fi
-    fi
-    if has_systemctl && systemctl is-enabled --quiet "$PROTECT_TIMER_NAME" 2>/dev/null &&
-        systemctl is-active --quiet "$PROTECT_TIMER_NAME" 2>/dev/null; then
-        timer_status="启用"
-        ! unit_script_missing "$PROTECT_SERVICE_NAME" || timer_status="失效（脚本路径已丢失）"
-    fi
-    if has_systemctl && [[ "$CURRENT_WHITELIST" == /* ]] &&
-        systemctl is-enabled --quiet "$WHITELIST_PATH_NAME" 2>/dev/null &&
-        systemctl is-active --quiet "$WHITELIST_PATH_NAME" 2>/dev/null; then
-        whitelist_watch="启用"
-    fi
-    printf -- '- 端口同步：%s\n' "$timer_status"
-    printf -- '- Whitelist 监控：%s\n' "$whitelist_watch"
+get_allowed_ports_from_ruleset() {
+    [ -r "$FORWARDAWS_RULES_FILE" ] || {
+        log_error "无法读取已发布的防护规则：$FORWARDAWS_RULES_FILE"
+        return 1
+    }
+    awk '
+        /^[[:space:]]*(ip saddr @whitelist4[[:space:]]+)?meta nfproto ipv[46][[:space:]]+(tcp|udp)[[:space:]]+dport[[:space:]]+\{[[:space:]][0-9,]+[[:space:]]\}[[:space:]]+accept[[:space:]]*$/ {
+            line=$0
+            sub(/^.*dport[[:space:]]+\{[[:space:]]*/, "", line)
+            sub(/[[:space:]]*\}[[:space:]]+accept[[:space:]]*$/, "", line)
+            gsub(/[[:space:]]/, "", line)
+            count=split(line, ports, ",")
+            for (i=1; i<=count; i++) print ports[i]
+        }
+    ' "$FORWARDAWS_RULES_FILE" | sort -un |
+        awk 'NF { printf "%s%s", separator, $0; separator="," } END { print "" }'
 }
 display_rules() {
     local src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss extra
-    printf '%s\n' '端口转发'
-    if [ -s "$RULES_STATE_FILE" ]; then
+    local has_forward=0 allowed_ports="" whitelist_note=""
+    load_config || return 1
+    [ ! -s "$RULES_STATE_FILE" ] || has_forward=1
+    if [ "$CURRENT_PROTECTION" = 1 ]; then
+        allowed_ports=$(get_allowed_ports_from_ruleset) || return 1
+        [ -n "$allowed_ports" ] || allowed_ports="无"
+    fi
+    if [ "$has_forward" -eq 0 ] && [ "$CURRENT_PROTECTION" != 1 ]; then
+        printf '%s\n' '无'
+        return 0
+    fi
+    if [ "$has_forward" -eq 1 ]; then
+        printf '%s\n' '端口转发'
         while IFS='|' read -r src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss; do
             [ -n "$src_port$mode$target$dest_port" ] || continue
             extra=""
@@ -1392,11 +1361,17 @@ display_rules() {
             fi
             printf -- '- %s -> %s:%s%s\n' "$src_port" "$target" "$dest_port" "${extra:+（${extra}）}"
         done < "$RULES_STATE_FILE"
-    else
-        printf '%s\n' '- 无'
     fi
-    printf '\n'
-    show_protection_status
+    if [ "$CURRENT_PROTECTION" = 1 ]; then
+        [ "$has_forward" -eq 0 ] || printf '\n'
+        printf '%s\n' '本机防护'
+        printf -- '- 放行端口：%s\n' "$allowed_ports"
+        if [[ "$CURRENT_WHITELIST" == /* ]]; then
+            normalize_whitelist_path "$CURRENT_WHITELIST" >/dev/null 2>&1 || whitelist_note="（无效）"
+            printf -- '- Whitelist：%s%s\n' "$CURRENT_WHITELIST" "$whitelist_note"
+        fi
+        [ "$CURRENT_PING" = any ] || printf -- '- Ping：%s\n' "$CURRENT_PING"
+    fi
 }
 run_mutation() {
     local mode="$1" desc="$2"
