@@ -32,7 +32,7 @@ PARSED_PING=""
 PARSED_RULES=()
 RESOLVED_PING_IPV4=""
 TX_DIR="" TX_RULES="" TX_PROTECTION=0 TX_WHITELIST=any
-TX_WHITELIST_FILE="" TX_PING=any
+TX_WHITELIST_FILE="" TX_WHITELIST_FILE_PREV="" TX_PING=any
 log_info() {
     [ "${FORWARDAWS_QUIET:-${QUIET:-0}}" = "1" ] || printf '[INFO] %s\n' "$*"
 }
@@ -315,7 +315,10 @@ providerdns_set_forwardaws() {
     PROVIDERDNS_QUIET=1 run_providerdns --set "$PROVIDERDNS_CONSUMER" "$domains_file" "$hook_command"
 }
 providerdns_unset_forwardaws() {
-    providerdns_bin >/dev/null || return 0
+    providerdns_bin >/dev/null || {
+        log_warning "未找到 providerdns.sh，无法回收 DNS 订阅：${PROVIDERDNS_CONSUMER}"
+        return 0
+    }
     PROVIDERDNS_QUIET=1 run_providerdns --unset "$PROVIDERDNS_CONSUMER"
 }
 # 系统依赖与持久状态
@@ -370,23 +373,18 @@ ensure_for_write() {
     acquire_global_lock || return 1
     mkdir -p "$STATE_DIR" "$NFT_INCLUDE_DIR" || return 1
     rm -rf "${STATE_DIR:?}"/.tx.* 2>/dev/null || true
-    upgrade_legacy_config || return 1
+    converge_owned_files || return 1
     [ -f "$RULES_STATE_FILE" ] || : > "$RULES_STATE_FILE"
 }
-# 一次性升格：e2d04b3 及更早版本的 PROTECT_NOPING -> PROTECT_PING，下个版本删除
-upgrade_legacy_config() {
-    local noping
-    [ -f "$CONFIG_FILE" ] || return 0
-    grep -q '^PROTECT_NOPING=' "$CONFIG_FILE" || return 0
-    noping=$(get_config_value PROTECT_NOPING 0)
-    case "$noping" in
-        0) noping=any ;;
-        1) noping=off ;;
-        *) validate_ping_spec "$noping" || noping=any ;;
-    esac
-    printf 'PROTECTION_ENABLED=%s\nPROTECT_WHITELIST=any\nPROTECT_WHITELIST_FILE=\nPROTECT_PING=%s\n' \
-        "$(get_config_value PROTECTION_ENABLED 0)" "$noping" > "$CONFIG_FILE" || return 1
-    log_info "已升格旧版保护配置：PROTECT_NOPING -> PROTECT_PING=${noping}"
+converge_owned_files() {
+    local whitelist
+    whitelist=$(get_config_value PROTECT_WHITELIST_FILE '')
+    find "$STATE_DIR" -maxdepth 1 -type f \
+        ! -name "$(basename "$RULES_STATE_FILE")" ! -name "$(basename "$CONFIG_FILE")" \
+        -delete 2>/dev/null || true
+    find "$NFT_INCLUDE_DIR" -maxdepth 1 -type f -name 'forwardaws*' \
+        ! -name "$(basename "$FORWARDAWS_RULES_FILE")" ! -path "$whitelist" \
+        -delete 2>/dev/null || true
 }
 get_config_value() {
     local key="$1" default="$2"
@@ -402,7 +400,12 @@ load_config() {
     CURRENT_PROTECTION=$(get_config_value PROTECTION_ENABLED 0)
     CURRENT_WHITELIST=$(get_config_value PROTECT_WHITELIST any)
     CURRENT_WHITELIST_FILE=$(get_config_value PROTECT_WHITELIST_FILE '')
-    CURRENT_PING=$(get_config_value PROTECT_PING any)
+    CURRENT_PING=$(get_config_value PROTECT_PING '')
+    if [ -z "$CURRENT_PING" ]; then
+        CURRENT_PING=$(get_config_value PROTECT_NOPING any)
+        [ "$CURRENT_PING" != 0 ] || CURRENT_PING=any
+        [ "$CURRENT_PING" != 1 ] || CURRENT_PING=off
+    fi
     [[ "$CURRENT_PROTECTION" =~ ^[01]$ ]] || {
         log_error "保护状态文件无效"
         return 1
@@ -419,22 +422,52 @@ load_config() {
         return 1
     }
 }
-nft_main_config_has_forwardaws_include() {
+nft_main_config_include_line() {
+    printf 'include "%s"\n' "$FORWARDAWS_RULES_FILE"
+}
+nft_main_config_owned_line() {
+    [ -f "$NFT_MAIN_CONFIG_FILE" ] || return 0
+    awk -v marker="$NFT_INCLUDE_MARKER" '
+        found { print; exit }
+        $0==marker { found=1 }
+    ' "$NFT_MAIN_CONFIG_FILE"
+}
+nft_main_config_has_foreign_include() {
     [ -f "$NFT_MAIN_CONFIG_FILE" ] || return 1
-    grep -Eq '^[[:space:]]*include[[:space:]]+"?/etc/nftables\.d/(\*|forwardaws)\.nft"?[[:space:]]*$' \
-        "$NFT_MAIN_CONFIG_FILE"
+    awk -v marker="$NFT_INCLUDE_MARKER" -v dir="$NFT_INCLUDE_DIR" '
+        $0==marker { skip=1; next }
+        skip { skip=0; next }
+        $0 ~ "^[[:space:]]*include[[:space:]]+\"?" dir "/(\\*|forwardaws)[.]nft\"?[[:space:]]*$" { found=1 }
+        END { exit(found ? 0 : 1) }
+    ' "$NFT_MAIN_CONFIG_FILE"
+}
+nft_main_config_include_is_current() {
+    local owned
+    owned=$(nft_main_config_owned_line)
+    if [ -n "$owned" ]; then
+        [ "$owned" = "$(nft_main_config_include_line)" ]
+        return
+    fi
+    nft_main_config_has_foreign_include
+}
+remove_own_include_block() {
+    awk -v marker="$NFT_INCLUDE_MARKER" '
+        $0==marker { skip=1; next }
+        skip { skip=0; next }
+        { print }
+    ' "$NFT_MAIN_CONFIG_FILE" > "$1"
 }
 ensure_nft_main_config_include() (
-    local include_line='include "/etc/nftables.d/forwardaws.nft"' tmp
-    if ! nft_main_config_has_forwardaws_include; then
+    local tmp
+    if ! nft_main_config_include_is_current; then
         tmp=$(mktemp "${NFT_MAIN_CONFIG_FILE}.XXXXXX") || return 1
         trap 'rm -f "$tmp"' EXIT
         if [ -e "$NFT_MAIN_CONFIG_FILE" ]; then
-            cp -p "$NFT_MAIN_CONFIG_FILE" "$tmp" || return 1
+            remove_own_include_block "$tmp" || return 1
         else
             chmod 644 "$tmp" 2>/dev/null || true
         fi
-        printf '\n%s\n%s\n' "$NFT_INCLUDE_MARKER" "$include_line" >> "$tmp" 2>/dev/null || {
+        printf '\n%s\n%s\n' "$NFT_INCLUDE_MARKER" "$(nft_main_config_include_line)" >> "$tmp" || {
             log_error "写入主配置 include 失败: $NFT_MAIN_CONFIG_FILE"
             return 1
         }
@@ -721,10 +754,22 @@ prepare_candidate() {
     fi
     resolve_ping_sources "$ping_spec"
 }
+list_owned_nft_tables() {
+    command -v nft >/dev/null 2>&1 || return 0
+    { nft list tables 2>/dev/null || true; } |
+        awk '$1=="table" && $3 ~ /^for?wardaws/ { print $2 "\t" $3 }'
+}
+nft_purge_prelude() {
+    {
+        [ "$#" -eq 0 ] || printf '%s\n' "$@"
+        list_owned_nft_tables
+    } | sort -u | awk -F'\t' 'NF==2 { printf "table %s %s\ndelete table %s %s\n", $1, $2, $1, $2 }'
+}
 render_ruleset() {
     local state_file="$1" protect_flag="$2" whitelist="$3" ping_spec="$4"
-    local ping_ips="$5" output_file="$6" allow_ports="${7:-}"
-    awk -F'|' -v nat="$NAT_TABLE_NAME" -v filter="$FILTER_TABLE_NAME" \
+    local ping_ips="$5" output_file="$6" allow_ports="${7:-}" purge
+    purge=$(nft_purge_prelude $'ip\t'"$NAT_TABLE_NAME" $'inet\t'"$FILTER_TABLE_NAME") || return 1
+    FORWARDAWS_PURGE="$purge" awk -F'|' -v nat="$NAT_TABLE_NAME" -v filter="$FILTER_TABLE_NAME" \
         -v protect="$protect_flag" -v whitelist="$whitelist" -v ping="$ping_spec" \
         -v ping_ips="$ping_ips" -v allow="$allow_ports" -v service_mark="$SERVICE_ALLOW_MARK" '
         function rule(s) { return "        " s "\n" }
@@ -748,7 +793,7 @@ render_ruleset() {
             split(allow, ports, "|")
             print "#!/usr/sbin/nft -f"
             print "# forwardaws generated by nftables.sh"
-            print "\ntable ip " nat "\ndelete table ip " nat "\ntable inet " filter "\ndelete table inet " filter
+            printf "\n%s\n", ENVIRON["FORWARDAWS_PURGE"]
             print "\ntable ip " nat " {\n    chain prerouting {\n" \
                 "        type nat hook prerouting priority -100; policy accept;"
             printf "%s", pre
@@ -834,7 +879,7 @@ apply_candidate_state() (
     cmp -s "$nft_tmp" "$FORWARDAWS_RULES_FILE" || rules_changed=1
     cmp -s "$state_tmp" "$RULES_STATE_FILE" || state_changed=1
     cmp -s "$config_tmp" "$CONFIG_FILE" || config_changed=1
-    nft_main_config_has_forwardaws_include || include_missing=1
+    nft_main_config_include_is_current || include_missing=1
     if [ "$rules_changed" -eq 0 ]; then
         nft list table ip "$NAT_TABLE_NAME" >/dev/null 2>&1 &&
             nft list table inet "$FILTER_TABLE_NAME" >/dev/null 2>&1 || live_missing=1
@@ -890,10 +935,37 @@ write_systemd_unit_if_changed() {
     chmod 644 "$target_file" 2>/dev/null || true
     SYSTEMD_UNITS_CHANGED=1
 }
-remove_unit_file_if_present() {
-    [ -e "$1" ] || [ -L "$1" ] || return 0
-    rm -f "$1" || return 1
-    SYSTEMD_UNITS_CHANGED=1
+list_owned_unit_files() {
+    [ -d "$SYSTEMD_SYSTEM_DIR" ] || return 0
+    find "$SYSTEMD_SYSTEM_DIR" -maxdepth 2 -name 'forwardaws-*' \
+        \( -type f -o -type l \) 2>/dev/null
+}
+converge_systemd_units() {
+    local path name failed=0 desired=" $* "
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        name=$(basename "$path")
+        [[ "$desired" != *" ${name} "* ]] || continue
+        if has_systemctl; then
+            disable_unit_if_active "$name" || failed=1
+            systemctl reset-failed "$name" >/dev/null 2>&1 || true
+        fi
+        if [ -e "$path" ] || [ -L "$path" ]; then
+            rm -f "$path" || {
+                log_error "无法删除 systemd 文件：$path"
+                failed=1
+                continue
+            }
+        fi
+        SYSTEMD_UNITS_CHANGED=1
+    done < <(list_owned_unit_files)
+    return "$failed"
+}
+reload_systemd_if_changed() {
+    [ "$SYSTEMD_UNITS_CHANGED" -eq 1 ] && has_systemctl || return 0
+    systemctl daemon-reload >/dev/null 2>&1 && return 0
+    log_error "systemd daemon-reload 失败"
+    return 1
 }
 # systemd 生命周期
 install_sync_service() {
@@ -968,28 +1040,17 @@ reconcile_systemd_units() {
         return 1
     fi
     SYSTEMD_UNITS_CHANGED=0
+    local -a desired=()
     if [ "$protect_flag" = "1" ]; then
         install_protection_units || return 1
-    elif has_systemctl; then
-        disable_unit_if_active "$PROTECT_TIMER_NAME" || return 1
+        desired+=("$PROTECT_SERVICE_NAME" "$PROTECT_TIMER_NAME")
     fi
     if [ "$want_whitelist" -eq 1 ]; then
         install_whitelist_units "$whitelist" || return 1
-    else
-        if has_systemctl; then
-            disable_unit_if_active "$WHITELIST_PATH_NAME" || return 1
-            systemctl stop "$WHITELIST_SERVICE_NAME" >/dev/null 2>&1 || true
-        fi
-        remove_unit_file_if_present "${SYSTEMD_SYSTEM_DIR}/${WHITELIST_SERVICE_NAME}" || return 1
-        remove_unit_file_if_present "${SYSTEMD_SYSTEM_DIR}/${WHITELIST_PATH_NAME}" || return 1
-        remove_unit_file_if_present "${SYSTEMD_SYSTEM_DIR}/paths.target.wants/${WHITELIST_PATH_NAME}" || return 1
+        desired+=("$WHITELIST_SERVICE_NAME" "$WHITELIST_PATH_NAME")
     fi
-    if [ "$SYSTEMD_UNITS_CHANGED" -eq 1 ] && has_systemctl; then
-        if ! systemctl daemon-reload >/dev/null 2>&1; then
-            log_error "systemd daemon-reload 失败"
-            return 1
-        fi
-    fi
+    converge_systemd_units "${desired[@]}" || return 1
+    reload_systemd_if_changed || return 1
     if [ "$protect_flag" = "1" ]; then
         enable_managed_unit "$PROTECT_TIMER_NAME" "启用保护同步定时器失败" || return 1
     fi
@@ -1033,17 +1094,45 @@ remove_rule_from_state() (
     mv "$next" "$candidate"
 )
 # 单一候选事务
+sanitize_state_file() {
+    local file="$1" next
+    [ -s "$file" ] || return 0
+    next=$(mktemp "${file}.XXXXXX") || return 1
+    awk -F'|' '
+        NF>=8 && $2=="remote" && $1 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/ { print; next }
+        NF { printf "[WARNING] 丢弃不合规状态行: %s\n", $0 > "/dev/stderr" }
+    ' "$file" > "$next" || {
+        rm -f "$next"
+        return 1
+    }
+    mv "$next" "$file"
+}
 transaction_open() {
     TX_DIR=$(mktemp -d "${STATE_DIR}/.tx.XXXXXX") || return 1
     TX_RULES="${TX_DIR}/candidate.db"
-    if ! cp "$RULES_STATE_FILE" "$TX_RULES" || ! load_config; then
+    if ! cp "$RULES_STATE_FILE" "$TX_RULES" || ! sanitize_state_file "$TX_RULES" || ! load_config; then
         rm -rf "$TX_DIR"
         return 1
     fi
     TX_PROTECTION="$CURRENT_PROTECTION"
     TX_WHITELIST="$CURRENT_WHITELIST"
     TX_WHITELIST_FILE="$CURRENT_WHITELIST_FILE"
+    TX_WHITELIST_FILE_PREV="$CURRENT_WHITELIST_FILE"
     TX_PING="$CURRENT_PING"
+}
+reclaim_whitelist_file() {
+    local path="$1"
+    [ -n "$path" ] && [ -e "$path" ] || return 0
+    if ! [[ "$path" =~ ^/([A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+[.]nft$ ]] ||
+        [ "$path" = "$FORWARDAWS_RULES_FILE" ]; then
+        log_error "拒绝删除无效的 whitelist owner 路径：$path"
+        return 1
+    fi
+    rm -f -- "$path" || {
+        log_error "无法删除 whitelist 文件：$path"
+        return 1
+    }
+    log_info "已回收不再使用的 whitelist 文件：$path"
 }
 transaction_set_whitelist() {
     TX_WHITELIST="$1"
@@ -1068,6 +1157,10 @@ transaction_commit() {
         log_error "nft 规则与持久状态已生效，但 systemd 单元未对齐；修复后请执行 --sync"
         return 1
     }
+    if [ -n "$TX_WHITELIST_FILE_PREV" ] && [ "$TX_WHITELIST_FILE_PREV" != "$TX_WHITELIST_FILE" ]; then
+        reclaim_whitelist_file "$TX_WHITELIST_FILE_PREV" ||
+            log_warning "旧 whitelist 文件未能回收：$TX_WHITELIST_FILE_PREV"
+    fi
 }
 rule_batch() (
     local action="$1" protect_clause="$2" whitelist_set="$3" whitelist_arg="$4"
@@ -1189,127 +1282,42 @@ run_clean_scope() (
     log_info "$message"
 )
 # 销毁、展示与 CLI 调度
-remove_nft_main_config_include_if_unused() (
+purge_owned_nft_tables() (
+    local nft_tmp prelude
+    command -v nft >/dev/null 2>&1 && nft list tables >/dev/null 2>&1 || {
+        log_error "无法读取 nftables 状态，live 表未确认清理"
+        return 1
+    }
+    prelude=$(nft_purge_prelude) || return 1
+    [ -n "$prelude" ] || return 0
+    nft_tmp=$(mktemp /tmp/forwardaws-cleanup.XXXXXX) || return 1
+    trap 'rm -f "$nft_tmp"' EXIT
+    printf '%s\n' "$prelude" > "$nft_tmp" || return 1
+    run_nft_file "" "清理" "$nft_tmp" "删除 ForwardAWS nftables 表"
+)
+purge_nft_main_config_include() (
     local tmp
     [ -f "$NFT_MAIN_CONFIG_FILE" ] || return 0
     grep -Fqx "$NFT_INCLUDE_MARKER" "$NFT_MAIN_CONFIG_FILE" || return 0
     tmp=$(mktemp "${NFT_MAIN_CONFIG_FILE}.XXXXXX") || return 1
     trap 'rm -f "$tmp"' EXIT
-    awk -v marker="$NFT_INCLUDE_MARKER" '
-        $0==marker { owned=1; next }
-        owned && $0 ~ /^[[:space:]]*include[[:space:]]+"?\/etc\/nftables[.]d\/forwardaws[.]nft"?[[:space:]]*$/ { owned=0; next }
-        { owned=0; print }
-    ' "$NFT_MAIN_CONFIG_FILE" > "$tmp" || return 1
+    remove_own_include_block "$tmp" || return 1
     mv "$tmp" "$NFT_MAIN_CONFIG_FILE" || {
         log_error "写回 nftables 主配置失败: $NFT_MAIN_CONFIG_FILE"
         return 1
     }
 )
-remove_active_nft_tables() (
-    local nft_tmp
-    nft_tmp=$(mktemp /tmp/forwardaws-cleanup.XXXXXX) || return 1
-    trap 'rm -f "$nft_tmp"' EXIT
-    cat > "$nft_tmp" << EOF
-table ip ${NAT_TABLE_NAME}
-delete table ip ${NAT_TABLE_NAME}
-table inet ${FILTER_TABLE_NAME}
-delete table inet ${FILTER_TABLE_NAME}
-table ip forwardaws
-delete table ip forwardaws
-table ip6 forwardaws
-delete table ip6 forwardaws
-EOF
-    run_nft_file "" "清理" "$nft_tmp" "删除 ForwardAWS nftables 表"
-)
-remove_systemd_units() {
-    local unit path failed=0 units_changed=0
-    local -a units=("$PROTECT_TIMER_NAME" "$WHITELIST_PATH_NAME" \
-        "$PROTECT_SERVICE_NAME" "$WHITELIST_SERVICE_NAME")
-    if has_systemctl; then
-        for unit in "${units[@]}"; do
-            disable_unit_if_active "$unit" || failed=1
-        done
-        systemctl reset-failed "${units[@]}" >/dev/null 2>&1 || true
-    fi
-    for path in \
-        "${SYSTEMD_SYSTEM_DIR}/${PROTECT_SERVICE_NAME}" \
-        "${SYSTEMD_SYSTEM_DIR}/${PROTECT_TIMER_NAME}" \
-        "${SYSTEMD_SYSTEM_DIR}/timers.target.wants/${PROTECT_TIMER_NAME}" \
-        "${SYSTEMD_SYSTEM_DIR}/${WHITELIST_SERVICE_NAME}" \
-        "${SYSTEMD_SYSTEM_DIR}/${WHITELIST_PATH_NAME}" \
-        "${SYSTEMD_SYSTEM_DIR}/paths.target.wants/${WHITELIST_PATH_NAME}"; do
-        [ -e "$path" ] || [ -L "$path" ] || continue
-        if ! rm -f "$path"; then
-            log_error "无法删除 systemd 文件：$path"
-            failed=1
-        else
-            units_changed=1
-        fi
-    done
-    if [ "$units_changed" -eq 1 ] && has_systemctl; then
-        if ! systemctl daemon-reload >/dev/null 2>&1; then
-            log_error "systemd daemon-reload 失败"
-            failed=1
-        fi
-    fi
-    return "$failed"
-}
-forwardaws_resources_exist() {
-    local unit
-    if [ -e "$FORWARDAWS_RULES_FILE" ] || [ -d "$STATE_DIR" ] || [ -e "$IPV4_FORWARD_SYSCTL_FILE" ] ||
-        [ -e "${SYSTEMD_SYSTEM_DIR}/${PROTECT_SERVICE_NAME}" ] ||
-        [ -e "${SYSTEMD_SYSTEM_DIR}/${PROTECT_TIMER_NAME}" ] ||
-        [ -e "${SYSTEMD_SYSTEM_DIR}/${WHITELIST_SERVICE_NAME}" ] ||
-        [ -e "${SYSTEMD_SYSTEM_DIR}/${WHITELIST_PATH_NAME}" ] ||
-        grep -Fqx "$NFT_INCLUDE_MARKER" "$NFT_MAIN_CONFIG_FILE" 2>/dev/null; then
-        return 0
-    fi
-    if command -v nft >/dev/null 2>&1; then
-        nft list table ip "$NAT_TABLE_NAME" >/dev/null 2>&1 && return 0
-        nft list table inet "$FILTER_TABLE_NAME" >/dev/null 2>&1 && return 0
-        nft list table ip forwardaws >/dev/null 2>&1 && return 0
-        nft list table ip6 forwardaws >/dev/null 2>&1 && return 0
-    fi
-    if has_systemctl; then
-        for unit in "$PROTECT_TIMER_NAME" "$WHITELIST_PATH_NAME" \
-            "$PROTECT_SERVICE_NAME" "$WHITELIST_SERVICE_NAME"; do
-            unit_enabled_or_active "$unit" && return 0
-        done
-    fi
-    return 1
-}
 clean_all() {
-    local whitelist_file="" failed=0 forwarding_persisted=0
-    whitelist_file=$(get_config_value PROTECT_WHITELIST_FILE '')
+    local failed=0 forwarding_persisted=0
     [ ! -e "$IPV4_FORWARD_SYSCTL_FILE" ] || forwarding_persisted=1
-    if ! forwardaws_resources_exist; then
-        providerdns_unset_forwardaws || failed=1
-        rm -f "$GLOBAL_LOCK_FILE" || failed=1
-        [ "$failed" -ne 0 ] || log_info "ForwardAWS 资源已不存在"
-        return "$failed"
-    fi
-    remove_systemd_units || failed=1
+    SYSTEMD_UNITS_CHANGED=0
+    converge_systemd_units || failed=1
+    reload_systemd_if_changed || failed=1
     providerdns_unset_forwardaws || failed=1
-    if command -v nft >/dev/null 2>&1 && nft list tables >/dev/null 2>&1; then
-        remove_active_nft_tables || failed=1
-    else
-        log_error "无法读取 nftables 状态，live 表未确认清理"
-        failed=1
-    fi
-    remove_nft_main_config_include_if_unused || failed=1
+    purge_owned_nft_tables || failed=1
+    purge_nft_main_config_include || failed=1
     rm -f "$FORWARDAWS_RULES_FILE" "$IPV4_FORWARD_SYSCTL_FILE" || failed=1
-    if [ -n "$whitelist_file" ]; then
-        if [[ "$whitelist_file" =~ ^/([A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+[.]nft$ ]] &&
-            [ "$whitelist_file" != "$FORWARDAWS_RULES_FILE" ]; then
-            if ! rm -f -- "$whitelist_file"; then
-                log_error "无法删除 whitelist 文件：$whitelist_file"
-                failed=1
-            fi
-        else
-            log_error "拒绝删除无效的 whitelist owner 路径：$whitelist_file"
-            failed=1
-        fi
-    fi
+    reclaim_whitelist_file "$(get_config_value PROTECT_WHITELIST_FILE '')" || failed=1
     rm -rf "$STATE_DIR" || failed=1
     rmdir "$NFT_INCLUDE_DIR" 2>/dev/null || true
     [ "$forwarding_persisted" -eq 0 ] ||
