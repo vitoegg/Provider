@@ -242,31 +242,20 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 
 ### 参数说明
 ```text
---help, -h              显示帮助
---list, -l              查看规则
---add, -a [noping] RULE [...]    添加规则，可选禁止 ping
---delete, -d RULE [...] 删除规则
---replace, -r [noping] RULE [...] 替换全部规则，可选禁止 ping
---ddns sync             同步域名订阅
---ddns apply            应用 DNS cache
---ddns list             查看域名规则
---protect on [noping]   开启端口保护并保留转发，可选禁止 ping
---protect only [noping] 清空转发并仅开启保护，可选禁止 ping
---protect off           关闭端口保护
---protect status        查看保护状态
---protect sync          同步保护端口
---uninstall, -u         卸载脚本产物
-
-RULE: <源端口>:<目标(IPv4/域名)>:<目标端口>[:SNAT_IP[:MSS]]
+--help, -h                         显示帮助
+--list, -l                         查看转发与保护状态
+--add, -a RULE [...] [--protect [whitelist=VALUE] [ping=VALUE]]
+--delete, -d RULE [...] [--protect [whitelist=VALUE] [ping=VALUE]]
+--replace, -r RULE [...] [--protect [whitelist=VALUE] [ping=VALUE]]
+--protect [whitelist=VALUE] [ping=VALUE]
+--sync                             解析域名并重新对齐规则
+--clean ping|whitelist|forward|protect|all
 ```
-
-无参数时显示帮助并返回失败，不会修改系统。
-变更命令仅输出操作日志；规则与本机防护状态通过 `--list` 或 `--protect status` 查询。
-DHCPv4/DHCPv6 使用专用规则，不计入服务端口列表。
 
 ### 示例命令
 ```bash
 bash nftables.sh --add 10086:82.40.1.2:33333:10.100.1.2:auto
+bash nftables.sh --protect whitelist=/root/whitelist.nft ping=1.2.3.4,home.example.com
 ```
 
 ## **sshg.sh**
