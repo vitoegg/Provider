@@ -1,0 +1,74 @@
+name: Update Firewall Whitelist
+
+on:
+  schedule:
+    - cron: '17 3 * * 2'
+  workflow_dispatch:
+
+concurrency:
+  group: update-firewall-whitelist
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  update-firewall-whitelist:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      WHITELIST_CITY_CODES: ${{ secrets.WHITELIST_CITY_CODES }}
+    outputs:
+      has_changes: ${{ steps.generate.outputs.has_changes }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+
+      - name: Setup Timezone
+        run: sudo timedatectl set-timezone "Asia/Shanghai"
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+
+      - name: Generate whitelist
+        id: generate
+        run: python3 ${GITHUB_WORKSPACE}/Script/Workflow/firewall_whitelist.py
+
+      - name: Commit and Push Changes
+        if: steps.generate.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -- RuleSet/Extra/Firewall/whitelist.nft
+          git commit -m "Update Firewall rules: ${{ steps.generate.outputs.change_summary }}"
+          git push
+
+      - name: Send Telegram Notification
+        if: steps.generate.outputs.has_changes == 'true'
+        run: |
+          curl -sS --fail-with-body \
+            -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "photo=${PHOTO_URL}" \
+            --data-urlencode "caption=${CAPTION}" \
+            --data-urlencode "parse_mode=HTML"
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PHOTO_URL: https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/upstream.webp
+          CAPTION: ${{ steps.generate.outputs.caption }}
+
+      - name: Delete old Workflows
+        uses: ophub/delete-releases-workflows@main
+        with:
+          gh_token: ${{ secrets.GITHUB_TOKEN }}
+          delete_releases: true
+          releases_keep_latest: 0
+          delete_tags: true
+          delete_workflows: true
+          workflows_keep_day: 0
