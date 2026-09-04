@@ -1,0 +1,40 @@
+{
+  "city": [
+    {
+      "source": "metowolf-iplist",
+      "names": [],
+      "mirrors": [
+        "https://raw.githubusercontent.com/metowolf/iplist/refs/heads/master/data/cncity/{name}.txt",
+        "https://metowolf.github.io/iplist/data/cncity/{name}.txt"
+      ]
+    }
+  ],
+  "retain": [
+    {
+      "source": "gaoyifan-operator",
+      "names": ["chinanet", "cmcc", "unicom"],
+      "mirrors": [
+        "https://raw.githubusercontent.com/gaoyifan/china-operator-ip/ip-lists/{name}.txt",
+        "https://cdn.jsdelivr.net/gh/gaoyifan/china-operator-ip@ip-lists/{name}.txt"
+      ]
+    }
+  ],
+  "exclude": [
+    {
+      "source": "metowolf-iplist",
+      "names": ["aliyun", "baidu", "bytedance", "huawei", "ksyun", "microsoft", "tencent", "ucloud", "volcengine"],
+      "mirrors": [
+        "https://raw.githubusercontent.com/metowolf/iplist/refs/heads/master/data/isp/{name}.txt",
+        "https://metowolf.github.io/iplist/data/isp/{name}.txt"
+      ]
+    },
+    {
+      "source": "axpwx-ipdata",
+      "names": ["aliyun", "baidu", "huawei", "jdcloud", "ksyun", "tencent", "ucloud"],
+      "mirrors": [
+        "https://raw.githubusercontent.com/axpwx/IP-Data/master/provider/{name}-cidr-ipv4.txt",
+        "https://cdn.jsdelivr.net/gh/axpwx/IP-Data@master/provider/{name}-cidr-ipv4.txt"
+      ]
+    }
+  ]
+}
