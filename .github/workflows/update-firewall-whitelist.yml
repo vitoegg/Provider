@@ -41,12 +41,27 @@ jobs:
 
       - name: Commit and Push Changes
         if: steps.generate.outputs.has_changes == 'true'
+        env:
+          COMMIT_MESSAGE: "Update Firewall rules: ${{ steps.generate.outputs.change_summary }}"
         run: |
+          set -euo pipefail
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add -- RuleSet/Extra/Firewall/whitelist.nft
-          git commit -m "Update Firewall rules: ${{ steps.generate.outputs.change_summary }}"
-          git push
+          git commit -m "${COMMIT_MESSAGE}"
+          for attempt in 1 2 3; do
+            if git push; then exit 0; fi
+            echo "推送被拒（第 ${attempt} 次），同步远端后重试"
+            git fetch --depth=1 origin "${GITHUB_REF_NAME}"
+            if ! git rebase --onto FETCH_HEAD HEAD~1; then
+              git rebase --abort || true
+              echo "::error::变基冲突：远端同路径已被修改"
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+          echo "::error::推送重试耗尽"
+          exit 1
 
       - name: Send Telegram Notification
         if: steps.generate.outputs.has_changes == 'true'
