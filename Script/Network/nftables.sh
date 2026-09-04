@@ -669,7 +669,9 @@ collect_domains() {
             *)
                 IFS=',' read -ra items <<< "$ping_spec"
                 for item in "${items[@]}"; do
-                    validate_domain_name "$item" && printf '%s\n' "$item"
+                    if validate_domain_name "$item"; then
+                        printf '%s\n' "$item"
+                    fi
                 done
                 ;;
         esac
