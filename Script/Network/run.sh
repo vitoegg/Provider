@@ -213,13 +213,13 @@ step_traffic() {
       log "traffic rules loaded | mode=forward"
       ;;
     protect)
-      provider_run "$script" --protect "$@" || fail "traffic rules load failed | mode=protect"
-      log "traffic rules loaded | mode=protect"
+      provider_run "$script" --protect "$@" || fail "traffic protection failed | mode=protect"
+      log "traffic protection enabled"
       ;;
     off)
-      [ "$#" -eq 0 ] || fail "traffic off does not accept arguments"
-      provider_run "$script" --clean all || fail "traffic rules removal failed"
-      mark_cleared traffic
+      [ "$#" -le 1 ] || fail "traffic off accepts an optional clean scope"
+      provider_run "$script" --clean "${1:-all}" || fail "traffic rules removal failed | scope=${1:-all}"
+      mark_cleared "traffic${1:+:$1}"
       ;;
     *)
       fail "unknown traffic mode | mode=${mode}"
