@@ -10,6 +10,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -54,7 +55,7 @@ def parse_city_codes(raw: str) -> List[str]:
     seen = set()
     for part in parts:
         if not CODE_PATTERN.fullmatch(part):
-            raise ValueError(f"无效的区域 code: {part}")
+            raise ValueError("存在无效的区域 code")
         if part not in seen:
             codes.append(part)
             seen.add(part)
@@ -116,7 +117,8 @@ def fetch_source(label: str, urls: Tuple[str, ...]) -> List[ipaddress.IPv4Networ
                 last_error = error
                 if is_permanent(error):
                     dead.add(url)
-                print(f"{label}: {url} 失败 -> {error}", file=sys.stderr)
+                host = urllib.parse.urlsplit(url).netloc or "未知来源"
+                print(f"{label}: {host} 失败 -> {error}", file=sys.stderr)
         if len(dead) == len(urls):
             break
         if round_index < DOWNLOAD_ROUNDS - 1:
@@ -142,9 +144,9 @@ def load_config(path: Path) -> Dict[str, List[Dict]]:
 def build_sources(group: str, blocks: List[Dict], names: Optional[Iterable[str]] = None) -> List[Source]:
     sources: List[Source] = []
     for block in blocks:
-        for name in block["names"] if names is None else names:
+        for index, name in enumerate(names or block["names"], start=1):
             urls = tuple(mirror.format(name=name) for mirror in block["mirrors"])
-            sources.append((f"{group}/{block['source']}/{name}", urls))
+            sources.append((f"{group}/{block['source']}/{index if names else name}", urls))
     return sources
 
 
