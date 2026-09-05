@@ -32,12 +32,12 @@ fail() {
 show_help() {
     cat <<'EOF'
 用法：
-  bash mosdns.sh [--install] [--dns DNS] [--ecs HK|TYO|LA|OR|SEA] [--ipv4|--ipv6]
+  bash mosdns.sh [--install] [--dns DNS] [--ecs HK|TYO|MY|LA|OR|SEA] [--ipv4|--ipv6]
   bash mosdns.sh --uninstall
 参数：
   -i, --install           显式安装 MosDNS，可省略
   -d, --dns DNS           自定义 DNS 服务器
-  -e, --ecs REGION        ECS 区域：HK、TYO、LA、OR、SEA；默认 TYO
+  -e, --ecs REGION        ECS 区域：HK、TYO、MY、LA、OR、SEA；默认 TYO
   -4, --ipv4              IPv4 优先，默认模式
   -6, --ipv6              IPv6 优先
   -u, --uninstall         卸载 MosDNS
@@ -50,6 +50,7 @@ parse_args() {
     local -A address_by_region=(
         [HK]="42.2.2.2"
         [TYO]="106.152.210.210"
+        [MY]="218.208.8.8"
         [LA]="107.119.53.53"
         [OR]="12.75.216.200"
         [SEA]="68.86.93.93"

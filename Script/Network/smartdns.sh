@@ -32,7 +32,7 @@ show_help() {
 用法：
   bash smartdns.sh [--ecs REGION] [-6|--ipv6 yes|no] [-u|--uninstall]
 参数：
-  -e, --ecs REGION        ECS 区域：HK、TYO、LA、OR、SEA
+  -e, --ecs REGION        ECS 区域：HK、TYO、MY、LA、OR、SEA
   -6, --ipv6 MODE         IPv6 模式：yes、no；未提供时沿用 SmartDNS 默认行为
   -u, --uninstall         卸载 SmartDNS 并恢复公共 DNS
   -h, --help              显示帮助
@@ -80,6 +80,7 @@ ecs_ip() {
     local -A addresses=(
         [HK]="42.2.2.2"
         [TYO]="106.152.210.210"
+        [MY]="218.208.8.8"
         [LA]="107.119.53.53"
         [OR]="12.75.216.200"
         [SEA]="68.86.93.93"
