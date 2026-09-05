@@ -1,6 +1,6 @@
 #!/bin/bash
 # rules.db 与 config.env 是声明真值；每次变更都生成并原子应用完整 nftables ruleset。
-# 运行环境为 Debian/Ubuntu，依赖 bash、nftables、util-linux、iproute2 与 procfs。
+# 运行环境为 Debian/Ubuntu，依赖 Bash 4+、nftables、util-linux、iproute2 与 procfs。
 set -o pipefail
 readonly NAT_TABLE_NAME="forwardaws_nat"
 readonly FILTER_TABLE_NAME="forwardaws_filter"
@@ -144,7 +144,7 @@ normalize_whitelist_path() {
     printf '%s\n' "$path"
 }
 parse_rule() {
-    local rule_string="$1" src_port target dest_port snat_ip mss
+    local rule_string="$1" src_port target dest_port snat_ip mss type ip="" status
     [[ "$rule_string" =~ ^[^:]+:[^:]+:[^:]+(:[^:]+(:[^:]+)?)?$ ]] || {
         log_error "规则格式错误: $rule_string"
         log_error "正确格式: 端口:目标(IPv4/域名):端口[:SNAT_IP[:MSS]]"
@@ -175,24 +175,17 @@ parse_rule() {
             return 1
             ;;
     esac
-    PARSED_MODE="remote"
-    PARSED_TARGET="$target"
     if validate_ip_address "$target"; then
-        PARSED_TYPE="ipv4"
-        PARSED_IP="$target"
-        PARSED_STATUS="ok"
+        type=ipv4 ip="$target" status=ok
     elif validate_domain_name "$target"; then
-        PARSED_TYPE="domain"
-        PARSED_IP=""
-        PARSED_STATUS="pending"
+        type=domain status=pending
     else
         log_error "无效的目标地址: $target"
         return 1
     fi
-    PARSED_SRC_PORT="$src_port"
-    PARSED_DEST_PORT="$dest_port"
-    PARSED_SNAT_IP="$snat_ip"
-    PARSED_MSS="$mss"
+    # 第 11 列仅用于批次错误提示，不写入 rules.db。
+    printf -v PARSED_RULE '%s|remote|%s|%s|%s|%s|%s||%s|%s|%s' \
+        "$src_port" "$target" "$dest_port" "$type" "$ip" "$status" "$snat_ip" "$mss" "$rule_string"
 }
 parse_protect_fields() {
     local arg value
@@ -252,7 +245,7 @@ parse_rule_command() {
             break
         fi
         parse_rule "$arg" || return 1
-        PARSED_RULES+=("$arg")
+        PARSED_RULES+=("$PARSED_RULE")
     done
     if [ "${#PARSED_RULES[@]}" -eq 0 ]; then
         log_error "未提供任何规则"
@@ -270,14 +263,14 @@ get_script_absolute_path() {
     readlink -f "$0" 2>/dev/null
 }
 providerdns_bin() {
-    local script_dir local_path
+    local local_path
     if [ -n "$PROVIDERDNS_BIN" ]; then
         [ -f "$PROVIDERDNS_BIN" ] || return 1
         printf '%s\n' "$PROVIDERDNS_BIN"
         return 0
     fi
-    script_dir=$(cd "$(dirname "$(get_script_absolute_path)")" 2>/dev/null && pwd)
-    local_path="${script_dir}/${PROVIDERDNS_LOCAL_NAME}"
+    local_path=$(get_script_absolute_path) || return 1
+    local_path="${local_path%/*}/${PROVIDERDNS_LOCAL_NAME}"
     [ -f "$local_path" ] || return 1
     printf '%s\n' "$local_path"
 }
@@ -287,8 +280,9 @@ require_providerdns() {
     return 1
 }
 run_providerdns() {
-    local bin
-    bin=$(providerdns_bin) || return 1
+    local bin="${PROVIDERDNS_BIN:-}"
+    [ -n "$bin" ] || bin=$(providerdns_bin) || return 1
+    [ -f "$bin" ] || return 1
     /bin/bash "$bin" "$@"
 }
 providerdns_refresh() {
@@ -387,12 +381,35 @@ get_config_value() {
         "$CONFIG_FILE"
 }
 load_config() {
-    CURRENT_PROTECTION=$(get_config_value PROTECTION_ENABLED 0)
-    CURRENT_WHITELIST=$(get_config_value PROTECT_WHITELIST any)
-    CURRENT_WHITELIST_FILE=$(get_config_value PROTECT_WHITELIST_FILE '')
-    CURRENT_PING=$(get_config_value PROTECT_PING '')
+    local key value seen="|" legacy_ping=any file=/dev/null
+    [ ! -f "$CONFIG_FILE" ] || file="$CONFIG_FILE"
+    CURRENT_PROTECTION=0 CURRENT_WHITELIST=any CURRENT_WHITELIST_FILE="" CURRENT_PING=""
+    while IFS='=' read -r key value || [ -n "$key" ]; do
+        [[ "$seen" != *"|$key|"* ]] || continue
+        case "$key" in
+            PROTECTION_ENABLED)
+                CURRENT_PROTECTION="$value"
+                ;;
+            PROTECT_WHITELIST)
+                CURRENT_WHITELIST="$value"
+                ;;
+            PROTECT_WHITELIST_FILE)
+                CURRENT_WHITELIST_FILE="$value"
+                ;;
+            PROTECT_PING)
+                CURRENT_PING="$value"
+                ;;
+            PROTECT_NOPING)
+                legacy_ping="$value"
+                ;;
+            *)
+                continue
+                ;;
+        esac
+        seen+="$key|"
+    done < "$file"
     if [ -z "$CURRENT_PING" ]; then
-        CURRENT_PING=$(get_config_value PROTECT_NOPING any)
+        CURRENT_PING="$legacy_ping"
         [ "$CURRENT_PING" != 0 ] || CURRENT_PING=any
         [ "$CURRENT_PING" != 1 ] || CURRENT_PING=off
     fi
@@ -415,30 +432,16 @@ load_config() {
 nft_main_config_include_line() {
     printf 'include "%s"\n' "$FORWARDAWS_RULES_FILE"
 }
-nft_main_config_owned_line() {
-    [ -f "$NFT_MAIN_CONFIG_FILE" ] || return 0
-    awk -v marker="$NFT_INCLUDE_MARKER" '
-        found { print; exit }
-        $0==marker { found=1 }
-    ' "$NFT_MAIN_CONFIG_FILE"
-}
-nft_main_config_has_foreign_include() {
-    [ -f "$NFT_MAIN_CONFIG_FILE" ] || return 1
-    awk -v marker="$NFT_INCLUDE_MARKER" -v dir="$NFT_INCLUDE_DIR" '
-        $0==marker { skip=1; next }
-        skip { skip=0; next }
-        $0 ~ "^[[:space:]]*include[[:space:]]+\"?" dir "/(\\*|forwardaws)[.]nft\"?[[:space:]]*$" { found=1 }
-        END { exit(found ? 0 : 1) }
-    ' "$NFT_MAIN_CONFIG_FILE"
-}
 nft_main_config_include_is_current() {
-    local owned
-    owned=$(nft_main_config_owned_line)
-    if [ -n "$owned" ]; then
-        [ "$owned" = "$(nft_main_config_include_line)" ]
-        return
-    fi
-    nft_main_config_has_foreign_include
+    [ -f "$NFT_MAIN_CONFIG_FILE" ] || return 1
+    awk -v marker="$NFT_INCLUDE_MARKER" -v dir="$NFT_INCLUDE_DIR" \
+        -v expected="include \"$FORWARDAWS_RULES_FILE\"" '
+        pending && !captured { owned=$0; captured=1 }
+        $0==marker { pending=1; next }
+        pending { pending=0; next }
+        $0 ~ "^[[:space:]]*include[[:space:]]+\"?" dir "/(\\*|forwardaws)[.]nft\"?[[:space:]]*$" { foreign=1 }
+        END { exit(owned!="" ? owned!=expected : !foreign) }
+    ' "$NFT_MAIN_CONFIG_FILE"
 }
 remove_own_include_block() {
     awk -v marker="$NFT_INCLUDE_MARKER" '
@@ -503,138 +506,78 @@ ipv4_forwarding_needs_update() {
     [ "$current" != "1" ] ||
         ! grep -q 'net.ipv4.ip_forward=1' "$IPV4_FORWARD_SYSCTL_FILE" 2>/dev/null
 }
-normalize_ports() {
-    printf '%s\n' "$1" | tr -d ' ' | tr ',' '\n' | awk 'NF>0' | sort -un | tr '\n' ',' | sed 's/,$//'
-}
-filter_ports() {
-    local ports="$1" exclude="${2:-}" result="" port
-    local -a port_arr
-    IFS=',' read -ra port_arr <<< "$(normalize_ports "$ports")"
-    for port in "${port_arr[@]}"; do
-        validate_port "$port" || continue
-        if [ -n "$exclude" ] && [[ ",$exclude," == *",$port,"* ]]; then
-            continue
-        fi
-        result="${result}${result:+,}${port}"
-    done
-    printf '%s\n' "$result"
-}
-detect_ssh_ports() {
-    local config ports
-    if ! command -v sshd >/dev/null 2>&1; then
-        printf '\n'
-        return 0
+get_auto_allow_ports() {
+    local ssh_config="" ssh_ports="" key port listeners dual=both
+    if command -v sshd >/dev/null 2>&1; then
+        ssh_config=$(sshd -T 2>/dev/null) || {
+            log_error "无法读取 SSH 生效配置，拒绝应用端口保护"
+            return 1
+        }
+        while read -r key port _; do
+            if [ "$key" = port ] && validate_port "$port"; then
+                ssh_ports+="${port},"
+            fi
+        done <<< "$ssh_config"
+        [ -n "$ssh_ports" ] || {
+            log_error "SSH 生效配置未包含有效端口，拒绝应用端口保护"
+            return 1
+        }
     fi
-    config=$(sshd -T 2>/dev/null) || {
-        log_error "无法读取 SSH 生效配置，拒绝应用端口保护"
-        return 1
-    }
-    ports=$(printf '%s\n' "$config" |
-        awk '$1 == "port" && $2 ~ /^[0-9]+$/ && $2 >= 1 && $2 <= 65535 { print $2 }' |
-        sort -un | tr '\n' ',' | sed 's/,$//')
-    [ -n "$ports" ] || {
-        log_error "SSH 生效配置未包含有效端口，拒绝应用端口保护"
-        return 1
-    }
-    printf '%s\n' "$ports"
-}
-parse_local_endpoint() {
-    local endpoint="$1" addr="$1" port=""
-    if [[ "$endpoint" =~ ^\[(.*)\]:([0-9]+)$ ]]; then
-        addr="${BASH_REMATCH[1]}"
-        port="${BASH_REMATCH[2]}"
-    else
-        addr="${endpoint%:*}"
-        port="${endpoint##*:}"
-    fi
-    printf '%s|%s\n' "${addr%%\%*}" "$port"
-}
-detect_runtime_public_ports() {
-    local listeners protocol endpoint parsed addr port family dual
-    local v4_tcp="" v4_udp="" v6_tcp="" v6_udp=""
-    if ! command -v ss >/dev/null 2>&1; then
+    command -v ss >/dev/null 2>&1 || {
         log_error "缺少依赖命令：ss"
         return 1
-    fi
+    }
     listeners=$(ss -H -lntu 2>/dev/null) || {
         log_error "无法检测监听端口，拒绝应用端口保护"
         return 1
     }
-    dual=both
-    [ "$(sysctl -n net.ipv6.bindv6only 2>/dev/null)" != "1" ] || dual=v6
-    while IFS='|' read -r protocol endpoint; do
-        [ -n "$endpoint" ] || continue
-        parsed=$(parse_local_endpoint "$endpoint")
-        IFS='|' read -r addr port <<< "$parsed"
-        validate_port "$port" || continue
-        [[ "$addr" == "::1" || "$addr" =~ ^127\. ]] && continue
-        case "$addr" in
-            \*) family=both ;;
-            ::) family="$dual" ;;
-            *:*) family=v6 ;;
-            *) family=v4 ;;
-        esac
-        case "${protocol}:${family}" in
-            tcp:v4) v4_tcp="${v4_tcp}${v4_tcp:+,}${port}" ;;
-            tcp:v6) v6_tcp="${v6_tcp}${v6_tcp:+,}${port}" ;;
-            udp:v4) v4_udp="${v4_udp}${v4_udp:+,}${port}" ;;
-            udp:v6) v6_udp="${v6_udp}${v6_udp:+,}${port}" ;;
-            tcp:both)
-                v4_tcp="${v4_tcp}${v4_tcp:+,}${port}"
-                v6_tcp="${v6_tcp}${v6_tcp:+,}${port}"
-                ;;
-            udp:both)
-                v4_udp="${v4_udp}${v4_udp:+,}${port}"
-                v6_udp="${v6_udp}${v6_udp:+,}${port}"
-                ;;
-        esac
-    done < <(printf '%s\n' "$listeners" | awk '{ print $1 "|" $(NF - 1) }')
-    printf '%s|%s|%s|%s\n' \
-        "$(normalize_ports "$v4_tcp")" "$(normalize_ports "$v4_udp")" \
-        "$(normalize_ports "$v6_tcp")" "$(normalize_ports "$v6_udp")"
-}
-get_auto_allow_ports() {
-    local ssh_ports runtime_ports exclude_ports port v4_tcp v4_udp v6_tcp v6_udp
-    local -a ssh_ports_arr
-    ssh_ports=$(detect_ssh_ports) || return 1
-    runtime_ports=$(detect_runtime_public_ports) || return 1
-    IFS='|' read -r v4_tcp v4_udp v6_tcp v6_udp <<< "$runtime_ports"
-    exclude_ports="$DEFAULT_EXCLUDE_PORTS"
-    [ -z "${FORWARDAWS_EXCLUDE_PORTS:-}" ] || exclude_ports="${exclude_ports},${FORWARDAWS_EXCLUDE_PORTS}"
-    exclude_ports=$(filter_ports "$exclude_ports")
-    v4_tcp=$(filter_ports "$v4_tcp" "$exclude_ports")
-    v4_udp=$(filter_ports "$v4_udp" "${exclude_ports},68")
-    v6_tcp=$(filter_ports "$v6_tcp" "$exclude_ports")
-    v6_udp=$(filter_ports "$v6_udp" "${exclude_ports},546")
-    IFS=',' read -ra ssh_ports_arr <<< "$ssh_ports"
-    for port in "${ssh_ports_arr[@]}"; do
-        validate_port "$port" || continue
-        v4_tcp=$(normalize_ports "${v4_tcp},${port}")
-        v6_tcp=$(normalize_ports "${v6_tcp},${port}")
-    done
-    printf '%s|%s|%s|%s\n' "$v4_tcp" "$v4_udp" "$v6_tcp" "$v6_udp"
-}
-make_state_line() {
-    printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
-        "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "${9:-}" "${10:-}"
-}
-state_rule_status() {
-    local file="$1" src_port="$2" mode="$3" target="$4" dest_port="$5" snat_ip="${6:-}" mss="${7:-}"
-    if [ ! -s "$file" ]; then
-        printf 'none\n'
-        return 0
-    fi
-    awk -F'|' -v sp="$src_port" -v mode="$mode" -v target="$target" \
-        -v dp="$dest_port" -v snat="$snat_ip" -v mss="$mss" '
-        BEGIN { result="none" }
-        NF>=8 && $1==sp {
-            if ($2==mode && $3==target && $4==dp) {
-                if ($9==snat && $10==mss) { result="exact"; exit }
-                result="base"
-            } else if (result=="none") result="port_conflict"
+    [ "$(sysctl -n net.ipv6.bindv6only 2>/dev/null)" != 1 ] || dual=v6
+    # 一次扫描监听项，按地址族/协议去重；SSH 端口最后加入，不受排除列表影响。
+    printf '%s\n' "$listeners" | awk -v ssh="$ssh_ports" -v dual="$dual" \
+        -v exclude="${DEFAULT_EXCLUDE_PORTS},${FORWARDAWS_EXCLUDE_PORTS:-}" '
+        function valid(p) { return p ~ /^[0-9]+$/ && p+0 >= 1 && p+0 <= 65535 }
+        function add(group, port) {
+            if (!((group SUBSEP (port+0)) in ports)) ports[group,port+0]=port
         }
-        END { print result }
-    ' "$file"
+        BEGIN {
+            gsub(/ /, "", exclude)
+            n=split(exclude, values, ",")
+            for (i=1; i<=n; i++) {
+                p=values[i]
+                if (valid(p) && !((p+0) in excluded)) excluded[p+0]=p
+            }
+        }
+        NF>=2 {
+            protocol=$1; endpoint=$(NF-1)
+            port=endpoint; sub(/^.*:/, "", port)
+            address=endpoint; sub(/:[^:]*$/, "", address)
+            sub(/^\[/, "", address); sub(/\]$/, "", address); sub(/%.*/, "", address)
+            if (!valid(port) || address=="::1" || address ~ /^127[.]/) next
+            if (protocol!="tcp" && protocol!="udp") next
+            family=(address=="*" ? "both" : address=="::" ? dual : index(address, ":") ? "v6" : "v4")
+            group=(protocol=="tcp" ? 1 : 2)
+            if (family!="v6") add(group, port)
+            if (family!="v4") add(group+2, port)
+        }
+        END {
+            for (key in ports) {
+                split(key, parts, SUBSEP); group=parts[1]; port=ports[key]
+                if (("" port)==("" excluded[port+0]) || (group==2 && port=="68") || (group==4 && port=="546"))
+                    delete ports[key]
+            }
+            n=split(ssh, fields, ",")
+            for (i=1; i<=n; i++) if (valid(fields[i])) {
+                add(1, fields[i]); add(3, fields[i])
+            }
+            for (key in ports) {
+                split(key, parts, SUBSEP)
+                print parts[1], ports[key]
+            }
+        }
+    ' | sort -k1,1n -k2,2n | awk '
+        { ports[$1]=ports[$1] (ports[$1]!="" ? "," : "") $2 }
+        END { printf "%s|%s|%s|%s\n", ports[1], ports[2], ports[3], ports[4] }
+    '
 }
 state_has_remote_rules() {
     [ -s "$1" ] || return 1
@@ -663,40 +606,51 @@ collect_domains() {
     } | sort -u
 }
 sync_providerdns_subscription() (
-    local state_file="$1" ping_spec="$2" domains_file
+    local domains="$1" domains_file
     domains_file=$(mktemp /tmp/forwardaws-domains.XXXXXX) || return 1
     trap 'rm -f "$domains_file"' EXIT
-    collect_domains "$state_file" "$ping_spec" > "$domains_file" || return 1
+    [ -z "$domains" ] || printf '%s\n' "$domains" > "$domains_file" || return 1
     if [ ! -s "$domains_file" ]; then
         providerdns_unset_forwardaws
         return
     fi
     providerdns_set_forwardaws "$domains_file"
 )
+read_domain_cache() {
+    local domain="$1"
+    # DNS_CACHE/DNS_RESULT 在 prepare_candidate 中局部声明，由转发和 Ping 共享。
+    if [ -z "${DNS_RESULT[$domain]+set}" ]; then
+        DNS_CACHE[$domain]=$(run_providerdns --cache "$domain" 2>/dev/null)
+        DNS_RESULT[$domain]=$?
+    fi
+    IFS=$'\t' read -r _ DNS_IP DNS_STATUS _ <<< "${DNS_CACHE[$domain]}"
+    return "${DNS_RESULT[$domain]}"
+}
 filter_candidate_domain_cache() {
-    local candidate="$1" next now record ip
+    local candidate="$1" next now
     local src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss
     next=$(mktemp "${candidate}.XXXXXX") || return 1
     now=$(date +%s)
     while IFS='|' read -r src_port mode target dest_port target_type resolved_ip status updated_at snat_ip mss; do
         [ -n "$src_port$mode$target$dest_port" ] || continue
         if [ "$target_type" = "domain" ]; then
-            record=$(run_providerdns --cache "$target" 2>/dev/null)
-            IFS=$'\t' read -r _ ip status _ <<< "$record"
-            if ! validate_ip_address "$ip"; then
+            read_domain_cache "$target"
+            status="$DNS_STATUS"
+            if ! validate_ip_address "$DNS_IP"; then
                 log_error "域名 ${target} 没有有效 IPv4，取消本次变更"
                 rm -f "$next"
                 return 1
             fi
-            [ "$ip" = "$resolved_ip" ] || { resolved_ip="$ip"; updated_at="$now"; }
+            [ "$DNS_IP" = "$resolved_ip" ] || { resolved_ip="$DNS_IP"; updated_at="$now"; }
         fi
-        make_state_line "$src_port" "$mode" "$target" "$dest_port" "$target_type" \
+        printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+            "$src_port" "$mode" "$target" "$dest_port" "$target_type" \
             "$resolved_ip" "$status" "$updated_at" "$snat_ip" "$mss" >> "$next"
     done < "$candidate"
     mv "$next" "$candidate"
 }
 resolve_ping_sources() {
-    local spec="$1" item record ip result_file
+    local spec="$1" item result=""
     local -a items
     RESOLVED_PING_IPV4=""
     case "$spec" in
@@ -704,35 +658,32 @@ resolve_ping_sources() {
             return 0
             ;;
     esac
-    result_file=$(mktemp /tmp/forwardaws-ping.XXXXXX) || return 1
     IFS=',' read -ra items <<< "$spec"
     for item in "${items[@]}"; do
-        if validate_ip_address "$item"; then
-            printf '%s\n' "$item" >> "$result_file"
-            continue
+        if ! validate_ip_address "$item"; then
+            if ! read_domain_cache "$item" || ! validate_ip_address "$DNS_IP"; then
+                log_error "Ping 域名 ${item} 没有当前或历史有效 IPv4"
+                return 1
+            fi
+            item="$DNS_IP"
         fi
-        record=$(run_providerdns --cache "$item" 2>/dev/null) || {
-            log_error "Ping 域名 ${item} 没有当前或历史有效 IPv4"
-            rm -f "$result_file"
-            return 1
-        }
-        IFS=$'\t' read -r _ ip _ _ <<< "$record"
-        validate_ip_address "$ip" || {
-            log_error "Ping 域名 ${item} 没有当前或历史有效 IPv4"
-            rm -f "$result_file"
-            return 1
-        }
-        printf '%s\n' "$ip" >> "$result_file"
+        result+="${item}"$'\n'
     done
-    RESOLVED_PING_IPV4=$(sort -u "$result_file" | awk 'NF { printf "%s%s", sep, $0; sep="," } END { print "" }')
-    rm -f "$result_file"
+    RESOLVED_PING_IPV4=$(printf '%s' "$result" | sort -u |
+        awk 'NF { printf "%s%s", sep, $0; sep="," } END { print "" }')
     [ -n "$RESOLVED_PING_IPV4" ]
 }
 prepare_candidate() {
-    local candidate="$1" ping_spec="$2" refresh="$3"
-    sync_providerdns_subscription "$candidate" "$ping_spec" || return 1
-    if [ -n "$(collect_domains "$candidate" "$ping_spec")" ]; then
+    local candidate="$1" ping_spec="$2" refresh="$3" domains DNS_IP DNS_STATUS
+    local -A DNS_CACHE=() DNS_RESULT=()
+    local PROVIDERDNS_BIN="${PROVIDERDNS_BIN:-}"
+    domains=$(collect_domains "$candidate" "$ping_spec") || return 1
+    if [ -n "$domains" ]; then
         require_providerdns || return 1
+        PROVIDERDNS_BIN=$(providerdns_bin) || return 1
+    fi
+    sync_providerdns_subscription "$domains" || return 1
+    if [ -n "$domains" ]; then
         if [ "$refresh" = "1" ]; then
             log_info "正在刷新域名解析"
             providerdns_refresh || return 1
@@ -847,35 +798,29 @@ run_nft_file() {
     fi
     return 1
 }
-apply_candidate_state() (
-    local candidate_state="$1" protect_flag="$2" whitelist="$3" whitelist_file="$4"
-    local ping_spec="$5" ping_ips="$6" desc="$7" force_apply="$8" protect_ports="${9:-}"
-    local work_dir nft_tmp state_tmp config_tmp
+apply_candidate_state() {
+    local desc="$1" force_apply="$2" protect_ports="${3:-}"
+    local nft_tmp="$TX_DIR/forwardaws.nft" config_tmp="$TX_DIR/config.env"
     local rules_changed=0 state_changed=0 config_changed=0 include_missing=0 live_missing=0 forwarding_needs_update=0
-    work_dir=$(dirname "$candidate_state")
-    nft_tmp="${work_dir}/forwardaws.nft"
-    state_tmp="${work_dir}/rules.db"
-    config_tmp="${work_dir}/config.env"
-    render_ruleset "$candidate_state" "$protect_flag" "$whitelist" "$ping_spec" \
-        "$ping_ips" "$nft_tmp" "$protect_ports" || return 1
-    cp "$candidate_state" "$state_tmp" || return 1
+    render_ruleset "$TX_RULES" "$TX_PROTECTION" "$TX_WHITELIST" "$TX_PING" \
+        "$RESOLVED_PING_IPV4" "$nft_tmp" "$protect_ports" || return 1
     printf 'PROTECTION_ENABLED=%s\nPROTECT_WHITELIST=%s\nPROTECT_WHITELIST_FILE=%s\nPROTECT_PING=%s\n' \
-        "$protect_flag" "$whitelist" "$whitelist_file" "$ping_spec" > "$config_tmp" || return 1
+        "$TX_PROTECTION" "$TX_WHITELIST" "$TX_WHITELIST_FILE" "$TX_PING" > "$config_tmp" || return 1
     cmp -s "$nft_tmp" "$FORWARDAWS_RULES_FILE" || rules_changed=1
-    cmp -s "$state_tmp" "$RULES_STATE_FILE" || state_changed=1
+    cmp -s "$TX_RULES" "$RULES_STATE_FILE" || state_changed=1
     cmp -s "$config_tmp" "$CONFIG_FILE" || config_changed=1
     nft_main_config_include_is_current || include_missing=1
     if [ "$rules_changed" -eq 0 ]; then
         nft list table ip "$NAT_TABLE_NAME" >/dev/null 2>&1 &&
             nft list table inet "$FILTER_TABLE_NAME" >/dev/null 2>&1 || live_missing=1
     fi
-    if state_has_remote_rules "$candidate_state" && ipv4_forwarding_needs_update; then
+    if state_has_remote_rules "$TX_RULES" && ipv4_forwarding_needs_update; then
         forwarding_needs_update=1
     fi
     if [ "$rules_changed" -eq 1 ] || [ "$live_missing" -eq 1 ] || [ "$force_apply" -eq 1 ]; then
         run_nft_file -c "预检" "$nft_tmp" "$desc" || return 1
     fi
-    if [ "$state_changed" -eq 1 ] && ! mv "$state_tmp" "$RULES_STATE_FILE"; then
+    if [ "$state_changed" -eq 1 ] && ! mv "$TX_RULES" "$RULES_STATE_FILE"; then
         log_error "状态文件发布失败，运行规则未变：$RULES_STATE_FILE"
         return 1
     fi
@@ -900,7 +845,7 @@ apply_candidate_state() (
         }
     fi
     [ "$forwarding_needs_update" -eq 0 ] || ensure_ipv4_forwarding_enabled
-)
+}
 write_systemd_unit_if_changed() {
     local target_file="$1" tmp_file
     tmp_file=$(mktemp "${target_file}.XXXXXX") || return 1
@@ -1012,6 +957,8 @@ disable_unit_if_active() {
     }
 }
 enable_managed_unit() {
+    systemctl is-enabled --quiet "$1" 2>/dev/null &&
+        systemctl is-active --quiet "$1" 2>/dev/null && return 0
     systemctl enable --now --no-reload "$1" >/dev/null 2>&1 &&
         systemctl is-active --quiet "$1" 2>/dev/null && return 0
     log_error "$2"
@@ -1043,59 +990,22 @@ reconcile_systemd_units() {
         enable_managed_unit "$WHITELIST_PATH_NAME" "启用 whitelist 文件监控失败" || return 1
     fi
 }
-append_rule_to_state() {
-    local candidate="$1" rule="$2" now="$3" duplicate_mode="$4" status
-    parse_rule "$rule" || return 1
-    status=$(state_rule_status "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" \
-        "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_SNAT_IP" "$PARSED_MSS")
-    case "$status" in
-        exact)
-            [ "$duplicate_mode" = "skip" ] && return 2
-            log_error "重复规则: $rule"
-            return 1
-            ;;
-        base|port_conflict)
-            log_error "规则冲突: $rule"
-            return 1
-            ;;
-    esac
-    make_state_line "$PARSED_SRC_PORT" "$PARSED_MODE" "$PARSED_TARGET" "$PARSED_DEST_PORT" \
-        "$PARSED_TYPE" "$PARSED_IP" "$PARSED_STATUS" "$now" "$PARSED_SNAT_IP" "$PARSED_MSS" >> "$candidate"
-}
-remove_rule_from_state() (
-    local candidate="$1" rule="$2" next status
-    parse_rule "$rule" || return 1
-    status=$(state_rule_status "$candidate" "$PARSED_SRC_PORT" "$PARSED_MODE" \
-        "$PARSED_TARGET" "$PARSED_DEST_PORT" "$PARSED_SNAT_IP" "$PARSED_MSS")
-    if [ "$status" != "exact" ] && [ "$status" != "base" ]; then
-        return 2
-    fi
-    next=$(mktemp "${candidate}.XXXXXX") || return 1
-    awk -F'|' -v sp="$PARSED_SRC_PORT" -v mode="$PARSED_MODE" -v target="$PARSED_TARGET" -v dp="$PARSED_DEST_PORT" \
-        'NF>=8 && !($1==sp && $2==mode && $3==target && $4==dp) { print }' "$candidate" > "$next" || {
-        rm -f "$next"
-        return 1
-    }
-    mv "$next" "$candidate"
-)
 # 单一候选事务
-sanitize_state_file() {
-    local file="$1" next
-    [ -s "$file" ] || return 0
-    next=$(mktemp "${file}.XXXXXX") || return 1
+sanitize_state_file() (
+    if [ ! -s "$1" ]; then
+        cp "$1" "$2"
+        return
+    fi
+    umask 077
     awk -F'|' '
         NF>=8 && $2=="remote" && $1 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/ { print; next }
         NF { printf "[WARNING] 丢弃不合规状态行: %s\n", $0 > "/dev/stderr" }
-    ' "$file" > "$next" || {
-        rm -f "$next"
-        return 1
-    }
-    mv "$next" "$file"
-}
+    ' "$1" > "$2"
+)
 transaction_open() {
     TX_DIR=$(mktemp -d "${STATE_DIR}/.tx.XXXXXX") || return 1
     TX_RULES="${TX_DIR}/candidate.db"
-    if ! cp "$RULES_STATE_FILE" "$TX_RULES" || ! sanitize_state_file "$TX_RULES" || ! load_config; then
+    if ! sanitize_state_file "$RULES_STATE_FILE" "$TX_RULES" || ! load_config; then
         rm -rf "$TX_DIR"
         return 1
     fi
@@ -1136,8 +1046,7 @@ transaction_commit() {
         }
     fi
     prepare_candidate "$TX_RULES" "$TX_PING" "$refresh" || return 1
-    apply_candidate_state "$TX_RULES" "$TX_PROTECTION" "$TX_WHITELIST" \
-        "$TX_WHITELIST_FILE" "$TX_PING" "$RESOLVED_PING_IPV4" "$desc" "$force_apply" "$ports" || return 1
+    apply_candidate_state "$desc" "$force_apply" "$ports" || return 1
     reconcile_systemd_units "$TX_PROTECTION" "$TX_WHITELIST" || {
         log_error "nft 规则与持久状态已生效，但 systemd 单元未对齐；修复后请执行 --sync"
         return 1
@@ -1147,55 +1056,69 @@ transaction_commit() {
             log_warning "旧 whitelist 文件未能回收：$TX_WHITELIST_FILE_PREV"
     fi
 }
-rule_batch() (
-    local action="$1" protect_clause="$2" whitelist_set="$3" whitelist_arg="$4"
-    local ping_set="$5" ping_arg="$6"
-    shift 6
-    local now rule rc operation duplicate_mode is_delete=0 success=0 skipped=0
-    transaction_open || return 1
-    trap 'rm -rf "$TX_DIR"' EXIT
-    if [ "$protect_clause" -eq 1 ]; then
+rule_batch() {
+    local action="$1" operation counts success skipped now
+    if [ "$PARSED_PROTECT" -eq 1 ]; then
         TX_PROTECTION=1
-        [ "$whitelist_set" -eq 0 ] || transaction_set_whitelist "$whitelist_arg"
-        [ "$ping_set" -eq 0 ] || TX_PING="$ping_arg"
+        [ "$PARSED_WHITELIST_SET" -eq 0 ] || transaction_set_whitelist "$PARSED_WHITELIST"
+        [ "$PARSED_PING_SET" -eq 0 ] || TX_PING="$PARSED_PING"
     fi
     case "$action" in
-        add|--add|-a)
-            operation="添加"
-            duplicate_mode=skip
+        --add|-a)
+            action=add operation="添加"
             ;;
-        delete|--delete|-d)
-            operation="删除"
-            is_delete=1
+        --delete|-d)
+            action=delete operation="删除"
             ;;
-        replace|--replace|-r)
-            operation="替换"
-            duplicate_mode=fail
-            : > "$TX_RULES"
+        --replace|-r)
+            action=replace operation="替换"
             ;;
     esac
     now=$(date +%s)
-    for rule in "$@"; do
-        if [ "$is_delete" -eq 1 ]; then
-            remove_rule_from_state "$TX_RULES" "$rule"
-            rc=$?
-        else
-            append_rule_to_state "$TX_RULES" "$rule" "$now" "$duplicate_mode"
-            rc=$?
-        fi
-        case "$rc" in
-            0)
-                success=$((success + 1))
-                ;;
-            2)
-                skipped=$((skipped + 1))
-                ;;
-            *)
-                log_error "批次校验失败，已取消所有变更"
-                return 1
-                ;;
-        esac
-    done
+    # 端口索引只存在于本次批处理；保留原始行顺序和同端口匹配优先级。
+    counts=$(printf '%s\n' "${PARSED_RULES[@]}" | awk -F'|' -v OFS='|' \
+        -v action="$action" -v now="$now" -v output="$TX_RULES" '
+        function append(line, port) {
+            rows[++count]=line
+            link[count]=head[port+0]; head[port+0]=count
+        }
+        FILENAME!="-" {
+            if (action!="replace") append($0, $1)
+            next
+        }
+        {
+            match_kind="none"
+            for (i=head[$1+0]; i; i=link[i]) {
+                if (!(i in rows)) continue
+                split(rows[i], old, "|")
+                if (old[2]==$2 && old[3]==$3 && old[4]==$4) {
+                    if (action=="delete") { delete rows[i]; match_kind="base" }
+                    else if (old[9]==$9 && old[10]==$10) { match_kind="exact"; break }
+                    else match_kind="base"
+                } else if (match_kind=="none") match_kind="port_conflict"
+            }
+            if (action=="delete") {
+                if (match_kind=="base") success++; else skipped++
+            } else if (match_kind=="exact" && action=="add") skipped++
+            else if (match_kind!="none") {
+                printf "[ERROR] %s: %s\n", (match_kind=="exact" ? "重复规则" : "规则冲突"), $11 > "/dev/stderr"
+                failed=1; exit 1
+            } else {
+                NF=10; $8=now
+                append($0, $1); success++
+            }
+        }
+        END {
+            if (failed) exit 1
+            printf "" > output
+            for (i=1; i<=count; i++) if (i in rows) print rows[i] > output
+            print success+0, skipped+0
+        }
+    ' "$TX_RULES" -) || {
+        log_error "批次校验失败，已取消所有变更"
+        return 1
+    }
+    IFS='|' read -r success skipped <<< "$counts"
     transaction_commit "${operation}转发规则" 1 || return 1
     if [ "$success" -eq 0 ]; then
         log_info "没有规则变化"
@@ -1204,18 +1127,15 @@ rule_batch() (
     else
         log_info "已${operation} ${success} 条转发规则，跳过 ${skipped} 条"
     fi
-)
-run_protect() (
-    local whitelist_set="$1" whitelist_arg="$2" ping_set="$3" ping_arg="$4"
-    transaction_open || return 1
-    trap 'rm -rf "$TX_DIR"' EXIT
+}
+run_protect() {
     TX_PROTECTION=1
-    [ "$whitelist_set" -eq 0 ] || transaction_set_whitelist "$whitelist_arg"
-    [ "$ping_set" -eq 0 ] || TX_PING="$ping_arg"
+    [ "$PARSED_WHITELIST_SET" -eq 0 ] || transaction_set_whitelist "$PARSED_WHITELIST"
+    [ "$PARSED_PING_SET" -eq 0 ] || TX_PING="$PARSED_PING"
     transaction_commit "开启保护" 1 || return 1
     log_info "保护已启用"
-)
-run_sync() (
+}
+run_sync() {
     local source="${FORWARDAWS_SYNC_SOURCE:-manual}" refresh=0 force_apply=0
     case "$source" in
         manual)
@@ -1231,18 +1151,14 @@ run_sync() (
             return 1
             ;;
     esac
-    transaction_open || return 1
-    trap 'rm -rf "$TX_DIR"' EXIT
     if [ "$source" = whitelist ] && ! [[ "$TX_WHITELIST" == /* ]]; then
         return 0
     fi
     transaction_commit "同步规则" "$refresh" "$force_apply" || return 1
     log_info "规则同步完成"
-)
-run_clean_scope() (
+}
+run_clean_scope() {
     local scope="$1" message
-    transaction_open || return 1
-    trap 'rm -rf "$TX_DIR"' EXIT
     case "$scope" in
         ping)
             TX_PING=any
@@ -1265,7 +1181,7 @@ run_clean_scope() (
     esac
     transaction_commit "清理 ${scope}" || return 1
     log_info "$message"
-)
+}
 # 销毁、展示与 CLI 调度
 purge_owned_nft_tables() (
     local nft_tmp prelude
@@ -1373,7 +1289,7 @@ display_rules() {
         [ "$CURRENT_PING" = any ] || printf -- '- Ping：%s\n' "$CURRENT_PING"
     fi
 }
-run_mutation() {
+run_mutation() (
     local mode="$1" desc="$2"
     shift 2
     if [ "$mode" = state ]; then
@@ -1387,8 +1303,12 @@ run_mutation() {
         acquire_global_lock || return 1
     fi
     log_info "$desc"
+    if [ "$mode" = state ]; then
+        transaction_open || return 1
+        trap 'rm -rf "$TX_DIR"' EXIT
+    fi
     "$@"
-}
+)
 main() {
     local action scope
     if [ $# -eq 0 ]; then
@@ -1411,15 +1331,12 @@ main() {
             action="$1"
             shift
             parse_rule_command "$@" || return 1
-            run_mutation state "正在处理 ${#PARSED_RULES[@]} 条转发规则" rule_batch "$action" \
-                "$PARSED_PROTECT" "$PARSED_WHITELIST_SET" "$PARSED_WHITELIST" \
-                "$PARSED_PING_SET" "$PARSED_PING" "${PARSED_RULES[@]}"
+            run_mutation state "正在处理 ${#PARSED_RULES[@]} 条转发规则" rule_batch "$action"
             ;;
         --protect)
             shift
             parse_protect_fields "$@" || return 1
-            run_mutation state "正在启用保护" run_protect "$PARSED_WHITELIST_SET" "$PARSED_WHITELIST" \
-                "$PARSED_PING_SET" "$PARSED_PING"
+            run_mutation state "正在启用保护" run_protect
             ;;
         --sync)
             shift
