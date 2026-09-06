@@ -224,7 +224,8 @@ validate_protocol_scope() {
     if [ "$SS_ENABLED" -eq 0 ] && [ -n "$SS_PORT$SS_PASSWORD" ]; then
         fail "Shadowsocks 参数需要 --protocol shadowsocks。"
     fi
-    if [ "$TROJAN_ENABLED" -eq 0 ] && [ -n "$TROJAN_PORT$TROJAN_PASSWORD$TROJAN_DOMAIN$TROJAN_CERT_PATH$TROJAN_KEY_PATH" ]; then
+    if [ "$TROJAN_ENABLED" -eq 0 ] &&
+        [ -n "$TROJAN_PORT$TROJAN_PASSWORD$TROJAN_DOMAIN$TROJAN_CERT_PATH$TROJAN_KEY_PATH" ]; then
         fail "Trojan 参数需要 --protocol trojan。"
     fi
 }
