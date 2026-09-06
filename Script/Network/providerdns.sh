@@ -135,17 +135,11 @@ collect_domains() {
 }
 
 run_hooks() {
-    local changed="${1:-}" hook name subscription failed=0
+    local hook failed=0
     [ -d "$HOOK_DIR" ] || return 0
     for hook in "$HOOK_DIR"/*; do
         [ -x "$hook" ] || continue
-        if [ -n "$changed" ]; then
-            name="${hook##*/}"
-            subscription="${SUBSCRIPTION_DIR}/${name}.list"
-            [ -s "$changed" ] || continue
-            [ -s "$subscription" ] || continue
-            grep -Fqx -f "$changed" "$subscription" || continue
-        fi
+        [ -s "${SUBSCRIPTION_DIR}/${hook##*/}.list" ] || continue
         "$hook" || failed=$((failed + 1))
     done
     if [ "$failed" -ne 0 ]; then
@@ -174,8 +168,7 @@ release_lock() {
 
 refresh_cache() {
     local run_hooks="${1:-0}" lock_wait="${PROVIDERDNS_LOCK_WAIT:-0}"
-    local candidate_domains="${2:-}"
-    local domains tmp changed_domains="" domain now ip cache="$CACHE_FILE"
+    local candidate_domains="${2:-}" domains tmp domain now ip cache="$CACHE_FILE"
     require_resolver
     ensure_private_dir "$HOOK_DIR" || fail "无法创建 Provider DNS 运行目录"
     ensure_private_dir "$STATE_DIR" || fail "无法创建 Provider DNS 运行目录"
@@ -188,11 +181,6 @@ refresh_cache() {
     TEMP_FILES+=("$domains")
     tmp="$(mktemp "${CACHE_FILE}.XXXXXX")" || fail "无法创建缓存临时文件"
     TEMP_FILES+=("$tmp")
-    if [ "$run_hooks" = 1 ]; then
-        changed_domains="$(mktemp /tmp/providerdns-changed.XXXXXX)" || fail "无法创建变更域名临时文件"
-        TEMP_FILES+=("$changed_domains")
-    fi
-
     collect_domains "$domains" || fail "无法收集 Provider DNS 订阅域名"
     if [ -n "$candidate_domains" ]; then
         cat "$candidate_domains" >> "$domains" || fail "无法读取候选域名"
@@ -209,7 +197,7 @@ refresh_cache() {
     done < "$domains"
     [ -f "$cache" ] || cache=/dev/null
     # 域名收集文件复用为最终缓存；旧缓存扫描一次，只保留本轮需要的记录。
-    awk -v now="$now" -v changed="$changed_domains" '
+    awk -v now="$now" '
         function valid_ip(ip, parts, n, i) {
             if (ip !~ /^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+$/) return 0
             n=split(ip, parts, ".")
@@ -231,22 +219,20 @@ refresh_cache() {
                 changed_value=(current[2]!=old_ip || current[3]!=old[3])
                 updated=(!changed_value && old[4]!="" ? old[4] : now)
                 printf "%s\t%s\t%s\t%s\n", domain, current[2], current[3], updated
-                if (changed_value && changed!="") print domain > changed
             }
         }
     ' "$tmp" "$cache" > "$domains" || fail "无法合并 Provider DNS 缓存"
     if cmp -s "$domains" "$CACHE_FILE" 2>/dev/null; then
-        release_lock
         log_info "Provider DNS 缓存未变化，无需更新"
-        return 0
+    else
+        chmod 600 "$domains" || fail "无法设置 DNS 缓存权限"
+        mv "$domains" "$CACHE_FILE" || fail "无法发布 Provider DNS 缓存"
+        log_info "Provider DNS 缓存已更新"
     fi
-
-    chmod 600 "$domains" || fail "无法设置 DNS 缓存权限"
-    mv "$domains" "$CACHE_FILE" || fail "无法发布 Provider DNS 缓存"
     release_lock
-    log_info "Provider DNS 缓存已更新"
+    # 缓存一致不代表消费者已应用成功，每轮在锁外重试对齐。
     if [ "$run_hooks" = "1" ]; then
-        run_hooks "$changed_domains"
+        run_hooks
     fi
 }
 
@@ -385,7 +371,9 @@ cleanup_unused_locked() {
     local systemctl file changed=0
     if [ -d "$SUBSCRIPTION_DIR" ]; then
         for file in "$SUBSCRIPTION_DIR"/*.list; do
-            [ -s "$file" ] && return 0
+            [ -s "$file" ] || continue
+            log_info "仍有 Provider DNS 订阅，跳过运行时清理"
+            return 0
         done
     fi
     [[ -e "$SERVICE_FILE" || -e "$TIMER_FILE" || -d "$STATE_DIR" || -d "$HOOK_DIR" ||

@@ -62,7 +62,7 @@ show_help() {
   $0 --sync
   $0 --clean <ping|whitelist|forward|protect|all>
 规则格式:
-  <源端口>:<目标(IPv4/域名)>:<目标端口>[:SNAT_IP[:MSS]]
+  <源端口>:<目标(IPv4/域名)>:<目标端口>[:[SNAT_IP][:MSS]]
 保护值:
   whitelist=<绝对路径>.nft
   ping=any|off|<IPv4或域名逗号列表>
@@ -145,9 +145,9 @@ normalize_whitelist_path() {
 }
 parse_rule() {
     local rule_string="$1" src_port target dest_port snat_ip mss type ip="" status
-    [[ "$rule_string" =~ ^[^:]+:[^:]+:[^:]+(:[^:]+(:[^:]+)?)?$ ]] || {
+    [[ "$rule_string" =~ ^[^:]+:[^:]+:[^:]+(:[^:]*(:[^:]+)?)?$ ]] || {
         log_error "规则格式错误: $rule_string"
-        log_error "正确格式: 端口:目标(IPv4/域名):端口[:SNAT_IP[:MSS]]"
+        log_error "正确格式: 端口:目标(IPv4/域名):端口[:[SNAT_IP][:MSS]]"
         return 1
     }
     IFS=':' read -r src_port target dest_port snat_ip mss <<< "$rule_string"
@@ -283,7 +283,7 @@ ensure_dependencies() {
     FORWARDAWS_QUIET=0 log_info "已安装依赖：${missing[*]}"
 }
 acquire_global_lock() {
-    local wait="${FORWARDAWS_LOCK_WAIT:-0}" deadline
+    local wait="${FORWARDAWS_LOCK_WAIT:-5}" deadline
     [[ "$wait" =~ ^[0-9]+$ ]] || wait=0
     deadline=$((SECONDS + 10#$wait + 1))
     while [ "$SECONDS" -lt "$deadline" ]; do
@@ -815,9 +815,11 @@ transaction_open() {
     load_state || return 1
     converge_owned_files || return 1
     read -ra owners <<< "$TX_WHITELIST_FILE"
-    TX_WHITELIST_FILE="${owners[0]:-}"
-    for path in "${owners[@]:1}"; do
-        [ ! -e "$path" ] || TX_WHITELIST_FILE+=" $path"
+    TX_WHITELIST_FILE=""
+    [[ "$TX_WHITELIST" != /* ]] || TX_WHITELIST_FILE="$TX_WHITELIST"
+    for path in "${owners[@]}"; do
+        [ "$path" != "$TX_WHITELIST" ] && [ -e "$path" ] || continue
+        TX_WHITELIST_FILE+="${TX_WHITELIST_FILE:+ }$path"
     done
 }
 
@@ -860,8 +862,8 @@ transaction_commit() {
         abort_operation "nft 规则与持久状态已生效，但 systemd 单元未对齐；修复后请执行 --sync"
     local -a owners=()
     read -ra owners <<< "$TX_WHITELIST_FILE"
-    for path in "${owners[@]:1}"; do
-        reclaim_whitelist_file "$path" || return 1
+    for path in "${owners[@]}"; do
+        [ "$path" = "$TX_WHITELIST" ] || reclaim_whitelist_file "$path" || return 1
     done
 }
 rule_batch() {
@@ -893,9 +895,12 @@ rule_batch() {
             rows[++count]=line
             link[count]=head[port+0]; head[port+0]=count
         }
+        function valid_port(port) {
+            return port ~ /^[0-9]+$/ && port+0 >= 1 && port+0 <= 65535
+        }
         FILENAME!="-" {
             if ($0 ~ /^(PROTECTION_ENABLED|PROTECT_WHITELIST|PROTECT_WHITELIST_FILE|PROTECT_PING)=/) next
-            if (NF>=8 && $2=="remote" && $1 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/) {
+            if (NF>=8 && $2=="remote" && valid_port($1) && valid_port($4)) {
                 if (action=="keep") emit($0)
                 else if (action!="replace" && action!="clear") append($0, $1)
             } else if (NF) printf "[WARNING] 丢弃不合规状态行: %s\n", $0 > "/dev/stderr"
@@ -957,6 +962,11 @@ run_protect() {
     [ -z "$PARSED_PING" ] || TX_PING="$PARSED_PING"
     TX_REFRESH=1 TX_DESC="开启保护" TX_MESSAGE="保护已启用"
 }
+skip_when_absent() {
+    [ "$TX_SOURCE" = /dev/null ] || return 1
+    TX_SKIP=1
+    log_info "未检测到 ForwardAWS 安装，已跳过；如需清理残留请执行 --clean all"
+}
 run_sync() {
     local source="${FORWARDAWS_SYNC_SOURCE:-manual}"
     case "$source" in
@@ -974,6 +984,7 @@ run_sync() {
             return 1
             ;;
     esac
+    skip_when_absent && return 0
     if [ "$source" = whitelist ] && ! [[ "$TX_WHITELIST" == /* ]]; then
         TX_SKIP=1
     fi
@@ -981,6 +992,7 @@ run_sync() {
 }
 run_clean_scope() {
     local scope="$1"
+    skip_when_absent && return 0
     case "$scope" in
         ping)
             TX_PING=any
