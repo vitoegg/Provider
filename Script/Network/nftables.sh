@@ -33,9 +33,6 @@ TX_DOMAINS_FILE=""
 log_info() {
     [ "${FORWARDAWS_QUIET:-0}" = "1" ] || printf '[INFO] %s\n' "$*"
 }
-log_warning() {
-    printf '[WARNING] %s\n' "$*" >&2
-}
 log_error() {
     printf '[ERROR] %s\n' "$*" >&2
 }
@@ -256,10 +253,31 @@ providerdns_set_forwardaws() {
     PROVIDERDNS_QUIET=1 run_providerdns --set "$PROVIDERDNS_CONSUMER" "$domains_file" "$hook_command"
 }
 providerdns_unset_forwardaws() {
-    providerdns_bin >/dev/null || {
-        log_warning "未找到 providerdns.sh，无法回收 DNS 订阅：${PROVIDERDNS_CONSUMER}"
+    if ! providerdns_bin >/dev/null; then
+        local root="${PROVIDERDNS_ROOT:-/}" path parent component
+        local -a components=()
+        [[ "$root" == /* ]] || root="$PWD/$root"
+        # 仅探测此 consumer；订阅与 hook 的删除仍由 ProviderDNS 持锁处理。
+        for path in "${root%/}/etc/provider/dns/subscriptions/${PROVIDERDNS_CONSUMER}.list" \
+            "${root%/}/etc/provider/dns/hooks/${PROVIDERDNS_CONSUMER}"; do
+            parent=/
+            IFS=/ read -ra components <<< "${path#/}"
+            for component in "${components[@]}"; do
+                [ -n "$component" ] || continue
+                if [ ! -d "$parent" ] || [ ! -r "$parent" ] || [ ! -x "$parent" ]; then
+                    log_error "无法检查 DNS 订阅路径：$parent"
+                    return 1
+                fi
+                parent="${parent%/}/$component"
+                [ -e "$parent" ] || [ -L "$parent" ] || break
+            done
+            if [ -e "$path" ] || [ -L "$path" ]; then
+                log_error "缺少 providerdns.sh，DNS 订阅未确认清理：$path"
+                return 1
+            fi
+        done
         return 0
-    }
+    fi
     PROVIDERDNS_QUIET=1 run_providerdns --unset "$PROVIDERDNS_CONSUMER"
 }
 # 系统依赖与持久状态
@@ -308,14 +326,21 @@ ensure_for_write() {
     mkdir -p "$STATE_DIR" "$NFT_INCLUDE_DIR" || return 1
     rm -rf "${STATE_DIR:?}"/.tx.* 2>/dev/null || true
 }
+# forwardaws* 产物与 forwardaws-* 单元是本脚本保留的命名空间，包含历史版本资源。
 converge_owned_files() {
-    local whitelist path
+    local whitelist path paths
     whitelist="$TX_WHITELIST_FILE $PARSED_WHITELIST"
-    find "$STATE_DIR" -maxdepth 1 -type f ! -name "${STATE_FILE##*/}" -delete 2>/dev/null || true
+    require_success "无法清理历史状态文件" \
+        find "$STATE_DIR" -maxdepth 1 -type f ! -name "${STATE_FILE##*/}" -delete || return 1
+    paths=$(find "$NFT_INCLUDE_DIR" -maxdepth 1 -type f -name 'forwardaws*' \
+        ! -name "${FORWARDAWS_RULES_FILE##*/}") || {
+        log_error "无法枚举 ForwardAWS 规则文件"
+        return 1
+    }
     while IFS= read -r path; do
+        [ -n "$path" ] || continue
         [[ " $whitelist " == *" $path "* ]] || rm -f -- "$path" || return 1
-    done < <(find "$NFT_INCLUDE_DIR" -maxdepth 1 -type f -name 'forwardaws*' \
-        ! -name "${FORWARDAWS_RULES_FILE##*/}" 2>/dev/null)
+    done <<< "$paths"
 }
 load_state() {
     local key value
@@ -366,7 +391,8 @@ ensure_nft_main_config_include() {
         if systemctl enable nftables.service >/dev/null 2>&1; then
             log_info "已启用系统服务：nftables.service"
         else
-            log_warning "无法启用 nftables.service，重启后规则可能丢失"
+            log_error "无法启用 nftables.service，持久化未就绪；修复后请执行 --sync"
+            return 1
         fi
     fi
 }
@@ -651,7 +677,7 @@ apply_candidate_state() {
     fi
     require_success "DNS 订阅未对齐，声明已提交；修复后请执行 --sync" \
         sync_providerdns_subscription || return 1
-    if [ "$include_missing" -eq 1 ] || [ "$rules_changed" -eq 1 ]; then
+    if [ "$include_missing" -eq 1 ] || [ "$rules_changed" -eq 1 ] || [ "$force_apply" -eq 1 ]; then
         ensure_nft_main_config_include || return 1
     fi
     if [ "$rules_changed" -eq 1 ] || [ "$live_missing" -eq 1 ] || [ "$force_apply" -eq 1 ]; then
@@ -687,13 +713,20 @@ list_owned_unit_files() {
         \( -type f -o -type l \) 2>/dev/null
 }
 converge_systemd_units() {
-    local path name failed=0 desired=" $* "
+    local path name paths failed=0 desired=" $* "
+    paths=$(list_owned_unit_files) || {
+        log_error "无法枚举 ForwardAWS systemd 文件"
+        return 1
+    }
     while IFS= read -r path; do
         [ -n "$path" ] || continue
         name="${path##*/}"
         [[ "$desired" != *" ${name} "* ]] || continue
         if has_systemctl; then
-            disable_unit_if_active "$name" || failed=1
+            disable_unit_if_active "$name" || {
+                failed=1
+                continue
+            }
             systemctl reset-failed "$name" >/dev/null 2>&1 || true
         fi
         if [ -e "$path" ] || [ -L "$path" ]; then
@@ -704,7 +737,7 @@ converge_systemd_units() {
             }
         fi
         SYSTEMD_UNITS_CHANGED=1
-    done < <(list_owned_unit_files)
+    done <<< "$paths"
     return "$failed"
 }
 reload_systemd_if_changed() {
@@ -1047,7 +1080,13 @@ clean_all() {
     providerdns_unset_forwardaws || failed=1
     purge_owned_nft_tables || failed=1
     purge_nft_main_config_include || failed=1
-    rm -f "$FORWARDAWS_RULES_FILE" "$IPV4_FORWARD_SYSCTL_FILE" || failed=1
+    rm -f "$FORWARDAWS_RULES_FILE" || failed=1
+    if rm -f "$IPV4_FORWARD_SYSCTL_FILE"; then
+        [ "$forwarding_persisted" -eq 0 ] ||
+            log_info "已删除 IPv4 转发持久配置，保留系统当前转发开关"
+    else
+        failed=1
+    fi
     read -ra owners <<< "$TX_WHITELIST_FILE"
     for path in "${owners[@]}"; do
         reclaim_whitelist_file "$path" || failed=1
@@ -1056,14 +1095,12 @@ clean_all() {
         rm -rf "$STATE_DIR" || failed=1
     fi
     rmdir "$NFT_INCLUDE_DIR" 2>/dev/null || true
-    [ "$forwarding_persisted" -eq 0 ] ||
-        log_warning "已删除 IPv4 转发持久配置，当前 net.ipv4.ip_forward live 值未复位"
+    rm -f "$GLOBAL_LOCK_FILE" || failed=1
     if [ "$failed" -eq 0 ]; then
         log_info "ForwardAWS 全部资源已清理"
     else
         log_error "ForwardAWS 清理未完全完成"
     fi
-    rm -f "$GLOBAL_LOCK_FILE" || failed=1
     return "$failed"
 }
 get_allowed_ports_from_ruleset() {
