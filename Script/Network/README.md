@@ -293,21 +293,11 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 
 ### 参数说明
 ```text
---install                           安装或修复 systemd timer
---set <consumer> <file> <hook>      注册订阅和 hook
---unset <consumer>                  移除订阅
---refresh                           刷新 DNS cache
---refresh hooks                     刷新 DNS cache 并运行受影响 hook
---snapshot <cache|refresh> <file>    批量输出候选域名缓存记录
---cache <domain>                    输出缓存记录
---lookup <domain>                   输出缓存或即时解析 IPv4
---cleanup unused                    无订阅时清理运行时
+--clean                             无订阅时清理服务、配置和缓存
 -h, --help                          显示帮助
 ```
 
-无参数时显示帮助并返回失败，不会修改系统。
-
 ### 示例命令
 ```bash
-bash providerdns.sh --lookup example.com
+bash providerdns.sh --clean
 ```

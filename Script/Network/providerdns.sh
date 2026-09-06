@@ -35,21 +35,24 @@ trap 'exit 143' TERM
 show_help() {
     cat << 'EOF'
 用法：
-  providerdns.sh --install
-  providerdns.sh --set <consumer> <域名文件> <hook 命令>
-  providerdns.sh --unset <consumer>
-  providerdns.sh --refresh
-  providerdns.sh --refresh hooks
-  providerdns.sh --cache <域名>
-  providerdns.sh --snapshot <cache|refresh> <域名文件>
-  providerdns.sh --lookup <域名>
-  providerdns.sh --cleanup unused
-  providerdns.sh -h|--help
+  providerdns.sh --clean           无订阅时清理服务、配置和缓存
+  providerdns.sh -h|--help         显示帮助
 EOF
 }
 
-trim() {
-    printf '%s' "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+normalize_domains() {
+    local strict="$1" domain
+    while IFS= read -r domain || [ -n "$domain" ]; do
+        domain="${domain%%#*}"
+        domain="${domain#"${domain%%[![:space:]]*}"}"
+        domain="${domain%"${domain##*[![:space:]]}"}"
+        [ -n "$domain" ] || continue
+        if ! validate_domain "$domain"; then
+            [ "$strict" != 1 ] && continue
+            fail "域名无效：$domain"
+        fi
+        printf '%s\n' "$domain" || return 1
+    done
 }
 
 validate_ipv4() {
@@ -121,17 +124,12 @@ resolve_ipv4() {
 }
 
 collect_domains() {
-    local output="$1" file line domain
+    local output="$1" file
     ensure_private_dir "$SUBSCRIPTION_DIR" || return 1
     : > "$output" || return 1
     for file in "$SUBSCRIPTION_DIR"/*.list; do
         [ -f "$file" ] || continue
-        while IFS= read -r line || [ -n "$line" ]; do
-            domain="$(trim "${line%%#*}")"
-            [ -n "$domain" ] || continue
-            validate_domain "$domain" || continue
-            printf '%s\n' "$domain" >> "$output"
-        done < "$file"
+        normalize_domains 0 < "$file" >> "$output" || return 1
     done
     sort -u "$output" -o "$output"
 }
@@ -142,7 +140,7 @@ run_hooks() {
     for hook in "$HOOK_DIR"/*; do
         [ -x "$hook" ] || continue
         if [ -n "$changed" ]; then
-            name="$(basename "$hook")"
+            name="${hook##*/}"
             subscription="${SUBSCRIPTION_DIR}/${name}.list"
             [ -s "$changed" ] || continue
             [ -s "$subscription" ] || continue
@@ -159,7 +157,7 @@ run_hooks() {
 acquire_lock() {
     local wait="${1:-0}"
     command -v flock >/dev/null 2>&1 || fail "缺少依赖命令：flock"
-    mkdir -p "$(dirname "$LOCK_FILE")" || fail "无法创建 Provider DNS 锁目录"
+    mkdir -p "${LOCK_FILE%/*}" || fail "无法创建 Provider DNS 锁目录"
     exec 8>"$LOCK_FILE" || fail "无法创建 Provider DNS 锁文件"
     chmod 600 "$LOCK_FILE" 2>/dev/null || true
     if [[ "$wait" =~ ^[0-9]+$ ]] && [ "$wait" -gt 0 ]; then
@@ -177,7 +175,7 @@ release_lock() {
 refresh_cache() {
     local run_hooks="${1:-0}" lock_wait="${PROVIDERDNS_LOCK_WAIT:-0}"
     local candidate_domains="${2:-}"
-    local domains tmp changed_domains domain now ip cache="$CACHE_FILE"
+    local domains tmp changed_domains="" domain now ip cache="$CACHE_FILE"
     require_resolver
     ensure_private_dir "$HOOK_DIR" || fail "无法创建 Provider DNS 运行目录"
     ensure_private_dir "$STATE_DIR" || fail "无法创建 Provider DNS 运行目录"
@@ -190,8 +188,10 @@ refresh_cache() {
     TEMP_FILES+=("$domains")
     tmp="$(mktemp "${CACHE_FILE}.XXXXXX")" || fail "无法创建缓存临时文件"
     TEMP_FILES+=("$tmp")
-    changed_domains="$(mktemp /tmp/providerdns-changed.XXXXXX)" || fail "无法创建变更域名临时文件"
-    TEMP_FILES+=("$changed_domains")
+    if [ "$run_hooks" = 1 ]; then
+        changed_domains="$(mktemp /tmp/providerdns-changed.XXXXXX)" || fail "无法创建变更域名临时文件"
+        TEMP_FILES+=("$changed_domains")
+    fi
 
     collect_domains "$domains" || fail "无法收集 Provider DNS 订阅域名"
     if [ -n "$candidate_domains" ]; then
@@ -231,7 +231,7 @@ refresh_cache() {
                 changed_value=(current[2]!=old_ip || current[3]!=old[3])
                 updated=(!changed_value && old[4]!="" ? old[4] : now)
                 printf "%s\t%s\t%s\t%s\n", domain, current[2], current[3], updated
-                if (changed_value) print domain > changed
+                if (changed_value && changed!="") print domain > changed
             }
         }
     ' "$tmp" "$cache" > "$domains" || fail "无法合并 Provider DNS 缓存"
@@ -280,19 +280,26 @@ write_if_changed() {
     mv "$tmp" "$target" || fail "无法写入文件：$target"
 }
 
+# 小型 hook/unit 按完整字节比较，仅变化时分配临时文件并原子发布。
+write_text_if_changed() {
+    local target="$1" content="$2" tmp
+    cmp -s "$target" <(printf '%s' "$content") 2>/dev/null && return 1
+    tmp="$(mktemp "${target}.XXXXXX")" || fail "无法创建临时文件：$target"
+    TEMP_FILES+=("$tmp")
+    printf '%s' "$content" > "$tmp" || fail "无法写入文件：$target"
+    mv "$tmp" "$target" || fail "无法写入文件：$target"
+}
+
 install_units() {
-    local script tmp changed=0
+    local script changed=0
     require_root
     if [ "$ROOT" = "/" ] && ! command -v systemctl >/dev/null 2>&1; then
         fail "未检测到 systemctl，无法安装 Provider DNS timer"
     fi
     script="$(realpath "$0")"
-    mkdir -p "$(dirname "$SERVICE_FILE")" || fail "无法创建 systemd 配置目录"
+    mkdir -p "${SERVICE_FILE%/*}" || fail "无法创建 systemd 配置目录"
 
-    tmp="$(mktemp "${SERVICE_FILE}.XXXXXX")" || fail "无法创建 systemd service 临时文件"
-    TEMP_FILES+=("$tmp")
-    cat > "$tmp" << EOF || fail "无法生成 Provider DNS service"
-[Unit]
+    write_text_if_changed "$SERVICE_FILE" "[Unit]
 Description=Provider DNS refresh service
 After=network-online.target
 Wants=network-online.target
@@ -301,14 +308,10 @@ Wants=network-online.target
 Type=oneshot
 Environment=PROVIDERDNS_QUIET=1
 Environment=PROVIDERDNS_LOCK_WAIT=10
-ExecStart=/bin/bash "${script}" --refresh hooks
-EOF
-    write_if_changed "$tmp" "$SERVICE_FILE" && changed=1
+ExecStart=/bin/bash \"${script}\" --refresh hooks
+" && changed=1
 
-    tmp="$(mktemp "${TIMER_FILE}.XXXXXX")" || fail "无法创建 systemd timer 临时文件"
-    TEMP_FILES+=("$tmp")
-    cat > "$tmp" << 'EOF' || fail "无法生成 Provider DNS timer"
-[Unit]
+    write_text_if_changed "$TIMER_FILE" '[Unit]
 Description=Provider DNS refresh timer
 
 [Timer]
@@ -319,8 +322,7 @@ Unit=providerdns.service
 
 [Install]
 WantedBy=timers.target
-EOF
-    write_if_changed "$tmp" "$TIMER_FILE" && changed=1
+' && changed=1
     chmod 644 "$SERVICE_FILE" "$TIMER_FILE" || fail "无法设置 systemd unit 权限"
 
     [ "$ROOT" != "/" ] && return 0
@@ -337,68 +339,46 @@ EOF
 }
 
 set_consumer() {
-    local consumer="$1" domains_file="$2" hook_command="$3" subscription hook subscription_tmp hook_tmp changed=0
+    local consumer="$1" domains_file="${2:-}" hook_command="${3:-}"
+    local subscription hook subscription_tmp changed=0 action=已取消
     require_root
     [[ "$consumer" =~ ^[A-Za-z0-9._-]+$ ]] || fail "consumer 名称无效"
-    [ -f "$domains_file" ] || fail "订阅文件不存在：$domains_file"
-    [ -n "$hook_command" ] || fail "hook 命令为空"
-    ensure_private_dir "$SUBSCRIPTION_DIR" || fail "无法创建 Provider DNS 配置目录"
-    ensure_private_dir "$HOOK_DIR" || fail "无法创建 Provider DNS 配置目录"
+    if [ "$#" -gt 1 ]; then
+        [ -f "$domains_file" ] || fail "订阅文件不存在：$domains_file"
+        [ -n "$hook_command" ] || fail "hook 命令为空"
+        ensure_private_dir "$SUBSCRIPTION_DIR" || fail "无法创建 Provider DNS 配置目录"
+        ensure_private_dir "$HOOK_DIR" || fail "无法创建 Provider DNS 配置目录"
+    fi
     acquire_lock "${PROVIDERDNS_LOCK_WAIT:-10}" || fail "已有 Provider DNS 任务正在执行，请稍后重试"
     subscription="${SUBSCRIPTION_DIR}/${consumer}.list"
     hook="${HOOK_DIR}/${consumer}"
-    subscription_tmp="$(mktemp "${subscription}.XXXXXX")" || fail "无法创建订阅临时文件"
-    hook_tmp="$(mktemp "${hook}.XXXXXX")" || fail "无法创建 hook 临时文件"
-    TEMP_FILES+=("$subscription_tmp" "$hook_tmp")
-    : > "$subscription_tmp" || fail "无法生成订阅"
-    while IFS= read -r domain || [ -n "$domain" ]; do
-        domain="$(trim "${domain%%#*}")"
-        [ -n "$domain" ] || continue
-        validate_domain "$domain" || fail "域名无效：$domain"
-        printf '%s\n' "$domain" >> "$subscription_tmp"
-    done < "$domains_file"
-    sort -u "$subscription_tmp" -o "$subscription_tmp"
-    if [ -s "$subscription_tmp" ]; then
-        {
-            printf '%s\n' '#!/bin/bash'
-            printf '%s\n' "$hook_command"
-        } > "$hook_tmp" || fail "无法生成 hook"
-        write_if_changed "$hook_tmp" "$hook" && changed=1
-        write_if_changed "$subscription_tmp" "$subscription" && changed=1
-        chmod 700 "$hook" || fail "无法设置 hook 权限"
-        chmod 600 "$subscription" || fail "无法设置订阅权限"
-        install_units
-        release_lock
-        if [ "$changed" = "1" ]; then
-            log_info "Provider DNS consumer 已更新：$consumer"
-        else
-            log_info "Provider DNS consumer 未变化：$consumer"
+    if [ "$#" -gt 1 ]; then
+        subscription_tmp="$(mktemp "${subscription}.XXXXXX")" || fail "无法创建订阅临时文件"
+        TEMP_FILES+=("$subscription_tmp")
+        normalize_domains 1 < "$domains_file" > "$subscription_tmp" || fail "无法生成订阅"
+        sort -u "$subscription_tmp" -o "$subscription_tmp" || fail "无法排序订阅"
+        if [ -s "$subscription_tmp" ]; then
+            write_text_if_changed "$hook" $'#!/bin/bash\n'"$hook_command"$'\n' && changed=1
+            write_if_changed "$subscription_tmp" "$subscription" && changed=1
+            chmod 700 "$hook" || fail "无法设置 hook 权限"
+            chmod 600 "$subscription" || fail "无法设置订阅权限"
+            install_units
+            release_lock
+            if [ "$changed" = "1" ]; then
+                log_info "Provider DNS consumer 已更新：$consumer"
+            else
+                log_info "Provider DNS consumer 未变化：$consumer"
+            fi
+            return 0
         fi
     else
-        rm -f "$subscription_tmp" "$hook_tmp" "$subscription" "$hook"
-        cleanup_unused_locked
-        release_lock
-        log_info "Provider DNS consumer 已取消：$consumer"
+        [[ -e "$subscription" || -e "$hook" ]] || action=已不存在
     fi
-}
-
-unset_consumer() {
-    local consumer="$1" subscription hook existed=0
-    require_root
-    [[ "$consumer" =~ ^[A-Za-z0-9._-]+$ ]] || fail "consumer 名称无效"
-    acquire_lock "${PROVIDERDNS_LOCK_WAIT:-10}" || fail "已有 Provider DNS 任务正在执行，请稍后重试"
-    subscription="${SUBSCRIPTION_DIR}/${consumer}.list"
-    hook="${HOOK_DIR}/${consumer}"
-    [ ! -e "$subscription" ] || existed=1
-    [ ! -e "$hook" ] || existed=1
+    # 显式注销与空订阅共用 owner 回收路径；其他订阅始终由共享运行时检查。
     rm -f "$subscription" "$hook" || fail "无法取消 Provider DNS consumer：$consumer"
     cleanup_unused_locked
     release_lock
-    if [ "$existed" = "1" ]; then
-        log_info "Provider DNS consumer 已取消：$consumer"
-    else
-        log_info "Provider DNS consumer 已不存在：$consumer"
-    fi
+    log_info "Provider DNS consumer ${action}：$consumer"
 }
 
 cleanup_unused_locked() {
@@ -445,6 +425,7 @@ cleanup_unused_locked() {
 
 main() {
     local action="${1:-}" mode="${2:-}"
+    # set/unset、refresh、snapshot、cache、lookup 与 install 是上游和 timer 的内部协议。
     case "$action" in
         --install)
             [ "$#" -eq 1 ] || fail "--install 不支持额外参数"
@@ -459,7 +440,7 @@ main() {
             ;;
         --unset)
             [ "$#" -eq 2 ] || fail "--unset 需要且仅需要 consumer"
-            unset_consumer "$mode"
+            set_consumer "$mode"
             ;;
         --refresh)
             case "$mode" in
@@ -492,10 +473,8 @@ main() {
                 resolve_ipv4 "$2"
             fi
             ;;
-        --cleanup)
-            if [ "$#" -ne 2 ] || [ "$mode" != "unused" ]; then
-                fail "cleanup 模式无效"
-            fi
+        --clean)
+            [ "$#" -eq 1 ] || fail "--clean 不支持额外参数"
             require_root
             acquire_lock "${PROVIDERDNS_LOCK_WAIT:-10}" ||
                 fail "已有 Provider DNS 任务正在执行，请稍后重试"
