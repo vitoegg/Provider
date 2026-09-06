@@ -10,8 +10,6 @@ readonly FORWARDAWS_RULES_FILE="${NFT_INCLUDE_DIR}/forwardaws.nft"
 readonly NFT_INCLUDE_MARKER="# Managed by Provider nftables.sh"
 readonly STATE_DIR="/etc/forwardaws"
 readonly STATE_FILE="${STATE_DIR}/state.db"
-readonly RULES_STATE_FILE="${STATE_DIR}/rules.db"
-readonly CONFIG_FILE="${STATE_DIR}/config.env"
 readonly GLOBAL_LOCK_FILE="/run/forwardaws.lock"
 readonly IPV4_FORWARD_SYSCTL_FILE="/etc/sysctl.d/99-forwardaws.conf"
 readonly SYSTEMD_SYSTEM_DIR="/etc/systemd/system"
@@ -33,7 +31,7 @@ TX_DIR="" TX_RULES="" TX_PROTECTION=0 TX_WHITELIST=any
 TX_WHITELIST_FILE="" TX_PING=any
 TX_DOMAINS_FILE=""
 log_info() {
-    [ "${FORWARDAWS_QUIET:-${QUIET:-0}}" = "1" ] || printf '[INFO] %s\n' "$*"
+    [ "${FORWARDAWS_QUIET:-0}" = "1" ] || printf '[INFO] %s\n' "$*"
 }
 log_warning() {
     printf '[WARNING] %s\n' "$*" >&2
@@ -278,11 +276,11 @@ ensure_dependencies() {
     command -v stat >/dev/null 2>&1 || missing+=(coreutils)
     [ "${#missing[@]}" -gt 0 ] || return 0
     command -v apt-get >/dev/null 2>&1 || abort_operation "缺少依赖且未检测到 apt-get：${missing[*]}"
-    FORWARDAWS_QUIET=0 QUIET=0 log_info "正在安装缺失依赖：${missing[*]}"
+    FORWARDAWS_QUIET=0 log_info "正在安装缺失依赖：${missing[*]}"
     DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || abort_operation "软件包索引更新失败"
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
         abort_operation "依赖安装失败：${missing[*]}"
-    FORWARDAWS_QUIET=0 QUIET=0 log_info "已安装依赖：${missing[*]}"
+    FORWARDAWS_QUIET=0 log_info "已安装依赖：${missing[*]}"
 }
 acquire_global_lock() {
     local wait="${FORWARDAWS_LOCK_WAIT:-0}" deadline
@@ -313,37 +311,25 @@ ensure_for_write() {
 converge_owned_files() {
     local whitelist path
     whitelist="$TX_WHITELIST_FILE $PARSED_WHITELIST"
-    find "$STATE_DIR" -maxdepth 1 -type f \
-        ! -name "${STATE_FILE##*/}" ! -name "${RULES_STATE_FILE##*/}" ! -name "${CONFIG_FILE##*/}" \
-        -delete 2>/dev/null || true
+    find "$STATE_DIR" -maxdepth 1 -type f ! -name "${STATE_FILE##*/}" -delete 2>/dev/null || true
     while IFS= read -r path; do
         [[ " $whitelist " == *" $path "* ]] || rm -f -- "$path" || return 1
     done < <(find "$NFT_INCLUDE_DIR" -maxdepth 1 -type f -name 'forwardaws*' \
         ! -name "${FORWARDAWS_RULES_FILE##*/}" 2>/dev/null)
 }
 load_state() {
-    local key value file="$STATE_FILE"
+    local key value
     local -A values=()
     TX_SOURCE="$STATE_FILE"
-    if [ ! -f "$STATE_FILE" ]; then
-        file="$CONFIG_FILE"
-        TX_SOURCE="$RULES_STATE_FILE"
-    fi
-    [ -f "$file" ] || file=/dev/null
     [ -f "$TX_SOURCE" ] || TX_SOURCE=/dev/null
     while IFS='=' read -r key value || [ -n "$key" ]; do
-        [[ "$key" =~ ^(PROTECTION_ENABLED|PROTECT_(WHITELIST|WHITELIST_FILE|PING|NOPING))$ ]] || continue
+        [[ "$key" =~ ^(PROTECTION_ENABLED|PROTECT_(WHITELIST|WHITELIST_FILE|PING))$ ]] || continue
         [ "${values[$key]+set}" ] || values[$key]="$value"
-    done < "$file"
+    done < "$TX_SOURCE"
     TX_PROTECTION="${values[PROTECTION_ENABLED]-0}"
     TX_WHITELIST="${values[PROTECT_WHITELIST]-any}"
     TX_WHITELIST_FILE="${values[PROTECT_WHITELIST_FILE]-}"
-    TX_PING="${values[PROTECT_PING]:-}"
-    if [ -z "$TX_PING" ]; then
-        TX_PING="${values[PROTECT_NOPING]-any}"
-        [ "$TX_PING" != 0 ] || TX_PING=any
-        [ "$TX_PING" != 1 ] || TX_PING=off
-    fi
+    TX_PING="${values[PROTECT_PING]:-any}"
     [ "${1:-validate}" != raw ] || return 0
     require_success "保护状态文件无效" test "$TX_PROTECTION" = 0 -o "$TX_PROTECTION" = 1 || return 1
     [[ "$TX_WHITELIST" = any || "$TX_WHITELIST" = /*.nft ]] || abort_operation "whitelist 状态无效: $TX_WHITELIST"
@@ -480,7 +466,7 @@ snapshot_candidate() {
 }
 list_owned_nft_tables() {
     nft list tables 2>/dev/null |
-        awk '$1=="table" && $3 ~ /^for?wardaws/ { print $2 "\t" $3 }'
+        awk '$1=="table" && $3 ~ /^forwardaws/ { print $2 "\t" $3 }'
 }
 nft_purge_prelude() {
     printf '%s\n' "$@" | sort -u |
@@ -665,8 +651,6 @@ apply_candidate_state() {
     fi
     require_success "DNS 订阅未对齐，声明已提交；修复后请执行 --sync" \
         sync_providerdns_subscription || return 1
-    require_success "旧声明文件未能回收；修复后请执行 --sync" \
-        rm -f "$RULES_STATE_FILE" "$CONFIG_FILE" || return 1
     if [ "$include_missing" -eq 1 ] || [ "$rules_changed" -eq 1 ]; then
         ensure_nft_main_config_include || return 1
     fi
