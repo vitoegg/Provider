@@ -298,6 +298,7 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 --unset <consumer>                  移除订阅
 --refresh                           刷新 DNS cache
 --refresh hooks                     刷新 DNS cache 并运行受影响 hook
+--snapshot <cache|refresh> <file>    批量输出候选域名缓存记录
 --cache <domain>                    输出缓存记录
 --lookup <domain>                   输出缓存或即时解析 IPv4
 --cleanup unused                    无订阅时清理运行时

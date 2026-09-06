@@ -41,6 +41,7 @@ show_help() {
   providerdns.sh --refresh
   providerdns.sh --refresh hooks
   providerdns.sh --cache <域名>
+  providerdns.sh --snapshot <cache|refresh> <域名文件>
   providerdns.sh --lookup <域名>
   providerdns.sh --cleanup unused
   providerdns.sh -h|--help
@@ -175,8 +176,8 @@ release_lock() {
 
 refresh_cache() {
     local run_hooks="${1:-0}" lock_wait="${PROVIDERDNS_LOCK_WAIT:-0}"
-    local domains tmp changed_domains domain now ip
-    local old_ip old_status old_time new_ip new_status updated_at
+    local candidate_domains="${2:-}"
+    local domains tmp changed_domains domain now ip cache="$CACHE_FILE"
     require_resolver
     ensure_private_dir "$HOOK_DIR" || fail "无法创建 Provider DNS 运行目录"
     ensure_private_dir "$STATE_DIR" || fail "无法创建 Provider DNS 运行目录"
@@ -185,7 +186,7 @@ refresh_cache() {
         return 75
     fi
 
-    domains="$(mktemp /tmp/providerdns-domains.XXXXXX)" || fail "无法创建域名临时文件"
+    domains="$(mktemp "${CACHE_FILE}.domains.XXXXXX")" || fail "无法创建域名临时文件"
     TEMP_FILES+=("$domains")
     tmp="$(mktemp "${CACHE_FILE}.XXXXXX")" || fail "无法创建缓存临时文件"
     TEMP_FILES+=("$tmp")
@@ -193,47 +194,81 @@ refresh_cache() {
     TEMP_FILES+=("$changed_domains")
 
     collect_domains "$domains" || fail "无法收集 Provider DNS 订阅域名"
+    if [ -n "$candidate_domains" ]; then
+        cat "$candidate_domains" >> "$domains" || fail "无法读取候选域名"
+        sort -u "$domains" -o "$domains" || fail "无法合并候选域名"
+    fi
     now="$(date +%s)"
     while IFS= read -r domain || [ -n "$domain" ]; do
         [ -n "$domain" ] || continue
-        old_ip=""
-        old_status=""
-        old_time=""
-        if [ -s "$CACHE_FILE" ]; then
-            IFS=$'\t' read -r old_ip old_status old_time < <(
-                awk -v d="$domain" '$1 == d { print $2 "\t" $3 "\t" $4; exit }' "$CACHE_FILE"
-            )
-        fi
         if ip="$(resolve_ipv4 "$domain")"; then
-            new_ip="$ip"
-            new_status="ok"
+            printf '%s\t%s\tok\n' "$domain" "$ip" >> "$tmp" || fail "无法保存解析结果"
         else
-            validate_ipv4 "$old_ip" || old_ip="-"
-            new_ip="$old_ip"
-            new_status="failed"
-        fi
-        updated_at="$now"
-        if [ "$old_ip" = "$new_ip" ] && [ "$old_status" = "$new_status" ] && [ -n "$old_time" ]; then
-            updated_at="$old_time"
-        fi
-        printf '%s\t%s\t%s\t%s\n' "$domain" "$new_ip" "$new_status" "$updated_at" >> "$tmp"
-        if [ "$new_ip" != "$old_ip" ] || [ "$new_status" != "$old_status" ]; then
-            printf '%s\n' "$domain" >> "$changed_domains"
+            printf '%s\t-\tfailed\n' "$domain" >> "$tmp" || fail "无法保存解析结果"
         fi
     done < "$domains"
-    if cmp -s "$tmp" "$CACHE_FILE" 2>/dev/null; then
+    [ -f "$cache" ] || cache=/dev/null
+    # 域名收集文件复用为最终缓存；旧缓存扫描一次，只保留本轮需要的记录。
+    awk -v now="$now" -v changed="$changed_domains" '
+        function valid_ip(ip, parts, n, i) {
+            if (ip !~ /^[0-9]+[.][0-9]+[.][0-9]+[.][0-9]+$/) return 0
+            n=split(ip, parts, ".")
+            for (i=1; i<=n; i++) if (parts[i]+0>255) return 0
+            return n==4
+        }
+        FILENAME==ARGV[1] { order[++count]=$1; result[$1]=$0; next }
+        ($1 in result) && !seen[$1]++ { previous[$1]=$0 }
+        END {
+            for (i=1; i<=count; i++) {
+                domain=order[i]
+                split(result[domain], current)
+                split(previous[domain], old)
+                old_ip=old[2]
+                if (current[3]=="failed") {
+                    if (!valid_ip(old_ip)) old_ip="-"
+                    current[2]=old_ip
+                }
+                changed_value=(current[2]!=old_ip || current[3]!=old[3])
+                updated=(!changed_value && old[4]!="" ? old[4] : now)
+                printf "%s\t%s\t%s\t%s\n", domain, current[2], current[3], updated
+                if (changed_value) print domain > changed
+            }
+        }
+    ' "$tmp" "$cache" > "$domains" || fail "无法合并 Provider DNS 缓存"
+    if cmp -s "$domains" "$CACHE_FILE" 2>/dev/null; then
         release_lock
         log_info "Provider DNS 缓存未变化，无需更新"
         return 0
     fi
 
-    chmod 600 "$tmp" || fail "无法设置 DNS 缓存权限"
-    mv "$tmp" "$CACHE_FILE" || fail "无法发布 Provider DNS 缓存"
+    chmod 600 "$domains" || fail "无法设置 DNS 缓存权限"
+    mv "$domains" "$CACHE_FILE" || fail "无法发布 Provider DNS 缓存"
     release_lock
     log_info "Provider DNS 缓存已更新"
     if [ "$run_hooks" = "1" ]; then
         run_hooks "$changed_domains"
     fi
+}
+
+snapshot_domains() {
+    local mode="$1" domains="$2" domain cache=/dev/null
+    [[ "$mode" = cache || "$mode" = refresh ]] || fail "快照模式必须为 cache 或 refresh"
+    [ -f "$domains" ] || fail "候选域名文件不存在：$domains"
+    while IFS= read -r domain || [ -n "$domain" ]; do
+        [ -z "$domain" ] || validate_domain "$domain" || fail "候选域名无效：$domain"
+    done < "$domains"
+    if [ "$mode" = refresh ]; then
+        require_root
+        PROVIDERDNS_QUIET=1 refresh_cache 0 "$domains" || return
+    fi
+    [ ! -f "$CACHE_FILE" ] || cache="$CACHE_FILE"
+    awk '
+        FILENAME==ARGV[1] { records[$1]=$0; next }
+        NF && !seen[$1]++ {
+            if ($1 in records) print records[$1]
+            else print $1 "\t-\tpending\t0"
+        }
+    ' "$cache" "$domains"
 }
 
 write_if_changed() {
@@ -444,6 +479,10 @@ main() {
         --cache)
             [ "$#" -eq 2 ] || fail "--cache 需要且仅需要域名"
             cache_record "$2"
+            ;;
+        --snapshot)
+            [ "$#" -eq 3 ] || fail "--snapshot 需要模式与域名文件"
+            snapshot_domains "$2" "$3"
             ;;
         --lookup)
             [ "$#" -eq 2 ] || fail "--lookup 需要且仅需要域名"
