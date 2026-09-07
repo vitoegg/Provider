@@ -192,6 +192,8 @@ domain:pddpic.com
 domain:sina.com
 domain:sina.net
 domain:sinaapp.com
+domain:sinaedge.com
+domain:sinajs.com
 domain:sinacdn.com
 domain:sinacloud.com
 domain:sinacloud.net
@@ -199,9 +201,11 @@ domain:sinaimg.com
 domain:wbimg.com
 domain:weibo.com
 domain:weibo.tv
+domain:weibopay.com
 domain:weibocdn.com
 domain:weiboums.com
 domain:xiaoka.tv
+domain:xhaiwai.com
 # > Tencent
 domain:foxmail.com
 domain:gtimg.com
@@ -229,10 +233,13 @@ domain:weixinbridge.com
 domain:weixinsxy.com
 full:file-igamecj.akamaized.net
 # > Xiaohongshu
+domain:fengkongcloud.com
 domain:kuiniuca.com
 domain:tianwenca.com
 domain:xhscdn.com
 domain:xhscdn.net
+domain:xhsrcdn.com
+domain:xhslink.com
 domain:xiaohongshu.com
 domain:xinqiucc.com
 # > Xiaomi
