@@ -25,6 +25,32 @@
       }
     },
     {
+      "id": "direct",
+      "path": "RuleSet/Extra/MosDNS/direct.txt",
+      "sources": {
+        "domain_v2fly": [
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/tencent",
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/ximalaya",
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/yuewen",
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/okjike",
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/xiaoyuzhou",
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/xiaohongshu",
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/askdiandian",
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/bilibili",
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/bilibili-cdn",
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/sina",
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/alibaba",
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/eleme",
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/hunantv",
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/pinduoduo",
+          "https://raw.githubusercontent.com/v2fly/domain-list-community/master/data/chinaunicom"
+        ],
+        "domain_mosdns": [
+          "RuleSet/Extra/BaseSet/MosDNS/direct.txt"
+        ]
+      }
+    },
+    {
       "id": "china",
       "path": "RuleSet/Extra/MosDNS/china.txt",
       "sources": {

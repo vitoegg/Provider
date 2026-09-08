@@ -37,6 +37,11 @@ DNS_MODIFIERS = frozenset({
     'dnsrewrite', 'dnstype', 'important', 'respgeo'
 })
 UNCONDITIONAL_MODIFIERS = frozenset({'important'})
+V2FLY_DROP_ATTRIBUTES = frozenset({'@ads', '@!cn'})
+EXPECTED_REASONS = frozenset({
+    'converted', 'hosts', 'comment', 'empty',
+    'header', 'include', 'attribute'
+})
 REMOTE_PREFIXES = ("https://", "http://")
 
 DOMAIN_FAMILY = "domain"
@@ -45,6 +50,7 @@ FORMAT_FAMILIES = {
     "domain_adguard": DOMAIN_FAMILY,
     "domain_surge": DOMAIN_FAMILY,
     "domain_mosdns": DOMAIN_FAMILY,
+    "domain_v2fly": DOMAIN_FAMILY,
     "ip_cidr": IP_FAMILY,
     "ip_nft": IP_FAMILY,
 }
@@ -252,6 +258,31 @@ def parse_mosdns_line(line: str) -> Tuple[List[DomainRule], str]:
     return [(kind, domain)], "converted"
 
 
+def parse_v2fly_line(line: str) -> Tuple[List[DomainRule], str]:
+    line = line.split('#', 1)[0].strip()
+    if not line:
+        return [], "comment"
+
+    entry, *annotations = line.split()
+    if any(not item.startswith(('@', '&')) for item in annotations):
+        return [], "invalid"
+    if entry.startswith('include:'):
+        return [], "include"
+    if any(item.lower() in V2FLY_DROP_ATTRIBUTES for item in annotations):
+        return [], "attribute"
+
+    kind, separator, domain = entry.partition(':')
+    if not separator:
+        kind, domain = DOMAIN, entry
+    elif kind not in (DOMAIN, FULL):
+        return [], "unsupported"
+
+    domain = domain.lower()
+    if not is_valid_domain(domain):
+        return [], "invalid"
+    return [(kind, domain)], "converted"
+
+
 def parse_ip_cidr_line(line: str) -> Tuple[List, str]:
     if ',' in line:
         parts = [part.strip() for part in line.split(',')]
@@ -304,6 +335,7 @@ def parse_nft(content: str, label: str) -> Tuple[List, Counter]:
 LINE_PARSERS = {
     "domain_surge": parse_surge_line,
     "domain_mosdns": parse_mosdns_line,
+    "domain_v2fly": parse_v2fly_line,
 }
 
 
@@ -339,7 +371,7 @@ def format_ignored(stats: Counter) -> str:
     ignored = {
         reason: count
         for reason, count in stats.items()
-        if reason not in ("converted", "hosts", "comment", "empty", "header")
+        if reason not in EXPECTED_REASONS
     }
     if not ignored:
         return ""
