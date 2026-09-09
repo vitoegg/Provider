@@ -81,6 +81,7 @@
         ]
       },
       "exclude": [
+        "RuleSet/Extra/BaseSet/MosDNS/whitelist.txt",
         "RuleSet/Extra/MosDNS/apple.txt",
         "RuleSet/Extra/MosDNS/reject.txt"
       ]
