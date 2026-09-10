@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 
 Bounds = List[Tuple[int, int]]
 Source = Tuple[str, Tuple[str, ...]]
+Change = Tuple[Path, str, int, int]
 
 CODE_PATTERN = re.compile(r"^\d{6}$")
 TRAILING_COMMENT_PATTERN = re.compile(r"\s+[#!;].*$")
@@ -28,6 +29,7 @@ CONFIG_RELATIVE = "Script/Workflow/firewall_config.json"
 SOURCE_GROUPS = ("city", "retain", "exclude")
 BASESET_RELATIVE = "RuleSet/Extra/BaseSet/Firewall/whitelist.txt"
 OUTPUT_RELATIVE = "RuleSet/Extra/Firewall/whitelist.nft"
+TXT_OUTPUT_RELATIVE = "RuleSet/Extra/Firewall/whitelist.txt"
 USER_AGENT = "Provider-Firewall-Workflow"
 FETCH_WORKERS = 8
 DOWNLOAD_ROUNDS = 3
@@ -249,7 +251,6 @@ def validate(networks: List[ipaddress.IPv4Network]) -> None:
 
 
 def render_nft(networks: List[ipaddress.IPv4Network]) -> str:
-    validate(networks)
     elements = ",\n".join(f"        {network}" for network in networks)
     return (
         "set whitelist4 {\n"
@@ -299,11 +300,20 @@ def build_caption(old_count: int, new_count: int, added: int, removed: int) -> s
     )
 
 
-def write_github_output(has_changes: bool, added: int, removed: int, caption: str) -> None:
+def summarize(changes: List[Change], total: int) -> str:
+    if not changes:
+        return "no changes"
+    counts = {(added, removed) for _, _, added, removed in changes}
+    if len(changes) == total and len(counts) == 1:
+        added, removed = counts.pop()
+        return f"whitelist (+{added} -{removed})"
+    return ", ".join(f"{path.name} (+{added} -{removed})" for path, _, added, removed in changes)
+
+
+def write_github_output(has_changes: bool, summary: str, caption: str) -> None:
     output_path = os.environ.get("GITHUB_OUTPUT")
     if not output_path:
         return
-    summary = f"whitelist (+{added} -{removed})" if has_changes else "no changes"
     with open(output_path, "a", encoding="utf-8") as file_handle:
         file_handle.write(f"has_changes={'true' if has_changes else 'false'}\n")
         file_handle.write(f"change_summary={summary}\n")
@@ -317,6 +327,7 @@ def main() -> int:
     try:
         codes = parse_city_codes(os.environ.get("WHITELIST_CITY_CODES", ""))
         output_path = workspace_path(workspace, OUTPUT_RELATIVE)
+        txt_output_path = workspace_path(workspace, TXT_OUTPUT_RELATIVE)
         baseset_path = workspace_path(workspace, BASESET_RELATIVE)
 
         config = load_config(workspace_path(workspace, CONFIG_RELATIVE))
@@ -341,24 +352,35 @@ def main() -> int:
         )
 
         collapsed = list(ipaddress.collapse_addresses(from_bounds(kept) + baseset))
-        nft_text = render_nft(collapsed)
-
-        existing_text = output_path.read_text(encoding="utf-8") if output_path.is_file() else ""
-        has_changes = nft_text != existing_text
-        old_elements = extract_elements(existing_text)
+        validate(collapsed)
         new_elements = {str(network) for network in collapsed}
-        added = len(new_elements - old_elements)
-        removed = len(old_elements - new_elements)
+
+        outputs = []
+        for path, content in (
+            (output_path, render_nft(collapsed)),
+            (txt_output_path, "".join(f"{network}\n" for network in collapsed)),
+        ):
+            previous = path.read_text(encoding="utf-8") if path.is_file() else ""
+            outputs.append((path, content, previous, extract_elements(previous)))
+
+        changes = [
+            (path, content, len(new_elements - old), len(old - new_elements))
+            for path, content, previous, old in outputs
+            if content != previous
+        ]
+        baseline = next((old for _, _, previous, old in outputs if previous), new_elements)
+        added = len(new_elements - baseline)
+        removed = len(baseline - new_elements)
+        summary = summarize(changes, len(outputs))
 
         caption = ""
-        if has_changes:
-            atomic_write(output_path, nft_text)
-            caption = build_caption(len(old_elements), len(new_elements), added, removed)
-            print(f"已写入 {output_path}：{len(city) + len(baseset)} -> {len(collapsed)} 条（+{added} -{removed}）")
-        else:
-            print(f"无变化：{len(collapsed)} 条")
+        for path, content, _, _ in changes:
+            atomic_write(path, content)
+        if added or removed:
+            caption = build_caption(len(baseline), len(new_elements), added, removed)
+        print(f"{summary}：{len(city) + len(baseset)} -> {len(collapsed)} 条")
 
-        write_github_output(has_changes, added, removed, caption)
+        write_github_output(bool(changes), summary, caption)
     except Exception as error:
         print(f"错误: {error}", file=sys.stderr)
         return 1

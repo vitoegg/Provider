@@ -47,7 +47,7 @@ jobs:
           set -euo pipefail
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add -- RuleSet/Extra/Firewall/whitelist.nft
+          git add -- RuleSet/Extra/Firewall/whitelist.nft RuleSet/Extra/Firewall/whitelist.txt
           git commit -m "${COMMIT_MESSAGE}"
           for attempt in 1 2 3; do
             if git push; then exit 0; fi
@@ -64,7 +64,7 @@ jobs:
           exit 1
 
       - name: Send Telegram Notification
-        if: steps.generate.outputs.has_changes == 'true'
+        if: steps.generate.outputs.caption != ''
         run: |
           curl -sS --fail-with-body \
             -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto" \
