@@ -409,7 +409,7 @@ def build_notification(result, executed_at):
     elif result["status"] == "success":
         lines = ["✅ 签到成功"]
         if result["reward"]:
-            lines.append(f"🍪 本次获得：{result['reward']} 饼")
+            lines[0] += f"，获得 {result['reward']} 饼"
         if result["days"]:
             lines.append(f"📅 连续签到：{result['days']} 天")
         lines.extend(f"⚠️ {message}" for message, _ in result["warnings"])
