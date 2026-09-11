@@ -397,7 +397,6 @@ full:ad.shenshiads.com
 full:ad.shunchangzhixing.com
 full:ad.tencentmusic.com
 full:ad.v3mh.com
-full:ad.weibo.com
 full:ad.winrar.com.cn
 full:ad.ximalaya.com
 full:ad.xunkids.com
@@ -427,9 +426,11 @@ full:adjust.cn
 full:adjust.com
 full:adks.hpplay.cn
 full:adlink-api.huan.tv
+full:adlog.vivo.com.cn
 full:adm.funshion.com
 full:admarketing.yahoo.net
 full:admobile.top
+full:adreq.vivo.com.cn
 full:ads-api-o.api.leiniao.com
 full:ads-api.tiktok.com
 full:ads-api.twitter.com
@@ -531,7 +532,9 @@ full:adx.appsdk.com.cn
 full:adx.sogaha.cn
 full:adx.tuia.cn
 full:adxlog-adnet.vivo.com.cn
+full:adxlog.vivo.com.cn
 full:adxserver.ad.cmvideo.cn
+full:adxstatic.vivo.com.cn
 full:aegis.qq.com
 full:aem.dentsuchina.cn
 full:afs.googlesyndication.com
@@ -621,6 +624,7 @@ full:bj.ad.track.66mobi.com
 full:blackhole.m.jd.com
 full:books-analytics-events.apple.com
 full:bootpreload.uve.weibo.com
+full:brandadsstatic.vivo.com.cn
 full:browsercfg-drcn.cloud.dbankcloud.cn
 full:bsrv.qq.com
 full:business-api.tiktok.com
@@ -693,6 +697,7 @@ full:download.changhong.upgrade2.huan.tv
 full:downloadxml.changhong.upgrade2.huan.tv
 full:dsp-x.jd.com
 full:dsp.fcbox.com
+full:dsplog-adnet.vivo.com.cn
 full:dualstack-logs.amap.com
 full:dxp.baidu.com
 full:dyp2p-ali.douyucdn.cn
@@ -775,7 +780,6 @@ full:iadctest.qwapi.com
 full:iadmoo.apple.com
 full:iadmusicmat.music.126.net
 full:iadsdk.apple.com
-full:iadworkbench.apple.com
 full:ifacelog.iqiyi.com
 full:ifs.tanx.com
 full:ii.gdt.qq.com
@@ -1004,7 +1008,6 @@ full:s8t.teads.tv
 full:saad.ms.zhangyue.net
 full:saas.hpplay.cn
 full:safebrowsing.googleapis.com
-full:safebrowsing.urlsec.gg.com
 full:safebrowsing.urlsec.qq.com
 full:samsung-com.112.2o7.net
 full:samsungads.com
@@ -1119,6 +1122,7 @@ full:track.tenjin.io
 full:track.tiara.daum.net
 full:track.tiara.kakao.com
 full:tracker-prd.aldi.com.cn
+full:tracking-adnet.vivo.com.cn
 full:tracking.rus.miui.com
 full:tracklog.58.com
 full:tuiguang.meitu.com
