@@ -22,7 +22,7 @@
       "path": "RuleSet/Direct/China.list",
       "sources": [
         "https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Surge/ChinaMax/ChinaMax_Domain.list",
-        "RuleSet/Direct/ChinaSite.list"
+        "RuleSet/Extra/BaseSet/Surge/China.list"
       ]
     },
     {
