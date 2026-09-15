@@ -7,6 +7,8 @@ DOMAIN-SUFFIX,p2ptun.qq.com
 DOMAIN-SUFFIX,p2pupgrade.gamedl.qq.com
 DOMAIN-SUFFIX,p2pupdate.gamedl.qq.com
 DOMAIN-SUFFIX,p2p.qq.com
+DOMAIN,livewebbs2pcdn.msstatic.com
+DOMAIN,qn-cdnfile1pcdn.msstatic.com
 # > PCDN
 DOMAIN-SUFFIX,szbdyd.com
 DOMAIN-SUFFIX,mcdn.bilivideo.cn
@@ -15,5 +17,6 @@ DOMAIN-SUFFIX,xycdn.com
 DOMAIN-SUFFIX,stun.hitv.com
 DOMAIN-SUFFIX,tpa-hcdn.iqiyi.com
 DOMAIN-SUFFIX,pcdn.xmcdn.com
+DOMAIN-WILDCARD,upos-sz-302*.bilivideo.com
 # > QUIC
 AND,((PROTOCOL,UDP), (DOMAIN-SUFFIX,googlevideo.com))
