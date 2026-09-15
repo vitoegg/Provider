@@ -1,4 +1,6 @@
 payload:
+# Sync with GitHub/Provider/RuleSet/Extra/BaseSet/Surge/China.list
+
   # Turkey Giftcard
   - '+.oyunfor.com'
   # Zimuku
@@ -7,5 +9,5 @@ payload:
   - '+.greencloudvps.com'
   - '+.green.cloud'
   - '+.hosthatch.com'
-  - '+.sa.net'
   - '+.po0.io'
+  - '+.brightdata.com'
