@@ -1,6 +1,5 @@
 # 更新时间: 2026-09-15 11:33:33
-# 规则来源:
-# - https://ruleset.skk.moe/List/non_ip/reject-no-drop.conf
+# 规则来源: https://ruleset.skk.moe/List/non_ip/reject-no-drop.conf
 
 # > P2P
 DOMAIN-SUFFIX,p2ptun.qq.com
