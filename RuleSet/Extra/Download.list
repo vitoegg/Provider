@@ -5,22 +5,12 @@ PROCESS-NAME,ThunderVIP
 PROCESS-NAME,DownloadService
 PROCESS-NAME,LocalSend
 PROCESS-NAME,BaiduNetdisk_mac
-PROCESS-NAME,privoxy
 PROCESS-NAME,cloudflared
-PROCESS-NAME,aria2c
-PROCESS-NAME,fdm
-PROCESS-NAME,Folx
 PROCESS-NAME,NetTransport
-PROCESS-NAME,BitComet
 PROCESS-NAME,uTorrent
-PROCESS-NAME,qbittorrent*
-PROCESS-NAME,qBittorrent
-PROCESS-NAME,qbittorrent-nox
 PROCESS-NAME,WebTorrent
 PROCESS-NAME,WebTorrent Helper
-PROCESS-NAME,amuled
 # PTR直连
-DOMAIN-SUFFIX,254.169.in-addr.arpa
 DOMAIN-SUFFIX,16.172.in-addr.arpa
 DOMAIN-SUFFIX,17.172.in-addr.arpa
 DOMAIN-SUFFIX,18.172.in-addr.arpa
@@ -37,4 +27,3 @@ DOMAIN-SUFFIX,28.172.in-addr.arpa
 DOMAIN-SUFFIX,29.172.in-addr.arpa
 DOMAIN-SUFFIX,30.172.in-addr.arpa
 DOMAIN-SUFFIX,31.172.in-addr.arpa
-DOMAIN-SUFFIX,168.192.in-addr.arpa
