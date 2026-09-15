@@ -9,6 +9,7 @@
 4. 集合差分判定变更后原子写入产物
 """
 
+import ipaddress
 import json
 import os
 import re
@@ -37,6 +38,12 @@ MAX_WORKERS = 8
 
 WILDCARD_KIND = "wildcard"
 EXACT_KIND = "exact"
+NETWORK_KIND = "network"
+EXCLUDED_KIND = "excluded"
+
+DOMAIN_TYPE = "domain"
+IP_TYPE = "ip"
+EXCLUDED_DOMAINS = {"7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe"}
 
 
 def is_valid_domain(domain: str) -> bool:
@@ -52,6 +59,18 @@ def convert_domain_set_rule(line: str) -> Tuple[str, str]:
     """
     rule = line.strip().lower()
 
+    if ',' in rule:
+        parts = [part.strip() for part in rule.split(',')]
+        if parts[0] == "domain-suffix":
+            rule = f".{parts[1]}"
+        elif parts[0] == "domain":
+            rule = parts[1]
+        else:
+            return "", "invalid"
+
+    if rule.lstrip('.') in EXCLUDED_DOMAINS:
+        return "", EXCLUDED_KIND
+
     if rule.startswith('.'):
         if is_valid_domain(rule[1:]):
             return rule, WILDCARD_KIND
@@ -60,6 +79,25 @@ def convert_domain_set_rule(line: str) -> Tuple[str, str]:
     if is_valid_domain(rule):
         return rule, EXACT_KIND
     return "", "invalid"
+
+
+def convert_ip_rule(line: str) -> Tuple[object, str]:
+    value = line.strip()
+    if ',' in value:
+        parts = [part.strip() for part in value.split(',')]
+        if parts[0].upper() not in ("IP-CIDR", "IP-CIDR6"):
+            return None, "invalid"
+        value = parts[1]
+
+    try:
+        return ipaddress.ip_network(value, strict=False), NETWORK_KIND
+    except ValueError:
+        return None, "invalid"
+
+
+def format_ip_rule(network) -> str:
+    rule_type = "IP-CIDR" if network.version == 4 else "IP-CIDR6"
+    return f"{rule_type},{network},no-resolve"
 
 
 def clean_rule_lines(content: str) -> Iterable[str]:
@@ -78,13 +116,16 @@ def clean_rule_lines(content: str) -> Iterable[str]:
             yield line
 
 
-def convert_source(content: str, label: str) -> Tuple[List[str], int]:
+def convert_source(content: str, label: str, rule_type: str) -> Tuple[List, int]:
     """将单个来源转换为规则列表，返回 (规则列表, 无效条数)。"""
+    convert = convert_ip_rule if rule_type == IP_TYPE else convert_domain_set_rule
     rules = []
     invalid_count = 0
 
     for line in clean_rule_lines(content):
-        rule, kind = convert_domain_set_rule(line)
+        rule, kind = convert(line)
+        if kind == EXCLUDED_KIND:
+            continue
         if kind == "invalid":
             invalid_count += 1
             continue
@@ -151,6 +192,32 @@ def optimize_domains(rules: List[str]) -> Tuple[List[str], Dict[str, int]]:
     final_rules = sorted(kept_wildcards + kept_exacts)
     stats["kept"] = len(final_rules)
     return final_rules, stats
+
+
+def optimize_networks(networks: List) -> Tuple[List[str], Dict[str, int]]:
+    unique_networks = set(networks)
+    stats = {
+        "total": len(networks),
+        "duplicates": len(networks) - len(unique_networks),
+        "covered": 0,
+        "kept": 0,
+    }
+
+    kept: List[str] = []
+    max_end = {4: -1, 6: -1}
+    for network in sorted(
+        unique_networks,
+        key=lambda item: (item.version, int(item.network_address), item.prefixlen)
+    ):
+        end = int(network.broadcast_address)
+        if end <= max_end[network.version]:
+            stats["covered"] += 1
+            continue
+        kept.append(format_ip_rule(network))
+        max_end[network.version] = end
+
+    stats["kept"] = len(kept)
+    return kept, stats
 
 
 def is_remote(location: str) -> bool:
@@ -232,6 +299,8 @@ def load_config(workspace: Path) -> List[Dict]:
             isinstance(source, str) and source for source in sources
         ):
             raise ValueError(f"规则 {name} 的 sources 无效")
+        if rule.setdefault("type", DOMAIN_TYPE) not in (DOMAIN_TYPE, IP_TYPE):
+            raise ValueError(f"规则 {name} 的 type 无效: {rule['type']}")
         seen_names.add(name)
         seen_paths.add(output_path)
     return rules
@@ -268,24 +337,33 @@ def build_rulesets(rules: List[Dict], contents: Dict[str, str]) -> Dict[str, Lis
             if source in output_paths:
                 if source not in generated:
                     raise ValueError(f"规则 {name} 的依赖尚未生成: {source}")
-                collected.extend(generated[source])
-                continue
+                content = "\n".join(generated[source])
+            else:
+                content = contents[source]
             source_rules, invalid_count = convert_source(
-                contents[source],
-                f"{name}:{source}"
+                content,
+                f"{name}:{source}",
+                rule["type"]
             )
             collected.extend(source_rules)
             invalid_total += invalid_count
 
-        final_rules, stats = optimize_domains(collected)
+        if rule["type"] == IP_TYPE:
+            final_rules, stats = optimize_networks(collected)
+            detail = f"重复 {stats['duplicates']}, 网段覆盖 {stats['covered']}"
+        else:
+            final_rules, stats = optimize_domains(collected)
+            detail = (
+                f"重复 {stats['duplicates']}, 泛域名覆盖 {stats['wildcard_covered']}, "
+                f"精确域名覆盖 {stats['exact_covered']}"
+            )
         if not final_rules:
             raise ValueError(f"规则 {name} 的最终产物为空")
 
         generated[rule["path"]] = final_rules
         print(
             f"{name}: {stats['total']} -> {stats['kept']} 条 "
-            f"(重复 {stats['duplicates']}, 泛域名覆盖 {stats['wildcard_covered']}, "
-            f"精确域名覆盖 {stats['exact_covered']}, 无效 {invalid_total})"
+            f"({detail}, 无效 {invalid_total})"
         )
 
     return generated

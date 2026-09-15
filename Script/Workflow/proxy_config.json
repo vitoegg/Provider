@@ -33,6 +33,22 @@
         "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/apple.txt",
         "https://raw.githubusercontent.com/Loyalsoldier/surge-rules/release/icloud.txt"
       ]
+    },
+    {
+      "name": "TELEGRAM",
+      "path": "RuleSet/Proxy/Telegram.list",
+      "sources": [
+        "https://ruleset.skk.moe/List/non_ip/telegram.conf"
+      ]
+    },
+    {
+      "name": "TELEGRAM_IP",
+      "type": "ip",
+      "path": "RuleSet/Proxy/TelegramIP.list",
+      "sources": [
+        "https://core.telegram.org/resources/cidr.txt",
+        "https://ruleset.skk.moe/List/ip/telegram.conf"
+      ]
     }
   ]
 }
