@@ -1,4 +1,4 @@
-# 更新时间: 2026-09-10 12:48:57
+# 更新时间: 2026-09-15 11:34:20
 # 规则条数: 111276
 # 规则来源:
 # - https://github.com/blackmatrix7/ios_rule_script
@@ -46480,6 +46480,7 @@
 .hostbuf.com
 .hostdie.com
 .hostgw.net
+.hosthatch.com
 .hostidc.net
 .hostkvm.com
 .hostloc.me
@@ -72512,7 +72513,7 @@
 .pnwww.com
 .pnzpw.com
 .po.co
-.po0.com
+.po0.io
 .po7ryumvkx34.com
 .pobaby.net
 .pobasoft.com
@@ -83783,7 +83784,6 @@
 .spsicloudport.com
 .spsisctgroup.com
 .spsisncl.com
-.spst2.com
 .spsy.org
 .sptcc.com
 .sptccn.com

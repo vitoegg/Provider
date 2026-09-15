@@ -1,15 +1,19 @@
-# 更新时间: 2026-09-14 23:50:00
-# 规则来源: https://ruleset.skk.moe/List/non_ip/telegram.conf
-.t.me
-.tx.me
-.tg.dev
-.legra.ph
+# 更新时间: 2026-09-15 11:34:20
+# 规则条数: 14
+# 规则来源:
+# - https://ruleset.skk.moe/List/non_ip/telegram.conf
+
+.cdn-telegram.org
 .graph.org
+.legra.ph
+.t.me
+.tdesktop.com
 .telega.one
 .telegra.ph
-.telesco.pe
-.telegram.me
-.tdesktop.com
 .telegram.dog
+.telegram.me
 .telegram.org
 .telegram.space
+.telesco.pe
+.tg.dev
+.tx.me
