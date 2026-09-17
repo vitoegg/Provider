@@ -180,6 +180,8 @@ payload:
   # > DIA
   - '+.diabrowser.com'
   - '+.diabrowser.engineering'
+  # > Paseo
+  - '+.paseo.sh'
   # > Poe
   - '+.poe.com'
   # > Dify
