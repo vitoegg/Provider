@@ -37,6 +37,7 @@ TROJAN_PASSWORD=""
 TROJAN_DOMAIN=""
 TROJAN_CERT_PATH=""
 TROJAN_KEY_PATH=""
+TROJAN_WS_NAME=""
 SS_PORT=""
 SS_PASSWORD=""
 SOCKS_HOST=""
@@ -91,6 +92,7 @@ show_usage() {
   --trojan-domain DOMAIN          Trojan 域名
   --trojan-cert-path PATH         证书路径
   --trojan-key-path PATH          私钥路径
+  --trojan-ws-name NAME           Trojan WS 单段路径名
   --ss-port PORT                  Shadowsocks 端口
   --ss-password PASSWORD          Shadowsocks 密码
   --socks-host HOST               Socks 服务地址
@@ -122,6 +124,7 @@ parse_args() {
         [--trojan-domain]=TROJAN_DOMAIN
         [--trojan-cert-path]=TROJAN_CERT_PATH
         [--trojan-key-path]=TROJAN_KEY_PATH
+        [--trojan-ws-name]=TROJAN_WS_NAME
         [--ss-port]=SS_PORT
         [--ss-password]=SS_PASSWORD
         [--socks-host]=SOCKS_HOST
@@ -176,7 +179,7 @@ install_arguments_present() {
     [ -n "$PROTOCOLS$SHADOWTLS_PORT$SHADOWTLS_PASSWORD$SHADOWTLS_DOMAIN" ] ||
         [ -n "$ANYTLS_PORT$ANYTLS_PASSWORD$ANYTLS_DOMAIN$ANYTLS_SCHEME" ] ||
         [ -n "$ANYTLS_CERT_MODE$ANYTLS_TOKEN$ANYTLS_CERT_PATH$ANYTLS_KEY_PATH" ] ||
-        [ -n "$TROJAN_PORT$TROJAN_PASSWORD$TROJAN_DOMAIN$TROJAN_CERT_PATH$TROJAN_KEY_PATH" ] ||
+        [ -n "$TROJAN_PORT$TROJAN_PASSWORD$TROJAN_DOMAIN$TROJAN_CERT_PATH$TROJAN_KEY_PATH$TROJAN_WS_NAME" ] ||
         [ -n "$SS_PORT$SS_PASSWORD$SOCKS_HOST$SOCKS_PORT$SINGBOX_VERSION" ]
 }
 
@@ -225,7 +228,7 @@ validate_protocol_scope() {
         fail "Shadowsocks 参数需要 --protocol shadowsocks。"
     fi
     if [ "$TROJAN_ENABLED" -eq 0 ] &&
-        [ -n "$TROJAN_PORT$TROJAN_PASSWORD$TROJAN_DOMAIN$TROJAN_CERT_PATH$TROJAN_KEY_PATH" ]; then
+        [ -n "$TROJAN_PORT$TROJAN_PASSWORD$TROJAN_DOMAIN$TROJAN_CERT_PATH$TROJAN_KEY_PATH$TROJAN_WS_NAME" ]; then
         fail "Trojan 参数需要 --protocol trojan。"
     fi
 }
@@ -405,6 +408,9 @@ prepare_trojan_params() {
     [ "$TROJAN_ENABLED" -eq 1 ] || return 0
     [ -n "$TROJAN_PASSWORD" ] || TROJAN_PASSWORD="$(generate_password)"
     [ -n "$TROJAN_DOMAIN" ] || fail "启用 Trojan 时必须提供 --trojan-domain。"
+    case "$TROJAN_WS_NAME" in
+        .|..|*/*|*'?'*|*'#'*|*[[:space:][:cntrl:]]*) fail "Trojan WS 路径名无效：$TROJAN_WS_NAME" ;;
+    esac
     if [ ! -f "$TROJAN_CERT_PATH" ] || [ ! -f "$TROJAN_KEY_PATH" ]; then
         fail "Trojan 证书文件不存在。"
     fi
@@ -514,7 +520,7 @@ build_anytls_inbound() {
 
 build_trojan_inbound() {
     jq -n --argjson port "$TROJAN_PORT" --arg password "$TROJAN_PASSWORD" --arg domain "$TROJAN_DOMAIN" \
-        --arg cert "$TROJAN_CERT_PATH" --arg key "$TROJAN_KEY_PATH" \
+        --arg cert "$TROJAN_CERT_PATH" --arg key "$TROJAN_KEY_PATH" --arg ws_path "/${TROJAN_WS_NAME:-img}" \
         '{
             type: "trojan",
             tag: "trojan-in",
@@ -533,7 +539,7 @@ build_trojan_inbound() {
             },
             transport: {
                 type: "ws",
-                path: "/img"
+                path: $ws_path
             }
         }'
 }
@@ -927,8 +933,8 @@ show_configuration() {
             "$ANYTLS_PORT" "$ANYTLS_PASSWORD" "$ANYTLS_DOMAIN" "$ANYTLS_CERT_MODE"
     fi
     if [ "$TROJAN_ENABLED" -eq 1 ]; then
-        printf 'Trojan 端口：%s\nTrojan 密码：%s\nTrojan 域名：%s\nTrojan WS 路径：/img\n' \
-            "$TROJAN_PORT" "$TROJAN_PASSWORD" "$TROJAN_DOMAIN"
+        printf 'Trojan 端口：%s\nTrojan 密码：%s\nTrojan 域名：%s\nTrojan WS 路径：/%s\n' \
+            "$TROJAN_PORT" "$TROJAN_PASSWORD" "$TROJAN_DOMAIN" "${TROJAN_WS_NAME:-img}"
     fi
     if [ "$SS_ENABLED" -eq 1 ]; then
         printf 'Shadowsocks 端口：%s\nShadowsocks 密码：%s\n加密：%s\n' \

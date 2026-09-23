@@ -26,6 +26,7 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 --trojan-domain DOMAIN          Trojan 域名
 --trojan-cert-path PATH         证书路径
 --trojan-key-path PATH          私钥路径
+--trojan-ws-name NAME           Trojan WS 单段路径名
 --ss-port PORT                  Shadowsocks 端口
 --ss-password PASSWORD          Shadowsocks 密码
 --socks-host HOST               Socks 服务 IP
@@ -56,7 +57,8 @@ bash singbox.sh \
   --trojan-domain stream.example.com \
   --trojan-port 443 \
   --trojan-cert-path /path/to/cert.pem \
-  --trojan-key-path /path/to/key.pem
+  --trojan-key-path /path/to/key.pem \
+  --trojan-ws-name jpg
 ```
 
 ## **shadowsocks.sh**
