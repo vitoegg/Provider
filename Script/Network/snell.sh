@@ -192,6 +192,7 @@ After=network.target
 
 [Service]
 Type=simple
+DynamicUser=yes
 LimitNOFILE=65536
 ExecStart=${SNELL_BINARY} -c ${SNELL_CONFIG_FILE}
 Restart=always
@@ -208,6 +209,7 @@ publish_candidate() {
 
     if [ -f "$target" ] && cmp -s "$candidate" "$target"; then
         rm -f "$candidate"
+        chmod "$mode" "$target" || return 1
         return 10
     fi
     chmod "$mode" "$candidate" || return 1
@@ -303,7 +305,7 @@ apply_files() {
         rm -f "$candidate"
         fail "Snell 配置生成失败。"
     }
-    publish_candidate "$candidate" "$SNELL_CONFIG_FILE" 600
+    publish_candidate "$candidate" "$SNELL_CONFIG_FILE" 644
     result=$?
     if [ "$result" -eq 0 ]; then
         CONFIG_CHANGED=1

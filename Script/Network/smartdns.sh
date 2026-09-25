@@ -8,6 +8,7 @@ readonly CONFIG_FILE="${CONFIG_DIR}/smartdns.conf"
 readonly INSTALLER_CACHE="${CONFIG_DIR}/install"
 readonly RESOLV_CONF="/etc/resolv.conf"
 readonly SERVICE="smartdns.service"
+readonly DATA_DIRS=(/var/cache/smartdns /var/lib/smartdns /var/log/smartdns)
 
 DOWNLOAD_URL=""
 ECS_REGION=""
@@ -170,6 +171,7 @@ write_config() {
     fi
     cat > "$candidate" <<EOF || fail "无法生成 SmartDNS 配置"
 server-name smartdns
+user nobody
 log-level off
 bind 127.0.0.1:53
 server 1.1.1.1
@@ -184,7 +186,6 @@ prefetch-domain yes
 serve-expired-prefetch-time 21600
 cache-size 4096
 cache-persist yes
-cache-file /etc/smartdns/smartdns.cache
 force-qtype-SOA 65
 EOF
     case "$IPV6_MODE" in
@@ -278,7 +279,7 @@ uninstall_smartdns() {
         run_installer -u || fail "SmartDNS 卸载失败"
     fi
     systemctl is-active --quiet "$SERVICE" 2>/dev/null && fail "SmartDNS 服务仍在运行"
-    rm -rf "$CONFIG_DIR" || fail "无法删除 SmartDNS 配置目录"
+    rm -rf "$CONFIG_DIR" "${DATA_DIRS[@]}" || fail "无法删除 SmartDNS 配置和数据目录"
     systemctl daemon-reload >/dev/null 2>&1 || fail "systemd 配置刷新失败"
     set_dns public
     log_info "SmartDNS 已卸载，并恢复公共 DNS"

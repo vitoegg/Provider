@@ -214,6 +214,7 @@ StartLimitIntervalSec=60
 
 [Service]
 Type=simple
+DynamicUser=yes
 LimitNOFILE=65536
 ExecStart=${SS_BINARY} -c ${SS_CONFIG_FILE}
 Restart=always
@@ -238,6 +239,7 @@ apply_candidate() {
     }
     if [ -f "$target" ] && cmp -s "$candidate" "$target"; then
         rm -f "$candidate"
+        chmod "$mode" "$target" || fail "${label} 权限设置失败。"
         printf -v "$changed_name" '%s' 0
         return 0
     fi
@@ -410,7 +412,7 @@ install_shadowsocks() {
         latest="$(get_latest_version)" || fail "无法获取 Shadowsocks 最新版本。"
         download_server "$latest"
     fi
-    apply_candidate render_config "$SS_CONFIG_FILE" 600 CONFIG_CHANGED \
+    apply_candidate render_config "$SS_CONFIG_FILE" 644 CONFIG_CHANGED \
         "已更新 Shadowsocks 配置：$SS_CONFIG_FILE" "Shadowsocks 配置"
     apply_candidate render_service "$SS_UNIT_FILE" 644 UNIT_CHANGED \
         "已更新系统服务：shadowsocks.service" "Shadowsocks unit"

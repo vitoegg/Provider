@@ -7,6 +7,9 @@ readonly BIN="/usr/local/bin/mosdns"
 readonly CONFIG_DIR="/etc/mosdns"
 readonly CONFIG_FILE="${CONFIG_DIR}/config.yaml"
 readonly RULE_DIR="${CONFIG_DIR}/rule"
+readonly UNIT_FILE="/etc/systemd/system/mosdns.service"
+readonly STATE_DIR="/var/lib/mosdns"
+readonly PRIVATE_STATE_DIR="/var/lib/private/mosdns"
 readonly RESOLV_CONF="/etc/resolv.conf"
 readonly PUBLIC_DNS=$'nameserver 8.8.8.8\nnameserver 1.1.1.1\n'
 CUSTOM_DNS=""
@@ -182,6 +185,10 @@ download_domain_rules() {
     fi
     mkdir -p "$CONFIG_DIR" || fail "无法创建 MosDNS 配置目录"
     stage="$(mktemp -d "${CONFIG_DIR}/rule.tmp.XXXXXX")" || fail "无法创建规则候选目录"
+    chmod 755 "$stage" || {
+        rm -rf "$stage"
+        fail "无法设置规则目录权限"
+    }
     for name in google reddit; do
         download "${base_url}/${name}.txt" "${stage}/${name}.txt" || {
             rm -rf "$stage"
@@ -204,7 +211,7 @@ render_config() {
         cat <<EOF
 log:
   level: error
-  file: "${CONFIG_DIR}/mosdns.log"
+  file: "${STATE_DIR}/mosdns.log"
 
 plugins:
   - tag: cache
@@ -212,7 +219,7 @@ plugins:
     args:
       size: 8192
       lazy_cache_ttl: 86400
-      dump_file: "${CONFIG_DIR}/cache.dump"
+      dump_file: "${STATE_DIR}/cache.dump"
       dump_interval: 1800
 
 EOF
@@ -296,24 +303,58 @@ EOF
     } > "$1"
 }
 
+# 候选与现有文件一致时丢弃，否则以 644 原子发布；返回 0 表示文件已变更。
+publish_file() {
+    local renderer="$1" target="$2" label="$3" candidate
+    mkdir -p "$(dirname "$target")" || fail "无法创建 ${label}目录"
+    candidate="$(mktemp "${target}.tmp.XXXXXX")" || fail "无法创建 ${label}候选文件"
+    if ! "$renderer" "$candidate" || [ ! -s "$candidate" ]; then
+        rm -f "$candidate"
+        fail "无法生成 ${label}"
+    fi
+    if cmp -s "$candidate" "$target" 2>/dev/null; then
+        rm -f "$candidate"
+        return 1
+    fi
+    if ! chmod 644 "$candidate" || ! mv -f "$candidate" "$target"; then
+        rm -f "$candidate"
+        fail "无法发布 ${label}"
+    fi
+}
+
 write_config() {
-    local candidate
-    mkdir -p "$CONFIG_DIR" || fail "无法创建 MosDNS 配置目录"
-    candidate="$(mktemp "${CONFIG_FILE}.tmp.XXXXXX")" || fail "无法创建 MosDNS 候选配置"
-    if ! render_config "$candidate" || [ ! -s "$candidate" ]; then
-        rm -f "$candidate"
-        fail "无法生成 MosDNS 配置"
-    fi
     CONFIG_CHANGED=0
-    if cmp -s "$candidate" "$CONFIG_FILE" 2>/dev/null; then
-        rm -f "$candidate"
-        return 0
-    fi
-    if ! chmod 644 "$candidate" || ! mv -f "$candidate" "$CONFIG_FILE"; then
-        rm -f "$candidate"
-        fail "无法发布 MosDNS 配置"
-    fi
+    publish_file render_config "$CONFIG_FILE" "MosDNS 配置" || return 0
     CONFIG_CHANGED=1
+}
+
+render_unit() {
+    cat > "$1" <<EOF
+[Unit]
+Description=MosDNS
+After=network.target
+Before=nss-lookup.target
+Wants=nss-lookup.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+StateDirectory=mosdns
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+ExecStart=${BIN} start -d ${STATE_DIR} -c ${CONFIG_FILE}
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+write_unit() {
+    UNIT_CHANGED=0
+    publish_file render_unit "$UNIT_FILE" "MosDNS unit" || return 0
+    UNIT_CHANGED=1
+    systemctl daemon-reload >/dev/null 2>&1 || fail "systemd 配置刷新失败"
 }
 
 set_dns() {
@@ -355,22 +396,18 @@ apply_mosdns() {
     fi
     download_domain_rules
     write_config
-    if [ "$CONFIG_CHANGED" -eq 1 ] || [ "$RULES_CHANGED" -eq 1 ] ||
+    write_unit
+    if [ "$CONFIG_CHANGED" -eq 1 ] || [ "$RULES_CHANGED" -eq 1 ] || [ "$UNIT_CHANGED" -eq 1 ] ||
         ! systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
         restart_needed=1
-    fi
-    if [ "$service_exists" -eq 1 ]; then
-        if [ "$restart_needed" -eq 1 ]; then
-            systemctl restart "$SERVICE" >/dev/null 2>&1 ||
-                fail "MosDNS 启动失败，请执行：journalctl -u ${SERVICE} --no-pager"
-        fi
-    else
-        "$BIN" service install -d "$CONFIG_DIR" -c "$CONFIG_FILE" >/dev/null 2>&1 || fail "MosDNS 服务安装失败"
-        "$BIN" service start >/dev/null 2>&1 || fail "MosDNS 服务启动失败"
     fi
     if ! systemctl is-enabled --quiet "$SERVICE" 2>/dev/null; then
         systemctl enable "$SERVICE" >/dev/null 2>&1 || fail "无法启用 MosDNS 服务"
         log_info "已启用系统服务：${SERVICE}"
+    fi
+    if [ "$restart_needed" -eq 1 ]; then
+        systemctl restart "$SERVICE" >/dev/null 2>&1 ||
+            fail "MosDNS 启动失败，请执行：journalctl -u ${SERVICE} --no-pager"
     fi
     systemctl is-active --quiet "$SERVICE" || fail "MosDNS 服务未运行"
     set_dns local
@@ -397,7 +434,7 @@ uninstall_mosdns() {
     rm -f "/etc/systemd/system/$SERVICE" "/lib/systemd/system/$SERVICE" "/usr/lib/systemd/system/$SERVICE" ||
         fail "无法删除 MosDNS service 文件"
     rm -f "$BIN" || fail "无法删除 MosDNS 程序"
-    rm -rf "$CONFIG_DIR" || fail "无法删除 MosDNS 配置目录"
+    rm -rf "$CONFIG_DIR" "$STATE_DIR" "$PRIVATE_STATE_DIR" || fail "无法删除 MosDNS 配置和数据目录"
     systemctl daemon-reload >/dev/null 2>&1 || fail "systemd 配置刷新失败"
     systemctl is-active --quiet "$SERVICE" 2>/dev/null && fail "MosDNS 服务仍在运行"
     set_dns public
