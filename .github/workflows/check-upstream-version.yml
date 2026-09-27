@@ -45,7 +45,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           MONITOR_STATE_FILE: ${{ runner.temp }}/immortalwrt-kernel-state/state.json
         run: >-
-          python ${GITHUB_WORKSPACE}/Script/Workflow/upstream_monitor.py versions
+          python ${GITHUB_WORKSPACE}/Script/Workflow/upstream_monitor.py
 
       - name: Save Upstream Version State
         if: steps.check_version.outputs.cache_save == 'true'

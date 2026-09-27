@@ -1,56 +1,29 @@
 {
   "timezone": "Asia/Shanghai",
-  "telegram": {
-    "parse_mode": "HTML",
-    "disable_web_page_preview": true,
-    "photo": "https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/upstream.webp"
-  },
-  "tasks": {
-    "default_lookback_hours": 24,
-    "repositories": [
-      {
-        "id": "jdpro",
-        "name": "jdpro",
-        "repo": "6dylan6/jdpro",
-        "branch": "main"
-      },
-      {
-        "id": "faker2",
-        "name": "faker2",
-        "repo": "shufflewzc/faker2",
-        "branch": "main"
-      }
-    ],
-    "files": {
-      "prefix": "jd_",
-      "extensions": [".js", ".py", ".sh", ".ts"]
+  "photo": "https://raw.githubusercontent.com/vitoegg/Provider/master/Picture/upstream.webp",
+  "sources": [
+    {
+      "id": "immortalwrt_kernel",
+      "name": "ImmortalWrt Kernel",
+      "icon": "🐧",
+      "type": "openwrt_kernel",
+      "repo": "immortalwrt/immortalwrt",
+      "branch": "openwrt-25.12",
+      "patchver": "6.12"
+    },
+    {
+      "id": "mihomo_core",
+      "name": "Mihomo Core",
+      "icon": "⚡",
+      "type": "github_latest_release",
+      "repo": "MetaCubeX/mihomo"
+    },
+    {
+      "id": "openwrt_release",
+      "name": "OpenWrt Release",
+      "icon": "🏷️",
+      "type": "github_latest_release",
+      "repo": "openwrt/openwrt"
     }
-  },
-  "versions": {
-    "sources": [
-      {
-        "id": "immortalwrt_kernel",
-        "name": "ImmortalWrt Kernel",
-        "icon": "🐧",
-        "type": "openwrt_kernel",
-        "repo": "immortalwrt/immortalwrt",
-        "branch": "openwrt-25.12",
-        "patchver": "6.12"
-      },
-      {
-        "id": "mihomo_core",
-        "name": "Mihomo Core",
-        "icon": "⚡",
-        "type": "github_latest_release",
-        "repo": "MetaCubeX/mihomo"
-      },
-      {
-        "id": "openwrt_release",
-        "name": "OpenWrt Release",
-        "icon": "🏷️",
-        "type": "github_latest_release",
-        "repo": "openwrt/openwrt"
-      }
-    ]
-  }
+  ]
 }

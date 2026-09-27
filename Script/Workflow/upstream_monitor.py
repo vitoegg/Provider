@@ -12,8 +12,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -22,16 +21,9 @@ GITHUB_API_BASE = "https://api.github.com"
 USER_AGENT = "ProviderUpstreamMonitor/2.0"
 MAX_ATTEMPTS = 4
 MAX_RETRY_DELAY = 60
-MAX_COMMIT_PAGES = 20
-COMPARE_FILE_LIMIT = 300
 TELEGRAM_TEXT_LIMIT = 4096
 TELEGRAM_CAPTION_LIMIT = 1024
 HTML_TAG = re.compile(r"<[^>]+>")
-TASK_CATEGORIES = (
-    ("🆕", "新增", "added"),
-    ("✏️", "修改", "modified"),
-    ("🗑️", "删除", "removed"),
-)
 
 
 class MonitorError(Exception):
@@ -42,26 +34,13 @@ class ConfigError(MonitorError):
     pass
 
 
-class NotFoundError(MonitorError):
-    pass
-
-
 class SendRejected(MonitorError):
-    pass
-
-
-class CursorError(MonitorError):
     pass
 
 
 def telegram_length(text):
     plain = html.unescape(HTML_TAG.sub("", text))
     return len(plain.encode("utf-16-le")) // 2
-
-
-def render_entry(icon, name, url, body_lines):
-    title = f'{icon} <a href="{html.escape(url, quote=True)}"><b>{html.escape(name)}</b></a>'
-    return "\n".join([title, *body_lines])
 
 
 def log(event, **fields):
@@ -98,54 +77,26 @@ def validate_config(config):
     require_object(config, "config")
     require_string(config.get("timezone"), "timezone")
 
-    telegram = require_object(config.get("telegram"), "telegram")
-    if telegram.get("parse_mode") != "HTML":
-        raise ConfigError("telegram.parse_mode 目前只支持 HTML")
-    if not isinstance(telegram.get("disable_web_page_preview"), bool):
-        raise ConfigError("telegram.disable_web_page_preview 必须是布尔值")
-    require_string(telegram.get("photo"), "telegram.photo")
+    require_string(config.get("photo"), "photo")
 
-    tasks = require_object(config.get("tasks"), "tasks")
-    lookback = tasks.get("default_lookback_hours")
-    if type(lookback) is not int or lookback <= 0:
-        raise ConfigError("tasks.default_lookback_hours 必须是正整数")
-
-    repositories = require_list(tasks.get("repositories"), "tasks.repositories")
-    repo_ids = set()
-    for index, item in enumerate(repositories):
-        repo_config = require_object(item, f"tasks.repositories[{index}]")
-        repo_id = require_string(repo_config.get("id"), f"tasks.repositories[{index}].id")
-        if repo_id in repo_ids:
-            raise ConfigError(f"重复的任务仓库 id: {repo_id}")
-        repo_ids.add(repo_id)
-        require_string(repo_config.get("name"), f"tasks.repositories[{index}].name")
-        split_repo(repo_config.get("repo"), f"tasks.repositories[{index}].repo")
-        require_string(repo_config.get("branch"), f"tasks.repositories[{index}].branch")
-
-    files = require_object(tasks.get("files"), "tasks.files")
-    require_string(files.get("prefix"), "tasks.files.prefix")
-    extensions = require_list(files.get("extensions"), "tasks.files.extensions")
-    if any(not isinstance(ext, str) or not ext.startswith(".") for ext in extensions):
-        raise ConfigError("tasks.files.extensions 必须是以点开头的字符串数组")
-    versions = require_object(config.get("versions"), "versions")
-    sources = require_list(versions.get("sources"), "versions.sources")
+    sources = require_list(config.get("sources"), "sources")
     source_ids = set()
     for index, item in enumerate(sources):
-        source = require_object(item, f"versions.sources[{index}]")
-        source_id = require_string(source.get("id"), f"versions.sources[{index}].id")
+        source = require_object(item, f"sources[{index}]")
+        source_id = require_string(source.get("id"), f"sources[{index}].id")
         if source_id in source_ids:
             raise ConfigError(f"重复的版本源 id: {source_id}")
         source_ids.add(source_id)
-        require_string(source.get("name"), f"versions.sources[{index}].name")
-        source_type = require_string(source.get("type"), f"versions.sources[{index}].type")
+        require_string(source.get("name"), f"sources[{index}].name")
+        source_type = require_string(source.get("type"), f"sources[{index}].type")
         if source_type not in {"openwrt_kernel", "github_latest_release"}:
             raise ConfigError(f"不支持的版本检测类型: {source_type}")
-        split_repo(source.get("repo"), f"versions.sources[{index}].repo")
+        split_repo(source.get("repo"), f"sources[{index}].repo")
         if source_type == "openwrt_kernel":
-            require_string(source.get("branch"), f"versions.sources[{index}].branch")
+            require_string(source.get("branch"), f"sources[{index}].branch")
             patchver = source.get("patchver", "")
             if not isinstance(patchver, str):
-                raise ConfigError(f"versions.sources[{index}].patchver 必须是字符串")
+                raise ConfigError(f"sources[{index}].patchver 必须是字符串")
 
 
 def load_config(path):
@@ -217,8 +168,6 @@ class HttpClient:
                     )
                     time.sleep(delay)
                     continue
-                if err.code == 404:
-                    raise NotFoundError(f"{method} {safe_url} 失败: HTTP 404") from err
                 error_class = (
                     SendRejected
                     if not idempotent and 400 <= err.code < 500
@@ -335,9 +284,8 @@ def write_state(path, state, dry_run):
 
 
 class TelegramClient:
-    def __init__(self, http, config, dry_run):
+    def __init__(self, http, dry_run):
         self.http = http
-        self.config = config
         self.dry_run = dry_run
         self.token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
         self.chat_id = os.environ.get("TELEGRAM_CHAT_ID", "")
@@ -365,10 +313,8 @@ class TelegramClient:
             TELEGRAM_TEXT_LIMIT,
             {
                 "text": message,
-                "parse_mode": self.config["parse_mode"],
-                "disable_web_page_preview": str(
-                    self.config["disable_web_page_preview"]
-                ).lower(),
+                "parse_mode": "HTML",
+                "disable_web_page_preview": "true",
             },
         )
 
@@ -380,33 +326,12 @@ class TelegramClient:
                 {
                     "photo": photo,
                     "caption": caption,
-                    "parse_mode": self.config["parse_mode"],
+                    "parse_mode": "HTML",
                 },
             )
         except SendRejected as err:
             log("telegram_photo_fallback", error=str(err))
             self.send(caption)
-
-@dataclass
-class TaskInfo:
-    task_id: str
-    task_name: str = ""
-
-
-@dataclass
-class RepoTaskChanges:
-    repo_id: str
-    repo_name: str
-    head_sha: str
-    bootstrap: bool
-    url: str = ""
-    added: list = field(default_factory=list)
-    modified: list = field(default_factory=list)
-    removed: list = field(default_factory=list)
-
-    @property
-    def has_changes(self):
-        return bool(self.added or self.modified or self.removed)
 
 
 def quote_path_part(value):
@@ -421,307 +346,8 @@ def raw_url(owner, repo, ref, path):
     )
 
 
-def task_file_matches(filename, patterns):
-    if "/" in filename:
-        return False
-    if not filename.startswith(patterns["prefix"]):
-        return False
-    if Path(filename).suffix.lower() not in patterns["extensions"]:
-        return False
-    return True
-
-
-def valid_task_name(value):
-    name = value.strip()
-    if not name or len(name) > 80:
-        return ""
-    lowered = name.lower()
-    if name.startswith(("!", "/")) or "coding:" in lowered:
-        return ""
-    return name
-
-
-def extract_task_name(content, filename):
-    extension = Path(filename).suffix.lower()
-    if extension in {".js", ".ts"}:
-        match = re.search(r"new\s+Env\s*\(\s*['\"](.+?)['\"]\s*\)", content)
-        return valid_task_name(match.group(1)) if match else ""
-
-    if extension == ".py":
-        patterns = [
-            r"Env\s*\(\s*['\"](.+?)['\"]\s*\)",
-            r"(?:name|task_name)\s*=\s*['\"](.+?)['\"]",
-            r"^\s*#\s*(.+?)\s*$",
-        ]
-    elif extension == ".sh":
-        patterns = [
-            r"(?:TASK_NAME|NAME)\s*=\s*['\"](.+?)['\"]",
-            r"^\s*#\s*(.+?)\s*$",
-        ]
-    else:
-        return ""
-
-    for pattern in patterns:
-        for match in re.finditer(pattern, content, re.MULTILINE):
-            name = valid_task_name(match.group(1))
-            if name:
-                return name
-    return ""
-
-
 def github_repo_path(owner, repo):
     return f"/repos/{quote_path_part(owner)}/{quote_path_part(repo)}"
-
-
-def branch_head(http, owner, repo, branch):
-    data = http.github(
-        f"{github_repo_path(owner, repo)}/commits/{quote_path_part(branch)}"
-    )
-    sha = str((data or {}).get("sha") or "")
-    if not sha:
-        raise MonitorError(f"未获取到 {owner}/{repo}:{branch} 的 HEAD")
-    return sha
-
-
-def commits_since(http, owner, repo, branch, since):
-    commits = []
-    for page in range(1, MAX_COMMIT_PAGES + 1):
-        data = http.github(
-            f"{github_repo_path(owner, repo)}/commits",
-            {
-                "sha": branch,
-                "since": since.isoformat().replace("+00:00", "Z"),
-                "per_page": 100,
-                "page": page,
-            },
-        )
-        if not isinstance(data, list):
-            raise MonitorError(f"{owner}/{repo} commits 响应格式错误")
-        commits.extend(data)
-        if len(data) < 100:
-            return commits
-    raise MonitorError(f"{owner}/{repo} 回溯 commit 超过 {MAX_COMMIT_PAGES * 100} 个")
-
-
-def compare_commits(http, owner, repo, base_sha, head_sha):
-    data = http.github(
-        f"{github_repo_path(owner, repo)}/compare/"
-        f"{quote_path_part(base_sha)}...{quote_path_part(head_sha)}"
-    )
-    if not isinstance(data, dict):
-        raise MonitorError(f"{owner}/{repo} compare 响应格式错误")
-    status = data.get("status")
-    if status not in {"ahead", "identical"}:
-        raise CursorError(f"{owner}/{repo} 游标已偏离当前分支: {status}")
-    files = data.get("files") or []
-    if not isinstance(files, list):
-        raise MonitorError(f"{owner}/{repo} compare files 格式错误")
-    if len(files) >= COMPARE_FILE_LIMIT:
-        raise MonitorError(
-            f"{owner}/{repo} compare 达到 {COMPARE_FILE_LIMIT} 文件上限，拒绝静默截断"
-        )
-    return files
-
-
-def bootstrap_base(http, owner, repo, branch, hours):
-    since = datetime.now(timezone.utc) - timedelta(hours=hours)
-    commits = commits_since(http, owner, repo, branch, since)
-    if not commits:
-        return ""
-    try:
-        oldest = min(
-            commits,
-            key=lambda commit: commit["commit"]["committer"]["date"],
-        )
-    except (KeyError, TypeError) as err:
-        raise MonitorError(f"{owner}/{repo} commit 时间信息不完整") from err
-    parents = oldest.get("parents") or []
-    base_sha = str((parents[0] if parents else {}).get("sha") or "")
-    if not base_sha:
-        raise MonitorError(f"{owner}/{repo} 无法确定首次回溯的基准 commit")
-    return base_sha
-
-
-def collect_task_changes(http, repo_config, patterns, previous_head, hours):
-    owner, repo = split_repo(repo_config["repo"], f"tasks.{repo_config['id']}.repo")
-    branch = repo_config["branch"]
-    current_head = branch_head(http, owner, repo, branch)
-    bootstrap = not previous_head
-
-    if previous_head == current_head:
-        files = []
-    elif previous_head:
-        try:
-            files = compare_commits(http, owner, repo, previous_head, current_head)
-        except (CursorError, NotFoundError) as err:
-            log("task_cursor_reset", repo=repo_config["id"], reason=str(err))
-            bootstrap = True
-            base_sha = bootstrap_base(http, owner, repo, branch, hours)
-            files = (
-                compare_commits(http, owner, repo, base_sha, current_head)
-                if base_sha
-                else []
-            )
-    else:
-        base_sha = bootstrap_base(http, owner, repo, branch, hours)
-        files = compare_commits(http, owner, repo, base_sha, current_head) if base_sha else []
-
-    changes = RepoTaskChanges(
-        repo_id=repo_config["id"],
-        repo_name=repo_config["name"],
-        head_sha=current_head,
-        bootstrap=bootstrap,
-        url=f"https://github.com/{owner}/{repo}/commit/{current_head}",
-    )
-
-    def add_current(filename, target):
-        content = http.text(raw_url(owner, repo, current_head, filename))
-        target.append(
-            TaskInfo(
-                task_id=Path(filename).stem,
-                task_name=extract_task_name(content, filename) or "(未识别)",
-            )
-        )
-
-    for file_info in files:
-        filename = str(file_info.get("filename") or "")
-        status = str(file_info.get("status") or "")
-        previous_filename = str(file_info.get("previous_filename") or "")
-
-        if status == "renamed":
-            if previous_filename and task_file_matches(previous_filename, patterns):
-                changes.removed.append(TaskInfo(task_id=Path(previous_filename).stem))
-            if filename and task_file_matches(filename, patterns):
-                add_current(filename, changes.added)
-            continue
-        if not filename or not task_file_matches(filename, patterns):
-            continue
-        if status in {"added", "copied"}:
-            add_current(filename, changes.added)
-        elif status == "removed":
-            changes.removed.append(TaskInfo(task_id=Path(filename).stem))
-        elif status in {"modified", "changed"}:
-            add_current(filename, changes.modified)
-        else:
-            raise MonitorError(f"{owner}/{repo} 出现未处理的文件状态: {status}")
-
-    changes.added.sort(key=lambda item: item.task_id)
-    changes.modified.sort(key=lambda item: item.task_id)
-    changes.removed.sort(key=lambda item: item.task_id)
-    log(
-        "task_repo_checked",
-        repo=repo_config["id"],
-        head=current_head[:12],
-        added=len(changes.added),
-        modified=len(changes.modified),
-        removed=len(changes.removed),
-    )
-    return changes
-
-
-def task_lines(changes):
-    items = []
-    for icon, label, field_name in TASK_CATEGORIES:
-        tasks = getattr(changes, field_name)
-        title = f"{icon} <b>{label} {len(tasks)}</b>"
-        for task in tasks:
-            line = f"<code>{html.escape(task.task_id)}</code>"
-            if task.task_name:
-                line += f" {html.escape(task.task_name)}"
-            items.append((title, line))
-    return items
-
-
-def task_block(items, keep):
-    rows = []
-    previous_title = ""
-    for title, line in items[:keep]:
-        if title != previous_title:
-            rows.append(title)
-            previous_title = title
-        rows.append(line)
-    if keep < len(items):
-        rows.append(f"… 另有 {len(items) - keep} 项")
-    return ["<blockquote expandable>", *rows, "</blockquote>"]
-
-
-def build_task_message(all_changes, hours, current_time):
-    changed = [changes for changes in all_changes if changes.has_changes]
-    if not changed:
-        return ""
-
-    header = ["📋 <b>上游任务变更</b>", f"🕐 {html.escape(current_time)}"]
-    if any(changes.bootstrap for changes in all_changes):
-        header.append(f"<i>首次回溯 {hours} 小时</i>")
-    listed = [(changes, task_lines(changes)) for changes in changed]
-
-    def assemble(keep):
-        parts = ["\n".join(header)]
-        for changes, items in listed:
-            body = task_block(items, keep)
-            parts.append(render_entry("📦", changes.repo_name, changes.url, body))
-        return "\n\n".join(parts)
-
-    low, high = 0, max(len(items) for _, items in listed)
-    while low < high:
-        middle = (low + high + 1) // 2
-        if telegram_length(assemble(middle)) <= TELEGRAM_CAPTION_LIMIT:
-            low = middle
-        else:
-            high = middle - 1
-    return assemble(low)
-
-
-def normalize_task_state(state):
-    if not state:
-        return {}
-    if state.get("schema_version") != 1 or state.get("mode") != "tasks":
-        raise MonitorError("任务状态格式或版本无效")
-    repositories = state.get("repositories")
-    if not isinstance(repositories, dict):
-        raise MonitorError("任务状态 repositories 无效")
-    normalized = {}
-    for repo_id, sha in repositories.items():
-        if not isinstance(repo_id, str) or not isinstance(sha, str) or not sha:
-            raise MonitorError("任务状态仓库游标无效")
-        normalized[repo_id] = sha
-    return normalized
-
-
-def run_tasks(config, http, telegram, state_path, hours, dry_run, zone):
-    if not state_path and not dry_run:
-        raise MonitorError("tasks 模式缺少 --state-file 或 MONITOR_STATE_FILE")
-    previous_state = read_state(state_path)
-    previous_heads = normalize_task_state(previous_state)
-    task_config = config["tasks"]
-    all_changes = []
-    current_heads = {}
-
-    for repo_config in task_config["repositories"]:
-        changes = collect_task_changes(
-            http,
-            repo_config,
-            task_config["files"],
-            previous_heads.get(repo_config["id"], ""),
-            hours,
-        )
-        all_changes.append(changes)
-        current_heads[repo_config["id"]] = changes.head_sha
-
-    current_time = datetime.now(zone).strftime("%Y-%m-%d %H:%M %Z")
-    message = build_task_message(all_changes, hours, current_time)
-    if message:
-        telegram.send_photo(message, config["telegram"]["photo"])
-    else:
-        log("tasks_unchanged")
-    current_state = {
-        "schema_version": 1,
-        "mode": "tasks",
-        "repositories": current_heads,
-    }
-    if current_state != previous_state:
-        write_state(state_path, current_state, dry_run)
-    log("tasks_completed", repositories=len(all_changes))
 
 
 def normalize_version_item(item, source_id):
@@ -772,7 +398,7 @@ def latest_path_update(http, owner, repo, branch, path, zone):
 
 
 def detect_openwrt_kernel(http, source, zone):
-    owner, repo = split_repo(source["repo"], f"versions.{source['id']}.repo")
+    owner, repo = split_repo(source["repo"], f"sources.{source['id']}.repo")
     branch = source["branch"]
     patchver = source.get("patchver", "").strip()
     if patchver:
@@ -817,7 +443,7 @@ def detect_openwrt_kernel(http, source, zone):
 
 
 def detect_github_latest_release(http, source, zone):
-    owner, repo = split_repo(source["repo"], f"versions.{source['id']}.repo")
+    owner, repo = split_repo(source["repo"], f"sources.{source['id']}.repo")
     release = http.github(f"{github_repo_path(owner, repo)}/releases/latest")
     if not isinstance(release, dict):
         raise MonitorError(f"未找到 {owner}/{repo} 的 latest release")
@@ -868,19 +494,24 @@ def changed_versions(previous, current, sources):
 def build_version_message(changes):
     parts = ["🚀 <b>上游版本更新</b>"]
     for item in changes:
-        body = [
-            f"<code>{html.escape(item['previous'])}</code> ➜ "
-            f"<code>{html.escape(item['version'])}</code>",
-            f"🕐 {html.escape(item['updated_at'])}",
-        ]
-        parts.append(render_entry(item["icon"], item["name"], item["url"], body))
+        url = html.escape(item["url"], quote=True)
+        parts.append(
+            "\n".join(
+                [
+                    f'{item["icon"]} <a href="{url}"><b>{html.escape(item["name"])}</b></a>',
+                    f"<code>{html.escape(item['previous'])}</code> ➜ "
+                    f"<code>{html.escape(item['version'])}</code>",
+                    f"🕐 {html.escape(item['updated_at'])}",
+                ]
+            )
+        )
     return "\n\n".join(parts)
 
 
 def run_versions(config, http, telegram, state_path, dry_run, zone):
     if not state_path and not dry_run:
-        raise MonitorError("versions 模式缺少 --state-file 或 MONITOR_STATE_FILE")
-    sources = config["versions"]["sources"]
+        raise MonitorError("缺少 --state-file 或 MONITOR_STATE_FILE")
+    sources = config["sources"]
     source_ids = [source["id"] for source in sources]
     raw_state = read_state(state_path)
     previous = normalize_version_state(raw_state, source_ids)
@@ -896,7 +527,7 @@ def run_versions(config, http, telegram, state_path, dry_run, zone):
         log("upstream_changed", sources=[change["id"] for change in changes])
         telegram.send_photo(
             build_version_message(changes),
-            config["telegram"]["photo"],
+            config["photo"],
         )
         write_state(state_path, current, dry_run)
         return
@@ -910,22 +541,14 @@ def run_versions(config, http, telegram, state_path, dry_run, zone):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="上游任务与版本监控")
+    parser = argparse.ArgumentParser(description="上游版本监控")
     parser.add_argument(
         "--config",
         default=str(Path(__file__).with_name("upstream_config.json")),
         help="配置文件路径",
     )
-    subparsers = parser.add_subparsers(dest="mode", required=True)
-
-    tasks = subparsers.add_parser("tasks", help="监控上游任务文件")
-    tasks.add_argument("--hours", type=int, help="首次建态时的回溯小时数")
-    tasks.add_argument("--state-file", default="", help="任务游标状态文件")
-    tasks.add_argument("--dry-run", action="store_true")
-
-    versions = subparsers.add_parser("versions", help="监控上游版本")
-    versions.add_argument("--state-file", default="", help="版本状态文件")
-    versions.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--state-file", default="", help="版本状态文件")
+    parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
 
@@ -949,14 +572,8 @@ def main():
     set_output("cache_save", "false")
 
     http = HttpClient(token)
-    telegram = TelegramClient(http, config["telegram"], dry_run)
-    if args.mode == "tasks":
-        hours = args.hours or config["tasks"]["default_lookback_hours"]
-        if hours <= 0:
-            raise ConfigError("--hours 必须是正整数")
-        run_tasks(config, http, telegram, state_path, hours, dry_run, zone)
-    else:
-        run_versions(config, http, telegram, state_path, dry_run, zone)
+    telegram = TelegramClient(http, dry_run)
+    run_versions(config, http, telegram, state_path, dry_run, zone)
 
 
 if __name__ == "__main__":
