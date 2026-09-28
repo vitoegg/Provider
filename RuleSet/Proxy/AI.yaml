@@ -198,5 +198,6 @@ payload:
   - '+.coze.com'
   # > Meta AI
   - '+.meta.ai'
+  - '+.muse.ai'
   # > Bixby
   - '+.bixbyllm.com'
