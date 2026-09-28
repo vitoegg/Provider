@@ -80,7 +80,7 @@ class SigninPageParser(HTMLParser):
             method = attributes.get("method", "get").lower()
             self.in_signin_form = (
                 "signin-form" in classes
-                and action == "/signin"
+                and action == "/checkin"
                 and method == "post"
             )
             self.has_signin_form = self.has_signin_form or self.in_signin_form
@@ -351,7 +351,7 @@ def sb_signin(cookie):
         )
 
     session = build_session(cookie)
-    signin_url = f"{SB_URL}/signin/"
+    signin_url = f"{SB_URL}/checkin/"
 
     try:
         wait_random_interval(START_DELAY, "签到任务启动")
