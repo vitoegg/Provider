@@ -198,7 +198,7 @@ acquire_lock() {
 open_transaction() {
     mkdir -p "$STATE_DIR" || fail "无法创建状态目录：${STATE_DIR}"
     chmod 700 "$STATE_DIR" || fail "无法设置状态目录权限"
-    TX_DIR="$(mktemp -d "${STATE_DIR}/.tx.XXXXXX")" || fail "无法创建候选目录"
+    TX_DIR="$(mktemp -d "${LOCK_FILE%/*}/gateway-tx.XXXXXX")" || fail "无法创建候选目录"
     trap 'rm -rf "$TX_DIR"; rmdir "$STATE_DIR" 2>/dev/null' EXIT
     mkdir "${TX_DIR}/lists" || fail "无法创建候选目录"
 }
@@ -619,7 +619,9 @@ commit_changes() {
     fi
     write_state
     compile_rules "${TX_DIR}/gateway.nft"
-    output="$(nft -c -f "${TX_DIR}/gateway.nft" 2>&1)" || fail "nftables 规则预检失败：${output}"
+    if [ "$SYNC_MODE" = user ] || ! cmp -s "${TX_DIR}/gateway.nft" "$RULES_FILE"; then
+        output="$(nft -c -f "${TX_DIR}/gateway.nft" 2>&1)" || fail "nftables 规则预检失败：${output}"
+    fi
     check_lockout
     install_file "${TX_DIR}/state" "$STATE_FILE" || fail "状态提交失败，运行规则未变"
     install_file "${TX_DIR}/dns.cache" "$DNS_CACHE_FILE" || fail "解析缓存提交失败，运行规则未变"
