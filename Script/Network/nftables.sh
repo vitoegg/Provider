@@ -100,7 +100,7 @@ item_kind() {
 parse_forward_rule() {
     local rule="$1" sport target dport snat mss
     [[ "$rule" =~ ^[^:]+:[^:]+:[^:]+(:[^:]*(:[^:]+)?)?$ ]] ||
-        fail "规则格式错误：${rule}，正确格式为 <源端口>:<目标>:<目标端口>[:[SNAT_IP][:MSS]]"
+        fail "规则格式错误：${rule}，正确格式为 源端口:目标IP或域名:目标端口[:SNAT_IP[:MSS]]"
     IFS=':' read -r sport target dport snat mss <<< "$rule"
     target="${target,,}"
     validate_port "$sport" || fail "无效的源端口：${sport}"
@@ -199,7 +199,7 @@ open_transaction() {
     mkdir -p "$STATE_DIR" || fail "无法创建状态目录：${STATE_DIR}"
     chmod 700 "$STATE_DIR" || fail "无法设置状态目录权限"
     TX_DIR="$(mktemp -d "${STATE_DIR}/.tx.XXXXXX")" || fail "无法创建候选目录"
-    trap 'rm -rf "$TX_DIR"' EXIT
+    trap 'rm -rf "$TX_DIR"; rmdir "$STATE_DIR" 2>/dev/null' EXIT
     mkdir "${TX_DIR}/lists" || fail "无法创建候选目录"
 }
 
@@ -395,11 +395,11 @@ compile_rules() {
         for protocol in tcp udp; do
             dnat_rules+="${indent}meta nfproto ipv4 fib daddr type local ${protocol} dport ${sport}"
             dnat_rules+=" dnat ip to ${ip}:${dport}"$'\n'
-            snat_rules+="${indent}ct status dnat ip daddr ${ip} ${protocol} dport ${dport} ${action}"$'\n'
+            snat_rules+="${indent}ct status dnat meta l4proto ${protocol} ct original proto-dst ${sport} ${action}"$'\n'
         done
         if [ "$mss" != - ]; then
             [ "$mss" != auto ] || mss="rt mtu"
-            mss_rules+="${indent}ct status dnat ip daddr ${ip} tcp dport ${dport}"
+            mss_rules+="${indent}ct status dnat meta l4proto tcp ct original proto-dst ${sport}"
             mss_rules+=" tcp flags syn tcp option maxseg size set ${mss}"$'\n'
         fi
     done
