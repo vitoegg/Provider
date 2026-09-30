@@ -1,66 +1,65 @@
-let token = "";
 export default {
 	async fetch(request ,env) {
-		const url = new URL(request.url);
-		if(url.pathname !== '/'){
-			let githubRawUrl = 'https://raw.githubusercontent.com';
-			if (new RegExp(githubRawUrl, 'i').test(url.pathname)){
-				githubRawUrl += url.pathname.split(githubRawUrl)[1];
-			} else {
-				if (env.GH_NAME) {
-					githubRawUrl += '/' + env.GH_NAME;
-					if (env.GH_REPO) {
-						githubRawUrl += '/' + env.GH_REPO;
-						if (env.GH_BRANCH) githubRawUrl += '/' + env.GH_BRANCH;
-					}
-				}
-				githubRawUrl += url.pathname;
-			}
-			//console.log(githubRawUrl);
-			if (env.GH_TOKEN && env.TOKEN){
-				if (env.TOKEN == url.searchParams.get('token')) token = env.GH_TOKEN || token;
-				else token = url.searchParams.get('token') || token;
-			} else token = url.searchParams.get('token') || env.GH_TOKEN || env.TOKEN || token;
+		try {
+			const url = new URL(request.url);
+			if (url.pathname !== '/') {
+				const token = url.searchParams.get('token');
+				if (!env.TOKEN || !token || !(await safeEqual(token, env.TOKEN))) return notFound();
+				if (request.method !== 'GET' && request.method !== 'HEAD') return notFound();
 
-			const githubToken = token;
-			//console.log(githubToken);
-			if (!githubToken || githubToken == '') return new Response('TOKEN不能为空', { status: 400 });
+				const { GH_NAME, GH_REPO, GH_BRANCH, GH_TOKEN } = env;
+				if (!GH_NAME || !GH_REPO || !GH_BRANCH || !GH_TOKEN) return notFound();
 
-			// 构建请求头
-			const headers = new Headers();
-			headers.append('Authorization', `token ${githubToken}`);
-
-			// 发起请求
-			const response = await fetch(githubRawUrl, { headers });
-
-			// 检查请求是否成功 (状态码 200 到 299)
-			if (response.ok) {
-				// 保留 GitHub 的响应状态和响应头
-				return new Response(response.body, {
-					status: response.status,
-					headers: response.headers
+				const segs = url.pathname.slice(1).split('/').map(decodeURIComponent);
+				if (segs.some(s => !s || s === '.' || s === '..' ||
+					/[\/\\\u0000-\u001f\u007f]/.test(s))) return notFound();
+				const githubRawUrl = `https://raw.githubusercontent.com/${GH_NAME}/${GH_REPO}/${GH_BRANCH}/` +
+					segs.map(encodeURIComponent).join('/');
+				const response = await fetch(githubRawUrl, {
+					method: request.method,
+					headers: { Authorization: `token ${GH_TOKEN}` },
+					redirect: 'error'
 				});
-			} else {
-				const errorText = env.ERROR || '无法获取文件，检查路径或TOKEN是否正确。';
-				return new Response(errorText, { status: response.status });
+				if (response.status !== 200) {
+					if (response.body) await response.body.cancel();
+					return notFound();
+				}
+
+				const headers = new Headers({ 'Cache-Control': 'no-store' });
+				const contentType = response.headers.get('Content-Type');
+				if (contentType) headers.set('Content-Type', contentType);
+				return new Response(request.method === 'HEAD' ? null : response.body, {
+					status: 200,
+					headers
+				});
 			}
 
-		} else {
-			const envKey = env.URL302 ? 'URL302' : (env.URL ? 'URL' : null);
-			if (envKey) {
-				const URLs = await ADD(env[envKey]);
-				const URL = URLs[Math.floor(Math.random() * URLs.length)];
-				return envKey === 'URL302' ? Response.redirect(URL, 302) : fetch(new Request(URL, request));
-			}
-			//首页改成一个nginx伪装页
 			return new Response(await nginx(), {
 				headers: {
 					'Content-Type': 'text/html; charset=UTF-8',
 				},
 			});
+		} catch {
+			return notFound();
 		}
 	}
 };
+
+async function safeEqual(a, b) {
+	const encoder = new TextEncoder();
+	const [x, y] = await Promise.all([a, b].map(v => crypto.subtle.digest('SHA-256', encoder.encode(v))));
+	return crypto.subtle.timingSafeEqual(x, y);
+}
+
+function notFound() {
+	return new Response('Not Found', {
+		status: 404,
+		headers: {
+			'Content-Type': 'text/plain; charset=UTF-8',
+			'Cache-Control': 'no-store'
+		}
+	});
+}
 
 async function nginx() {
 	const text = `
@@ -91,14 +90,4 @@ async function nginx() {
 	</html>
 	`
 	return text ;
-}
-
-async function ADD(envadd) {
-	var addtext = envadd.replace(/[	|"'\r\n]+/g, ',').replace(/,+/g, ',');	// 将空格、双引号、单引号和换行符替换为逗号
-	//console.log(addtext);
-	if (addtext.charAt(0) == ',') addtext = addtext.slice(1);
-	if (addtext.charAt(addtext.length -1) == ',') addtext = addtext.slice(0, addtext.length - 1);
-	const add = addtext.split(',');
-	//console.log(add);
-	return add ;
 }
