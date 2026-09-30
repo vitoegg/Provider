@@ -30,14 +30,10 @@ fail() {
 
 show_help() {
     cat <<'EOF'
-用法：
-  bash smartdns.sh [--ecs REGION] [-6|--ipv6 yes|no] [-u|--uninstall]
-参数：
-  -e, --ecs REGION        ECS 区域：HK、TYO、MY、SG、LA、OR、SEA
-  -6, --ipv6 MODE         IPv6 模式：yes、no；未提供时沿用 SmartDNS 默认行为
-  -u, --uninstall         卸载 SmartDNS 并恢复公共 DNS
-  -h, --help              显示帮助
-无参数时安装 SmartDNS，或更新现有配置。
+用法:
+  smartdns.sh [-e|--ecs HK|TYO|MY|SG|LA|OR|SEA] [-6|--ipv6 yes|no]
+  smartdns.sh -u, --uninstall
+  smartdns.sh -h, --help
 EOF
 }
 

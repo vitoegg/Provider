@@ -53,26 +53,14 @@ fail() {
 
 show_usage() {
     cat <<'EOF'
-用法：
-  bash reality.sh --protocol reality|shadowsocks|reality,shadowsocks [OPTIONS]
-  bash reality.sh --update
-  bash reality.sh --uninstall
-
-参数：
-  --protocol LIST
-  --reality-port PORT
-  --reality-domain DOMAIN
-  --reality-uuid UUID
-  --reality-private-key KEY
-  --reality-public-key KEY
-  --reality-short-id ID
-  --ss-port PORT
-  --ss-password PASSWORD
-  --socks-host HOST
-  --socks-port PORT
-  --update
-  -u, --uninstall
-  -h, --help
+用法:
+  reality.sh --protocol reality|shadowsocks|reality,shadowsocks
+             [--reality-port PORT] [--reality-domain DOMAIN] [--reality-uuid UUID]
+             [--reality-private-key KEY] [--reality-public-key KEY] [--reality-short-id ID]
+             [--ss-port PORT] [--ss-password PASSWORD] [--socks-host HOST] [--socks-port PORT]
+  reality.sh --update
+  reality.sh -u, --uninstall
+  reality.sh -h, --help
 EOF
 }
 

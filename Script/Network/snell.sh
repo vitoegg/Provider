@@ -38,20 +38,12 @@ fail() {
 
 show_usage() {
     cat <<'EOF'
-用法：
-  bash snell.sh --install [VERSION] [--port PORT] [--psk PSK]
-  bash snell.sh --update [VERSION]
-  bash snell.sh --uninstall
-
-参数：
-  -i, --install [VERSION]  安装，可指定版本
-  -n, --update [VERSION]   更新，可指定版本
-  -u, --uninstall          卸载
-  -p, --port PORT          监听端口，范围 10000-60000
-  -k, --psk PSK            16 位字母数字预共享密钥
-  -h, --help               显示帮助
-
-无参数时显示交互菜单。
+用法:
+  snell.sh
+  snell.sh -i|--install [VERSION] [-p|--port PORT] [-k|--psk PSK]
+  snell.sh -n|--update [VERSION]
+  snell.sh -u, --uninstall
+  snell.sh -h, --help
 EOF
 }
 

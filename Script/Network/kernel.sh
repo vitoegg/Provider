@@ -28,11 +28,10 @@ trap 'rm -f "$CANDIDATE"' EXIT
 
 show_help() {
     cat << 'EOF'
-用法：
-  bash kernel.sh [-6 yes|no|-u]
-  -6 yes|no    是否保留 IPv6，默认 yes
-  -u           移除内核优化配置
-  -h, --help   显示帮助
+用法:
+  kernel.sh [-6 yes|no]
+  kernel.sh -u
+  kernel.sh -h, --help
 EOF
 }
 

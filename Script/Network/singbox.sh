@@ -69,38 +69,18 @@ fail() {
 
 show_usage() {
     cat <<'EOF'
-用法：
-  bash singbox.sh --protocol LIST [OPTIONS]
-  bash singbox.sh --update
-  bash singbox.sh --uninstall
-
-协议：
-  --protocol LIST                 anytls、shadowsocks、shadowtls、trojan，支持逗号组合
-  --shadowtls-port PORT           ShadowTLS 端口
-  --shadowtls-password PASSWORD   ShadowTLS 密码
-  --shadowtls-domain DOMAIN       ShadowTLS 单域名
-  --anytls-port PORT              AnyTLS 端口
-  --anytls-password PASSWORD      AnyTLS 密码
-  --anytls-domain DOMAIN          AnyTLS 域名
-  --anytls-scheme SCHEME          AnyTLS padding scheme
-  --anytls-cert-mode acme|manual  AnyTLS 证书模式
-  --anytls-token TOKEN            Cloudflare API Token
-  --anytls-cert-path PATH         证书路径
-  --anytls-key-path PATH          私钥路径
-  --trojan-port PORT              Trojan 端口
-  --trojan-password PASSWORD      Trojan 密码
-  --trojan-domain DOMAIN          Trojan 域名
-  --trojan-cert-path PATH         证书路径
-  --trojan-key-path PATH          私钥路径
-  --trojan-ws-name NAME           Trojan WS 单段路径名
-  --ss-port PORT                  Shadowsocks 端口
-  --ss-password PASSWORD          Shadowsocks 密码
-  --socks-host HOST               Socks 服务地址
-  --socks-port PORT               Socks 服务端口
-  --version VERSION               sing-box 版本
-  --update                        更新 sing-box
-  -u, --uninstall                 卸载 sing-box
-  -h, --help                      显示帮助
+用法:
+  singbox.sh --protocol anytls|shadowsocks|shadowtls|trojan[,...] [--version VERSION]
+             [--shadowtls-port PORT] [--shadowtls-password PASSWORD] [--shadowtls-domain DOMAIN]
+             [--anytls-port PORT] [--anytls-password PASSWORD] [--anytls-domain DOMAIN]
+             [--anytls-scheme SCHEME] [--anytls-cert-mode acme|manual] [--anytls-token TOKEN]
+             [--anytls-cert-path PATH] [--anytls-key-path PATH]
+             [--trojan-port PORT] [--trojan-password PASSWORD] [--trojan-domain DOMAIN]
+             [--trojan-cert-path PATH] [--trojan-key-path PATH] [--trojan-ws-name NAME]
+             [--ss-port PORT] [--ss-password PASSWORD] [--socks-host HOST] [--socks-port PORT]
+  singbox.sh --update
+  singbox.sh -u, --uninstall
+  singbox.sh -h, --help
 EOF
 }
 

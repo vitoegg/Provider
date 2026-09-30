@@ -34,18 +34,10 @@ fail() {
 
 show_help() {
     cat <<'EOF'
-用法：
-  bash mosdns.sh [--install] [--dns DNS] [--ecs HK|TYO|MY|SG|LA|OR|SEA] [--ipv4|--ipv6]
-  bash mosdns.sh --uninstall
-参数：
-  -i, --install           显式安装 MosDNS，可省略
-  -d, --dns DNS           自定义 DNS 服务器
-  -e, --ecs REGION        ECS 区域：HK、TYO、MY、SG、LA、OR、SEA；默认 TYO
-  -4, --ipv4              IPv4 优先，默认模式
-  -6, --ipv6              IPv6 优先
-  -u, --uninstall         卸载 MosDNS
-  -h, --help              显示帮助
-无参数时使用默认配置安装 MosDNS。
+用法:
+  mosdns.sh [-i|--install] [-d|--dns DNS] [-e|--ecs HK|TYO|MY|SG|LA|OR|SEA] [-4|--ipv4|-6|--ipv6]
+  mosdns.sh -u, --uninstall
+  mosdns.sh -h, --help
 EOF
 }
 

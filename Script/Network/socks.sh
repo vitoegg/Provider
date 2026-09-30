@@ -23,13 +23,10 @@ fail() {
 
 show_help() {
     cat <<'EOF'
-用法：
-  bash socks.sh [--port PORT] --allow-ip IP[,IP...]
-参数：
-  --port PORT             监听端口；未提供时自动生成
-  --allow-ip IP[,IP...]   允许访问的 IPv4；必填，可重复使用
-  -u, --uninstall         卸载 Dante
-  -h, --help              显示帮助
+用法:
+  socks.sh [--port PORT] --allow-ip IP[,IP...] [--allow-ip IP[,IP...]]
+  socks.sh -u, --uninstall
+  socks.sh -h, --help
 EOF
 }
 

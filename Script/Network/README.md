@@ -70,8 +70,8 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 
 ### 参数说明
 ```text
--s password             Shadowsocks 密码
--p port                 Shadowsocks 端口
+-s password             Shadowsocks 密码，未提供时自动生成
+-p port                 Shadowsocks 端口，未提供时自动生成
 -u                      卸载
 -h, --help              显示帮助
 ```
@@ -117,8 +117,8 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 -i, --install [VERSION] 安装，可指定版本
 -n, --update [VERSION]  更新，可指定版本
 -u, --uninstall         卸载
--p, --port PORT         监听端口
--k, --psk PSK           预共享密钥
+-p, --port PORT         监听端口，范围 10000-60000
+-k, --psk PSK           预共享密钥，16 位字母数字
 -h, --help              显示帮助
 ```
 
@@ -177,7 +177,7 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 ### 参数说明
 ```text
 -e, --ecs REGION        ECS 区域: HK, TYO, MY, SG, LA, OR, SEA
--6, --ipv6 MODE         IPv6 模式: yes, no
+-6, --ipv6 MODE         IPv6 模式: yes, no；未提供时沿用 SmartDNS 默认行为
 -u, --uninstall         卸载并恢复 DNS 为 1.1.1.1 / 8.8.8.8
 -h, --help              显示帮助
 ```
@@ -200,8 +200,8 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 ```text
 -i, --install           显式安装，可省略
 -d, --dns DNS           自定义 DNS 服务器
--e, --ecs REGION        ECS 区域: HK, TYO, MY, SG, LA, OR, SEA
--4, --ipv4              IPv4 优先
+-e, --ecs REGION        ECS 区域: HK, TYO, MY, SG, LA, OR, SEA；默认 TYO
+-4, --ipv4              IPv4 优先，默认模式
 -6, --ipv6              IPv6 优先
 -u, --uninstall         卸载
 -h, --help              显示帮助

@@ -37,17 +37,10 @@ fail() {
 
 show_usage() {
     cat <<'EOF'
-用法：
-  bash shadowsocks.sh [-s PASSWORD] [-p PORT]
-  bash shadowsocks.sh -u
-
-参数：
-  -s PASSWORD   Shadowsocks 密码，未提供时自动生成
-  -p PORT       Shadowsocks 端口，未提供时自动生成
-  -u            卸载 Shadowsocks
-  -h, --help    显示帮助
-
-无参数时显示安装、更新、卸载菜单。
+用法:
+  shadowsocks.sh [-s PASSWORD] [-p PORT]
+  shadowsocks.sh -u
+  shadowsocks.sh -h, --help
 EOF
 }
 
