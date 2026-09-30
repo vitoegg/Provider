@@ -93,12 +93,12 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 ### 参数说明
 ```text
 --port PORT                 监听端口，未提供时自动生成
---allow-ip IP[,IP...]       Dante 与 NFT 白名单 IPv4，必填且可重复使用
+--allow-ip IP[,IP...]       Dante 允许的客户端 IPv4，必填且可重复使用
 -u, --uninstall             卸载 Dante
 -h, --help                  显示帮助
 ```
 
-安装时 `--allow-ip` 必填；无参数会直接报错。
+安装时 `--allow-ip` 必填；无参数会直接报错。端口准入由 `nftables.sh` 统一负责，白名单模式下需要将这些 IP 同时加入 `--whitelist`。
 
 ### 示例命令
 ```bash
@@ -244,20 +244,22 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 
 ### 参数说明
 ```text
---help, -h                         显示帮助
---list, -l                         查看已发布的转发与防护规则
---add, -a RULE [...] [--protect [whitelist=/ABSOLUTE/PATH.nft] [ping=VALUE]]
---delete, -d RULE [...] [--protect [whitelist=/ABSOLUTE/PATH.nft] [ping=VALUE]]
---replace, -r RULE [...] [--protect [whitelist=/ABSOLUTE/PATH.nft] [ping=VALUE]]
---protect [whitelist=/ABSOLUTE/PATH.nft] [ping=VALUE]
---sync                             解析域名并重新对齐规则
---clean ping|whitelist|forward|protect|all
+--forward RULE [...]       设置转发，完整列表覆盖原有设置
+--forward off              关闭转发
+--whitelist ITEM [...]     设置白名单，完整列表覆盖原有设置
+--whitelist off            关闭白名单，放行全部入站
+--list                     查看当前设置
+--uninstall                全部移除
+-h, --help                 显示帮助
+RULE                       源端口:目标IP或域名:目标端口[:SNAT_IP[:MSS]]
+ITEM                       IP、IP段、域名、URL 或本地文件路径
 ```
+
+白名单开启后，只有白名单内的来源可以访问本机和使用转发。URL 和本地文件更新后会自动生效。
 
 ### 示例命令
 ```bash
-bash nftables.sh --add 10086:82.40.1.2:33333:10.100.1.2:auto
-bash nftables.sh --protect whitelist=/root/whitelist.nft ping=1.2.3.4,home.example.com
+bash nftables.sh --forward 10086:1.2.3.4:33333 --whitelist /root/whitelist.txt home.example.com
 ```
 
 ## **sshg.sh**
@@ -269,37 +271,17 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 
 ### 参数说明
 ```text
---apply                 应用传入的 config/key/allow 变更
---reset                 重置为传入的 config/key/allow 状态
---sync                  解析域名并刷新 nft
---remove                移除 sshg 文件和 nft table
+--apply                 应用传入的 config/key 变更
+--reset                 重置为传入的 config/key 状态
+--remove                移除 sshg 托管的 SSH 配置与公钥
 config=ssh              写入 SSH hardening 配置
 key=...                 确保 root 可使用该 ssh-ed25519 公钥，必要时写入 authorized_keys3
-allow=...               IPv4、IPv4 CIDR 或域名，逗号分隔
 -h, --help              显示帮助
 ```
 
-无参数时显示帮助并返回失败，不会修改系统。
+无参数时显示帮助并返回失败，不会修改系统。SSH 端口的来源限制由 `nftables.sh --whitelist` 负责。
 
 ### 示例命令
 ```bash
-bash sshg.sh --reset config=ssh allow=1.2.3.4,1.2.3.0/24,example.com key='ssh-ed25519 AAAA...'
-```
-
-## **providerdns.sh**
-
-### 下载
-```bash
-curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/providerdns.sh
-```
-
-### 参数说明
-```text
---clean                             无订阅时清理服务、配置和缓存
--h, --help                          显示帮助
-```
-
-### 示例命令
-```bash
-bash providerdns.sh --clean
+bash sshg.sh --reset config=ssh key='ssh-ed25519 AAAA...'
 ```
