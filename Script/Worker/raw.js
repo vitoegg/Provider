@@ -18,7 +18,7 @@ export default {
 				const response = await fetch(githubRawUrl, {
 					method: request.method,
 					headers: { Authorization: `token ${GH_TOKEN}` },
-					redirect: 'error'
+					redirect: 'manual'
 				});
 				if (response.status !== 200) {
 					if (response.body) await response.body.cancel();
