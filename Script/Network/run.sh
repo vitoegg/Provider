@@ -77,34 +77,16 @@ provider_run() {
   run_quiet bash "$path" "$@"
 }
 
-allowlist_count() {
-  printf '%s\n' "$1" | awk -F, '
-    {
-      for (i = 1; i <= NF; i++) {
-        item = $i
-        gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
-        if (item == "") continue
-        total++
-      }
-      printf "%d", total
-    }'
-}
-
 step_ssh_guard() {
-  [ "$#" -ge 2 ] && [ "$#" -le 3 ] || fail "step_ssh_guard requires script, allowlist, and optional public key"
-  local script="$1" allowlist="$2" public_key="${3:-}" allow_count key_detail=""
-  local -a args
-  [ -n "$allowlist" ] || fail "ssh allowlist empty"
-
-  args=(--reset config=ssh "allow=${allowlist}")
+  [ "$#" -ge 1 ] && [ "$#" -le 2 ] || fail "step_ssh_guard requires script and optional public key"
+  local script="$1" public_key="${2:-}" key_detail=""
+  local -a args=(--reset config=ssh)
   if [ -n "$public_key" ]; then
     args+=("key=${public_key}")
     key_detail=" | root_key=ready"
   fi
-
-  allow_count="$(allowlist_count "$allowlist")"
-  provider_run "$script" "${args[@]}" || fail "ssh guard failed | trusted_sources=${allow_count}"
-  log "ssh guard enabled | trusted_sources=${allow_count}${key_detail}"
+  provider_run "$script" "${args[@]}" || fail "ssh guard failed"
+  log "ssh guard enabled${key_detail}"
 }
 
 step_ssh_guard_remove() {
@@ -204,27 +186,15 @@ step_dns() {
 }
 
 step_traffic() {
-  [ "$#" -ge 2 ] || fail "step_traffic requires mode and script"
-  local mode="$1" script="$2"
-  shift 2
-  case "$mode" in
-    forward)
-      provider_run "$script" -r "$@" || fail "traffic rules load failed | mode=forward"
-      log "traffic rules loaded | mode=forward"
-      ;;
-    protect)
-      provider_run "$script" --protect "$@" || fail "traffic protection failed | mode=protect"
-      log "traffic protection enabled"
-      ;;
-    off)
-      [ "$#" -le 1 ] || fail "traffic off accepts an optional clean scope"
-      provider_run "$script" --clean "${1:-all}" || fail "traffic rules removal failed | scope=${1:-all}"
-      mark_cleared "traffic${1:+:$1}"
-      ;;
-    *)
-      fail "unknown traffic mode | mode=${mode}"
-      ;;
-  esac
+  [ "$#" -ge 2 ] || fail "step_traffic requires script and arguments"
+  provider_run "$@" || fail "traffic configuration failed"
+  log "traffic configured"
+}
+
+step_traffic_remove() {
+  [ "$#" -eq 1 ] || fail "step_traffic_remove requires script"
+  provider_run "$1" --uninstall || fail "traffic rules removal failed"
+  mark_cleared traffic
 }
 
 step_cleanup_scripts() {
