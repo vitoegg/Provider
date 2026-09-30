@@ -409,7 +409,9 @@ prepare_trojan_params() {
     [ -n "$TROJAN_PASSWORD" ] || TROJAN_PASSWORD="$(generate_password)"
     [ -n "$TROJAN_DOMAIN" ] || fail "启用 Trojan 时必须提供 --trojan-domain。"
     case "$TROJAN_WS_NAME" in
-        .|..|*/*|*'?'*|*'#'*|*[[:space:][:cntrl:]]*) fail "Trojan WS 路径名无效：$TROJAN_WS_NAME" ;;
+        .|..|*/*|*'?'*|*'#'*|*[[:space:][:cntrl:]]*)
+            fail "Trojan WS 路径名无效：$TROJAN_WS_NAME"
+            ;;
     esac
     if [ ! -f "$TROJAN_CERT_PATH" ] || [ ! -f "$TROJAN_KEY_PATH" ]; then
         fail "Trojan 证书文件不存在。"

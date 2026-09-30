@@ -48,21 +48,13 @@ fail() {
 show_help() {
     cat << 'EOF'
 用法:
-  nftables.sh --forward <规则> [规则 ...]     设置转发，完整列表覆盖原有设置
-  nftables.sh --forward off                   关闭转发
-  nftables.sh --whitelist <来源> [来源 ...]   设置白名单，完整列表覆盖原有设置
-  nftables.sh --whitelist off                 关闭白名单，放行全部入站
-  nftables.sh --list                          查看当前设置
-  nftables.sh --uninstall                     全部移除
-  nftables.sh -h, --help                      显示帮助
-  --forward 与 --whitelist 可在同一条命令中同时设置
-规则:
-  源端口:目标IP或域名:目标端口[:SNAT_IP[:MSS]]，MSS 为 auto 或 536-9000
-来源:
-  IP、IP段、域名、https URL 或本地文件路径；URL 与文件内容为每行一个 IP 或 IP 段
-说明:
-  白名单开启后，只有白名单内的来源可以访问本机和使用转发
-  URL 和本地文件更新后会自动生效
+  nftables.sh --forward <源端口:目标IP或域名:目标端口[:SNAT_IP[:MSS]]> [...]
+  nftables.sh --forward off
+  nftables.sh --whitelist <IP|IP段|域名|URL|文件路径> [...]
+  nftables.sh --whitelist off
+  nftables.sh --list
+  nftables.sh --uninstall
+  nftables.sh -h, --help
 EOF
 }
 
