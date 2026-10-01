@@ -644,9 +644,26 @@ run_change() {
     commit_changes
 }
 
+gateway_present() {
+    local path tables=""
+    for path in "$STATE_DIR" "$RULES_FILE" "$SYSCTL_FILE" \
+        "${SYSTEMD_DIR}/${SYNC_TIMER}" "${SYSTEMD_DIR}/${SYNC_SERVICE}"; do
+        [ ! -e "$path" ] || return 0
+    done
+    ! grep -Fqx "$NFT_INCLUDE_MARKER" "$NFT_MAIN_CONFIG_FILE" 2>/dev/null || return 0
+    if command -v nft >/dev/null 2>&1; then
+        tables="$(nft list tables 2>/dev/null)" || fail "无法读取 nftables 状态，已保留网关状态"
+    fi
+    grep -Fqx "table inet ${TABLE_NAME}" <<< "$tables"
+}
+
 run_uninstall() {
     require_root
     acquire_lock
+    if ! gateway_present; then
+        log_info "网关已不存在，无需卸载"
+        return 0
+    fi
     teardown
     log_info "网关已卸载"
 }
