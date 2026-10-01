@@ -115,19 +115,19 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 
 ### 参数说明
 ```text
--i, --install [VERSION] 安装，可指定版本
--n, --update [VERSION]  更新，可指定版本
--u, --uninstall         卸载
 -p, --port PORT         监听端口，范围 10000-60000
--k, --psk PSK           预共享密钥，16 位字母数字
+-k, --psk PSK           预共享密钥，16-64 位字母数字
+--version VERSION       安装指定版本，测试版需显式指定（如 6.0.0rc2）
+--update                更新到当前大版本内的最新正式版
+-u, --uninstall         卸载
 -h, --help              显示帮助
 ```
 
-无参数时显示安装、更新、卸载菜单。
+无参数时安装或修复 Snell。未提供端口或 PSK 时沿用现有配置中的值，没有则自动生成；未安装时自动获取官方最新正式版。
 
 ### 示例命令
 ```bash
-bash snell.sh --install 4.1.1 --port 23456 --psk abcdefgh12345678
+bash snell.sh --port 23456 --psk "$(openssl rand -hex 16)"
 ```
 
 ## **reality.sh**

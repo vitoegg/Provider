@@ -2,29 +2,27 @@
 
 set -o pipefail
 
+SNELL_BINARY="${SNELL_BINARY:-/usr/local/bin/snell-server}"
 SNELL_CONFIG_FILE="${SNELL_CONFIG_FILE:-/etc/snell/snell.conf}"
 SNELL_UNIT_FILE="${SNELL_UNIT_FILE:-/etc/systemd/system/snell.service}"
-SNELL_BINARY="${SNELL_BINARY:-/usr/local/bin/snell-server}"
 SNELL_DOWNLOAD_BASE="https://dl.nssurge.com/snell"
+SNELL_RELEASE_NOTES="https://kb.nssurge.com/surge-knowledge-base/release-notes/snell.md"
 
-ACTION=""
-VERSION=""
-PORT=""
-PSK=""
+UPDATE_REQUESTED=0
+UNINSTALL_REQUESTED=0
+SNELL_VERSION=""
+SNELL_PORT=""
+SNELL_PSK=""
+CURRENT_VERSION=""
+TARGET_VERSION=""
+WORK_DIR=""
+CANDIDATE_BINARY=""
 BINARY_CHANGED=0
 CONFIG_CHANGED=0
 UNIT_CHANGED=0
-TRANSACTION_DIR=""
-TRANSACTION_ACTIVE=0
-SERVICE_WAS_ACTIVE=0
-SERVICE_WAS_ENABLED=0
 
 log_info() {
     printf '[INFO] %s\n' "$*"
-}
-
-log_warning() {
-    printf '[WARNING] %s\n' "$*" >&2
 }
 
 log_error() {
@@ -39,69 +37,56 @@ fail() {
 show_usage() {
     cat <<'EOF'
 用法:
-  snell.sh
-  snell.sh -i|--install [VERSION] [-p|--port PORT] [-k|--psk PSK]
-  snell.sh -n|--update [VERSION]
+  snell.sh [-p|--port PORT] [-k|--psk PSK] [--version VERSION]
+  snell.sh --update
   snell.sh -u, --uninstall
   snell.sh -h, --help
 EOF
 }
 
 parse_args() {
+    local install_option=0
     while [ "$#" -gt 0 ]; do
-        if [[ "$1" =~ ^(-i|--install|-n|--update|-u|--uninstall)$ ]]; then
-            [ -z "$ACTION" ] || fail "只能选择一个操作。"
-            if [[ "$1" =~ ^(-i|--install)$ ]]; then
-                ACTION=install
-            elif [[ "$1" =~ ^(-n|--update)$ ]]; then
-                ACTION=update
+        if [[ "$1" =~ ^(-p|--port|-k|--psk|--version)$ ]]; then
+            if [ "$#" -le 1 ] || [ -z "$2" ] || [[ "$2" == -* ]]; then
+                fail "$1 缺少参数值。"
+            fi
+            if [[ "$1" =~ ^(-p|--port)$ ]]; then
+                SNELL_PORT="$2"
+            elif [[ "$1" =~ ^(-k|--psk)$ ]]; then
+                SNELL_PSK="$2"
             else
-                ACTION=uninstall
+                SNELL_VERSION="${2#v}"
             fi
+            install_option=1
+            shift 2
+        elif [ "$1" = --update ]; then
+            UPDATE_REQUESTED=1
             shift
-            if [ "$ACTION" != uninstall ] && [ "$#" -gt 0 ] && [[ "$1" != -* ]]; then
-                VERSION="$1"
-                shift
-            fi
-        elif [[ "$1" =~ ^(-p|--port)$ ]]; then
-            if [ "$#" -le 1 ] || [[ "$2" == -* ]]; then
-                fail "$1 缺少参数值。"
-            fi
-            PORT="$2"
-            shift 2
-        elif [[ "$1" =~ ^(-k|--psk)$ ]]; then
-            if [ "$#" -le 1 ] || [[ "$2" == -* ]]; then
-                fail "$1 缺少参数值。"
-            fi
-            PSK="$2"
-            shift 2
-        elif [[ "$1" =~ ^(-h|--help)$ ]]; then
+        elif [ "$1" = -u ] || [ "$1" = --uninstall ]; then
+            UNINSTALL_REQUESTED=1
+            shift
+        elif [ "$1" = -h ] || [ "$1" = --help ]; then
             show_usage
             exit 0
         else
             fail "未知参数：$1"
         fi
     done
-
-    if [ "$ACTION" != install ] && [ -n "$PORT$PSK" ]; then
-        fail "--port 和 --psk 只能用于安装。"
+    if (( UPDATE_REQUESTED && UNINSTALL_REQUESTED )); then
+        fail "--update 和 --uninstall 不能同时使用。"
+    fi
+    if (( (UPDATE_REQUESTED || UNINSTALL_REQUESTED) && install_option )); then
+        fail "更新或卸载不能同时使用端口、PSK 或版本参数。"
+    fi
+    if [ -n "$SNELL_VERSION" ] && ! [[ "$SNELL_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+[a-z0-9]*$ ]]; then
+        fail "Snell 版本格式无效：$SNELL_VERSION"
     fi
 }
 
-validate_value() {
-    local type="$1" value="$2"
-    if [ "$type" = version ] && ! [[ "$value" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        log_error "版本格式无效：$value；应为 X.Y.Z。"
-        return 1
-    fi
-    if [ "$type" = port ]; then
-        if ! [[ "$value" =~ ^[0-9]+$ ]] || (( 10#$value < 10000 || 10#$value > 60000 )); then
-            log_error "端口无效：$value；范围应为 10000-60000。"
-            return 1
-        fi
-    fi
-    if [ "$type" = psk ] && ! [[ "$value" =~ ^[A-Za-z0-9]{16}$ ]]; then
-        log_error "PSK 无效：必须是 16 位字母数字。"
+validate_port() {
+    if ! [[ "$1" =~ ^[0-9]{5}$ ]] || (( 10#$1 < 10000 || 10#$1 > 60000 )); then
+        log_error "Snell 端口无效：$1；范围应为 10000-60000。"
         return 1
     fi
 }
@@ -114,65 +99,85 @@ require_environment() {
 
 ensure_dependencies() {
     local missing=()
-
     command -v curl >/dev/null 2>&1 || missing+=(curl)
     [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
     command -v unzip >/dev/null 2>&1 || missing+=(unzip)
+    command -v shuf >/dev/null 2>&1 || missing+=(coreutils)
+    command -v ss >/dev/null 2>&1 || missing+=(iproute2)
     [ "${#missing[@]}" -eq 0 ] && return 0
-
     log_info "正在安装缺失依赖：${missing[*]}"
-    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 ||
-        fail "软件包索引更新失败。"
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || fail "软件包索引更新失败。"
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
         fail "依赖安装失败：${missing[*]}"
     log_info "已安装依赖：${missing[*]}"
 }
 
 detect_arch() {
-    local arch
+    case "$(uname -m)" in
+        x86_64)
+            printf 'amd64\n'
+            ;;
+        i386|i686)
+            printf 'i386\n'
+            ;;
+        aarch64)
+            printf 'aarch64\n'
+            ;;
+        armv7l)
+            printf 'armv7l\n'
+            ;;
+        *)
+            fail "不支持的系统架构：$(uname -m)"
+            ;;
+    esac
+}
 
-    arch="$(uname -m)"
-    if [ "$arch" = x86_64 ]; then
-        printf 'amd64\n'
-    elif [[ "$arch" =~ ^(i386|i686)$ ]]; then
-        printf 'i386\n'
-    elif [ "$arch" = aarch64 ]; then
-        printf 'aarch64\n'
-    elif [ "$arch" = armv7l ]; then
-        printf 'armv7l\n'
-    else
-        fail "不支持的系统架构：$arch"
-    fi
+port_in_use() {
+    ss -H -lntup 2>/dev/null | grep -E ":${1}[[:space:]]" | grep -vq '"snell-server"'
+}
+
+generate_port() {
+    local port
+    while true; do
+        port="$(shuf -i 10000-60000 -n 1)" || fail "端口生成失败。"
+        if [[ "$port" != *4* ]] && ! port_in_use "$port"; then
+            printf '%s\n' "$port"
+            return 0
+        fi
+    done
+}
+
+generate_psk() {
+    local psk
+    psk="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 32)" || true
+    [ "${#psk}" -eq 32 ] || fail "Snell PSK 生成失败。"
+    printf '%s\n' "$psk"
+}
+
+existing_value() {
+    [ -r "$SNELL_CONFIG_FILE" ] || return 0
+    sed -n "s/^${1}[[:space:]]*=[[:space:]]*\([^[:space:]]*\).*/\1/p" "$SNELL_CONFIG_FILE" | head -n 1
 }
 
 get_current_version() {
     local output
-
     [ -x "$SNELL_BINARY" ] || return 1
     output="$("$SNELL_BINARY" -v 2>&1)" || return 1
     [[ "$output" =~ [0-9]+\.[0-9]+\.[0-9]+ ]] || return 1
     printf '%s\n' "${BASH_REMATCH[0]}"
 }
 
-prepare_install_inputs() {
-    while [ -z "$PORT" ]; do
-        read -r -p '请输入端口（10000-60000）：' PORT || fail "未读取到端口。"
-    done
-    validate_value port "$PORT" || exit 1
-
-    if [ -z "$PSK" ]; then
-        PSK="$(tr -dc A-Za-z0-9 </dev/urandom | head -c 16 || true)"
-        [ "${#PSK}" -eq 16 ] || fail "PSK 生成失败。"
-    fi
-    validate_value psk "$PSK" || exit 1
+get_stable_versions() {
+    curl -fSsL --connect-timeout 5 --max-time 15 --retry 2 "$SNELL_RELEASE_NOTES" 2>/dev/null |
+        grep -oE 'snell-server-v[0-9]+\.[0-9]+\.[0-9]+-linux-' |
+        sed -E 's/^snell-server-v//; s/-linux-$//' | sort -uV
 }
 
 render_config() {
     cat <<EOF
 [snell-server]
-listen = ::0:${PORT}
-psk = ${PSK}
-ipv6 = true
+listen = ::0:${SNELL_PORT}
+psk = ${SNELL_PSK}
 EOF
 }
 
@@ -185,8 +190,9 @@ After=network.target
 [Service]
 Type=simple
 DynamicUser=yes
+LoadCredential=snell.conf:${SNELL_CONFIG_FILE}
 LimitNOFILE=65536
-ExecStart=${SNELL_BINARY} -c ${SNELL_CONFIG_FILE}
+ExecStart=${SNELL_BINARY} -c \${CREDENTIALS_DIRECTORY}/snell.conf
 Restart=always
 RestartSec=2
 TimeoutStopSec=15
@@ -196,292 +202,142 @@ WantedBy=multi-user.target
 EOF
 }
 
-publish_candidate() {
-    local candidate="$1" target="$2" mode="$3"
-
-    if [ -f "$target" ] && cmp -s "$candidate" "$target"; then
-        rm -f "$candidate"
-        chmod "$mode" "$target" || return 1
-        return 10
+resolve_version() {
+    local versions latest
+    CURRENT_VERSION="$(get_current_version)" || CURRENT_VERSION=""
+    if [ -n "$SNELL_VERSION" ]; then
+        TARGET_VERSION="$SNELL_VERSION"
+        return 0
     fi
-    chmod "$mode" "$candidate" || return 1
-    mv -f "$candidate" "$target"
+    if [ "$UPDATE_REQUESTED" -eq 0 ] && [ -n "$CURRENT_VERSION" ]; then
+        return 0
+    fi
+    [ "$UPDATE_REQUESTED" -eq 0 ] || [ -n "$CURRENT_VERSION" ] || fail "Snell 未安装。"
+    versions="$(get_stable_versions)" || fail "无法获取 Snell 正式版本列表，请使用 --version 指定版本。"
+    if [ -n "$CURRENT_VERSION" ]; then
+        latest="$(printf '%s\n' "$versions" | grep "^${CURRENT_VERSION%%.*}\." | tail -n 1)"
+        [ -n "$latest" ] || return 0
+        if [ "$(printf '%s\n%s\n' "$latest" "$CURRENT_VERSION" | sort -V | tail -n 1)" != "$latest" ]; then
+            return 0
+        fi
+    else
+        latest="$(printf '%s\n' "$versions" | tail -n 1)"
+    fi
+    TARGET_VERSION="$latest"
 }
 
-begin_transaction() {
-    local targets names index
-
-    targets=("$SNELL_BINARY" "$SNELL_CONFIG_FILE" "$SNELL_UNIT_FILE")
-    names=(binary config unit)
-    TRANSACTION_DIR="$(mktemp -d)" || fail "无法创建 Snell 事务目录。"
-    if systemctl is-active --quiet snell 2>/dev/null; then
-        SERVICE_WAS_ACTIVE=1
-    else
-        SERVICE_WAS_ACTIVE=0
+resolve_config() {
+    local listen
+    if [ -z "$SNELL_PORT" ]; then
+        listen="$(existing_value listen)"
+        SNELL_PORT="${listen##*:}"
     fi
-    if systemctl is-enabled --quiet snell 2>/dev/null; then
-        SERVICE_WAS_ENABLED=1
-    else
-        SERVICE_WAS_ENABLED=0
+    [ -n "$SNELL_PSK" ] || SNELL_PSK="$(existing_value psk)"
+    if [ -z "$SNELL_PORT" ]; then
+        SNELL_PORT="$(generate_port)" || exit 1
     fi
-
-    for index in "${!targets[@]}"; do
-        [ -e "${targets[$index]}" ] || continue
-        cp -a "${targets[$index]}" "${TRANSACTION_DIR}/${names[$index]}" || {
-            rm -rf "$TRANSACTION_DIR"
-            fail "无法备份 Snell 当前状态。"
-        }
-    done
-    TRANSACTION_ACTIVE=1
-    trap rollback_transaction EXIT
+    if [ -z "$SNELL_PSK" ]; then
+        SNELL_PSK="$(generate_psk)" || exit 1
+    fi
+    validate_port "$SNELL_PORT" || exit 1
+    ! port_in_use "$SNELL_PORT" || fail "Snell 端口已被其他进程占用：$SNELL_PORT"
+    [[ "$SNELL_PSK" =~ ^[A-Za-z0-9]{16,64}$ ]] || fail "Snell PSK 无效：必须是 16-64 位字母数字。"
+    render_config > "${WORK_DIR}/snell.conf" || fail "Snell 配置生成失败。"
+    render_service > "${WORK_DIR}/snell.service" || fail "Snell unit 生成失败。"
 }
 
-rollback_transaction() {
-    local targets names index restore_failed=0
-
-    [ "$TRANSACTION_ACTIVE" -eq 1 ] || return 0
-    targets=("$SNELL_BINARY" "$SNELL_CONFIG_FILE" "$SNELL_UNIT_FILE")
-    names=(binary config unit)
-    for index in "${!targets[@]}"; do
-        if [ -e "${TRANSACTION_DIR}/${names[$index]}" ]; then
-            if ! mkdir -p "$(dirname "${targets[$index]}")" ||
-               ! cp -a "${TRANSACTION_DIR}/${names[$index]}" "${targets[$index]}"; then
-                restore_failed=1
-            fi
-        else
-            rm -f "${targets[$index]}" || restore_failed=1
-        fi
-    done
-
-    systemctl daemon-reload >/dev/null 2>&1 || restore_failed=1
-    if [ "$SERVICE_WAS_ENABLED" -eq 1 ]; then
-        systemctl enable snell >/dev/null 2>&1 || restore_failed=1
-    elif systemctl is-enabled --quiet snell 2>/dev/null; then
-        systemctl disable snell >/dev/null 2>&1 || restore_failed=1
+stage_binary() {
+    local arch archive output
+    [ -n "$TARGET_VERSION" ] || return 0
+    arch="$(detect_arch)" || exit 1
+    archive="${WORK_DIR}/snell-server.zip"
+    log_info "正在下载 Snell ${TARGET_VERSION}（${arch}）"
+    curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o "$archive" \
+        "${SNELL_DOWNLOAD_BASE}/snell-server-v${TARGET_VERSION}-linux-${arch}.zip" || fail "Snell 下载失败。"
+    unzip -qo "$archive" snell-server -d "$WORK_DIR" >/dev/null 2>&1 || fail "Snell 解压失败。"
+    CANDIDATE_BINARY="${WORK_DIR}/snell-server"
+    [ -f "$CANDIDATE_BINARY" ] || fail "压缩包中未找到 snell-server。"
+    chmod 755 "$CANDIDATE_BINARY" || fail "snell-server 权限设置失败。"
+    if ! output="$("$CANDIDATE_BINARY" -v 2>&1)"; then
+        fail "snell-server 二进制预检失败：${output:-无错误输出}"
     fi
-    if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
-        if ! systemctl restart snell >/dev/null 2>&1 ||
-           ! systemctl is-active --quiet snell 2>/dev/null; then
-            restore_failed=1
-        fi
-    elif systemctl is-active --quiet snell 2>/dev/null; then
-        systemctl stop snell >/dev/null 2>&1 || restore_failed=1
-    fi
+    [[ "$output" == *"snell-server v${TARGET_VERSION%%.*}."* ]] || fail "snell-server 大版本校验失败。"
+}
 
-    TRANSACTION_ACTIVE=0
-    trap - EXIT
-    rm -rf "$TRANSACTION_DIR" || restore_failed=1
-    if [ "$restore_failed" -eq 1 ]; then
-        log_error "Snell 旧状态恢复失败，请检查文件和服务状态。"
+publish_file() {
+    local source="$1" target="$2" mode="$3" directory staged
+    if [ -f "$target" ] && cmp -s "$source" "$target"; then
+        chmod "$mode" "$target" || fail "文件权限设置失败：$target"
         return 1
     fi
-    log_warning "Snell 变更失败，已恢复旧状态。"
+    directory="$(dirname "$target")"
+    mkdir -p "$directory" || fail "无法创建目录：$directory"
+    staged="$(mktemp "${directory}/.$(basename "$target").XXXXXX")" || fail "无法创建候选文件：$target"
+    if ! install -m "$mode" "$source" "$staged" || ! mv -f "$staged" "$target"; then
+        rm -f "$staged"
+        fail "文件写入失败：$target"
+    fi
 }
 
-commit_transaction() {
-    TRANSACTION_ACTIVE=0
-    trap - EXIT
-    rm -rf "$TRANSACTION_DIR" || log_warning "Snell 事务临时目录清理失败：$TRANSACTION_DIR"
-}
-
-apply_files() {
-    local config_dir unit_dir candidate result
-
-    config_dir="$(dirname "$SNELL_CONFIG_FILE")"
-    unit_dir="$(dirname "$SNELL_UNIT_FILE")"
-    mkdir -p "$config_dir" "$unit_dir" || fail "无法创建 Snell 配置目录。"
-    umask 077
-
-    candidate="$(mktemp "${config_dir}/.snell.conf.XXXXXX")" || fail "无法创建 Snell 候选配置。"
-    render_config > "$candidate" || {
-        rm -f "$candidate"
-        fail "Snell 配置生成失败。"
-    }
-    publish_candidate "$candidate" "$SNELL_CONFIG_FILE" 644
-    result=$?
-    if [ "$result" -eq 0 ]; then
+apply_changes() {
+    if [ -n "$CANDIDATE_BINARY" ] && publish_file "$CANDIDATE_BINARY" "$SNELL_BINARY" 755; then
+        BINARY_CHANGED=1
+        log_info "已安装 Snell 二进制：${TARGET_VERSION}"
+    fi
+    if publish_file "${WORK_DIR}/snell.conf" "$SNELL_CONFIG_FILE" 600; then
         CONFIG_CHANGED=1
         log_info "已更新 Snell 配置：$SNELL_CONFIG_FILE"
-    elif [ "$result" -eq 10 ]; then
-        CONFIG_CHANGED=0
-    else
-        rm -f "$candidate"
-        fail "Snell 配置应用失败。"
     fi
-
-    candidate="$(mktemp "${unit_dir}/.snell.service.XXXXXX")" || fail "无法创建 Snell unit 候选文件。"
-    render_service > "$candidate" || {
-        rm -f "$candidate"
-        fail "Snell unit 生成失败。"
-    }
-    publish_candidate "$candidate" "$SNELL_UNIT_FILE" 644
-    result=$?
-    if [ "$result" -eq 0 ]; then
+    if publish_file "${WORK_DIR}/snell.service" "$SNELL_UNIT_FILE" 644; then
         UNIT_CHANGED=1
         log_info "已更新系统服务：snell.service"
-    elif [ "$result" -eq 10 ]; then
-        UNIT_CHANGED=0
-    else
-        rm -f "$candidate"
-        fail "Snell unit 应用失败。"
     fi
-}
-
-download_server() {
-    local version="$1" arch temp_dir archive candidate install_candidate output
-
-    validate_value version "$version" || exit 1
-    arch="$(detect_arch)"
-    [ -d "$TRANSACTION_DIR" ] || fail "Snell 事务尚未开始。"
-    temp_dir="$(mktemp -d "${TRANSACTION_DIR}/download.XXXXXX")" || fail "无法创建下载临时目录。"
-    archive="${temp_dir}/snell.zip"
-
-    log_info "正在下载 Snell ${version}（${arch}）"
-    curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o "$archive" \
-        "${SNELL_DOWNLOAD_BASE}/snell-server-v${version}-linux-${arch}.zip" || fail "Snell 下载失败。"
-    [ -s "$archive" ] || fail "Snell 下载文件为空。"
-    unzip -q "$archive" -d "$temp_dir" || fail "Snell 解压失败。"
-    candidate="${temp_dir}/snell-server"
-    [ -f "$candidate" ] || fail "压缩包中未找到 snell-server。"
-    chmod 755 "$candidate" || fail "Snell 二进制权限设置失败。"
-    output="$("$candidate" -v 2>&1)" || fail "Snell 二进制预检失败。"
-    [[ "$output" == *"$version"* ]] || fail "Snell 版本校验失败。"
-
-    if [ -f "$SNELL_BINARY" ] && cmp -s "$candidate" "$SNELL_BINARY"; then
-        BINARY_CHANGED=0
-        return 0
-    fi
-    mkdir -p "$(dirname "$SNELL_BINARY")" || fail "无法创建 Snell 安装目录。"
-    install_candidate="$(mktemp "$(dirname "$SNELL_BINARY")/.snell-server.XXXXXX")" ||
-        fail "无法创建 Snell 安装候选文件。"
-    if ! install -m 755 "$candidate" "$install_candidate"; then
-        rm -f "$install_candidate"
-        fail "Snell 二进制安装失败。"
-    fi
-    if ! mv -f "$install_candidate" "$SNELL_BINARY"; then
-        rm -f "$install_candidate"
-        fail "Snell 二进制安装失败。"
-    fi
-    BINARY_CHANGED=1
-}
-
-ensure_server() {
-    if [ -x "$SNELL_BINARY" ] && [ -z "$VERSION" ]; then
-        BINARY_CHANGED=0
-        return 0
-    fi
-    while [ -z "$VERSION" ]; do
-        read -r -p '请输入 Snell 版本（例如 4.1.1）：' VERSION || fail "未读取到 Snell 版本。"
-    done
-    download_server "$VERSION"
 }
 
 converge_service() {
     if [ "$UNIT_CHANGED" -eq 1 ]; then
-        systemctl daemon-reload >/dev/null 2>&1 || {
-            log_error "systemd daemon 重载失败。"
-            return 1
-        }
+        systemctl daemon-reload >/dev/null 2>&1 || fail "systemd daemon 重载失败。"
     fi
-    if ! systemctl is-enabled --quiet snell 2>/dev/null; then
-        systemctl enable snell >/dev/null 2>&1 || {
-            log_error "snell.service 启用失败。"
-            return 1
-        }
+    if ! systemctl is-enabled --quiet snell.service 2>/dev/null; then
+        systemctl enable snell.service >/dev/null 2>&1 || fail "snell.service 启用失败。"
         log_info "已启用系统服务：snell.service"
     fi
-
-    if systemctl is-active --quiet snell 2>/dev/null; then
-        if (( BINARY_CHANGED || CONFIG_CHANGED || UNIT_CHANGED )); then
-            systemctl restart snell >/dev/null 2>&1 || {
-                log_error "Snell 重启失败，请执行：journalctl -u snell --no-pager"
-                return 1
-            }
-        fi
+    if ! systemctl is-active --quiet snell.service 2>/dev/null; then
+        systemctl start snell.service >/dev/null 2>&1 ||
+            fail "Snell 启动失败，请执行：journalctl -u snell --no-pager"
+    elif (( BINARY_CHANGED || CONFIG_CHANGED || UNIT_CHANGED )); then
+        systemctl restart snell.service >/dev/null 2>&1 ||
+            fail "Snell 重启失败，请执行：journalctl -u snell --no-pager"
     else
-        systemctl start snell >/dev/null 2>&1 || {
-            log_error "Snell 启动失败，请执行：journalctl -u snell --no-pager"
-            return 1
-        }
-    fi
-}
-
-read_current_configuration() {
-    [ -r "$SNELL_CONFIG_FILE" ] || fail "未找到 Snell 配置：$SNELL_CONFIG_FILE"
-    PORT="$(sed -n 's/^listen = ::0:\([0-9][0-9]*\)$/\1/p' "$SNELL_CONFIG_FILE" | head -n 1)"
-    PSK="$(sed -n 's/^psk = \([A-Za-z0-9][A-Za-z0-9]*\)$/\1/p' "$SNELL_CONFIG_FILE" | head -n 1)"
-    validate_value port "$PORT" >/dev/null 2>&1 || fail "现有 Snell 端口无法解析。"
-    validate_value psk "$PSK" >/dev/null 2>&1 || fail "现有 Snell PSK 无法解析。"
-}
-
-install_snell() {
-    ensure_dependencies
-    prepare_install_inputs
-    begin_transaction
-    ensure_server
-    apply_files
-    if ! converge_service || ! verify_service; then
-        if rollback_transaction; then
-            fail "Snell 应用失败，已恢复旧状态。"
-        fi
-        fail "Snell 应用失败，且旧状态恢复失败。"
-    fi
-    commit_transaction
-    [ "$BINARY_CHANGED" -eq 0 ] || log_info "已安装 Snell 二进制。"
-    log_info "Snell 已启动，服务端口：$PORT"
-    show_configuration
-}
-
-update_snell() {
-    local current_version highest
-
-    ensure_dependencies
-    current_version="$(get_current_version)" || fail "Snell 未安装或版本无法读取。"
-    while [ -z "$VERSION" ]; do
-        read -r -p '请输入目标 Snell 版本：' VERSION || fail "未读取到目标版本。"
-    done
-    validate_value version "$VERSION" || exit 1
-    highest="$(printf '%s\n%s\n' "$VERSION" "$current_version" | sort -V | tail -n 1)"
-    if [ "$highest" != "$VERSION" ] || [ "$VERSION" = "$current_version" ]; then
-        log_info "无需更新：当前版本 ${current_version}，目标版本 ${VERSION}。"
         return 0
     fi
+    sleep 2
+}
 
-    read_current_configuration
-    begin_transaction
-    download_server "$VERSION"
-    if ! converge_service || ! verify_service; then
-        if rollback_transaction; then
-            fail "Snell 更新失败，已恢复旧状态。"
-        fi
-        fail "Snell 更新失败，且旧状态恢复失败。"
-    fi
-    commit_transaction
-    log_info "Snell 已更新：${current_version} -> ${VERSION}"
-    show_configuration
+cleanup_work_dir() {
+    [ -z "$WORK_DIR" ] || rm -rf "$WORK_DIR"
 }
 
 uninstall_snell() {
-    if [ ! -e "$SNELL_BINARY" ] && [ ! -e "$SNELL_CONFIG_FILE" ] &&
-       [ ! -e "$SNELL_UNIT_FILE" ] && ! systemctl is-active --quiet snell 2>/dev/null &&
+    if [ ! -e "$SNELL_BINARY" ] && [ ! -e "$SNELL_CONFIG_FILE" ] && [ ! -e "$SNELL_UNIT_FILE" ] &&
+       ! systemctl is-active --quiet snell.service 2>/dev/null &&
        ! systemctl cat snell.service >/dev/null 2>&1; then
         log_info "Snell 已不存在，无需卸载。"
         return 0
     fi
-
-    if systemctl is-active --quiet snell 2>/dev/null; then
-        systemctl stop snell >/dev/null 2>&1 || fail "Snell 服务停止失败。"
+    if systemctl is-active --quiet snell.service 2>/dev/null; then
+        systemctl stop snell.service >/dev/null 2>&1 || fail "Snell 服务停止失败。"
         log_info "已停止系统服务：snell.service"
     fi
-    if systemctl is-enabled --quiet snell 2>/dev/null; then
-        systemctl disable snell >/dev/null 2>&1 || fail "Snell 服务禁用失败。"
+    if systemctl is-enabled --quiet snell.service 2>/dev/null; then
+        systemctl disable snell.service >/dev/null 2>&1 || fail "Snell 服务禁用失败。"
         log_info "已禁用系统服务：snell.service"
     fi
     rm -f "$SNELL_UNIT_FILE" "$SNELL_CONFIG_FILE" "$SNELL_BINARY" || fail "Snell 文件删除失败。"
     rmdir "$(dirname "$SNELL_CONFIG_FILE")" >/dev/null 2>&1 || true
     systemctl daemon-reload >/dev/null 2>&1 || fail "systemd daemon 重载失败。"
-    systemctl reset-failed snell >/dev/null 2>&1 || true
-    if systemctl is-active --quiet snell 2>/dev/null ||
+    systemctl reset-failed snell.service >/dev/null 2>&1 || true
+    if systemctl is-active --quiet snell.service 2>/dev/null ||
        systemctl cat snell.service >/dev/null 2>&1 || [ -e "$SNELL_BINARY" ] ||
        [ -e "$SNELL_CONFIG_FILE" ] || [ -e "$SNELL_UNIT_FILE" ]; then
         fail "Snell 卸载验证失败。"
@@ -490,54 +346,52 @@ uninstall_snell() {
 }
 
 verify_service() {
-    systemctl is-active --quiet snell 2>/dev/null || {
-        log_error "Snell 服务未运行，请执行：journalctl -u snell --no-pager"
-        return 1
-    }
+    systemctl is-active --quiet snell.service 2>/dev/null ||
+        fail "Snell 服务未运行，请执行：journalctl -u snell --no-pager"
 }
 
 show_configuration() {
-    local current_version ip
-
-    current_version="$(get_current_version 2>/dev/null || printf '%s' "${VERSION:-未知}")"
+    local ip
     ip="$(curl -fSs --max-time 5 --retry 1 https://api.ipify.org 2>/dev/null)" || true
     cat <<EOF
 
 === Snell 客户端配置 ===
 服务器：${ip:-无法获取 IP}
-端口：${PORT}
-PSK：${PSK}
-版本：${current_version}
+端口：${SNELL_PORT}
+PSK：${SNELL_PSK}
+版本：${TARGET_VERSION:-$CURRENT_VERSION}
 ========================
 EOF
 }
 
-main() {
-    local choice
+show_result() {
+    if [ "$UPDATE_REQUESTED" -eq 0 ]; then
+        log_info "Snell 已启动，服务端口：$SNELL_PORT"
+        show_configuration
+    elif [ "$BINARY_CHANGED" -eq 1 ]; then
+        log_info "Snell 已更新到：${TARGET_VERSION}"
+    else
+        log_info "Snell 已是最新版本：${TARGET_VERSION:-$CURRENT_VERSION}"
+    fi
+}
 
+main() {
     parse_args "$@"
     require_environment
-    if [ -z "$ACTION" ]; then
-        printf '1. 安装 Snell\n2. 更新 Snell\n3. 卸载 Snell\n'
-        read -r -p '请选择（1-3）：' choice || fail "未读取到选择。"
-        if [ "$choice" = 1 ]; then
-            ACTION=install
-        elif [ "$choice" = 2 ]; then
-            ACTION=update
-        elif [ "$choice" = 3 ]; then
-            ACTION=uninstall
-        else
-            fail "无效选择：$choice"
-        fi
-    fi
-
-    if [ "$ACTION" = install ]; then
-        install_snell
-    elif [ "$ACTION" = update ]; then
-        update_snell
-    else
+    if [ "$UNINSTALL_REQUESTED" -eq 1 ]; then
         uninstall_snell
+        return
     fi
+    ensure_dependencies
+    WORK_DIR="$(mktemp -d)" || fail "无法创建 Snell 临时目录。"
+    trap cleanup_work_dir EXIT
+    resolve_version
+    resolve_config
+    stage_binary
+    apply_changes
+    converge_service
+    verify_service
+    show_result
 }
 
 main "$@"
