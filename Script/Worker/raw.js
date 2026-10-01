@@ -3,12 +3,14 @@ export default {
 		try {
 			const url = new URL(request.url);
 			if (url.pathname !== '/') {
-				const token = url.searchParams.get('token');
-				if (!env.TOKEN || !token || !(await safeEqual(token, env.TOKEN))) return notFound();
+				if (env.GH_TOKEN || env.TOKEN) {
+					const token = url.searchParams.get('token');
+					if (!env.TOKEN || !token || !(await safeEqual(token, env.TOKEN))) return notFound();
+				}
 				if (request.method !== 'GET' && request.method !== 'HEAD') return notFound();
 
 				const { GH_NAME, GH_REPO, GH_BRANCH, GH_TOKEN } = env;
-				if (!GH_NAME || !GH_REPO || !GH_BRANCH || !GH_TOKEN) return notFound();
+				if (!GH_NAME || !GH_REPO || !GH_BRANCH) return notFound();
 
 				const segs = url.pathname.slice(1).split('/').map(decodeURIComponent);
 				if (segs.some(s => !s || s === '.' || s === '..' ||
@@ -17,7 +19,7 @@ export default {
 					segs.map(encodeURIComponent).join('/');
 				const response = await fetch(githubRawUrl, {
 					method: request.method,
-					headers: { Authorization: `token ${GH_TOKEN}` },
+					headers: GH_TOKEN ? { Authorization: `token ${GH_TOKEN}` } : {},
 					redirect: 'manual'
 				});
 				if (response.status !== 200) {
