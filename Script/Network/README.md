@@ -179,11 +179,12 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 ```text
 -e, --ecs REGION        ECS 区域: HK, TYO, MY, SG, LA, OR, SEA
 -6, --ipv6 MODE         IPv6 模式: yes, no；未提供时沿用 SmartDNS 默认行为
+--update                更新 SmartDNS
 -u, --uninstall         卸载并恢复 DNS 为 1.1.1.1 / 8.8.8.8
 -h, --help              显示帮助
 ```
 
-无参数时安装 SmartDNS，或更新现有配置。
+无参数时安装 SmartDNS，或按当前参数更新配置。
 
 ### 示例命令
 ```bash

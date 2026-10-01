@@ -2,18 +2,26 @@
 
 set -o pipefail
 
-readonly API_URL="https://api.github.com/repos/pymumu/smartdns/releases/latest"
-readonly CONFIG_DIR="/etc/smartdns"
-readonly CONFIG_FILE="${CONFIG_DIR}/smartdns.conf"
-readonly INSTALLER_CACHE="${CONFIG_DIR}/install"
-readonly RESOLV_CONF="/etc/resolv.conf"
-readonly SERVICE="smartdns.service"
-readonly DATA_DIRS=(/var/cache/smartdns /var/lib/smartdns /var/log/smartdns)
+SMARTDNS_BINARY="${SMARTDNS_BINARY:-/usr/sbin/smartdns}"
+SMARTDNS_CONFIG_FILE="${SMARTDNS_CONFIG_FILE:-/etc/smartdns/smartdns.conf}"
+SMARTDNS_LEGACY_INSTALLER="${SMARTDNS_LEGACY_INSTALLER:-/etc/smartdns/install}"
+SMARTDNS_LEGACY_INIT="${SMARTDNS_LEGACY_INIT:-/etc/init.d/smartdns}"
+RESOLV_CONF="${RESOLV_CONF:-/etc/resolv.conf}"
+SMARTDNS_DATA_DIRS=(/var/cache/smartdns /var/lib/smartdns /var/log/smartdns)
+API_URL="https://api.github.com/repos/pymumu/smartdns/releases/latest"
+SERVICE="smartdns.service"
 
-DOWNLOAD_URL=""
 ECS_REGION=""
 IPV6_MODE=""
-UNINSTALL=0
+UPDATE_REQUESTED=0
+UNINSTALL_REQUESTED=0
+CURRENT_VERSION=""
+TARGET_VERSION=""
+PACKAGE_URL=""
+WORK_DIR=""
+PACKAGE_CHANGED=0
+CONFIG_CHANGED=0
+SERVICE_STARTED=0
 
 log_info() {
     printf '[INFO] %s\n' "$*"
@@ -32,6 +40,7 @@ show_help() {
     cat <<'EOF'
 用法:
   smartdns.sh [-e|--ecs HK|TYO|MY|SG|LA|OR|SEA] [-6|--ipv6 yes|no]
+  smartdns.sh --update
   smartdns.sh -u, --uninstall
   smartdns.sh -h, --help
 EOF
@@ -45,21 +54,20 @@ parse_args() {
                 exit 0
                 ;;
             -u|--uninstall)
-                UNINSTALL=1
+                UNINSTALL_REQUESTED=1
+                shift
+                ;;
+            --update)
+                UPDATE_REQUESTED=1
                 shift
                 ;;
             -e|--ecs)
-                if [ -z "${2:-}" ] || [[ "$2" == -* ]]; then
-                    fail "--ecs 缺少区域"
-                fi
-                ECS_REGION="$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]')"
-                ecs_ip "$ECS_REGION" >/dev/null || fail "无效的 ECS 区域：$2"
+                ECS_REGION="${2^^}"
+                ecs_ip "$ECS_REGION" >/dev/null || fail "无效的 ECS 区域：${2:-}"
                 shift 2
                 ;;
             -6|--ipv6)
-                if [ "${2:-}" != "yes" ] && [ "${2:-}" != "no" ]; then
-                    fail "无效的 IPv6 模式：${2:-}"
-                fi
+                [[ "${2:-}" =~ ^(yes|no)$ ]] || fail "无效的 IPv6 模式：${2:-}"
                 IPV6_MODE="$2"
                 shift 2
                 ;;
@@ -68,8 +76,11 @@ parse_args() {
                 ;;
         esac
     done
-    if [ "$UNINSTALL" -eq 1 ] && [ -n "$ECS_REGION$IPV6_MODE" ]; then
-        fail "卸载参数不能与配置参数混用"
+    if (( UPDATE_REQUESTED && UNINSTALL_REQUESTED )); then
+        fail "--update 和 --uninstall 不能同时使用"
+    fi
+    if (( UPDATE_REQUESTED || UNINSTALL_REQUESTED )) && [ -n "$ECS_REGION$IPV6_MODE" ]; then
+        fail "更新或卸载不能与配置参数混用"
     fi
 }
 
@@ -89,17 +100,15 @@ ecs_ip() {
 
 require_environment() {
     [ "${EUID:-$(id -u)}" -eq 0 ] || fail "此操作必须以 root 权限运行"
+    command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt-get 环境"
     command -v systemctl >/dev/null 2>&1 || fail "未检测到 systemd"
 }
 
 ensure_dependencies() {
     local missing=()
-    command -v apt-get >/dev/null 2>&1 || fail "仅支持 Debian/Ubuntu apt-get 环境"
     command -v jq >/dev/null 2>&1 || missing+=(jq)
-    command -v tar >/dev/null 2>&1 || missing+=(tar)
     command -v ss >/dev/null 2>&1 || missing+=(iproute2)
     command -v curl >/dev/null 2>&1 || missing+=(curl)
-    command -v cmp >/dev/null 2>&1 || missing+=(diffutils)
     [ -e /etc/ssl/certs/ca-certificates.crt ] || missing+=(ca-certificates)
     [ "${#missing[@]}" -gt 0 ] || return 0
     log_info "正在安装缺失依赖：${missing[*]}"
@@ -110,62 +119,39 @@ ensure_dependencies() {
     log_info "已安装依赖：${missing[*]}"
 }
 
-select_release_asset() {
-    local arch json
+package_managed() {
+    dpkg-query -W -f='${db:Status-Abbrev}' smartdns 2>/dev/null | grep -q '^ii '
+}
+
+port53_in_use() {
+    ss -H -lunp 2>/dev/null |
+        awk '$4 ~ /(^|\[::\]|0\.0\.0\.0|127\.0\.0\.1|\*):53$/ { print }' |
+        grep -vq '"smartdns"'
+}
+
+get_current_version() {
+    [ -x "$SMARTDNS_BINARY" ] || return 1
+    "$SMARTDNS_BINARY" -v 2>/dev/null | awk '$1 == "smartdns" && $2 != "" { print $2; found = 1 } END { exit !found }'
+}
+
+fetch_latest_release() {
+    local arch asset
     arch="$(uname -m)"
-    case "$arch" in
-        x86_64|aarch64)
-            ;;
-        *)
-            fail "不支持的系统架构：$arch"
-            ;;
-    esac
-    json="$(curl -fSsL --connect-timeout 5 --max-time 15 --retry 2 "$API_URL")" ||
-        fail "无法获取 SmartDNS release 信息"
-    [ -n "$json" ] || fail "SmartDNS release 信息为空"
-    DOWNLOAD_URL="$(printf '%s' "$json" | jq -r --arg arch "$arch" '
-        .assets[] | select(.name | test("^smartdns\\..*\\." + $arch + "-linux-all\\.tar\\.gz$"))
-        | .browser_download_url' |
-        head -n 1)" || fail "无法解析 SmartDNS 下载地址"
-    [ -n "$DOWNLOAD_URL" ] || fail "未找到适用于 ${arch} 的 SmartDNS 安装包"
+    [[ "$arch" =~ ^(x86_64|aarch64)$ ]] || fail "不支持的系统架构：$arch"
+    asset="$(curl -fSsL --connect-timeout 5 --max-time 15 --retry 2 "$API_URL" | jq -r --arg arch "$arch" '
+        .assets[] | select(.name | test("^smartdns\\..+\\." + $arch + "-debian-all\\.deb$"))
+        | "\(.name) \(.browser_download_url)"' | head -n 1)" || return 1
+    [ -n "$asset" ] || return 1
+    PACKAGE_URL="${asset#* }"
+    TARGET_VERSION="${asset%% *}"
+    TARGET_VERSION="${TARGET_VERSION#smartdns.}"
+    TARGET_VERSION="${TARGET_VERSION%".${arch}-debian-all.deb"}"
 }
 
-udp53_listeners() {
-    ss -H -lun 2>/dev/null |
-        awk '$4 ~ /(^|\[::\]|0\.0\.0\.0|127\.0\.0\.1|\*):53$/ { print }'
-}
-
-run_installer() {
-    local action="$1" tmp_dir status
-    tmp_dir="$(mktemp -d)" || fail "无法创建 SmartDNS 临时目录"
-    (
-        cd "$tmp_dir" || exit 1
-        curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o smartdns.tar.gz "$DOWNLOAD_URL" || exit 1
-        [ -s smartdns.tar.gz ] || exit 1
-        tar -xzf smartdns.tar.gz || exit 1
-        cd smartdns || exit 1
-        sh -n ./install >/dev/null 2>&1 || exit 1
-        chmod +x ./install || exit 1
-        ./install "$action" >/dev/null 2>&1 || exit 1
-        if [ "$action" = "-i" ]; then
-            install -D -m 755 ./install "$INSTALLER_CACHE" || exit 1
-        fi
-    )
-    status=$?
-    rm -rf "$tmp_dir"
-    return "$status"
-}
-
-write_config() {
-    local candidate suffix="" ip
-    CONFIG_CHANGED=0
-    mkdir -p "$CONFIG_DIR" || fail "无法创建 SmartDNS 配置目录"
-    candidate="$(mktemp "${CONFIG_FILE}.tmp.XXXXXX")" || fail "无法创建 SmartDNS 候选配置"
-    if [ -n "$ECS_REGION" ]; then
-        ip="$(ecs_ip "$ECS_REGION")" || fail "无法生成 SmartDNS ECS 配置"
-        suffix=" -subnet ${ip}/24"
-    fi
-    cat > "$candidate" <<EOF || fail "无法生成 SmartDNS 配置"
+render_config() {
+    local suffix=""
+    [ -z "$ECS_REGION" ] || suffix=" -subnet $(ecs_ip "$ECS_REGION")/24"
+    cat <<EOF
 server-name smartdns
 user nobody
 log-level off
@@ -184,112 +170,154 @@ cache-size 4096
 cache-persist yes
 force-qtype-SOA 65
 EOF
-    case "$IPV6_MODE" in
-        no)
-            printf 'dualstack-ip-selection no\nforce-AAAA-SOA yes\n' >> "$candidate"
-            ;;
-        yes)
-            printf 'dualstack-ip-selection yes\n' >> "$candidate"
-            ;;
-    esac
-    if cmp -s "$candidate" "$CONFIG_FILE" 2>/dev/null; then
-        rm -f "$candidate"
+    [ "$IPV6_MODE" != no ] || printf 'dualstack-ip-selection no\nforce-AAAA-SOA yes\n'
+    [ "$IPV6_MODE" != yes ] || printf 'dualstack-ip-selection yes\n'
+}
+
+resolve_version() {
+    CURRENT_VERSION="$(get_current_version)" || CURRENT_VERSION=""
+    if package_managed && [ -n "$CURRENT_VERSION" ] && [ "$UPDATE_REQUESTED" -eq 0 ]; then
         return 0
     fi
-    if ! chmod 644 "$candidate" || ! mv -f "$candidate" "$CONFIG_FILE"; then
-        rm -f "$candidate"
+    [ "$UPDATE_REQUESTED" -eq 0 ] || [ -n "$CURRENT_VERSION" ] || fail "SmartDNS 未安装"
+    fetch_latest_release || fail "无法获取 SmartDNS 最新版本"
+    if package_managed && [ -n "$CURRENT_VERSION" ] &&
+       [ "$(printf '%s\n%s\n' "$TARGET_VERSION" "$CURRENT_VERSION" | sort -V | tail -n 1)" = "$CURRENT_VERSION" ]; then
+        PACKAGE_URL=""
+    fi
+}
+
+resolve_config() {
+    [ "$UPDATE_REQUESTED" -eq 0 ] || return 0
+    ! port53_in_use || fail "53 端口已被其他服务占用"
+    render_config > "${WORK_DIR}/smartdns.conf" || fail "无法生成 SmartDNS 配置"
+}
+
+stage_package() {
+    local package="${WORK_DIR}/smartdns.deb"
+    [ -n "$PACKAGE_URL" ] || return 0
+    log_info "正在下载 SmartDNS ${TARGET_VERSION}"
+    curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o "$package" "$PACKAGE_URL" ||
+        fail "SmartDNS 下载失败"
+    if [ ! -s "$package" ] || [ "$(dpkg-deb -f "$package" Package 2>/dev/null)" != smartdns ]; then
+        fail "SmartDNS 软件包校验失败"
+    fi
+}
+
+apply_changes() {
+    local package="${WORK_DIR}/smartdns.deb" candidate="${WORK_DIR}/smartdns.conf" directory staged
+    if [ -f "$package" ]; then
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+            "$package" >/dev/null 2>&1 || fail "SmartDNS 软件包安装失败"
+        PACKAGE_CHANGED=1
+        log_info "已安装 SmartDNS 软件包：${TARGET_VERSION}"
+        rm -f "$SMARTDNS_LEGACY_INSTALLER" "$SMARTDNS_LEGACY_INIT" || fail "无法清理旧版安装器文件"
+    fi
+    if [ ! -f "$candidate" ] || cmp -s "$candidate" "$SMARTDNS_CONFIG_FILE"; then
+        return 0
+    fi
+    directory="$(dirname "$SMARTDNS_CONFIG_FILE")"
+    mkdir -p "$directory" || fail "无法创建 SmartDNS 配置目录"
+    staged="$(mktemp "${directory}/.smartdns.conf.XXXXXX")" || fail "无法创建 SmartDNS 候选配置"
+    if ! install -m 644 "$candidate" "$staged" || ! mv -f "$staged" "$SMARTDNS_CONFIG_FILE"; then
+        rm -f "$staged"
         fail "无法发布 SmartDNS 配置"
     fi
     CONFIG_CHANGED=1
+    log_info "已更新 SmartDNS 配置：$SMARTDNS_CONFIG_FILE"
 }
 
-set_dns() {
-    local mode="$1" candidate
-    candidate="$(mktemp "${RESOLV_CONF}.tmp.XXXXXX")" || fail "无法创建 DNS 候选配置"
-    if [ "$mode" = "local" ]; then
-        printf 'nameserver 127.0.0.1\n' > "$candidate"
-    else
-        printf 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n' > "$candidate"
-    fi
-    chattr -i "$RESOLV_CONF" 2>/dev/null || true
-    if cmp -s "$candidate" "$RESOLV_CONF" 2>/dev/null; then
-        rm -f "$candidate"
-        [ "$mode" != "local" ] || chattr +i "$RESOLV_CONF" 2>/dev/null || true
-        return 0
-    fi
-    if ! chmod 644 "$candidate" || ! mv -f "$candidate" "$RESOLV_CONF"; then
-        rm -f "$candidate"
-        fail "无法更新系统 DNS"
-    fi
-    [ "$mode" != "local" ] || chattr +i "$RESOLV_CONF" 2>/dev/null || true
-    if [ "$mode" = "local" ]; then
-        log_info "已将系统 DNS 设置为 127.0.0.1"
-    else
-        log_info "已恢复公共 DNS：1.1.1.1、8.8.8.8"
-    fi
-}
-
-apply_smartdns() {
-    local restart_needed=0 service_exists=0
-    systemctl cat "$SERVICE" >/dev/null 2>&1 && service_exists=1
-    if [ "$service_exists" -eq 0 ]; then
-        [ -z "$(udp53_listeners)" ] || fail "53 端口已被其他服务占用"
-    fi
-    if [ "$service_exists" -eq 0 ] || [ ! -x /usr/sbin/smartdns ]; then
-        select_release_asset
-        log_info "正在安装 SmartDNS"
-        run_installer -i || fail "SmartDNS 安装失败"
-        restart_needed=1
-    fi
-    write_config
-    if [ "$CONFIG_CHANGED" -eq 1 ] || ! systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
-        restart_needed=1
+converge_service() {
+    if [ "$PACKAGE_CHANGED" -eq 1 ]; then
+        systemctl daemon-reload >/dev/null 2>&1 || fail "systemd 配置刷新失败"
     fi
     if ! systemctl is-enabled --quiet "$SERVICE" 2>/dev/null; then
         systemctl enable "$SERVICE" >/dev/null 2>&1 || fail "无法启用 SmartDNS 服务"
         log_info "已启用系统服务：${SERVICE}"
     fi
-    if [ "$restart_needed" -eq 1 ]; then
+    if (( PACKAGE_CHANGED || CONFIG_CHANGED )) || ! systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
         systemctl restart "$SERVICE" >/dev/null 2>&1 ||
             fail "SmartDNS 启动失败，请执行：journalctl -u ${SERVICE} --no-pager"
+        SERVICE_STARTED=1
+        sleep 2
     fi
-    systemctl is-active --quiet "$SERVICE" || fail "SmartDNS 服务未运行"
-    set_dns local
-    if [ "$restart_needed" -eq 1 ]; then
+    systemctl is-active --quiet "$SERVICE" 2>/dev/null ||
+        fail "SmartDNS 服务未运行，请执行：journalctl -u ${SERVICE} --no-pager"
+}
+
+set_dns() {
+    local servers="127.0.0.1" content candidate
+    [ "$1" = local ] || servers="1.1.1.1 8.8.8.8"
+    content="$(printf 'nameserver %s\n' $servers)"
+    chattr -i "$RESOLV_CONF" 2>/dev/null
+    if [ "$(cat "$RESOLV_CONF" 2>/dev/null)" != "$content" ]; then
+        candidate="$(mktemp "${RESOLV_CONF}.tmp.XXXXXX")" || fail "无法创建 DNS 候选配置"
+        printf '%s\n' "$content" > "$candidate"
+        if ! chmod 644 "$candidate" || ! mv -f "$candidate" "$RESOLV_CONF"; then
+            rm -f "$candidate"
+            fail "无法更新系统 DNS"
+        fi
+        log_info "已将系统 DNS 设置为：${servers}"
+    fi
+    [ "$1" != local ] || chattr +i "$RESOLV_CONF" 2>/dev/null
+}
+
+uninstall_smartdns() {
+    local config_dir
+    config_dir="$(dirname "$SMARTDNS_CONFIG_FILE")"
+    if ! systemctl cat "$SERVICE" >/dev/null 2>&1 && [ ! -e "$SMARTDNS_BINARY" ] && [ ! -e "$config_dir" ]; then
+        log_info "SmartDNS 已不存在，无需卸载"
+        return 0
+    fi
+    set_dns public
+    if package_managed; then
+        DEBIAN_FRONTEND=noninteractive apt-get purge -y -qq smartdns >/dev/null 2>&1 ||
+            fail "SmartDNS 软件包卸载失败"
+        log_info "已卸载软件包：smartdns"
+    elif [ -x "$SMARTDNS_LEGACY_INSTALLER" ]; then
+        "$SMARTDNS_LEGACY_INSTALLER" -u >/dev/null 2>&1 || fail "SmartDNS 卸载失败"
+    fi
+    rm -rf "$config_dir" "${SMARTDNS_DATA_DIRS[@]}" "$SMARTDNS_LEGACY_INIT" ||
+        fail "无法删除 SmartDNS 配置和数据目录"
+    systemctl daemon-reload >/dev/null 2>&1 || fail "systemd 配置刷新失败"
+    if [ -e "$SMARTDNS_BINARY" ] || systemctl cat "$SERVICE" >/dev/null 2>&1; then
+        fail "SmartDNS 卸载验证失败"
+    fi
+    log_info "SmartDNS 已卸载，并恢复公共 DNS"
+}
+
+show_result() {
+    if [ "$UPDATE_REQUESTED" -eq 1 ]; then
+        if [ "$PACKAGE_CHANGED" -eq 1 ] && [ "$CURRENT_VERSION" != "$TARGET_VERSION" ]; then
+            log_info "SmartDNS 已更新：${CURRENT_VERSION} -> ${TARGET_VERSION}"
+        else
+            log_info "SmartDNS 已是最新版本：${CURRENT_VERSION}"
+        fi
+    elif [ "$SERVICE_STARTED" -eq 1 ]; then
         log_info "SmartDNS 已启动，服务地址：127.0.0.1:53"
     else
         log_info "SmartDNS 配置未变化，无需重新应用"
     fi
 }
 
-uninstall_smartdns() {
-    if ! systemctl cat "$SERVICE" >/dev/null 2>&1 && [ ! -x /usr/sbin/smartdns ] && [ ! -e "$CONFIG_DIR" ]; then
-        log_info "SmartDNS 已不存在，无需卸载"
-        return 0
-    fi
-    if [ -x "$INSTALLER_CACHE" ]; then
-        "$INSTALLER_CACHE" -u >/dev/null 2>&1 || fail "SmartDNS 卸载失败"
-    else
-        ensure_dependencies
-        select_release_asset
-        run_installer -u || fail "SmartDNS 卸载失败"
-    fi
-    systemctl is-active --quiet "$SERVICE" 2>/dev/null && fail "SmartDNS 服务仍在运行"
-    rm -rf "$CONFIG_DIR" "${DATA_DIRS[@]}" || fail "无法删除 SmartDNS 配置和数据目录"
-    systemctl daemon-reload >/dev/null 2>&1 || fail "systemd 配置刷新失败"
-    set_dns public
-    log_info "SmartDNS 已卸载，并恢复公共 DNS"
-}
-
 main() {
     parse_args "$@"
     require_environment
-    if [ "$UNINSTALL" -eq 1 ]; then
+    if [ "$UNINSTALL_REQUESTED" -eq 1 ]; then
         uninstall_smartdns
-    else
-        ensure_dependencies
-        apply_smartdns
+        return
     fi
+    ensure_dependencies
+    WORK_DIR="$(mktemp -d)" || fail "无法创建 SmartDNS 临时目录"
+    trap 'rm -rf "$WORK_DIR"' EXIT
+    resolve_version
+    resolve_config
+    stage_package
+    apply_changes
+    converge_service
+    set_dns local
+    show_result
 }
 
 main "$@"
