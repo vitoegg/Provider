@@ -37,7 +37,7 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 -h, --help                      显示帮助
 ```
 
-安装时必须提供 `--protocol`；无参数会直接报错。
+安装时必须提供 `--protocol`；无参数会直接报错。未提供端口或密码时沿用现有配置中的值，没有则自动生成。
 
 ### 示例命令
 ```bash
