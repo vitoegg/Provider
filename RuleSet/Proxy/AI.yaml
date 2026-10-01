@@ -38,6 +38,7 @@ payload:
   - '+.anthropic.com'
   - '+.claude.ai'
   - '+.claude.com'
+  - '+.claude.dev'
   - '+.clau.de'
   - '+.claudemcpclient.com'
   - '+.claudemcpcontent.com'
