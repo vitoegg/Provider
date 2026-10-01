@@ -143,8 +143,7 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 --reality-port PORT             Reality 端口
 --reality-domain DOMAIN         Reality 域名
 --reality-uuid UUID             VLESS UUID
---reality-private-key KEY       Reality 私钥
---reality-public-key KEY        Reality 公钥
+--reality-private-key KEY       Reality 私钥，公钥由私钥自动推导
 --reality-short-id ID           Reality short id
 --ss-port PORT                  Shadowsocks 端口
 --ss-password PASSWORD          Shadowsocks 密码
@@ -155,7 +154,7 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 -h, --help                      显示帮助
 ```
 
-安装时必须提供 `--protocol`；无参数会直接报错。
+安装时必须提供 `--protocol`；无参数会直接报错。未提供端口、UUID、私钥、short id 或密码时沿用现有配置中的值，没有则自动生成。
 
 ### 示例命令
 ```bash
