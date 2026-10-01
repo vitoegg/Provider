@@ -124,59 +124,6 @@ def is_signin_success(response):
     )
 
 
-def serialize_session_cookies(session):
-    cookies = {
-        cookie.name: cookie.value
-        for cookie in session.cookies
-        if cookie.domain.lstrip(".").lower() in {"v2ex.com", "www.v2ex.com"}
-        and cookie.path == "/"
-        and not cookie.is_expired()
-    }
-    return "; ".join(f"{name}={cookies[name]}" for name in sorted(cookies))
-
-
-def persist_cookie_if_changed(original_cookie, session):
-    """登录确认后，将服务端更新的 Cookie 单次写回当前青龙变量。"""
-    updated_cookie = serialize_session_cookies(session)
-    if not updated_cookie or (
-        parse_cookie_header(updated_cookie) == parse_cookie_header(original_cookie)
-    ):
-        return True, "unchanged"
-
-    try:
-        qlapi = QLAPI
-    except NameError:
-        return False, "青龙内置 API 不可用"
-
-    try:
-        response = qlapi.getEnvs({"searchValue": "V2EX_COOKIE"})
-        if response.get("code") != 200:
-            return False, "读取青龙环境变量失败"
-        candidates = [
-            item
-            for item in response.get("data", [])
-            if item.get("name") == "V2EX_COOKIE"
-            and item.get("value") == original_cookie
-        ]
-        if len(candidates) != 1:
-            return False, "无法唯一定位当前 V2EX_COOKIE，已拒绝覆盖"
-
-        current_env = candidates[0]
-        env_data = {
-            "id": current_env["id"],
-            "name": "V2EX_COOKIE",
-            "value": updated_cookie,
-        }
-        if "remarks" in current_env:
-            env_data["remarks"] = current_env["remarks"]
-        response = qlapi.updateEnv({"env": env_data})
-        if response.get("code") != 200:
-            return False, "更新青龙环境变量失败"
-        return True, "updated"
-    except Exception as error:
-        return False, f"写回青龙环境变量异常（{type(error).__name__}）"
-
-
 def get_account_info(session):
     response = request_page(session, "/balance", "balance")
     if is_cookie_invalid(response):
@@ -264,12 +211,6 @@ def v2ex_signin(cookie):
         print(f"V2EX签到异常：stage={stage} type={type(error).__name__}")
         return "签到异常：V2EX 签到失败"
 
-    persist_ok, persist_status = persist_cookie_if_changed(cookie, session)
-    if persist_status == "updated":
-        print("V2EX Cookie 已自动续期并写回青龙环境变量")
-    elif not persist_ok:
-        print("V2EX Cookie 续期写回失败：", persist_status)
-        result += f"\n⚠️【Cookie续期】：{persist_status}"
     return result
 
 # 消息推送（调用的是青龙系统通知API）
