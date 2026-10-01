@@ -93,7 +93,7 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 
 ### 参数说明
 ```text
---port PORT                 监听端口，未提供时自动生成
+--port PORT                 监听端口，未提供时沿用现有配置，没有则自动生成
 --allow-ip IP[,IP...]       Dante 允许的客户端 IPv4，必填且可重复使用
 -u, --uninstall             卸载 Dante
 -h, --help                  显示帮助

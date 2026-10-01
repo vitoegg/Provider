@@ -113,22 +113,22 @@ enable_service_if_needed() {
     log_info "已启用服务：$1"
 }
 
+port_in_use() {
+    local listeners
+    listeners="$(ss -H -lntup "sport = :$1" 2>/dev/null)" || fail "无法读取当前监听端口"
+    grep -v '"danted"' <<< "$listeners" | grep -q .
+}
+
 prepare_port() {
-    local candidate listeners managed_port
+    local candidate
+    [ -n "$PORT" ] || PORT="$(sed -n 's/^internal: .* port = \([0-9][0-9]*\)$/\1/p' "$CONFIG_FILE" 2>/dev/null)"
     if [ -n "$PORT" ]; then
-        listeners="$(ss -H -lntu "sport = :$PORT" 2>/dev/null)" || fail "无法读取当前监听端口"
-        managed_port="$(sed -n 's/^internal: .* port = \([0-9][0-9]*\)$/\1/p' "$CONFIG_FILE" 2>/dev/null)"
-        [ -z "$listeners" ] || [ "$managed_port" = "$PORT" ] ||
-            fail "端口 ${PORT} 已被其它服务占用"
+        ! port_in_use "$PORT" || fail "端口 ${PORT} 已被其它服务占用"
         return 0
     fi
     while true; do
         candidate=$((RANDOM % 10001 + 20000))
-        if [[ "$candidate" == *4* ]]; then
-            continue
-        fi
-        listeners="$(ss -H -lntu "sport = :$candidate" 2>/dev/null)" || fail "无法读取当前监听端口"
-        if [ -z "$listeners" ]; then
+        if [[ "$candidate" != *4* ]] && ! port_in_use "$candidate"; then
             PORT="$candidate"
             return 0
         fi
@@ -178,8 +178,10 @@ EOF
     if [ "$config_changed" -eq 1 ]; then
         systemctl restart "$SERVICE_NAME" >/dev/null 2>&1 ||
             fail "Dante 重启失败，请执行：journalctl -u ${SERVICE_NAME} --no-pager"
+        sleep 2
     elif ! systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
         systemctl start "$SERVICE_NAME" >/dev/null 2>&1 || fail "Dante 启动失败"
+        sleep 2
     fi
     systemctl is-active --quiet "$SERVICE_NAME" || fail "Dante 服务未运行"
 )
