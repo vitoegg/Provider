@@ -190,31 +190,6 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 bash smartdns.sh --ecs TYO
 ```
 
-## **mosdns.sh**
-
-### 下载
-```bash
-curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Network/mosdns.sh
-```
-
-### 参数说明
-```text
--i, --install           显式安装，可省略
--d, --dns DNS           自定义 DNS 服务器
--e, --ecs REGION        ECS 区域: HK, TYO, MY, SG, LA, OR, SEA；默认 TYO
--4, --ipv4              IPv4 优先，默认模式
--6, --ipv6              IPv6 优先
--u, --uninstall         卸载
--h, --help              显示帮助
-```
-
-无参数时使用默认配置安装 MosDNS。
-
-### 示例命令
-```bash
-bash mosdns.sh --install --ecs TYO --ipv4
-```
-
 ## **kernel.sh**
 
 ### 下载
