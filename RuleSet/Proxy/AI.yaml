@@ -20,6 +20,7 @@ payload:
   - '+.oaistatsig.com'
   - '+.oaiusercontent.com'
   - '+.webpubsub.azure.com'
+  - '+.api.statsig.com'
   - 'openaicom.imgix.net'
   - 'chat.openai.com.cdn.cloudflare.net'
   - 'openaiapi-site.azureedge.net'
@@ -36,15 +37,27 @@ payload:
 
   # Claude
   - '+.anthropic.com'
+  - '+.anthropic.team'
+  - '+.antspace.dev'
   - '+.claude.ai'
   - '+.claude.com'
+  - '+.claude.app'
+  - '+.claude.site'
   - '+.claude.dev'
+  - '+.claude.new'
   - '+.clau.de'
   - '+.claudemcpclient.com'
   - '+.claudemcpcontent.com'
   - '+.claudeusercontent.com'
-  - 'cdn.usefathom.com'
+  - '+.claudepages.dev'
+  - '+.claudestudio.com'
+  - '+.chatbotclaude.com'
+  - '+.modelcontextprotocol.com'
+  - '+.modelcontextprotocol.net'
+  - '+.modelcontextprotocol.io'
+  - '+.modelcontextprotocol.org'
   - 'cdn.anthropic.com'
+  - 'cdn.usefathom.com'
   - 'anthropic.com.cdn.cloudflare.net'
   - 'servd-anthropic-website.b-cdn.net'
   - 'anthropic.auth0.com'
@@ -73,6 +86,8 @@ payload:
   - '+.gemini.gstatic.com'
   - '+.aisandbox-pa.googleapis.com'
   - '+.robinfrontend-pa.googleapis.com'
+  - 'geminiweb-pa.clients.google.com'
+  - 'geminiweb-pa.clients6.google.com'
   # > Gemini Code Assist
   - 'cloudaicompanion.googleapis.com'
   - 'cloudcode-pa.googleapis.com'
@@ -108,34 +123,65 @@ payload:
   # > Google Stitch
   - '+.stitch.withgoogle.com'
 
-  # Grok
+  # xAI
+  # > Grok
   - '+.x.ai'
   - '+.grok.com'
+  - '+.grok.x.com'
+  - '+.grokipedia.com'
   - '+.xai.chronosphere.io'
-
-  # Perplexity AI
-  - '+.perplexity.ai'
-  - '+.perplexity.com'
-  - '+.pplx.ai'
-  - 'perplexity-ai.cloudflareaccess.com'
-  - 'ppl-ai-file-upload.s3.amazonaws.com'
-  - 'pplx-res.cloudinary.com'
-
-  # Vibe Coding
-  # > Herdr
-  - '+.herdr.dev'
-  # > OpenCode
-  - '+.opencode.ai'
-  # > Pi
-  - '+.pi.dev'
   # > Cursor
   - '+.cursor.sh'
+  - '+.cursor.com'
+  - '+.cursorapi.com'
+  - '+.cursor-cdn.com'
+
+  # Meta AI
+  - '+.meta.ai'
+  - '+.muse.ai'
+  - '+.metaaivm.com'
+  - '+.atmeta.com'
+  - '+.llama.com'
+  - '+.llamameta.net'
+  - 'ai.developer.meta.com'
+  - 'ai.meta.com'
+  - 'aidemos.meta.com'
+  - 'developer.meta.com'
+  - 'llama.developer.meta.com'
+
+  # AI Gateway
+  # > OpenRouter
+  - '+.openrouter.ai'
+  # > Cloudflare
+  - 'gateway.ai.cloudflare.com'
+  # > Vercel
+  - 'ai-gateway.vercel.sh'
+  # > Fireworks
+  - '+.fireworks.ai'
+  # > Groq
+  - '+.groq.com'
+  # > Ollama
+  - '+.ollama.com'
+  # > LM Studio
+  - '+.lmstudio.ai'
+  # > OpenCode
+  - '+.opencode.ai'
+  # > CommandCode
+  - '+.commandcode.ai'
+
+  # AI Tools
+  # > Herdr
+  - '+.herdr.dev'
+  # > Pi
+  - '+.pi.dev'
+  # > Paseo
+  - '+.paseo.sh'
+  # > Zed
+  - '+.zed.dev'
   # > Windsurf
   - '+.windsurf.com'
   - '+.codeium.com'
   - '+.codeiumdata.com'
-  # > Zed
-  - '+.zed.dev'
   # > Copilot
   - '+.githubcopilot.com'
   - 'copilot.microsoft.com'
@@ -153,36 +199,26 @@ payload:
   - '+.chorus.sh'
   # > Cline
   - '+.cline.bot'
+  # > Devin
+  - '+.devin.ai'
   # > JetBrains
   - '+.grazie.ai'
   - '+.jetbrains.ai'
   - '+.grazie.aws.intellij.net'
   # > Trae
-  - '+.trae.ai'
   - 'trae-api-sg.mchost.guru'
+  - '+.trae.ai'
 
-  # AI Gateway
-  # > OpenRouter
-  - '+.openrouter.ai'
-  # > Cloudflare
-  - 'gateway.ai.cloudflare.com'
-  # > Vercel
-  - 'ai-gateway.vercel.sh'
-  # > Fireworks
-  - '+.fireworks.ai'
-  # > Ollama
-  - '+.ollama.com'
-
-  # AI Tools
+  # AI Services
   # > Manus
   - '+.manus.space'
+  - '+.manuscdn.com'
   - '+.manus.im'
   - '+.manus.ai'
+  - '+.cue.im'
   # > DIA
   - '+.diabrowser.com'
   - '+.diabrowser.engineering'
-  # > Paseo
-  - '+.paseo.sh'
   # > Poe
   - '+.poe.com'
   # > Dify
@@ -192,13 +228,15 @@ payload:
   # > Jasper
   - '+.clipdrop.co'
   - '+.jasper.ai'
-  # > Groq
-  - '+.groq.com'
   # > ByteDance
   - '+.ciciai.com'
   - '+.coze.com'
-  # > Meta AI
-  - '+.meta.ai'
-  - '+.muse.ai'
   # > Bixby
   - '+.bixbyllm.com'
+  # > Perplexity AI
+  - '+.perplexity.ai'
+  - '+.perplexity.com'
+  - '+.pplx.ai'
+  - 'perplexity-ai.cloudflareaccess.com'
+  - 'ppl-ai-file-upload.s3.amazonaws.com'
+  - 'pplx-res.cloudinary.com'
