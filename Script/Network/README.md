@@ -70,17 +70,18 @@ curl -fSLO https://raw.githubusercontent.com/vitoegg/Provider/master/Script/Netw
 
 ### 参数说明
 ```text
--s password             Shadowsocks 密码，未提供时自动生成
--p port                 Shadowsocks 端口，未提供时自动生成
+-s password             Shadowsocks 密码，16 字节密钥的 base64 编码
+-p port                 Shadowsocks 端口
+--update                更新 Shadowsocks
 -u                      卸载
 -h, --help              显示帮助
 ```
 
-无参数时显示安装、更新、卸载菜单。
+无参数时安装或修复 Shadowsocks。未提供端口或密码时沿用现有配置中的值，没有则自动生成。
 
 ### 示例命令
 ```bash
-bash shadowsocks.sh -s password -p 25252
+bash shadowsocks.sh -s "$(openssl rand -base64 16)" -p 25252
 ```
 
 ## **socks.sh**

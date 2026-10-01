@@ -7,23 +7,20 @@ SS_CONFIG_FILE="${SS_CONFIG_FILE:-/etc/shadowsocks/config.json}"
 SS_UNIT_FILE="${SS_UNIT_FILE:-/lib/systemd/system/shadowsocks.service}"
 SS_METHOD="2022-blake3-aes-128-gcm"
 
-ACTION=""
+UPDATE_REQUESTED=0
+UNINSTALL_REQUESTED=0
 SS_PORT=""
 SS_PASSWORD=""
+CURRENT_VERSION=""
+TARGET_VERSION=""
+WORK_DIR=""
+CANDIDATE_BINARY=""
 BINARY_CHANGED=0
 CONFIG_CHANGED=0
 UNIT_CHANGED=0
-TRANSACTION_DIR=""
-TRANSACTION_ACTIVE=0
-SERVICE_WAS_ACTIVE=0
-SERVICE_WAS_ENABLED=0
 
 log_info() {
     printf '[INFO] %s\n' "$*"
-}
-
-log_warning() {
-    printf '[WARNING] %s\n' "$*" >&2
 }
 
 log_error() {
@@ -39,16 +36,17 @@ show_usage() {
     cat <<'EOF'
 用法:
   shadowsocks.sh [-s PASSWORD] [-p PORT]
+  shadowsocks.sh --update
   shadowsocks.sh -u
   shadowsocks.sh -h, --help
 EOF
 }
 
 parse_args() {
-    local install_option=0 uninstall_option=0
+    local install_option=0
     while [ "$#" -gt 0 ]; do
         if [ "$1" = -s ] || [ "$1" = -p ]; then
-            if [ "$#" -le 1 ] || [[ "$2" == -* ]]; then
+            if [ "$#" -le 1 ] || [ -z "$2" ] || [[ "$2" == -* ]]; then
                 fail "$1 缺少参数值。"
             fi
             if [ "$1" = -s ]; then
@@ -58,8 +56,11 @@ parse_args() {
             fi
             install_option=1
             shift 2
+        elif [ "$1" = --update ]; then
+            UPDATE_REQUESTED=1
+            shift
         elif [ "$1" = -u ]; then
-            uninstall_option=1
+            UNINSTALL_REQUESTED=1
             shift
         elif [ "$1" = -h ] || [ "$1" = --help ]; then
             show_usage
@@ -68,13 +69,11 @@ parse_args() {
             fail "未知参数：$1"
         fi
     done
-    if (( install_option && uninstall_option )); then
-        fail "安装参数和 -u 不能同时使用。"
+    if (( UPDATE_REQUESTED && UNINSTALL_REQUESTED )); then
+        fail "--update 和 -u 不能同时使用。"
     fi
-    if [ "$uninstall_option" -eq 1 ]; then
-        ACTION=uninstall
-    elif [ "$install_option" -eq 1 ]; then
-        ACTION=install
+    if (( (UPDATE_REQUESTED || UNINSTALL_REQUESTED) && install_option )); then
+        fail "更新或卸载不能同时使用 -s 或 -p。"
     fi
 }
 
@@ -103,34 +102,12 @@ ensure_dependencies() {
         missing+=(coreutils)
     fi
     command -v ss >/dev/null 2>&1 || missing+=(iproute2)
-    dpkg-query -W -f='${db:Status-Abbrev}' systemd-timesyncd 2>/dev/null | grep -q '^ii ' ||
-        missing+=(systemd-timesyncd)
     [ "${#missing[@]}" -eq 0 ] && return 0
     log_info "正在安装缺失依赖：${missing[*]}"
     DEBIAN_FRONTEND=noninteractive apt-get update -qq >/dev/null 2>&1 || fail "软件包索引更新失败。"
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${missing[@]}" >/dev/null 2>&1 ||
         fail "依赖安装失败：${missing[*]}"
     log_info "已安装依赖：${missing[*]}"
-}
-
-ensure_time_sync() {
-    local synced i
-    synced="$(timedatectl show --property=NTPSynchronized --value 2>/dev/null || true)"
-    [ "$synced" != yes ] || return 0
-    if ! systemctl is-enabled --quiet systemd-timesyncd 2>/dev/null ||
-       ! systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
-        if ! systemctl enable --now systemd-timesyncd >/dev/null 2>&1 ||
-           ! systemctl is-active --quiet systemd-timesyncd 2>/dev/null; then
-            fail "systemd-timesyncd 启动失败。"
-        fi
-        log_info "已启用系统服务：systemd-timesyncd.service"
-    fi
-    for ((i=0; i<30; i++)); do
-        synced="$(timedatectl show --property=NTPSynchronized --value 2>/dev/null || true)"
-        [ "$synced" = yes ] && return 0
-        sleep 2
-    done
-    fail "systemd-timesyncd 已运行，但时间尚未同步。"
 }
 
 detect_target() {
@@ -145,20 +122,24 @@ detect_target() {
     fi
 }
 
-prepare_configuration() {
-    local generated
-    while [ -z "$SS_PORT" ]; do
-        generated="$(shuf -i 20000-40000 -n 1)" || fail "端口生成失败。"
-        if [[ "$generated" != *4* ]] &&
-           ! ss -H -lntu 2>/dev/null | grep -Eq ":${generated}[[:space:]]"; then
-            SS_PORT="$generated"
+port_in_use() {
+    ss -H -lntup 2>/dev/null | grep -E ":${1}[[:space:]]" | grep -vq '"ssserver"'
+}
+
+generate_port() {
+    local port
+    while true; do
+        port="$(shuf -i 20000-40000 -n 1)" || fail "端口生成失败。"
+        if [[ "$port" != *4* ]] && ! port_in_use "$port"; then
+            printf '%s\n' "$port"
+            return 0
         fi
     done
-    validate_port "$SS_PORT" || exit 1
-    if [ -z "$SS_PASSWORD" ]; then
-        SS_PASSWORD="$(openssl rand -base64 16)" || fail "Shadowsocks 密码生成失败。"
-    fi
-    [ -n "$SS_PASSWORD" ] || fail "Shadowsocks 密码不能为空。"
+}
+
+existing_value() {
+    [ -r "$SS_CONFIG_FILE" ] || return 0
+    jq -r "$1 // empty" "$SS_CONFIG_FILE" 2>/dev/null
 }
 
 get_current_version() {
@@ -208,8 +189,9 @@ StartLimitIntervalSec=60
 [Service]
 Type=simple
 DynamicUser=yes
+LoadCredential=config.json:${SS_CONFIG_FILE}
 LimitNOFILE=65536
-ExecStart=${SS_BINARY} -c ${SS_CONFIG_FILE}
+ExecStart=${SS_BINARY} -c \${CREDENTIALS_DIRECTORY}/config.json
 Restart=always
 RestartSec=2
 TimeoutStopSec=15
@@ -219,233 +201,118 @@ WantedBy=multi-user.target
 EOF
 }
 
-apply_candidate() {
-    local renderer="$1" target="$2" mode="$3" changed_name="$4" success="$5" label="$6"
-    local directory candidate
-    directory="$(dirname "$target")"
-    mkdir -p "$directory" || fail "无法创建 ${label} 目录。"
-    umask 077
-    candidate="$(mktemp "${directory}/.$(basename "$target").XXXXXX")" || fail "无法创建 ${label} 候选文件。"
-    "$renderer" > "$candidate" || {
-        rm -f "$candidate"
-        fail "${label} 生成失败。"
-    }
-    if [ -f "$target" ] && cmp -s "$candidate" "$target"; then
-        rm -f "$candidate"
-        chmod "$mode" "$target" || fail "${label} 权限设置失败。"
-        printf -v "$changed_name" '%s' 0
+resolve_version() {
+    local latest
+    CURRENT_VERSION="$(get_current_version)" || CURRENT_VERSION=""
+    if [ "$UPDATE_REQUESTED" -eq 0 ] && [ -n "$CURRENT_VERSION" ]; then
+        TARGET_VERSION="$CURRENT_VERSION"
         return 0
     fi
-    if ! chmod "$mode" "$candidate" || ! mv -f "$candidate" "$target"; then
-        rm -f "$candidate"
-        fail "${label} 应用失败。"
+    [ "$UPDATE_REQUESTED" -eq 0 ] || [ -n "$CURRENT_VERSION" ] || fail "Shadowsocks 未安装。"
+    latest="$(get_latest_version)" || fail "无法获取 Shadowsocks 最新版本。"
+    TARGET_VERSION="${latest#v}"
+    if [ -n "$CURRENT_VERSION" ] &&
+       [ "$(printf '%s\n%s\n' "$TARGET_VERSION" "$CURRENT_VERSION" | sort -V | tail -n 1)" != "$TARGET_VERSION" ]; then
+        TARGET_VERSION="$CURRENT_VERSION"
     fi
-    printf -v "$changed_name" '%s' 1
-    log_info "$success"
 }
 
-begin_transaction() {
-    local targets names index
-    targets=("$SS_BINARY" "$SS_CONFIG_FILE" "$SS_UNIT_FILE")
-    names=(binary config unit)
-    TRANSACTION_DIR="$(mktemp -d)" || fail "无法创建 Shadowsocks 事务目录。"
-    if systemctl is-active --quiet shadowsocks.service 2>/dev/null; then
-        SERVICE_WAS_ACTIVE=1
-    else
-        SERVICE_WAS_ACTIVE=0
+resolve_config() {
+    [ -n "$SS_PORT" ] || SS_PORT="$(existing_value .server_port)"
+    [ -n "$SS_PASSWORD" ] || SS_PASSWORD="$(existing_value .password)"
+    if [ -z "$SS_PORT" ]; then
+        SS_PORT="$(generate_port)" || exit 1
     fi
-    if systemctl is-enabled --quiet shadowsocks.service 2>/dev/null; then
-        SERVICE_WAS_ENABLED=1
-    else
-        SERVICE_WAS_ENABLED=0
+    if [ -z "$SS_PASSWORD" ]; then
+        SS_PASSWORD="$(openssl rand -base64 16)" || fail "Shadowsocks 密码生成失败。"
     fi
-    for index in "${!targets[@]}"; do
-        [ -e "${targets[$index]}" ] || continue
-        cp -a "${targets[$index]}" "${TRANSACTION_DIR}/${names[$index]}" || {
-            rm -rf "$TRANSACTION_DIR"
-            fail "无法备份 Shadowsocks 当前状态。"
-        }
-    done
-    TRANSACTION_ACTIVE=1
-    trap rollback_transaction EXIT
+    validate_port "$SS_PORT" || exit 1
+    ! port_in_use "$SS_PORT" || fail "Shadowsocks 端口已被其他进程占用：$SS_PORT"
+    [[ "$SS_PASSWORD" =~ ^[A-Za-z0-9+/]{21}[AQgw]==$ ]] ||
+        fail "Shadowsocks 密码必须是 16 字节密钥的 base64 编码，可用 openssl rand -base64 16 生成。"
+    render_config > "${WORK_DIR}/config.json" || fail "Shadowsocks 配置生成失败。"
+    render_service > "${WORK_DIR}/shadowsocks.service" || fail "Shadowsocks unit 生成失败。"
 }
 
-rollback_transaction() {
-    local targets names index restore_failed=0
-    [ "$TRANSACTION_ACTIVE" -eq 1 ] || return 0
-    targets=("$SS_BINARY" "$SS_CONFIG_FILE" "$SS_UNIT_FILE")
-    names=(binary config unit)
-    for index in "${!targets[@]}"; do
-        if [ -e "${TRANSACTION_DIR}/${names[$index]}" ]; then
-            if ! mkdir -p "$(dirname "${targets[$index]}")" ||
-               ! cp -a "${TRANSACTION_DIR}/${names[$index]}" "${targets[$index]}"; then
-                restore_failed=1
-            fi
-        else
-            rm -f "${targets[$index]}" || restore_failed=1
-        fi
-    done
-    systemctl daemon-reload >/dev/null 2>&1 || restore_failed=1
-    if [ "$SERVICE_WAS_ENABLED" -eq 1 ]; then
-        systemctl enable shadowsocks.service >/dev/null 2>&1 || restore_failed=1
-    elif systemctl is-enabled --quiet shadowsocks.service 2>/dev/null; then
-        systemctl disable shadowsocks.service >/dev/null 2>&1 || restore_failed=1
-    fi
-    if [ "$SERVICE_WAS_ACTIVE" -eq 1 ]; then
-        if ! systemctl restart shadowsocks.service >/dev/null 2>&1 ||
-           ! systemctl is-active --quiet shadowsocks.service 2>/dev/null; then
-            restore_failed=1
-        fi
-    elif systemctl is-active --quiet shadowsocks.service 2>/dev/null; then
-        systemctl stop shadowsocks.service >/dev/null 2>&1 || restore_failed=1
-    fi
-    TRANSACTION_ACTIVE=0
-    trap - EXIT
-    rm -rf "$TRANSACTION_DIR" || restore_failed=1
-    if [ "$restore_failed" -eq 1 ]; then
-        log_error "Shadowsocks 旧状态恢复失败，请检查文件和服务状态。"
-        return 1
-    fi
-    log_warning "Shadowsocks 变更失败，已恢复旧状态。"
-}
-
-download_server() {
-    local version="$1" target archive_name release_url temp_dir archive checksum
-    local candidate install_candidate output
-    target="$(detect_target)"
-    archive_name="shadowsocks-${version}.${target}.tar.xz"
-    release_url="https://github.com/shadowsocks/shadowsocks-rust/releases/download/${version}"
-    [ -d "$TRANSACTION_DIR" ] || fail "Shadowsocks 事务尚未开始。"
-    temp_dir="$(mktemp -d "${TRANSACTION_DIR}/download.XXXXXX")" || fail "无法创建下载临时目录。"
-    archive="${temp_dir}/${archive_name}"
-    checksum="${archive}.sha256"
-    log_info "正在下载 Shadowsocks ${version#v}（${target}）"
+stage_binary() {
+    local target archive_name release_url archive output
+    [ "$TARGET_VERSION" != "$CURRENT_VERSION" ] || return 0
+    target="$(detect_target)" || exit 1
+    archive_name="shadowsocks-v${TARGET_VERSION}.${target}.tar.xz"
+    release_url="https://github.com/shadowsocks/shadowsocks-rust/releases/download/v${TARGET_VERSION}"
+    archive="${WORK_DIR}/${archive_name}"
+    log_info "正在下载 Shadowsocks ${TARGET_VERSION}（${target}）"
     curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o "$archive" "${release_url}/${archive_name}" ||
         fail "Shadowsocks 下载失败。"
-    curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o "$checksum" "${release_url}/${archive_name}.sha256" ||
-        fail "Shadowsocks 校验文件下载失败。"
+    curl -fSsL --connect-timeout 10 --max-time 120 --retry 2 -o "${archive}.sha256" \
+        "${release_url}/${archive_name}.sha256" || fail "Shadowsocks 校验文件下载失败。"
     [ -s "$archive" ] || fail "Shadowsocks 下载文件为空。"
-    [ -s "$checksum" ] || fail "Shadowsocks 校验文件为空。"
-    if ! (cd "$temp_dir" && sha256sum -c "${archive_name}.sha256" >/dev/null 2>&1); then
+    [ -s "${archive}.sha256" ] || fail "Shadowsocks 校验文件为空。"
+    if ! (cd "$WORK_DIR" && sha256sum -c "${archive_name}.sha256" >/dev/null 2>&1); then
         fail "Shadowsocks 下载文件校验失败。"
     fi
-    tar -xJf "$archive" -C "$temp_dir" >/dev/null 2>&1 || fail "Shadowsocks 解压失败。"
-    candidate="${temp_dir}/ssserver"
-    [ -f "$candidate" ] || fail "压缩包中未找到 ssserver。"
-    chmod 755 "$candidate" || fail "ssserver 权限设置失败。"
-    if ! output="$("$candidate" -V 2>&1)"; then
+    tar -xJf "$archive" -C "$WORK_DIR" >/dev/null 2>&1 || fail "Shadowsocks 解压失败。"
+    CANDIDATE_BINARY="${WORK_DIR}/ssserver"
+    [ -f "$CANDIDATE_BINARY" ] || fail "压缩包中未找到 ssserver。"
+    chmod 755 "$CANDIDATE_BINARY" || fail "ssserver 权限设置失败。"
+    if ! output="$("$CANDIDATE_BINARY" -V 2>&1)"; then
         fail "ssserver 二进制预检失败：${output:-无错误输出}"
     fi
-    [[ "$output" == *"${version#v}"* ]] || fail "ssserver 版本校验失败。"
-    if [ -f "$SS_BINARY" ] && cmp -s "$candidate" "$SS_BINARY"; then
-        BINARY_CHANGED=0
-        return 0
+    [[ "$output" == *"$TARGET_VERSION"* ]] || fail "ssserver 版本校验失败。"
+}
+
+publish_file() {
+    local source="$1" target="$2" mode="$3" directory staged
+    if [ -f "$target" ] && cmp -s "$source" "$target"; then
+        chmod "$mode" "$target" || fail "文件权限设置失败：$target"
+        return 1
     fi
-    mkdir -p "$(dirname "$SS_BINARY")" || fail "无法创建 Shadowsocks 安装目录。"
-    install_candidate="$(mktemp "$(dirname "$SS_BINARY")/.ssserver.XXXXXX")" ||
-        fail "无法创建 ssserver 安装候选文件。"
-    if ! install -m 755 "$candidate" "$install_candidate"; then
-        rm -f "$install_candidate"
-        fail "ssserver 安装失败。"
+    directory="$(dirname "$target")"
+    mkdir -p "$directory" || fail "无法创建目录：$directory"
+    staged="$(mktemp "${directory}/.$(basename "$target").XXXXXX")" || fail "无法创建候选文件：$target"
+    if ! install -m "$mode" "$source" "$staged" || ! mv -f "$staged" "$target"; then
+        rm -f "$staged"
+        fail "文件写入失败：$target"
     fi
-    if ! mv -f "$install_candidate" "$SS_BINARY"; then
-        rm -f "$install_candidate"
-        fail "ssserver 安装失败。"
+}
+
+apply_changes() {
+    if [ -n "$CANDIDATE_BINARY" ] && publish_file "$CANDIDATE_BINARY" "$SS_BINARY" 755; then
+        BINARY_CHANGED=1
+        log_info "已安装 Shadowsocks 二进制：${TARGET_VERSION}"
     fi
-    BINARY_CHANGED=1
+    if publish_file "${WORK_DIR}/config.json" "$SS_CONFIG_FILE" 600; then
+        CONFIG_CHANGED=1
+        log_info "已更新 Shadowsocks 配置：$SS_CONFIG_FILE"
+    fi
+    if publish_file "${WORK_DIR}/shadowsocks.service" "$SS_UNIT_FILE" 644; then
+        UNIT_CHANGED=1
+        log_info "已更新系统服务：shadowsocks.service"
+    fi
 }
 
 converge_service() {
     if [ "$UNIT_CHANGED" -eq 1 ]; then
-        systemctl daemon-reload >/dev/null 2>&1 || {
-            log_error "systemd daemon 重载失败。"
-            return 1
-        }
+        systemctl daemon-reload >/dev/null 2>&1 || fail "systemd daemon 重载失败。"
     fi
     if ! systemctl is-enabled --quiet shadowsocks.service 2>/dev/null; then
-        systemctl enable shadowsocks.service >/dev/null 2>&1 || {
-            log_error "shadowsocks.service 启用失败。"
-            return 1
-        }
+        systemctl enable shadowsocks.service >/dev/null 2>&1 || fail "shadowsocks.service 启用失败。"
         log_info "已启用系统服务：shadowsocks.service"
     fi
-    if systemctl is-active --quiet shadowsocks.service 2>/dev/null; then
-        if (( BINARY_CHANGED || CONFIG_CHANGED || UNIT_CHANGED )); then
-            systemctl restart shadowsocks.service >/dev/null 2>&1 || {
-                log_error "Shadowsocks 重启失败。"
-                return 1
-            }
-        fi
+    if ! systemctl is-active --quiet shadowsocks.service 2>/dev/null; then
+        systemctl start shadowsocks.service >/dev/null 2>&1 ||
+            fail "Shadowsocks 启动失败，请执行：journalctl -u shadowsocks --no-pager"
+    elif (( BINARY_CHANGED || CONFIG_CHANGED || UNIT_CHANGED )); then
+        systemctl restart shadowsocks.service >/dev/null 2>&1 ||
+            fail "Shadowsocks 重启失败，请执行：journalctl -u shadowsocks --no-pager"
     else
-        systemctl start shadowsocks.service >/dev/null 2>&1 || {
-            log_error "Shadowsocks 启动失败。"
-            return 1
-        }
-    fi
-}
-
-read_current_configuration() {
-    [ -r "$SS_CONFIG_FILE" ] || fail "未找到 Shadowsocks 配置。"
-    SS_PORT="$(jq -r '.server_port' "$SS_CONFIG_FILE")" || fail "无法读取 Shadowsocks 端口。"
-    SS_PASSWORD="$(jq -r '.password' "$SS_CONFIG_FILE")" || fail "无法读取 Shadowsocks 密码。"
-    validate_port "$SS_PORT" >/dev/null 2>&1 || fail "现有 Shadowsocks 端口无效。"
-    if [ -z "$SS_PASSWORD" ] || [ "$SS_PASSWORD" = null ]; then
-        fail "现有 Shadowsocks 密码无效。"
-    fi
-}
-
-install_shadowsocks() {
-    local latest
-    ensure_dependencies
-    ensure_time_sync
-    prepare_configuration
-    begin_transaction
-    BINARY_CHANGED=0
-    if [ ! -x "$SS_BINARY" ]; then
-        latest="$(get_latest_version)" || fail "无法获取 Shadowsocks 最新版本。"
-        download_server "$latest"
-    fi
-    apply_candidate render_config "$SS_CONFIG_FILE" 644 CONFIG_CHANGED \
-        "已更新 Shadowsocks 配置：$SS_CONFIG_FILE" "Shadowsocks 配置"
-    apply_candidate render_service "$SS_UNIT_FILE" 644 UNIT_CHANGED \
-        "已更新系统服务：shadowsocks.service" "Shadowsocks unit"
-    if ! converge_service || ! verify_service; then
-        if rollback_transaction; then
-            fail "Shadowsocks 应用失败，已恢复旧状态。"
-        fi
-        fail "Shadowsocks 应用失败，且旧状态恢复失败。"
-    fi
-    TRANSACTION_ACTIVE=0
-    trap - EXIT
-    rm -rf "$TRANSACTION_DIR" || log_warning "Shadowsocks 事务临时目录清理失败：$TRANSACTION_DIR"
-    [ "$BINARY_CHANGED" -eq 0 ] || log_info "已安装 Shadowsocks 二进制。"
-    log_info "Shadowsocks 已启动，服务端口：$SS_PORT"
-    show_configuration
-}
-
-update_shadowsocks() {
-    local current latest highest
-    ensure_dependencies
-    current="$(get_current_version)" || fail "Shadowsocks 未安装。"
-    latest="$(get_latest_version)" || fail "无法获取 Shadowsocks 最新版本。"
-    highest="$(printf '%s\n%s\n' "${latest#v}" "$current" | sort -V | tail -n 1)"
-    if [ "$highest" != "${latest#v}" ] || [ "${latest#v}" = "$current" ]; then
-        log_info "Shadowsocks 已是最新版本：$current"
         return 0
     fi
-    read_current_configuration
-    begin_transaction
-    download_server "$latest"
-    if ! converge_service || ! verify_service; then
-        if rollback_transaction; then
-            fail "Shadowsocks 更新失败，已恢复旧状态。"
-        fi
-        fail "Shadowsocks 更新失败，且旧状态恢复失败。"
-    fi
-    TRANSACTION_ACTIVE=0
-    trap - EXIT
-    rm -rf "$TRANSACTION_DIR" || log_warning "Shadowsocks 事务临时目录清理失败：$TRANSACTION_DIR"
-    log_info "Shadowsocks 已更新：${current} -> ${latest#v}"
+    sleep 2
+}
+
+cleanup_work_dir() {
+    [ -z "$WORK_DIR" ] || rm -rf "$WORK_DIR"
 }
 
 uninstall_shadowsocks() {
@@ -476,10 +343,8 @@ uninstall_shadowsocks() {
 }
 
 verify_service() {
-    systemctl is-active --quiet shadowsocks.service 2>/dev/null || {
-        log_error "Shadowsocks 服务未运行。"
-        return 1
-    }
+    systemctl is-active --quiet shadowsocks.service 2>/dev/null ||
+        fail "Shadowsocks 服务未运行，请执行：journalctl -u shadowsocks --no-pager"
 }
 
 show_configuration() {
@@ -496,30 +361,34 @@ show_configuration() {
 EOF
 }
 
+show_result() {
+    if [ "$UPDATE_REQUESTED" -eq 0 ]; then
+        log_info "Shadowsocks 已启动，服务端口：$SS_PORT"
+        show_configuration
+    elif [ "$BINARY_CHANGED" -eq 1 ]; then
+        log_info "Shadowsocks 已更新：${CURRENT_VERSION} -> ${TARGET_VERSION}"
+    else
+        log_info "Shadowsocks 已是最新版本：${CURRENT_VERSION}"
+    fi
+}
+
 main() {
-    local choice
     parse_args "$@"
     require_environment
-    if [ -z "$ACTION" ]; then
-        printf '1. 安装 Shadowsocks\n2. 更新 Shadowsocks\n3. 卸载 Shadowsocks\n'
-        read -r -p '请选择（1-3）：' choice || fail "未读取到选择。"
-        if [ "$choice" = 1 ]; then
-            ACTION=install
-        elif [ "$choice" = 2 ]; then
-            ACTION=update
-        elif [ "$choice" = 3 ]; then
-            ACTION=uninstall
-        else
-            fail "无效选择：$choice"
-        fi
-    fi
-    if [ "$ACTION" = install ]; then
-        install_shadowsocks
-    elif [ "$ACTION" = update ]; then
-        update_shadowsocks
-    else
+    if [ "$UNINSTALL_REQUESTED" -eq 1 ]; then
         uninstall_shadowsocks
+        return
     fi
+    ensure_dependencies
+    WORK_DIR="$(mktemp -d)" || fail "无法创建 Shadowsocks 临时目录。"
+    trap cleanup_work_dir EXIT
+    resolve_version
+    resolve_config
+    stage_binary
+    apply_changes
+    converge_service
+    verify_service
+    show_result
 }
 
 main "$@"
