@@ -133,6 +133,7 @@ payload:
   # > Cursor
   - '+.cursor.sh'
   - '+.cursor.com'
+  - '+.cursorvm.com'
   - '+.cursorapi.com'
   - '+.cursor-cdn.com'
 
