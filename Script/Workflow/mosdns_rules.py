@@ -8,6 +8,7 @@ import re
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -43,6 +44,7 @@ EXPECTED_REASONS = frozenset({
     'header', 'include', 'attribute'
 })
 REMOTE_PREFIXES = ("https://", "http://")
+DOWNLOAD_ATTEMPTS = 3
 
 DOMAIN_FAMILY = "domain"
 IP_FAMILY = "ip"
@@ -393,8 +395,22 @@ def read_location(workspace: Path, location: str) -> str:
             location,
             headers={"User-Agent": "Provider-MosDNS-Workflow"}
         )
-        with urllib.request.urlopen(request, timeout=30) as response:
-            data = response.read()
+        for attempt in range(1, DOWNLOAD_ATTEMPTS + 1):
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    data = response.read()
+                break
+            except urllib.error.HTTPError as error:
+                if error.code < 500 and error.code != 429:
+                    raise RuntimeError(f"下载失败: {location}: {error}") from error
+                last_error = error
+            except OSError as error:
+                last_error = error
+            if attempt == DOWNLOAD_ATTEMPTS:
+                raise RuntimeError(
+                    f"下载失败（重试 {DOWNLOAD_ATTEMPTS} 次）: {location}: {last_error}"
+                ) from last_error
+            time.sleep(attempt * 3)
         if not data:
             raise ValueError(f"下载内容为空: {location}")
         return data.decode("utf-8")
