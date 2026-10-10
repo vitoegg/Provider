@@ -39,6 +39,7 @@ DNS_MODIFIERS = frozenset({
 })
 UNCONDITIONAL_MODIFIERS = frozenset({'important'})
 V2FLY_DROP_ATTRIBUTES = frozenset({'@ads', '@!cn'})
+EXCLUDED_DOMAINS = frozenset({'7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe'})
 EXPECTED_REASONS = frozenset({
     'converted', 'hosts', 'comment', 'empty',
     'header', 'include', 'attribute'
@@ -244,6 +245,8 @@ def parse_surge_line(line: str) -> Tuple[List[DomainRule], str]:
         kind = FULL
 
     domain = domain.strip().lower()
+    if domain in EXCLUDED_DOMAINS:
+        return [], "excluded"
     if not is_valid_domain(domain):
         return [], "invalid"
     return [(kind, domain)], "converted"
@@ -443,18 +446,18 @@ def load_config(workspace: Path) -> List[Dict]:
             raise ValueError(f"规则 path 无效或重复: {output_path}")
         if not isinstance(sources, dict) or not sources:
             raise ValueError(f"规则 {rule_id} 的 sources 必须是非空对象")
-        for rule_format, locations in sources.items():
+        excludes = rule.get("exclude", {})
+        if not isinstance(excludes, dict) or any(
+            FORMAT_FAMILIES.get(rule_format) != DOMAIN_FAMILY for rule_format in excludes
+        ):
+            raise ValueError(f"规则 {rule_id} 的 exclude 必须是域名格式对象")
+        for rule_format, locations in [*sources.items(), *excludes.items()]:
             if rule_format not in FORMAT_FAMILIES:
                 raise ValueError(f"规则 {rule_id} 使用了未知格式: {rule_format}")
             if not isinstance(locations, list) or not locations or not all(
                 isinstance(location, str) and location for location in locations
             ):
                 raise ValueError(f"规则 {rule_id} 的 {rule_format} 来源无效")
-        excludes = rule.get("exclude", [])
-        if not isinstance(excludes, list) or not all(
-            isinstance(path, str) and path for path in excludes
-        ):
-            raise ValueError(f"规则 {rule_id} 的 exclude 无效")
         seen_ids.add(rule_id)
         seen_paths.add(output_path)
     return rules
@@ -469,10 +472,11 @@ def load_locations(workspace: Path, rules: List[Dict]) -> Dict[str, str]:
         for location in source_locations
     }
     locations.update(
-        exclude_path
+        location
         for rule in rules
-        for exclude_path in rule.get("exclude", [])
-        if exclude_path not in output_paths
+        for exclude_locations in rule.get("exclude", {}).values()
+        for location in exclude_locations
+        if location not in output_paths
     )
     ordered_locations = sorted(locations)
     with ThreadPoolExecutor(max_workers=min(8, len(ordered_locations))) as executor:
@@ -491,16 +495,20 @@ def collect_excludes(
 ) -> List[DomainRule]:
     excludes: List[DomainRule] = []
 
-    for exclude_path in rule.get("exclude", []):
-        if exclude_path in output_paths:
-            if exclude_path not in generated:
-                raise ValueError(f"规则 {rule['id']} 的依赖尚未生成: {exclude_path}")
-            excludes.extend(generated[exclude_path])
-        else:
-            parsed, _ = parse_source(
-                "domain_mosdns", contents[exclude_path], exclude_path, strict=True
-            )
-            excludes.extend(parsed)
+    for rule_format, locations in rule.get("exclude", {}).items():
+        for location in locations:
+            if location in output_paths:
+                if location not in generated:
+                    raise ValueError(f"规则 {rule['id']} 的依赖尚未生成: {location}")
+                excludes.extend(generated[location])
+            else:
+                parsed, _ = parse_source(
+                    rule_format,
+                    contents[location],
+                    location,
+                    strict=not location.startswith(REMOTE_PREFIXES)
+                )
+                excludes.extend(parsed)
 
     return optimize_domains(excludes)
 
