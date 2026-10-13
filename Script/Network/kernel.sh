@@ -75,15 +75,28 @@ bbr_supported() {
     grep -wq bbr /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null
 }
 
+tcp_mem_value() {
+    local mem_kb page_size pages
+    mem_kb="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null)"
+    page_size="$(getconf PAGESIZE 2>/dev/null || echo 4096)"
+    [[ "$mem_kb" =~ ^[0-9]+$ && "$page_size" =~ ^[0-9]+$ ]] || return 1
+    pages=$((mem_kb * 1024 / page_size))
+    printf '%s %s %s' $((pages / 10)) $((pages * 3 / 20)) $((pages / 5))
+}
+
 render_config() {
+    local tcp_mem
+    tcp_mem="$(tcp_mem_value)" || fail '无法读取内存容量'
     cat > "$1" << 'EOF' || fail '无法生成内核参数配置'
 # Managed by Provider kernel.sh
-net.ipv4.tcp_slow_start_after_idle = 1
+net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_notsent_lowat = 131072
 net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_fastopen = 0
 net.ipv4.tcp_ecn = 0
 net.ipv4.tcp_fin_timeout = 30
 EOF
+    printf 'net.ipv4.tcp_mem = %s\n' "$tcp_mem" >> "$1" || fail '无法生成 TCP 内存配置'
     if bbr_supported; then
         cat >> "$1" << 'EOF' || fail '无法生成 BBR 配置'
 net.core.default_qdisc = fq
@@ -152,7 +165,7 @@ runtime_matches_config() {
         if [[ "$key" == \#* ]]; then
             continue
         fi
-        actual="$(sysctl -n "$key" 2>/dev/null || true)"
+        actual="$(sysctl -n "$key" 2>/dev/null | tr '\t' ' ' || true)"
         if [ "$actual" != "$expected" ]; then
             if [ "$report" = "1" ]; then
                 log_warning "内核参数未生效：$key，期望 $expected，实际 ${actual:-不可用}"
