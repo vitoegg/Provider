@@ -1,5 +1,5 @@
-# 更新时间: 2026-10-10 20:40:42
-# 规则条数: 111872
+# 更新时间: 2026-10-13 18:31:14
+# 规则条数: 111890
 # 规则来源:
 # - https://github.com/blackmatrix7/ios_rule_script
 # - https://ruleset.skk.moe/List/non_ip/microsoft_cdn.conf
@@ -47046,6 +47046,22 @@
 .hsayi.com
 .hsbank.cc
 .hsbbs.com
+.hsbc
+.hsbc.com
+.hsbc.com.eg
+.hsbc.com.hk
+.hsbc.com.mo
+.hsbc.com.mt
+.hsbc.com.mx
+.hsbc.com.sg
+.hsbc.net
+.hsbcapi.com
+.hsbcdynamic.com
+.hsbcgroup.com
+.hsbcinnovationbanking.com
+.hsbcnet.com
+.hsbcnet.com.hk
+.hsbcprivatebank.com
 .hsbdc.com
 .hsbianma.com
 .hscarbonfibre.com
@@ -67272,6 +67288,7 @@
 .myhongzuan.com
 .myhopu.com
 .myhostadmin.net
+.myhsbc.com
 .myhscodes.com
 .myhuaweicloud-custom.com
 .myhuaweicloud-koodrive.com
@@ -93402,6 +93419,7 @@
 .vuz.me
 .vv-tool.com
 .vv.cc
+.vv1865.com
 .vv27.com
 .vv3111.com
 .vv8.com
