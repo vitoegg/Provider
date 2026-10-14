@@ -7,12 +7,17 @@
 - SB_COOKIE：论坛 Cookie
 - SB_USER_AGENT：与该 Cookie 登录时一致的浏览器 User-Agent
 """
+import base64
+import hashlib
+import itertools
+import json
 import os
 import random
 import re
 import time
+import zlib
 from html.parser import HTMLParser
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -24,7 +29,7 @@ SB_USER_AGENT = os.environ.get(
     (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
         "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/151.0.0.0 Safari/537.36"
+        "Chrome/155.0.0.0 Safari/537.36"
     ),
 )
 TIMEOUT = 30
@@ -38,6 +43,22 @@ CHALLENGE_MARKERS = (
     "just a moment...",
     "enable javascript and cookies to continue",
 )
+CAP_FONT_WIDTHS = (
+    1224.94, 1153.59, 1083.7, 1200.87, 1156.96, 1080.18, 1224.94, 1224.94, 1198.23,
+    1224.94, 1224.94, 1224.94, 1203.86, 1224.94, 1224.94, 1224.94, 1224.94,
+)
+GREASE_CHARS = " (:-./);=?_"
+GREASE_VERSIONS = ("8", "99", "24")
+GREASE_ORDERS = ((0, 1, 2), (0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0))
+INSTR_NONCE = re.compile(r'nonce:\s*"([0-9a-fA-F]+)"')
+INSTR_VARS = re.compile(r"var (\w+)=(-?\d+);var (\w+)=(-?\d+);var (\w+)=(-?\d+);var (\w+)=(-?\d+);")
+INSTR_CS_FN = re.compile(r"function (\w+)\(a,b,c\)\{function F\(d\)\{this\.v=function\(\)\{return this\.k\^d;")
+INSTR_GM_FN = re.compile(r"function (\w+)\(x,y,z\)\{var d=document\.createElement\('div'\)")
+INSTR_FINAL = re.compile(r"(\w+)\s*=\s*\(\(\s*\1\s*\^\s*\d+\s*\)\s*&\s*0x7FFFFFFF\s*\)[^;]*;")
+INSTR_TERNARY = re.compile(r"navigator\.userAgent\s*\?\s*(\d+)\s*:\s*\d+")
+JS_TOKEN = re.compile(r"\s*(?:(0[xX][0-9a-fA-F]+|\d+)|([A-Za-z_$][\w$]*)|(>>>|<<|>>|[~^&|+%(),]))")
+JS_IDENTIFIER = re.compile(r"[A-Za-z_$][\w$]*")
+JS_BINARY_LEVELS = (("|",), ("^",), ("&",), ("<<", ">>", ">>>"), ("+",), ("%",))
 
 
 def normalize_text(value):
@@ -65,6 +86,8 @@ class SigninPageParser(HTMLParser):
         self.has_signin_form = False
         self.csrf_token = ""
         self.already_signed = False
+        self.cap_endpoint = ""
+        self.cap_field = "cap-token"
         self.hero_depth = 0
         self.result_depth = 0
         self.results = []
@@ -74,6 +97,10 @@ class SigninPageParser(HTMLParser):
     def handle_starttag(self, tag, attrs):
         attributes = dict(attrs)
         classes = set(attributes.get("class", "").split())
+
+        if attributes.get("data-cap-api-endpoint") and not self.cap_endpoint:
+            self.cap_endpoint = attributes["data-cap-api-endpoint"]
+            self.cap_field = attributes.get("data-cap-hidden-field-name") or "cap-token"
 
         if tag == "form":
             action = urlparse(attributes.get("action", "")).path.rstrip("/")
@@ -262,6 +289,9 @@ def parse_post_result(html):
             )
         else:
             detail = "POST 未确认签到成功：未找到 .signin-result"
+            site_error = extract_site_error(html)
+            if site_error:
+                detail += f"；site_error={site_error!r}"
         return failure("签到失败", detail)
 
     result_classes, result_text = results[0]
@@ -288,20 +318,22 @@ def parse_post_result(html):
 def validate_response(response, stage):
     """验证响应状态与来源；异常时返回分类结果。"""
     status = response.status_code
+    site_error = extract_site_error(response.text) if status >= 400 else ""
+    site_detail = f" site_error={site_error!r}" if site_error else ""
     if status in {401, 403, 429}:
         return failure(
             "访问受限，签到未完成",
-            f"{stage}被拒绝：status={status} url={response.url!r}",
+            f"{stage}被拒绝：status={status} url={response.url!r}{site_detail}",
         )
     if status >= 500:
         return failure(
             "论坛服务异常，签到未完成",
-            f"论坛服务异常：stage={stage} status={status} url={response.url!r}",
+            f"论坛服务异常：stage={stage} status={status} url={response.url!r}{site_detail}",
         )
     if status >= 400:
         return failure(
             "签到请求异常",
-            f"请求异常：stage={stage} status={status} url={response.url!r}",
+            f"请求异常：stage={stage} status={status} url={response.url!r}{site_detail}",
         )
 
     response_url = urlparse(response.url)
@@ -335,6 +367,322 @@ def validate_response(response, stage):
     return None
 
 
+class CapError(Exception):
+    pass
+
+
+def to_int32(value):
+    return (int(value) + 0x80000000) % 0x100000000 - 0x80000000
+
+
+def js_mod(left, right):
+    if right == 0:
+        raise CapError("表达式出现除以零")
+    remainder = abs(left) % abs(right)
+    return -remainder if left < 0 else remainder
+
+
+JS_OPERATORS = {
+    "|": lambda left, right: to_int32(left) | to_int32(right),
+    "^": lambda left, right: to_int32(left) ^ to_int32(right),
+    "&": lambda left, right: to_int32(left) & to_int32(right),
+    "<<": lambda left, right: to_int32(to_int32(left) << (to_int32(right) & 31)),
+    ">>": lambda left, right: to_int32(left) >> (to_int32(right) & 31),
+    ">>>": lambda left, right: (to_int32(left) & 0xFFFFFFFF) >> (to_int32(right) & 31),
+    "+": lambda left, right: left + right,
+    "%": js_mod,
+}
+
+
+def tokenize_js(source):
+    tokens = []
+    position = 0
+    source = source.strip()
+    while position < len(source):
+        match = JS_TOKEN.match(source, position)
+        if not match:
+            raise CapError(f"表达式无法解析：{log_excerpt(source)!r}")
+        number, name, operator = match.groups()
+        if number:
+            tokens.append(("number", int(number, 16) if number[:2] in {"0x", "0X"} else int(number)))
+        elif name:
+            tokens.append(("name", name))
+        else:
+            tokens.append(("op", operator))
+        position = match.end()
+    return tokens
+
+
+class JsExpression:
+    def __init__(self, source, variables, functions):
+        self.source = source
+        self.tokens = tokenize_js(source)
+        self.position = 0
+        self.variables = variables
+        self.functions = functions
+
+    def evaluate(self):
+        value = self.binary(0)
+        if self.position != len(self.tokens):
+            raise CapError(f"表达式无法解析：{log_excerpt(self.source)!r}")
+        return value
+
+    def peek(self):
+        if self.position < len(self.tokens):
+            return self.tokens[self.position]
+        return (None, None)
+
+    def take(self):
+        token = self.peek()
+        if token[0] is None:
+            raise CapError(f"表达式意外结束：{log_excerpt(self.source)!r}")
+        self.position += 1
+        return token
+
+    def expect(self, operator):
+        if self.take() != ("op", operator):
+            raise CapError(f"表达式缺少 {operator!r}：{log_excerpt(self.source)!r}")
+
+    def binary(self, level):
+        if level == len(JS_BINARY_LEVELS):
+            return self.unary()
+        value = self.binary(level + 1)
+        while self.peek()[0] == "op" and self.peek()[1] in JS_BINARY_LEVELS[level]:
+            operator = self.take()[1]
+            value = JS_OPERATORS[operator](value, self.binary(level + 1))
+        return value
+
+    def unary(self):
+        if self.peek() == ("op", "~"):
+            self.take()
+            return ~to_int32(self.unary())
+        return self.primary()
+
+    def primary(self):
+        kind, value = self.take()
+        if kind == "number":
+            return value
+        if kind == "op" and value == "(":
+            result = self.binary(0)
+            self.expect(")")
+            return result
+        if kind == "name" and self.peek() == ("op", "("):
+            self.take()
+            args = []
+            while self.peek() != ("op", ")"):
+                args.append(self.binary(0))
+                if self.peek() == ("op", ","):
+                    self.take()
+            self.take()
+            if value not in self.functions or len(args) != 3:
+                raise CapError(f"未知函数调用：{value}({len(args)})")
+            return self.functions[value](*args)
+        if kind == "name" and value in self.variables:
+            return self.variables[value]
+        raise CapError(f"表达式无法解析：{log_excerpt(self.source)!r}")
+
+
+def cs_mix(a, b, c):
+    return (to_int32(b) ^ to_int32(a)) | (to_int32(c) ^ to_int32(b))
+
+
+def gm_dom_compute(*values):
+    total = 0
+    for value in values:
+        for _ in range(8):
+            if to_int32(value) & 1 == 0:
+                total += value
+            value = to_int32(value) >> 1
+    return js_mod(total, 256)
+
+
+def eval_instr_state(script):
+    initial = INSTR_VARS.search(script)
+    cs_name = INSTR_CS_FN.search(script)
+    gm_name = INSTR_GM_FN.search(script)
+    if not initial or not cs_name or not gm_name:
+        raise CapError("instrumentation 脚本结构无法识别：缺少 state 初值或运算函数")
+
+    names = initial.group(1, 3, 5, 7)
+    variables = {name: int(value) for name, value in zip(names, initial.group(2, 4, 6, 8))}
+    start = re.search(rf"\b{re.escape(names[0])}\s*=\s*{re.escape(names[0])}\s*\^", script)
+    finals = [match for match in INSTR_FINAL.finditer(script) if match.group(1) in variables]
+    if not start or {match.group(1) for match in finals} != set(names):
+        raise CapError("instrumentation 脚本结构无法识别：缺少 state 计算块")
+    end = max(match.end() for match in finals)
+    if end <= start.start():
+        raise CapError("instrumentation 脚本结构无法识别：state 计算块顺序异常")
+
+    functions = {cs_name.group(1): cs_mix, gm_name.group(1): gm_dom_compute}
+    block = INSTR_TERNARY.sub(r"\1", script[start.start():end])
+    for statement in filter(None, (item.strip() for item in block.split(";"))):
+        name, separator, expression = statement.partition("=")
+        name = name.strip()
+        if not separator or not JS_IDENTIFIER.fullmatch(name):
+            raise CapError(f"instrumentation 语句无法识别：{log_excerpt(statement)!r}")
+        variables[name] = JsExpression(expression, variables, functions).evaluate()
+    return {name: variables[name] for name in names}
+
+
+def chrome_brands(major):
+    grease = (
+        f"Not{GREASE_CHARS[major % len(GREASE_CHARS)]}A"
+        f"{GREASE_CHARS[(major + 1) % len(GREASE_CHARS)]}Brand/"
+        f"{GREASE_VERSIONS[major % len(GREASE_VERSIONS)]}"
+    )
+    brands = [None] * 3
+    order = GREASE_ORDERS[major % len(GREASE_ORDERS)]
+    brands[order[0]] = grease
+    brands[order[1]] = f"Chromium/{major}"
+    brands[order[2]] = f"Google Chrome/{major}"
+    return brands
+
+
+def cap_fingerprint(user_agent):
+    major = int(re.search(r"Chrome/(\d+)", user_agent).group(1))
+    return {
+        "webdriver": False,
+        "pdfViewerEnabled": True,
+        "tamper": {
+            "getParameterWebGL": True,
+            "toDataURL": True,
+            "getImageData": True,
+            "permissionsQuery": True,
+            "fnToString": True,
+        },
+        "uaDataPresent": True,
+        "outerWH": [2560, 1410],
+        "isExtended": True,
+        "productSub": "20030107",
+        "screen": {"width": 2560, "height": 1440},
+        "oscpu": "__undefined",
+        "engine": {"hasMozInnerScreenX": False, "hasChrome": True},
+        "fontWidths": list(CAP_FONT_WIDTHS),
+        "plugins": {"length": 5},
+        "uaData": {"mobile": False, "brands": chrome_brands(major)},
+        "ua": user_agent,
+        "deviceMemory": 32,
+    }
+
+
+def build_instr(encoded):
+    try:
+        script = zlib.decompressobj(-15).decompress(base64.b64decode(encoded)).decode()
+    except (ValueError, zlib.error) as error:
+        raise CapError(f"instrumentation 脚本解码失败：error={error!r}") from error
+    nonce = INSTR_NONCE.search(script)
+    if not nonce:
+        raise CapError("instrumentation 脚本缺少 nonce")
+    return {
+        "i": nonce.group(1),
+        "state": eval_instr_state(script),
+        "p": cap_fingerprint(SB_USER_AGENT),
+        "ts": int(time.time() * 1000),
+    }
+
+
+def cap_gen(seed, length):
+    value = 2166136261
+    for char in seed:
+        value = to_int32(value) ^ ord(char)
+        value += sum(to_int32(value << shift) for shift in (1, 4, 7, 8, 24))
+    state = value & 0xFFFFFFFF
+    output = ""
+    while len(output) < length:
+        state ^= (state << 13) & 0xFFFFFFFF
+        state ^= state >> 17
+        state ^= (state << 5) & 0xFFFFFFFF
+        output += f"{state:08x}"
+    return output[:length]
+
+
+def solve_pow(salt, target):
+    full, remainder = divmod(4 * len(target), 8)
+    target_bytes = bytes.fromhex(target + "0" * (len(target) % 2))
+    prefix = target_bytes[:full]
+    mask = (0xFF << (8 - remainder)) & 0xFF
+    base = hashlib.sha256(salt.encode())
+    for nonce in itertools.count():
+        digest = base.copy()
+        digest.update(str(nonce).encode())
+        value = digest.digest()
+        if value[:full] == prefix and (
+            not remainder or (value[full] ^ target_bytes[full]) & mask == 0
+        ):
+            return nonce
+
+
+def solve_cap_pow(token, count, salt_length, difficulty):
+    return [
+        solve_pow(cap_gen(f"{token}{index}", salt_length), cap_gen(f"{token}{index}d", difficulty))
+        for index in range(1, count + 1)
+    ]
+
+
+def cap_request(url, referer, payload=None):
+    headers = {
+        "Accept": "*/*",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "Origin": SB_URL,
+        "Referer": referer,
+        "User-Agent": SB_USER_AGENT,
+    }
+    body = None
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+        body = json.dumps(payload, separators=(",", ":"))
+    response = requests.post(url, data=body, headers=headers, timeout=TIMEOUT)
+    try:
+        data = response.json()
+    except ValueError:
+        data = None
+    if not isinstance(data, dict):
+        raise CapError(
+            f"响应解析失败：url={url!r} status={response.status_code} "
+            f"body={log_excerpt(response.text, 200)!r}"
+        )
+    return data
+
+
+def solve_captcha(endpoint, referer):
+    challenge = cap_request(f"{endpoint}challenge", referer)
+    if challenge.get("error"):
+        raise CapError(f"取题失败：error={challenge['error']!r}")
+    if challenge.get("format") == 2 or challenge.get("challenges"):
+        raise CapError(f"验证协议已升级，脚本暂不支持：format={challenge.get('format')!r}")
+
+    spec = challenge.get("challenge")
+    token = challenge.get("token")
+    if (
+        not isinstance(spec, dict)
+        or not isinstance(token, str)
+        or not token
+        or not all(isinstance(spec.get(key), int) and spec[key] > 0 for key in "csd")
+    ):
+        raise CapError(f"题目格式异常：keys={sorted(challenge)!r} challenge={spec!r}")
+
+    payload = {
+        "token": token,
+        "solutions": solve_cap_pow(token, spec["c"], spec["s"], spec["d"]),
+    }
+    if challenge.get("instrumentation"):
+        payload["instr"] = build_instr(challenge["instrumentation"])
+
+    result = cap_request(f"{endpoint}redeem", referer, payload)
+    if not result.get("success") or not result.get("token"):
+        raise CapError(f"redeem 未通过：response={log_excerpt(json.dumps(result, ensure_ascii=False), 300)!r}")
+    return result["token"]
+
+
+def extract_site_error(html):
+    if "出错了" not in html:
+        return ""
+    text = re.sub(r"(?is)<(script|style|title|noscript)\b[^>]*>.*?</\1>", " ", html)
+    text = normalize_text(re.sub(r"<[^>]*>", " ", text))
+    _, _, message = text.partition("出错了")
+    return log_excerpt(message.split("回到首页", 1)[0], 120)
+
+
 def sb_signin(cookie):
     """执行烧饼论坛签到。"""
     if not cookie:
@@ -348,6 +696,12 @@ def sb_signin(cookie):
         return failure(
             "配置异常，签到未执行",
             f"配置异常：Cookie 缺少必要字段：{', '.join(missing)}",
+        )
+
+    if not re.search(r"Chrome/\d+", SB_USER_AGENT):
+        return failure(
+            "配置异常，签到未执行",
+            f"配置异常：SB_USER_AGENT 需为 Chrome UA：{SB_USER_AGENT!r}",
         )
 
     session = build_session(cookie)
@@ -383,10 +737,25 @@ def sb_signin(cookie):
             )
         print("[INFO] 找到签到表单和 CSRF token")
 
+        form = {"_csrf": page.csrf_token, "message": ""}
+        if page.cap_endpoint:
+            endpoint = urljoin(signin_url, page.cap_endpoint).rstrip("/") + "/"
+            started = time.monotonic()
+            try:
+                form[page.cap_field] = solve_captcha(endpoint, signin_url)
+            except CapError as error:
+                return failure(
+                    "人机验证失败，签到未执行",
+                    f"人机验证失败：endpoint={endpoint!r} {error}",
+                )
+            print(f"[INFO] 人机验证通过，耗时 {time.monotonic() - started:.1f} 秒")
+        else:
+            print("[INFO] 签到页面未要求人机验证")
+
         wait_random_interval(SUBMIT_DELAY, "提交签到前")
         response = session.post(
             signin_url,
-            data={"_csrf": page.csrf_token},
+            data=form,
             headers={"Origin": SB_URL, "Referer": signin_url},
             timeout=TIMEOUT,
         )
