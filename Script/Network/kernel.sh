@@ -89,7 +89,7 @@ render_config() {
     tcp_mem="$(tcp_mem_value)" || fail '无法读取内存容量'
     cat > "$1" << 'EOF' || fail '无法生成内核参数配置'
 # Managed by Provider kernel.sh
-net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_slow_start_after_idle = 1
 net.ipv4.tcp_notsent_lowat = 131072
 net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_fastopen = 0
