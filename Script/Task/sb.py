@@ -47,6 +47,7 @@ CAP_FONT_WIDTHS = (
     1224.94, 1153.59, 1083.7, 1200.87, 1156.96, 1080.18, 1224.94, 1224.94, 1198.23,
     1224.94, 1224.94, 1224.94, 1203.86, 1224.94, 1224.94, 1224.94, 1224.94,
 )
+CAP_GL_RENDERER = "ANGLE (Apple, ANGLE Metal Renderer: Apple M2 Pro, Unspecified Version)"
 GREASE_CHARS = " (:-./);=?_"
 GREASE_VERSIONS = ("8", "99", "24")
 GREASE_ORDERS = ((0, 1, 2), (0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0))
@@ -54,7 +55,12 @@ INSTR_NONCE = re.compile(r'nonce:\s*"([0-9a-fA-F]+)"')
 INSTR_VARS = re.compile(r"var (\w+)=(-?\d+);var (\w+)=(-?\d+);var (\w+)=(-?\d+);var (\w+)=(-?\d+);")
 INSTR_CS_FN = re.compile(r"function (\w+)\(a,b,c\)\{function F\(d\)\{this\.v=function\(\)\{return this\.k\^d;")
 INSTR_GM_FN = re.compile(r"function (\w+)\(x,y,z\)\{var d=document\.createElement\('div'\)")
-INSTR_FINAL = re.compile(r"(\w+)\s*=\s*\(\(\s*\1\s*\^\s*\d+\s*\)\s*&\s*0x7FFFFFFF\s*\)[^;]*;")
+INSTR_STATE_END = re.compile(r'var (\w+)=\{\};\1\["')
+INSTR_DATA = re.compile(r"\{(?=(?:[^{}]*,)?v:1[,}])(?=(?:[^{}]*,)?el:Math\.max\()[^{}]*\}")
+INSTR_BIND = re.compile(r"(\w+)=(\w+)\(\w+,\((-?\d+)\^\2\(([^()]+),(-?\d+)\)\)>>>0\)")
+INSTR_FOLD = re.compile(
+    r'\w+\["(\w+)"\]=\(\(\w+\["\1"\]\^(-?\d+)((?:\^\w+)*)\)&0x7FFFFFFF\)%900000\+100000;'
+)
 INSTR_TERNARY = re.compile(r"navigator\.userAgent\s*\?\s*(\d+)\s*:\s*\d+")
 JS_TOKEN = re.compile(r"\s*(?:(0[xX][0-9a-fA-F]+|\d+)|([A-Za-z_$][\w$]*)|(>>>|<<|>>|[~^&|+%(),]))")
 JS_IDENTIFIER = re.compile(r"[A-Za-z_$][\w$]*")
@@ -506,15 +512,12 @@ def eval_instr_state(script):
     names = initial.group(1, 3, 5, 7)
     variables = {name: int(value) for name, value in zip(names, initial.group(2, 4, 6, 8))}
     start = re.search(rf"\b{re.escape(names[0])}\s*=\s*{re.escape(names[0])}\s*\^", script)
-    finals = [match for match in INSTR_FINAL.finditer(script) if match.group(1) in variables]
-    if not start or {match.group(1) for match in finals} != set(names):
+    end = start and INSTR_STATE_END.search(script, start.end())
+    if not end:
         raise CapError("instrumentation 脚本结构无法识别：缺少 state 计算块")
-    end = max(match.end() for match in finals)
-    if end <= start.start():
-        raise CapError("instrumentation 脚本结构无法识别：state 计算块顺序异常")
 
     functions = {cs_name.group(1): cs_mix, gm_name.group(1): gm_dom_compute}
-    block = INSTR_TERNARY.sub(r"\1", script[start.start():end])
+    block = INSTR_TERNARY.sub(r"\1", script[start.start():end.start()])
     for statement in filter(None, (item.strip() for item in block.split(";"))):
         name, separator, expression = statement.partition("=")
         name = name.strip()
@@ -538,8 +541,24 @@ def chrome_brands(major):
     return brands
 
 
+def cap_navigator(user_agent, brands):
+    """主线程与 Worker 中一致的 navigator 摘要。"""
+    return {
+        "ua": user_agent,
+        "platform": "MacIntel",
+        "languages": "zh-CN,zh,en",
+        "hc": 12,
+        "tz": "Asia/Shanghai",
+        "brands": ",".join(brands),
+        "brave": False,
+        "gl": CAP_GL_RENDERER,
+    }
+
+
 def cap_fingerprint(user_agent):
+    """与默认 UA 一致的 macOS（Apple Silicon）Chrome 指纹。"""
     major = int(re.search(r"Chrome/(\d+)", user_agent).group(1))
+    brands = chrome_brands(major)
     return {
         "webdriver": False,
         "pdfViewerEnabled": True,
@@ -558,11 +577,99 @@ def cap_fingerprint(user_agent):
         "oscpu": "__undefined",
         "engine": {"hasMozInnerScreenX": False, "hasChrome": True},
         "fontWidths": list(CAP_FONT_WIDTHS),
+        "fm": CAP_FONT_WIDTHS[0],
         "plugins": {"length": 5},
-        "uaData": {"mobile": False, "brands": chrome_brands(major)},
+        "uaData": {"mobile": False, "brands": brands},
         "ua": user_agent,
-        "deviceMemory": 32,
+        "deviceMemory": 8,
+        "maxTouchPoints": 0,
+        "juggler": None,
+        "evalLen": 33,
+        "langs": [3, True],
+        "activeText": ["rgb(255, 0, 0)", False],
+        "stealth": {"iframe": False, "runtime": False},
+        "lies": [],
+        "cv": [1, 1806],
+        "na": 127,
+        "ig": [],
+        "sd": [],
+        "no": [],
+        "glsh": {"r": CAP_GL_RENDERER, "t": "metal"},
+        "em": [156.63, 75],
+        "mainNav": cap_navigator(user_agent, brands),
+        "workerNav": cap_navigator(user_agent, brands),
+        "hev": {
+            "pv": "15.6.1",
+            "ar": "arm",
+            "fv": f"{major}.0.0.0",
+            "bi": "64",
+            "fl": ",".join(brand.rsplit("/", 1)[0] for brand in brands),
+        },
+        "gpu": {"v": "apple", "a": "metal-3", "f": False, "n": False},
+        "voices": [176, 19],
     }
+
+
+def cap_bound_data(user_agent):
+    """instrumentation 绑定数据，字段与 capjs-core 的 emit 结构一致。"""
+    probe = cap_fingerprint(user_agent)
+    nav = probe["mainNav"]
+    host_nav = {key: nav[key] for key in ("ua", "platform", "languages", "hc", "brands")}
+    return {
+        "v": 1,
+        "el": random.randint(400, 1500),
+        "p": probe,
+        "vp": [2560, 1323],
+        "hp": {
+            "nav": {**host_nav, "webdriver": False},
+            "doc": False,
+            "cdp": False,
+            "ha": ["lang"],
+        },
+        "ag": [],
+        "ce": 0,
+        "ia": None,
+        "bh": None,
+    }
+
+
+def cap_hash(text, seed):
+    """capjs-core 的 $H：带种子的 FNV 变体，按 UTF-16 码元计算。"""
+    value = seed & 0xFFFFFFFF
+    for unit in memoryview(text.encode("utf-16-le")).cast("H"):
+        value ^= unit
+        value = (
+            value + (value << 1) + (value << 4) + (value << 7) + (value << 8) + (value << 24)
+        ) & 0xFFFFFFFF
+    return value
+
+
+def bind_instr_state(script, state, serialized):
+    """复现 emit 中 state 与绑定数据哈希的折叠运算。"""
+    names = list(state)
+    mix = ",".join(str(state[name]) for name in names)
+    hashes = {}
+    for match in INSTR_BIND.finditer(script):
+        if re.findall(r'\["(\w+)"\]', match.group(4)) != names:
+            raise CapError("instrumentation 绑定结构无法识别：哈希输入与 state 不一致")
+        seed = int(match.group(3)) ^ cap_hash(mix, int(match.group(5)))
+        hashes[match.group(1)] = cap_hash(serialized, seed)
+
+    folds = {match.group(1): match for match in INSTR_FOLD.finditer(script)}
+    if set(folds) != set(names) or len(hashes) != 2:
+        raise CapError(
+            f"instrumentation 绑定结构无法识别：fold={len(folds)} hash={len(hashes)}"
+        )
+
+    result = {}
+    for name in names:
+        value = state[name] ^ int(folds[name].group(2))
+        for ref in filter(None, folds[name].group(3).split("^")):
+            if ref not in hashes:
+                raise CapError(f"instrumentation 绑定结构无法识别：未知哈希变量 {ref}")
+            value ^= hashes[ref]
+        result[name] = (value & 0x7FFFFFFF) % 900000 + 100000
+    return result
 
 
 def build_instr(encoded):
@@ -573,11 +680,22 @@ def build_instr(encoded):
     nonce = INSTR_NONCE.search(script)
     if not nonce:
         raise CapError("instrumentation 脚本缺少 nonce")
+    collected = INSTR_DATA.search(script)
+    if not collected:
+        raise CapError("instrumentation 脚本结构无法识别：缺少绑定数据结构")
+    if not {"ia:null", "bh:null"} <= set(collected.group(0)[1:-1].split(",")):
+        raise CapError("验证要求交互/行为采集，脚本暂不支持")
+
+    serialized = json.dumps(
+        cap_bound_data(SB_USER_AGENT),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
     return {
         "i": nonce.group(1),
-        "state": eval_instr_state(script),
-        "p": cap_fingerprint(SB_USER_AGENT),
-        "ts": int(time.time() * 1000),
+        "state": bind_instr_state(script, eval_instr_state(script), serialized),
+        "d": serialized,
     }
 
 
