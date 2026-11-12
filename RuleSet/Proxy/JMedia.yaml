@@ -1,8 +1,6 @@
 payload:
   # >Movie
   - '+.mini4k.com'
-  # >BBS
-  - '+.v2ex.com'
   # >Comic
   - '+.18comic.vip'
   - '+.18comic.ink'
@@ -14,4 +12,3 @@ payload:
   - '+.jinfan-keji.com'
   - '+.mgstage.com'
   - '+.pornrips.to'
-
