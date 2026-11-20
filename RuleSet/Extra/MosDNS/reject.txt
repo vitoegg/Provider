@@ -435,17 +435,16 @@ full:admarketing.yahoo.net
 full:admobile.top
 full:adreq.vivo.com.cn
 full:ads-api-o.api.leiniao.com
-full:ads-api.tiktok.com
 full:ads-api.twitter.com
 full:ads-img-al.xhscdn.com
+full:ads-img-bak.xhscdn.com
 full:ads-img-qc.xhscdn.com
-full:ads-jp.tiktok.com
 full:ads-marketing-vivofs.vivo.com.cn
 full:ads-sdk-api.ranfenghd.com
-full:ads-sg.tiktok.com
 full:ads-shopping.shouqianba.com
 full:ads-video-al.xhscdn.com
 full:ads-video-qc.xhscdn.com
+full:ads-vp5.xhscdn.com
 full:ads.95516.com
 full:ads.adfunlink.com
 full:ads.auctions.yahoo.com
@@ -462,7 +461,6 @@ full:ads.pubmatic.com
 full:ads.raidrive.com
 full:ads.servebom.com
 full:ads.service.kugou.com
-full:ads.tiktok.com
 full:ads.v3mh.com
 full:ads.youtube.com
 full:ads.zhinengxiyifang.cn
@@ -494,16 +492,13 @@ full:adsmartget.datads.cn
 full:adsmind.gdtimg.com
 full:adsmind.ugdtimg.com
 full:adsp.xunlei.com
-full:adspecs.yahoo.com
 full:adstat.izuiyou.com
 full:adstats.tencentmusic.com
 full:adstore-1252524079.file.myqcloud.com
 full:adstore-index-1252524079.file.myqcloud.com
 full:adstrategy.biz.weibo.com
 full:adstudio-assets.scdn.co
-full:adstudio.spotify.com
 full:adtago.s3.amazonaws.com
-full:adtech.yahooinc.com
 full:adtrack.quark.cn
 full:adtracker.adfunlink.com
 full:adtracker.medproad.com
@@ -511,12 +506,6 @@ full:adui.tg.meitu.com
 full:adv-api.shenshiads.com
 full:adv.sec.intl.miui.com
 full:adv.sec.miui.com
-full:advertising-api-eu.amazon.com
-full:advertising-api-fe.amazon.com
-full:advertising-api.amazon.com
-full:advertising.apple.com
-full:advertising.yahoo.com
-full:advertising.yandex.ru
 full:advice-ads.s3.amazonaws.com
 full:adview.cn
 full:adx-ad.smart-tv.cn
@@ -532,6 +521,7 @@ full:adx-saas.advlion.com
 full:adx-strategy-api-cn.statisticslinks.com
 full:adx.ads.heytapmobi.com
 full:adx.ads.oppomobile.com
+full:adx.anythinktech.com
 full:adx.appsdk.com.cn
 full:adx.sogaha.cn
 full:adx.tuia.cn
@@ -595,6 +585,7 @@ full:api.statsig.com
 full:api.touch-moblie.com
 full:api5-normal-quic-lf.ixigua.com
 full:apiyd.my91app.com
+full:apmplus.volces.com
 full:app-measurement.com
 full:app-site-association.cdn-apple.com
 full:appcfg.v.qq.com
@@ -621,7 +612,7 @@ full:beacons.gvt2.com
 full:bes-mtj.baidu.com
 full:bgg.baidu.com
 full:bianxian.com
-full:bingads.microsoft.com
+full:bid.shanghailingye.cn
 full:biz.weibo.com
 full:bj-td-menta-01-callback.advlion.com
 full:bj.ad.track.66mobi.com
@@ -663,10 +654,14 @@ full:click.googleanalytics.com
 full:click.liftoff.io
 full:click.oneplus.cn
 full:click4.chinaliftoff.io
+full:client-upload.cn-shanghai.log.aliyuncs.com
 full:clog.miguvideo.com
 full:cloooud.com
 full:cm.bilibili.com
+full:cn-api-sec.anythinktech.com
 full:cn-api.anythinktech.com
+full:cn-da.anythinktech.com
+full:cn-tk.anythinktech.com
 full:cnlogs.umeng.com
 full:cnlogs.umengcloud.com
 full:cnzz.com
@@ -680,10 +675,10 @@ full:cpc-service-square.aiclk.com
 full:cpro.baidustatic.com
 full:crash2.zhihu.com
 full:crashlyticsreports-pa.googleapis.com
-full:csjplatform.com
 full:d.applovin.com
 full:d.applvn.com
 full:da.anythinktech.com
+full:da.statisticslinks.com
 full:data-sdk-uuid-log.d.meituan.net
 full:data.ads.oppomobile.com
 full:data.chsmarttv.com
@@ -703,6 +698,7 @@ full:downloadxml.changhong.upgrade2.huan.tv
 full:dsp-x.jd.com
 full:dsp.fcbox.com
 full:dsplog-adnet.vivo.com.cn
+full:du-app.cn-hangzhou.log.aliyuncs.com
 full:dualstack-logs.amap.com
 full:dxp.baidu.com
 full:dyp2p-ali.douyucdn.cn
@@ -712,6 +708,8 @@ full:edge.ads.twitch.tv
 full:ef-dongfeng.tanx.com
 full:engine.dcad01.com
 full:entry.baidu.com
+full:errlogos.umeng.com
+full:errnewlogos.umeng.com
 full:event.tradplusad.com
 full:events-drcn.op.dbankcloud.cn
 full:events.mapbox.com
@@ -724,6 +722,7 @@ full:feed-image.baidu.com
 full:file.daihuo.qq.com
 full:firebaselogging-pa.googleapis.com
 full:flurry.com
+full:fp-it.fengkongcloud.com
 full:frontend-perf-service.e.kuaishou.com
 full:fxgate.baidu.com
 full:g-adnet.hiaiabc.com
@@ -830,6 +829,7 @@ full:kwpush.kuwo.cn
 full:l6.fancyapi.com
 full:launcher.smart-tv.cn
 full:launcherimg.smart-tv.cn
+full:lf-event-manager.oceanengine.com
 full:lftxali.fancyapi.com
 full:lh3.googleadsserving.cn
 full:litchiads.com
@@ -844,6 +844,7 @@ full:lm10111.jtrincc.cn
 full:loading-cmp.hismarttv.com
 full:log-api-mn.huxiu.com
 full:log-api.huxiu.com
+full:log-auth.zztfly.com
 full:log-report.com
 full:log-sdk.gifshow.com
 full:log-sdk.ksapisrv.com
@@ -1060,6 +1061,8 @@ full:sentry.music.163.com
 full:service.changhong.upgrade2.huan.tv
 full:service.vmos.cn
 full:sf16-static.i18n-pglstatp.com
+full:shihuo-new.log.shihuocdn.cn
+full:shihuo.log.shihuocdn.cn
 full:shouji.sogou.com
 full:sigmob.com
 full:skdisplay.jd.com
@@ -1072,6 +1075,7 @@ full:sms.ads.oppomobile.com
 full:sngmta.qq.com
 full:snowflake.qq.com
 full:spider-tracker.xiaohongshu.com
+full:ssapi.anythinktech.com
 full:ssp.cloooud.com
 full:staging-notify.sec.miui.com
 full:stat.dongqiudi.com
@@ -1109,6 +1113,7 @@ full:tencent-dtv.m.cn.miaozhen.com
 full:tj.b.qq.com
 full:tj.video.qq.com
 full:tk.anythinktech.com
+full:tk.statisticslinks.com
 full:tmead.y.qq.com
 full:tmeadcomm.y.qq.com
 full:tmfmazu-wangka.m.qq.com
@@ -1163,8 +1168,7 @@ full:ulogs.umengcloud.com
 full:umini.shujupie.com
 full:union-mlog.bigda.com
 full:union-record.oss-cn-zhangjiakou.aliyuncs.com
-full:union.baidu.cn
-full:union.baidu.com
+full:upc.zztfly.com
 full:update.avlyun.sec.miui.com
 full:update.lejiao.tv
 full:update0.aiclk.com
