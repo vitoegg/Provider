@@ -3,10 +3,12 @@ domain:ad2.ettoday.net
 domain:adfstat.yandex.ru
 domain:ads.music.126.net
 domain:adv.fjtv.net
+domain:ahdohpiechei.com
 domain:airpr.com
 domain:analytics.google.com
 domain:bugly.qq.com
 domain:bugsnag.com
+domain:bvmlt.top
 domain:cctv.adsunion.com
 domain:cj.qidian.com
 domain:cpatrk.net
@@ -17,7 +19,6 @@ domain:dl.zuimeitianqi.com
 domain:easytomessage.com
 domain:errlog.umeng.com
 domain:errnewlog.umeng.com
-domain:edge.mountaintoys.cn
 domain:f-log-extension.grammarly.io
 domain:fundingchoicesmessages.google.com
 domain:getpush.com
@@ -44,9 +45,13 @@ domain:mime.baidu.com
 domain:mmgame.qpic.cn
 domain:mobileapptracking.com
 domain:mon.zijieapi.com
+domain:mountaintoys.cn
 domain:mparticle.com
 domain:mcdn.bilivideo.cn
+domain:mcdn.bilivideo.com
+domain:mcdn.bilivideo.net
 domain:nexac.com
+domain:nexusedgeio.com
 domain:nr-data.net
 domain:pardot.com
 domain:parrable.com
@@ -73,6 +78,7 @@ domain:socialbakers.com
 domain:sociaplus.com
 domain:stathat.com
 domain:stats-locations.com
+domain:szbdyd.com
 domain:t7z.cupid.iqiyi.com
 domain:tagcommander.com
 domain:tailtarget.com
@@ -114,5 +120,10 @@ full:track.tenjin.io
 full:track.tiara.daum.net
 full:track.tiara.kakao.com
 full:tracklog.58.com
+full:upos-sz-302kodo.bilivideo.com
+full:upos-sz-302ppio.bilivideo.com
+full:upos-sz-db302xl.bilivideo.com
+full:upos-sz-mirror14b.bilivideo.com
+full:upos-sz-pcdnyf302.bilivideo.com
 full:wc.51.la
 full:zgsdk.zhugeio.com
