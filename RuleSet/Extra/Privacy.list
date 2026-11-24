@@ -1,5 +1,5 @@
-# 更新时间: 2026-11-19 15:31:31
-# 规则条数: 1030
+# 更新时间: 2026-11-24 09:23:46
+# 规则条数: 1040
 # 规则来源:
 # - https://github.com/TG-Twilight/AWAvenue-Ads-Rule
 # - https://github.com/vitoegg/Provider
@@ -195,6 +195,7 @@
 .aem.dentsuchina.cn
 .afs.googlesyndication.com
 .agn.aty.sohu.com
+.ahdohpiechei.com
 .airpr.com
 .aiseet.aa.atianqi.com
 .ali-ad.a.yximgs.com
@@ -298,6 +299,7 @@
 .bugly.qq.com
 .bugsnag.com
 .business-api.tiktok.com
+.bvmlt.top
 .c.bidtoolads.com
 .c.etoolads.cn
 .c.evidon.com
@@ -387,7 +389,6 @@
 .easytomessage.com
 .eclick.baidu.com
 .edge.ads.twitch.tv
-.edge.mountaintoys.cn
 .ef-dongfeng.tanx.com
 .engine.dcad01.com
 .entry.baidu.com
@@ -602,6 +603,8 @@
 .mazu.m.qq.com
 .mbdlog.iqiyi.com
 .mcdn.bilivideo.cn
+.mcdn.bilivideo.com
+.mcdn.bilivideo.net
 .medproad.com
 .metrics.icloud.com
 .metrics.mzstatic.com
@@ -635,6 +638,7 @@
 .monitor.uu.qq.com
 .monsetting.toutiao.com
 .mores.toponad.com
+.mountaintoys.cn
 .mparticle.com
 .mpcfg.fancydsp.com
 .ms.applvn.com
@@ -648,6 +652,7 @@
 .newvoice.chiq5.smart-tv.cn
 .nex.163.com
 .nexac.com
+.nexusedgeio.com
 .nmetrics.samsung.com
 .notes-analytics-events.apple.com
 .notify.sec.miui.com
@@ -1032,5 +1037,10 @@ track.tenjin.io
 track.tiara.daum.net
 track.tiara.kakao.com
 tracklog.58.com
+upos-sz-302kodo.bilivideo.com
+upos-sz-302ppio.bilivideo.com
+upos-sz-db302xl.bilivideo.com
+upos-sz-mirror14b.bilivideo.com
+upos-sz-pcdnyf302.bilivideo.com
 wc.51.la
 zgsdk.zhugeio.com
