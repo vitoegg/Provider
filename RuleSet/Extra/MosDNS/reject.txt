@@ -68,6 +68,7 @@ domain:adx.apiok.net
 domain:adx.xiaodutv.com
 domain:afd.baidu.com
 domain:ag.qq.com
+domain:ahdohpiechei.com
 domain:airpr.com
 domain:alog-default.umeng.com
 domain:alog.umeng.com
@@ -103,6 +104,7 @@ domain:browser.events.data.msn.cn
 domain:browser.events.data.msn.com
 domain:bugly.qq.com
 domain:bugsnag.com
+domain:bvmlt.top
 domain:c.medialytics.com
 domain:c.vserv.mobi
 domain:cc-api-data.adobe.io
@@ -152,7 +154,6 @@ domain:download.adsage.com
 domain:e.duomeng.org
 domain:e.qq.com
 domain:easytomessage.com
-domain:edge.mountaintoys.cn
 domain:errlog.umeng.com
 domain:errnewlog.umeng.com
 domain:exp.sug.browser.miui.com
@@ -230,6 +231,8 @@ domain:loggw.alipay.com.cn
 domain:marketo.com
 domain:mars.jd.com
 domain:mcdn.bilivideo.cn
+domain:mcdn.bilivideo.com
+domain:mcdn.bilivideo.net
 domain:mdt.qq.com
 domain:media.mobpartner.mobi
 domain:metok.sys.miui.com
@@ -239,6 +242,7 @@ domain:miui-fxcse.avlyun.com
 domain:mmgame.qpic.cn
 domain:mobileapptracking.com
 domain:mon.zijieapi.com
+domain:mountaintoys.cn
 domain:mparticle.com
 domain:msg.71.am
 domain:msg.umengcloud.com
@@ -251,6 +255,7 @@ domain:mws.adsage.com
 domain:my.adsmogo.com
 domain:n.sigmob.cn
 domain:nexac.com
+domain:nexusedgeio.com
 domain:now-dns.net
 domain:now-dns.org
 domain:nr-data.net
@@ -300,6 +305,7 @@ domain:stathat.com
 domain:static.dns.qiyipic.iqiyi.com
 domain:stats-locations.com
 domain:sugar.zhihu.com
+domain:szbdyd.com
 domain:t7z.cupid.iqiyi.com
 domain:tagcommander.com
 domain:tailtarget.com
@@ -1093,7 +1099,6 @@ full:supply.inmobicdn.net
 full:sv-video.play.aiseet.atianqi.com
 full:syh-imp.cdnjtzy.com
 full:syh.zybang.com
-full:szbdyd.com
 full:t-adx.52qumao.com
 full:t-dsp.pinduoduo.com
 full:t.applovin.com
@@ -1173,6 +1178,11 @@ full:update.avlyun.sec.miui.com
 full:update.lejiao.tv
 full:update0.aiclk.com
 full:upgrade-update.hismarttv.com
+full:upos-sz-302kodo.bilivideo.com
+full:upos-sz-302ppio.bilivideo.com
+full:upos-sz-db302xl.bilivideo.com
+full:upos-sz-mirror14b.bilivideo.com
+full:upos-sz-pcdnyf302.bilivideo.com
 full:uranus.jd.com
 full:us.l.qq.com
 full:usr-api.aiclk.com
