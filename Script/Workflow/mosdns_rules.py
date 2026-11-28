@@ -88,37 +88,10 @@ def optimize_domains(rules: Iterable[DomainRule]) -> List[DomainRule]:
     )
 
 
-def exclude_domains(
-    rules: Iterable[DomainRule],
-    excludes: Iterable[DomainRule]
-) -> List[DomainRule]:
-    excludes = list(excludes)
-    exclude_suffixes = {domain for kind, domain in excludes if kind == DOMAIN}
-    exclude_exacts = {domain for kind, domain in excludes if kind == FULL}
-
-    return [
-        (kind, domain)
-        for kind, domain in rules
-        if not covered_by(domain, exclude_suffixes)
-        and not (kind == FULL and domain in exclude_exacts)
-    ]
-
-
 def optimize_networks(networks: Iterable) -> List:
-    kept = []
-    max_end = {4: -1, 6: -1}
-
-    for network in sorted(
-        set(networks),
-        key=lambda item: (item.version, int(item.network_address), item.prefixlen)
-    ):
-        end = int(network.broadcast_address)
-        if end <= max_end[network.version]:
-            continue
-        kept.append(network)
-        max_end[network.version] = end
-
-    return kept
+    v4 = [net for net in networks if net.version == 4]
+    v6 = [net for net in networks if net.version == 6]
+    return list(ipaddress.collapse_addresses(v4)) + list(ipaddress.collapse_addresses(v6))
 
 
 def clean_rule_lines(content: str) -> Iterable[str]:
@@ -446,12 +419,13 @@ def load_config(workspace: Path) -> List[Dict]:
             raise ValueError(f"规则 path 无效或重复: {output_path}")
         if not isinstance(sources, dict) or not sources:
             raise ValueError(f"规则 {rule_id} 的 sources 必须是非空对象")
-        excludes = rule.get("exclude", {})
-        if not isinstance(excludes, dict) or any(
-            FORMAT_FAMILIES.get(rule_format) != DOMAIN_FAMILY for rule_format in excludes
-        ):
-            raise ValueError(f"规则 {rule_id} 的 exclude 必须是域名格式对象")
-        for rule_format, locations in [*sources.items(), *excludes.items()]:
+        role = rule.get("role")
+        if role is not None and role != "route":
+            raise ValueError(f"规则 {rule_id} 的 role 无效: {role}")
+        promote_to = rule.get("promote_subdomains_to")
+        if promote_to is not None and (not isinstance(promote_to, str) or not promote_to):
+            raise ValueError(f"规则 {rule_id} 的 promote_subdomains_to 无效: {promote_to}")
+        for rule_format, locations in sources.items():
             if rule_format not in FORMAT_FAMILIES:
                 raise ValueError(f"规则 {rule_id} 使用了未知格式: {rule_format}")
             if not isinstance(locations, list) or not locations or not all(
@@ -460,24 +434,23 @@ def load_config(workspace: Path) -> List[Dict]:
                 raise ValueError(f"规则 {rule_id} 的 {rule_format} 来源无效")
         seen_ids.add(rule_id)
         seen_paths.add(output_path)
+
+    route_ids = {rule["id"] for rule in rules if rule.get("role") == "route"}
+    for rule in rules:
+        promote_to = rule.get("promote_subdomains_to")
+        if promote_to is not None:
+            if rule.get("role") != "route" or promote_to not in route_ids:
+                raise ValueError(f"规则 {rule['id']} 的 promote_subdomains_to 目标无效: {promote_to}")
     return rules
 
 
 def load_locations(workspace: Path, rules: List[Dict]) -> Dict[str, str]:
-    output_paths = {rule["path"] for rule in rules}
     locations = {
         location
         for rule in rules
         for source_locations in rule["sources"].values()
         for location in source_locations
     }
-    locations.update(
-        location
-        for rule in rules
-        for exclude_locations in rule.get("exclude", {}).values()
-        for location in exclude_locations
-        if location not in output_paths
-    )
     ordered_locations = sorted(locations)
     with ThreadPoolExecutor(max_workers=min(8, len(ordered_locations))) as executor:
         contents = executor.map(
@@ -487,35 +460,110 @@ def load_locations(workspace: Path, rules: List[Dict]) -> Dict[str, str]:
         return dict(zip(ordered_locations, contents))
 
 
-def collect_excludes(
-    rule: Dict,
-    contents: Dict[str, str],
-    generated: Dict[str, List],
-    output_paths: Set[str]
-) -> List[DomainRule]:
-    excludes: List[DomainRule] = []
+def partition_routing_rules(
+    route_rules: List[Dict],
+    parsed_by_id: Dict[str, Tuple[Set[DomainRule], Set[DomainRule]]]
+) -> Dict[str, List[DomainRule]]:
+    rule_order = [rule["id"] for rule in route_rules]
+    order_index = {rule_id: index for index, rule_id in enumerate(rule_order)}
+    group_by_id = {rule["id"]: rule.get("group", rule["id"]) for rule in route_rules}
+    promote_targets = {
+        rule["id"]: rule["promote_subdomains_to"]
+        for rule in route_rules
+        if rule.get("promote_subdomains_to")
+    }
 
-    for rule_format, locations in rule.get("exclude", {}).items():
-        for location in locations:
-            if location in output_paths:
-                if location not in generated:
-                    raise ValueError(f"规则 {rule['id']} 的依赖尚未生成: {location}")
-                excludes.extend(generated[location])
-            else:
-                parsed, _ = parse_source(
-                    rule_format,
-                    contents[location],
-                    location,
-                    strict=not location.startswith(REMOTE_PREFIXES)
-                )
-                excludes.extend(parsed)
+    # Resolve exact rule collisions once: pinned local BaseSet beats remote,
+    # ties follow declaration order matching runtime evaluation priority.
+    winners: Dict[DomainRule, Tuple[bool, int, str]] = {}
+    for rule_id in rule_order:
+        pinned_set, remote_set = parsed_by_id[rule_id]
+        rank = order_index[rule_id]
+        for is_pinned, bucket in ((True, pinned_set), (False, remote_set)):
+            for item in bucket:
+                current = winners.get(item)
+                if current is None:
+                    winners[item] = (is_pinned, rank, rule_id)
+                elif is_pinned and not current[0]:
+                    winners[item] = (True, rank, rule_id)
 
-    return optimize_domains(excludes)
+    owned: Dict[str, Set[DomainRule]] = {rule_id: set() for rule_id in rule_order}
+    pinned_owned: Dict[str, Set[DomainRule]] = {rule_id: set() for rule_id in rule_order}
+    for item, (is_pinned, _, owner_id) in winners.items():
+        owned[owner_id].add(item)
+        if is_pinned:
+            pinned_owned[owner_id].add(item)
+
+    # Collapse internal redundancy per set before cross-set parent resolution.
+    optimized: Dict[str, List[DomainRule]] = {
+        rule_id: optimize_domains(owned[rule_id]) for rule_id in rule_order
+    }
+
+    # Resolve parent-domain shadowing in runtime priority order.
+    # Strict domain: subdomains (or pinned entries) shadowed by a later-promoted
+    # parent are promoted to the configured earlier set instead of dropped.
+    final_by_id: Dict[str, List[DomainRule]] = {rule_id: [] for rule_id in rule_order}
+    suffixes_by_id: Dict[str, Set[str]] = {}
+    promoted_counts: Counter = Counter()
+
+    for rule_id in rule_order:
+        rank = order_index[rule_id]
+        target_id = promote_targets.get(rule_id)
+        target_rank = order_index[target_id] if target_id else -1
+        target_suffixes = suffixes_by_id.get(target_id, set()) if target_id else set()
+
+        kept: List[DomainRule] = []
+        for kind, domain in optimized[rule_id]:
+            shadow_id = None
+            for earlier_id in rule_order[:rank]:
+                if covered_by(domain, suffixes_by_id[earlier_id]):
+                    shadow_id = earlier_id
+                    break
+            if shadow_id is None:
+                kept.append((kind, domain))
+                continue
+
+            is_pinned = (kind, domain) in pinned_owned[rule_id]
+            can_promote = (
+                target_id is not None
+                and order_index[shadow_id] > target_rank
+                and group_by_id[shadow_id] != group_by_id[target_id]
+                and (kind == DOMAIN or is_pinned)
+                and not covered_by(domain, target_suffixes)
+            )
+            if can_promote:
+                final_by_id[target_id].append((kind, domain))
+                if kind == DOMAIN:
+                    suffixes_by_id[target_id].add(domain)
+                promoted_counts[(rule_id, target_id)] += 1
+
+        final_by_id[rule_id] = kept
+        suffixes_by_id[rule_id] = {domain for kind, domain in kept if kind == DOMAIN}
+
+    for (src_id, dst_id), count in sorted(promoted_counts.items()):
+        print(f"  promote {src_id} -> {dst_id}: {count} 条专用子域")
+
+    for rule_id in rule_order:
+        final_by_id[rule_id] = optimize_domains(final_by_id[rule_id])
+
+    # Invariant: no rule in a later routing set may be shadowed by an earlier one.
+    earlier_suffixes: Set[str] = set()
+    earlier_exacts: Set[str] = set()
+    for rule_id in rule_order:
+        for kind, domain in final_by_id[rule_id]:
+            if covered_by(domain, earlier_suffixes) or (kind == FULL and domain in earlier_exacts):
+                raise RuntimeError(f"路由分区校验失败，规则 {rule_id} 存在被遮蔽条目: {kind}:{domain}")
+        earlier_suffixes.update(d for k, d in final_by_id[rule_id] if k == DOMAIN)
+        earlier_exacts.update(d for k, d in final_by_id[rule_id] if k == FULL)
+
+    return final_by_id
 
 
 def build_rulesets(rules: List[Dict], contents: Dict[str, str]) -> Dict[str, List]:
-    output_paths = {rule["path"] for rule in rules}
     generated: Dict[str, List] = {}
+    route_rules: List[Dict] = []
+    route_parsed: Dict[str, Tuple[Set[DomainRule], Set[DomainRule]]] = {}
+    route_source_counts: Dict[str, int] = {}
 
     for rule in rules:
         rule_id = rule["id"]
@@ -524,7 +572,11 @@ def build_rulesets(rules: List[Dict], contents: Dict[str, str]) -> Dict[str, Lis
             raise ValueError(f"规则 {rule_id} 不能混合域名与 IP 来源")
         family = next(iter(families))
 
-        parsed_rules = []
+        pinned_rules: Set[DomainRule] = set()
+        remote_rules: Set[DomainRule] = set()
+        parsed_ip_rules = []
+        source_count = 0
+
         for rule_format, locations in rule["sources"].items():
             for location in locations:
                 source_rules, stats = parse_source(
@@ -532,26 +584,43 @@ def build_rulesets(rules: List[Dict], contents: Dict[str, str]) -> Dict[str, Lis
                     contents[location],
                     f"{rule_id}:{location}"
                 )
-                parsed_rules.extend(source_rules)
+                source_count += len(source_rules)
+                if family == DOMAIN_FAMILY:
+                    if location.startswith(REMOTE_PREFIXES):
+                        remote_rules.update(source_rules)
+                    else:
+                        pinned_rules.update(source_rules)
+                else:
+                    parsed_ip_rules.extend(source_rules)
                 ignored = format_ignored(stats)
                 if ignored:
                     print(f"  {rule_id} <- {location.rsplit('/', 1)[-1]}:{ignored}")
 
-        source_count = len(parsed_rules)
+        if family == DOMAIN_FAMILY and rule.get("role") == "route":
+            route_rules.append(rule)
+            route_parsed[rule_id] = (pinned_rules, remote_rules)
+            route_source_counts[rule_id] = source_count
+            continue
+
         if family == DOMAIN_FAMILY:
-            excludes = collect_excludes(rule, contents, generated, output_paths)
-            if excludes:
-                parsed_rules = exclude_domains(parsed_rules, excludes)
-            final_rules = optimize_domains(parsed_rules)
+            final_rules = optimize_domains(pinned_rules | remote_rules)
         else:
-            if rule.get("exclude"):
-                raise ValueError(f"IP 规则 {rule_id} 不支持 exclude")
-            final_rules = optimize_networks(parsed_rules)
+            final_rules = optimize_networks(parsed_ip_rules)
 
         if not final_rules:
             raise ValueError(f"规则 {rule_id} 的最终产物为空")
         generated[rule["path"]] = final_rules
         print(f"{rule_id}: {source_count} -> {len(final_rules)} 条")
+
+    if route_rules:
+        partitioned = partition_routing_rules(route_rules, route_parsed)
+        for rule in route_rules:
+            rule_id = rule["id"]
+            final_rules = partitioned[rule_id]
+            if not final_rules:
+                raise ValueError(f"规则 {rule_id} 的最终产物为空")
+            generated[rule["path"]] = final_rules
+            print(f"{rule_id}: {route_source_counts[rule_id]} -> {len(final_rules)} 条")
 
     return generated
 

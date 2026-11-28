@@ -4294,6 +4294,7 @@ domain:buddhanet.com.tw
 domain:buddhistchannel.tv
 domain:buddymedia.com
 domain:buffered.com
+domain:bugsnag.com
 domain:bugzilla.org
 domain:buhidoh.net
 domain:buicha.social
@@ -4806,6 +4807,7 @@ domain:cdn-tinkoff.ru
 domain:cdn-vk.net
 domain:cdn-vk.ru
 domain:cdn.angruo.com
+domain:cdn.segment.com
 domain:cdn77.com
 domain:cdn77.org
 domain:cdnblackmyth.club
@@ -6640,6 +6642,7 @@ domain:disney.in
 domain:disney.io
 domain:disney.it
 domain:disney.my
+domain:disney.my.sentry.io
 domain:disney.nl
 domain:disney.no
 domain:disney.ph
@@ -9555,7 +9558,6 @@ domain:fusker.xxx
 domain:futanarihq.com
 domain:futhead.com
 domain:futpromos.com
-domain:futu.cn
 domain:futu.com
 domain:futu.link
 domain:futu0.com
@@ -9569,7 +9571,6 @@ domain:futu7.com
 domain:futu8.com
 domain:futu9.com
 domain:futuau.com
-domain:futubull.cn
 domain:futuchain.com
 domain:futuesop.com
 domain:futufin.com
@@ -10345,6 +10346,7 @@ domain:googil.com
 domain:googl.com
 domain:google-access.net
 domain:google-analytics-cn.com
+domain:google-analytics.com
 domain:google-syndication.com
 domain:google.ac
 domain:google.ad
@@ -10604,9 +10606,13 @@ domain:googlesource.com
 domain:googlestore.com
 domain:googlesverige.com
 domain:googlesyndication-cn.com
+domain:googletagmanager-cn.com
+domain:googletagmanager.com
+domain:googletagservices-cn.com
 domain:googletraveladservices-cn.com
 domain:googletraveladservices.com
 domain:googleusercontent.com
+domain:googlevads-cn.com
 domain:googleventures.com
 domain:googlevideo.com
 domain:googleweblight.com
@@ -10651,7 +10657,6 @@ domain:gotquestions.org
 domain:gotraffic.net
 domain:gotrusted.com
 domain:gotw.ca
-domain:gouhuo.qq.com
 domain:goup.ai
 domain:gouri.xyz
 domain:gov.ir
@@ -11419,7 +11424,6 @@ domain:hjd2048.com
 domain:hk-pub.com
 domain:hk.file.myqcloud.com
 domain:hk.hao123img.com
-domain:hk.weibo.com
 domain:hk01.com
 domain:hk1lib.org
 domain:hk32168.com
@@ -11864,20 +11868,13 @@ domain:hsbc.co.mu
 domain:hsbc.co.nz
 domain:hsbc.co.th
 domain:hsbc.co.uk
-domain:hsbc.com
 domain:hsbc.com.ar
 domain:hsbc.com.au
 domain:hsbc.com.bd
 domain:hsbc.com.bh
 domain:hsbc.com.br
-domain:hsbc.com.eg
-domain:hsbc.com.hk
-domain:hsbc.com.mo
-domain:hsbc.com.mt
-domain:hsbc.com.mx
 domain:hsbc.com.my
 domain:hsbc.com.ph
-domain:hsbc.com.sg
 domain:hsbc.com.tr
 domain:hsbc.com.tw
 domain:hsbc.com.uy
@@ -11885,12 +11882,8 @@ domain:hsbc.com.vn
 domain:hsbc.de
 domain:hsbc.fr
 domain:hsbc.lk
-domain:hsbc.net
 domain:hsbc.uk
 domain:hsbcamanah.com.my
-domain:hsbcinnovationbanking.com
-domain:hsbcnet.com
-domain:hsbcprivatebank.com
 domain:hsbctrinkaus.de
 domain:hsex.icu
 domain:hsex.men
@@ -13449,7 +13442,6 @@ domain:jinhai.de
 domain:jinmantiankong.com
 domain:jinnaju.com
 domain:jinpianwang.com
-domain:jinrieluosi.cn
 domain:jinrizhiyi.news
 domain:jinroukong.com
 domain:jinsilubanzhao.com
@@ -14583,7 +14575,6 @@ domain:londonmithraeum.com
 domain:londonreal.tv
 domain:lonestarnaughtygirls.com
 domain:longbridge.cloud
-domain:longbridge.cn
 domain:longbridge.com
 domain:longbridge.global
 domain:longbridge.hk
@@ -14595,7 +14586,6 @@ domain:longmabook.com
 domain:longmabookcn.com
 domain:longman.ch
 domain:longmusic.com
-domain:longportapp.cn
 domain:longportapp.com
 domain:longtailvideo.com
 domain:longtermly.net
@@ -14926,6 +14916,7 @@ domain:marketing-cloud.com
 domain:marketing-nirvana.com
 domain:marketingcloud.com
 domain:marketo.co.uk
+domain:marketo.com
 domain:marketo.tv
 domain:marketodesigner.com
 domain:marketolive.com
@@ -16410,7 +16401,6 @@ domain:my-proxy.com
 domain:my-tbank.ru
 domain:my.com
 domain:my.games
-domain:my.weibo.com
 domain:my03.com
 domain:my13la.com
 domain:my1stflame.com
@@ -18162,7 +18152,6 @@ domain:overdaily.org
 domain:overdrive.com
 domain:overleaf.com
 domain:overplay.net
-domain:overseas.weibo.com
 domain:overthumbs.com
 domain:ovi.com
 domain:ovpn.com
@@ -18325,6 +18314,7 @@ domain:parallels.com
 domain:paramount.com
 domain:paramountplus.com
 domain:parastorage.com
+domain:pardot.com
 domain:park-now.com
 domain:parkansky.com
 domain:parkinfo.com
@@ -20435,7 +20425,6 @@ domain:roblox.net
 domain:roblox.org
 domain:roblox.ph
 domain:roblox.pt
-domain:roblox.qq.com
 domain:roblox.sk
 domain:roblox.tv
 domain:roblox.uk
@@ -20464,7 +20453,6 @@ domain:rockstargames.com
 domain:rockstarnorth.com
 domain:rockylinux.org
 domain:rocmgov.org
-domain:roco.qq.com
 domain:rojo.com
 domain:roku.com
 domain:rokutime.com
@@ -20906,7 +20894,6 @@ domain:schiffvitamins.com
 domain:scholarpedia.org
 domain:schwab.co.uk
 domain:schwab.com
-domain:schwab.com.cn
 domain:schwab.com.hk
 domain:schwab.com.sg
 domain:schwabassetmanagement.com
@@ -20935,6 +20922,7 @@ domain:scmpchinese.com
 domain:scnsrc.me
 domain:scolle.net
 domain:scoop.sh
+domain:scorecardresearch.com
 domain:scoreclassics.com
 domain:scorediscounts.club
 domain:scoregroup.com
@@ -21304,7 +21292,6 @@ domain:sftindia.org
 domain:sftuk.org
 domain:sfunpay.com
 domain:sfx.ms
-domain:sg.weibo.com
 domain:sg120.me
 domain:sg1lib.org
 domain:sgcheck.ru
@@ -21694,7 +21681,6 @@ domain:skysports.fr
 domain:skysports.ie
 domain:skysportsonline.com
 domain:skysportsracing.com
-domain:skytigris.cn
 domain:skyvegas.com
 domain:skyxvpn.com
 domain:sl-reverse.com
@@ -21840,6 +21826,7 @@ domain:socalbmw.com
 domain:soccerfanz.com.my
 domain:soccerfinancier.ca
 domain:soccermatchpass.com
+domain:socdm.com
 domain:social.com
 domain:social.edu.ci
 domain:socialblade.com
@@ -23126,7 +23113,6 @@ domain:tgtime.store
 domain:tgtube.com
 domain:tgutube.com
 domain:th.hao123.com
-domain:th.weibo.com
 domain:thai-xxx.com
 domain:thai69.com
 domain:thaicherry.com
@@ -23497,7 +23483,6 @@ domain:tidelift.com
 domain:tiendabestbuy.com
 domain:tiffany-towers.com
 domain:tig-ol-bitties.live
-domain:tigerbbs.cn
 domain:tigerbbs.com
 domain:tigerbrokers.com
 domain:tigerbrokers.net
@@ -24078,7 +24063,6 @@ domain:tw-blog.com
 domain:tw-npo.org
 domain:tw.hao123.com
 domain:tw.iqiyi.com
-domain:tw.weibo.com
 domain:tw01.org
 domain:tw985.com
 domain:twaitter.com
@@ -24498,7 +24482,6 @@ domain:urlgalleries.net
 domain:urlparser.com
 domain:urukawa.com
 domain:us.to
-domain:us.weibo.com
 domain:usacn.com
 domain:usaco.org
 domain:usaip.eu
@@ -25616,7 +25599,6 @@ domain:vulgarx.com
 domain:vultr.com
 domain:vultryhw.com
 domain:vuvuzela.io
-domain:vv1865.com
 domain:vxnbbrs.xyz
 domain:vxxsred.xyz
 domain:vyprvpn.com
@@ -27811,7 +27793,6 @@ domain:zhengjian.org
 domain:zhenlibu.info
 domain:zhenlibu1984.com
 domain:zhenxiang.biz
-domain:zhijianfengyi.cn
 domain:zhijianfengyi.com
 domain:zhimeishe888.com
 domain:zhinengluyou.com
@@ -28044,6 +28025,7 @@ full:ntp7.ntp-servers.net
 full:ntppool1.time.nl
 full:ntppool2.time.nl
 full:nvidia.tt.omtrdc.net
+full:o33249.ingest.sentry.io
 full:ood.opsource.net
 full:openai-api.arkoselabs.com
 full:openai.qualtrics.com
@@ -28086,7 +28068,6 @@ full:utcnist3.colorado.edu
 full:vmware.tt.omtrdc.net
 full:vscode.search.windows.net
 full:vsmarketplacebadge.apphb.com
-full:wetv.qq.com
 full:widgets.stripst.com
 full:wrds-www.wharton.upenn.edu
 full:ws.audioscrobbler.com
